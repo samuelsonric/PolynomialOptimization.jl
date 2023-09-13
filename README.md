@@ -10,6 +10,11 @@ with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
 modelling framework, it introduces a significant overhead that is omitted in this way.
 
+## About this branch
+This branch contains an implementation of the [SketchyCGAL](https://doi.org/10.1137/19M1305045) solver in its original form.
+It also contains an extension with multiple semidefinite matrices (not thouroughly tested). However, as experiments did not
+show much promise for solving polynomial optimization problems, no integration with `PolynomialOptimization` is currently
+provided.
 
 ## Compatibility notice
 Currently, the required complex-valued functionality depends on a not-yet-merged request in

@@ -56,6 +56,16 @@ chordal_completion!
 chordal_cliques!
 ```
 
+## SketchyCGAL
+While the solver was implemented for the purpose of being used within `PolynomialOptimization`, it also works as a standalone
+routine (and could in principle be a separate package). SketchyCGAL is a solver that scales very well for large problem sizes
+and is based on the assumption that the optimal solution has low rank; indeed, in polynomial optimizations, if there is an
+optimal point for the problem that can be encoded in the chosen basis, then this automatically gives rise to a rank-one
+semidefinite encoding of this point.
+```@docs
+sketchy_cgal
+SketchyCGALStatus
+```
 
 ## FastVector
 To improve the speed in some implementation details, `PolynomialOptimization` provides a "fast" vector type. This is basically

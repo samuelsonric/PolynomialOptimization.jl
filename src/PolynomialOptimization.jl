@@ -14,6 +14,8 @@ import Combinatorics
 import DynamicPolynomials
 import MutableArithmetics
 import StatsBase
+import Random
+import IterativeSolvers
 
 const sqrt2 = sqrt(2.0)
 
@@ -42,6 +44,8 @@ isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
 include("./solvers/MosekSOS.jl")
 include("./solvers/COSMOMoment.jl")
 include("./solvers/HypatiaMoment.jl")
+#include("./solvers/SketchyCGAL/SketchyCGAL.jl") << this is the single-matrix variant that directly follows the paper
+include("./solvers/SketchyCGAL/SketchyCGALBlock.jl")
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
 include("./sparsity/SparsityTerm.jl")
