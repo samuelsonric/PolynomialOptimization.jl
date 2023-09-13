@@ -14,6 +14,7 @@ import Combinatorics
 import DynamicPolynomials
 import MutableArithmetics
 import StatsBase
+import StaticPolynomials
 
 const sqrt2 = sqrt(2.0)
 
@@ -27,8 +28,10 @@ macro verbose_info(str...)
 end
 
 include("./helpers/FastVector.jl")
+include("./helpers/PackedMatrices.jl")
 include("./helpers/ComplexPolynomials.jl")
 include("./helpers/MatrixPolynomials.jl")
+include("./helpers/Lancelot.jl")
 
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")
@@ -42,6 +45,7 @@ isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
 include("./solvers/MosekSOS.jl")
 include("./solvers/COSMOMoment.jl")
 include("./solvers/HypatiaMoment.jl")
+include("./solvers/LANCELOT.jl")
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
 include("./sparsity/SparsityTerm.jl")

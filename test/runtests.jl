@@ -24,4 +24,7 @@ optimize = true
     @testset "multiplication by prefactor using Mai et al.'s method" begin
         include("./Noncompact.jl")
     end
+    @testset "LANCELOT solver" begin
+        include("./LocalSolver.jl")
+    end
 end

@@ -10,6 +10,21 @@ with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
 modelling framework, it introduces a significant overhead that is omitted in this way.
 
+## About this branch
+
+This branch provides an interface to the [LANCELOT sovler](https://github.com/ralna/GALAHAD). LANCELOT is a sophisticated
+non-convex solver which can now be invoked using the solver `:LANCELOT`. Note that contrary to all other methods, this will
+*not* result in an optimization that is based on convex relaxations; no global guarantees are made. Futher notes:
+
+- We call `LANCELOT_simple`, which does not make use of all the potential sophistication LANCELOT provides as regards the use
+  of variables.
+- You will have to provide a path to the `libgalahad_double_d` shared library whenever you import `PolynomialOptimization`.
+  This is annoying. You might want to `dev` this branch and change the constant `libgalahad_double` in
+  `src/helpers/Lancelot.jl`.
+- You will have to download and compile the GALAHAD library first using the GFortran compiler (at least version 9). Since
+  LANCELOT currently only has a Fortran interface, we need to rely on compiler internals to call it. Memory corruption will
+  definitely occur if the library was compiled with a version of GFortran smaller than 9 or e.g., Intel Fortran. Both use
+  different formats for the array descriptors.
 
 ## Compatibility notice
 Currently, the required complex-valued functionality depends on a not-yet-merged request in
