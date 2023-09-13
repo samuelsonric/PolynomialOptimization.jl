@@ -98,14 +98,14 @@ it will lead to memory corruption. Call [`push!`](@ref) instead if you cannot gu
 end
 
 """
-    append!(v::FastVec, els::AbstractVector)
+    append!(v::FastVec, els)
 
 Appends all items in `els` to the end of `v`, increasing the length of `v` by `length(els)`. If there is not enough space,
 grows `v`.
 Note that if you made sure beforehand that the capacity of `v` is sufficient for the addition of these elements, consider
 calling [`unsafe_append!`](@ref) instead, which avoids the length check.
 """
-@inline function Base.append!(v::FastVec{V}, @nospecialize els::AbstractVector) where {V}
+@inline function Base.append!(v::FastVec{V}, els) where {V}
     oldlen = v.len
     v.len += length(els)
     length(v.data) < v.len && resize!(v.data, overallocation(v.len))
@@ -114,13 +114,13 @@ calling [`unsafe_append!`](@ref) instead, which avoids the length check.
 end
 
 """
-    unsafe_append!(v::FastVec, els::AbstractVector)
+    unsafe_append!(v::FastVec, els)
 
 Appends all items in `els` to the end of `v`, increasing the length of `v` by `length(els)`.
 This function assumes that the internal buffer of `v` holds enough space to add at least all elements in `els`; if this is not
 the case, it will lead to memory corruption. Call [`append!`](@ref) instead if you cannot guarantee the necessary buffer size.
 """
-@inline function unsafe_append!(v::FastVec{V}, @nospecialize els::AbstractVector) where {V}
+@inline function unsafe_append!(v::FastVec{V}, els) where {V}
     oldlen = v.len
     v.len += length(els)
     @assert(length(v.data) ≥ v.len)
@@ -129,14 +129,14 @@ the case, it will lead to memory corruption. Call [`append!`](@ref) instead if y
 end
 
 """
-    prepend!(v::FastVec, els::AbstractVector)
+    prepend!(v::FastVec, els)
 
 Prepends all items in `els` to the beginning of `v`, increasing the length `v` by `length(els)`. If there is not enough space,
 grows `v`.
 Note that if you made sure beforehand that the capacity of `v` is sufficient for the addition of these elements, consider
 calling [`unsafe_prepend!`](@ref) instead, which avoids the length check.
 """
-@inline function Base.prepend!(v::FastVec{V}, @nospecialize els::AbstractVector) where {V}
+@inline function Base.prepend!(v::FastVec{V}, els) where {V}
     oldlen = v.len
     v.len += length(els)
     length(v.data) < v.len && resize!(v.data, overallocation(v.len))
@@ -152,7 +152,7 @@ Prepends all items in `els` to the beginning of `v`, increasing the length `v` b
 This function assumes that the internal buffer of `v` holds enough space to add at least all elements in `els`; if this is not
 the case, it will lead to memory corruption. Call [`prepend!`](@ref) instead if you cannot guarantee the necessary buffer size.
 """
-@inline function unsafe_prepend!(v::FastVec{V}, @nospecialize els::AbstractVector) where {V}
+@inline function unsafe_prepend!(v::FastVec{V}, els) where {V}
     oldlen = v.len
     v.len += length(els)
     @assert(length(v.data) ≥ v.len)
