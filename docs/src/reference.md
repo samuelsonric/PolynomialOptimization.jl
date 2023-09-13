@@ -76,3 +76,10 @@ unsafe_prepend!
 Base.similar(::FastVec{V}) where {V}
 finish!
 ```
+
+## Lancelot
+`PolynomialOptimization` provides an interface to LANCELOT. This is only temporary, as the GALAHAD developers are developing
+Julia interfaces themselves (in fact, this is already there - but LANCELOT is the only part that not even has a C interface).
+```@docs
+LANCELOT_simple
+```
