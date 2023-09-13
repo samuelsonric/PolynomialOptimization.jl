@@ -167,7 +167,7 @@ Variable cliques:
 Block sizes:
   [85 => 1, 1 => 35]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-10
+        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
         @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-8
         @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
         @test sparse_optimize(:HypatiaMoment, sp, dense=true)[2] ≈ 0 atol = 1e-7

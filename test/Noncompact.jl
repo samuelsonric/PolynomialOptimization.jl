@@ -417,7 +417,8 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 3: 0 ≤ x₂
 Size of full basis: 15"
     if optimize
-        @test poly_optimize(:MosekMoment, prob)[2] ≈ -8.5578 atol = 1e-4
+        @test_broken poly_optimize(:MosekMoment, prob)[2] ≈ -8.5578 atol = 1e-4
+        # ^ this once worked, but now Mosek's status is UNKNOWN
         @test poly_optimize(:MosekSOS, prob)[2] ≈ -8.5578 atol = 1e-4
         # COSMO is pretty bad
         @test poly_optimize(:HypatiaMoment, prob)[2] ≈ -8.5578 atol = 1e-4
