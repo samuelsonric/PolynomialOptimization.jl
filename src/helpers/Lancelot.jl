@@ -2,7 +2,7 @@ export LANCELOT_simple
 
 # We choose the same approach as GALAHAD.jl. We might even want to introduce a weak dependency on it once it provides a JLL.
 if haskey(ENV, "JULIA_GALAHAD_LIBRARY_PATH")
-    const libgalahad_double = joinpath(ENV["JULIA_GALAHAD_LIBRARY_PATH"], "libgalahad_double.$dlext")
+    const libgalahad_double = joinpath(ENV["JULIA_GALAHAD_LIBRARY_PATH"], "libgalahad_double.$(Libc.Libdl.dlext)")
 else
     @warn("For Lancelot support, enter the complete file path to the libgalahad_double_d shared library")
     const libgalahad_double = readline()
