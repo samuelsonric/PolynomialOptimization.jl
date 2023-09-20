@@ -27,6 +27,9 @@ macro verbose_info(str...)
 end
 
 include("./helpers/FastVector.jl")
+include("./helpers/SortAlong.jl")
+include("./helpers/PackedMatrices.jl")
+include("./helpers/FastSuiteSparse.jl")
 include("./helpers/ComplexPolynomials.jl")
 include("./helpers/MatrixPolynomials.jl")
 
@@ -41,6 +44,7 @@ include("./SolutionExtractionHeuristic.jl")
 isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
 include("./solvers/MosekSOS.jl")
 include("./solvers/COSMOMoment.jl")
+include("./solvers/SpecBMSOS.jl")
 include("./solvers/HypatiaMoment.jl")
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
