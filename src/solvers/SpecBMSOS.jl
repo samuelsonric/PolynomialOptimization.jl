@@ -162,7 +162,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
         # Will we work with sparse vectors at all?
         if 5length(problem.objective) < nconstrs
             b_idx = FastVec{Int}(buffer=length(problem.objective))
-            b_val = FastVec{Int}(buffer=length(problem.objective))
+            b_val = FastVec{Float64}(buffer=length(problem.objective))
             for x in problem.objective
                 if !isconstant(x)
                     unsafe_push!(b_idx, get_constraint!(sbm, monomial(x)))
