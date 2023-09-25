@@ -24,4 +24,7 @@ optimize = true
     @testset "multiplication by prefactor using Mai et al.'s method" begin
         include("./Noncompact.jl")
     end
+    @testset "Packed matrices" begin
+        include("./PackedMatrices.jl")
+    end
 end

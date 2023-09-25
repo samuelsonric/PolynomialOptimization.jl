@@ -29,6 +29,7 @@ end
 include("./helpers/FastVector.jl")
 include("./helpers/SortAlong.jl")
 include("./helpers/PackedMatrices.jl")
+using .PackedMatrices
 include("./helpers/FastSuiteSparse.jl")
 include("./helpers/ComplexPolynomials.jl")
 include("./helpers/MatrixPolynomials.jl")

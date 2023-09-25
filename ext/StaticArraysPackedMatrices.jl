@@ -1,6 +1,6 @@
 module StaticArraysPackedMatrices
 
-import PolynomialOptimization: PackedMatrix, packedsize
+using PolynomialOptimization.PackedMatrices
 import StaticArrays
 
 # We need to be extra careful here - StaticArrays's broadcasting has higher precedence, but will try to write n^2 elements to
