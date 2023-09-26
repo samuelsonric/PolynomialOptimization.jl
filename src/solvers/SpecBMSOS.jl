@@ -17,21 +17,21 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
     i = isempty(sbm.A[2]) ? 1 : last(sbm.A[2]) +1
     prepare_push!.(sbm.A, items * nterms(constraint))
     for exp2 in 1:lg
-        for exp1 in 1:exp2
+        for exp1 in exp2:lg
             sqr = grouping[exp1] * grouping[exp2]
             for mon_constr in constraint
                 @inbounds for term in rem(sqr * mon_constr, gröbner_basis)
                     if isconstant(term)
                         push!(sbm.c[1], i)
-                        push!(sbm.c[2], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                        push!(sbm.c[2], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                     elseif gröbner_basis isa EmptyGröbnerBasis
                         unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                         unsafe_push!(sbm.A[2], i)
-                        unsafe_push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                        unsafe_push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                     else
                         push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                         push!(sbm.A[2], i)
-                        push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                        push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                     end
                 end
             end
@@ -53,22 +53,22 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
     prepare_push!.(sbm.A, items * nterms(constraint))
     for exp2 in 1:lg
         for block_j in 1:block_size
-            for exp1 in 1:exp2
+            for exp1 in exp2:lg
                 sqr = grouping[exp1] * grouping[exp2]
-                for block_i in 1:(exp1 == exp2 ? block_j : block_size)
+                for block_i in (exp1 == exp2 ? block_j : 1):block_size
                     for mon_constr in constraint[block_i, block_j]
                         for term in rem(sqr * mon_constr, gröbner_basis)
                             if isconstant(term)
                                 push!(sbm.c[1], i)
-                                push!(sbm.c[2], exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                                push!(sbm.c[2], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                             elseif gröbner_basis isa EmptyGröbnerBasis
                                 unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 unsafe_push!(sbm.A[2], i)
-                                unsafe_push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                                unsafe_push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                             else
                                 push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 push!(sbm.A[2], i)
-                                push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : Float64(2coefficient(term)))
+                                push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
                             end
                         end
                     end
@@ -106,7 +106,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
                 end
             end
         end
-        frees = isempty(sbm.A[2]) ? 0 : last(sbm.A[2])
+        num_frees = isempty(sbm.A[2]) ? 0 : last(sbm.A[2])
         # SOS term for objective
         for grouping in groupings[1]
             @assert(issorted(grouping, by=degree))
@@ -146,17 +146,6 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
             end
             A, SparseMatrixCSC(nvars, nconstrs, csrrowptr, csrcolval, csrnzval)
         end
-        # We need to un-scale the off-diagonals in At
-        i = frees +1
-        for nⱼ in sbm.psds
-            curcol = 2
-            i += 1
-            while curcol ≤ nⱼ
-                lmul!(.5, @view(At[i:i+curcol-2, :]))
-                i += curcol
-                curcol += 1
-            end
-        end
         c = sparsevec(sbm.c..., nvars, +)
         # We need to put the objective constraints in b, but the constant contribution, if present, belongs to c in principle.
         # Will we work with sparse vectors at all?
@@ -182,7 +171,8 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solve_time = @elapsed begin
-        value, _, mon_vals, quality = specbm_primal(A, b, c; free=frees, psd=finish!(sbm.psds), verbose, At, offset, kwargs...)
+        value, _, mon_vals, quality = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, offset,
+            kwargs...)
     end
     @verbose_info("Optimization complete in ", solve_time, " seconds")
 

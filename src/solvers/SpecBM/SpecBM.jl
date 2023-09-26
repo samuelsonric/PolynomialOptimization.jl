@@ -1,12 +1,246 @@
 # This is an implementation of the SpecPM primal solver, https://arxiv.org/abs/2307.07651v1 with a reference implementation on
 # https://github.com/soc-ucsd/SpecBM.git, tightly integrated with the PolynomialOptimization framework
+const VecView{R,cont} = SubArray{R,1,Vector{R},Tuple{UnitRange{Int}},cont}
+const MatView{R,cont} = SubArray{R,2,Matrix{R},Tuple{UnitRange{Int},UnitRange{Int}},cont}
+const DiagView{R} = SubArray{R,1,Base.ReshapedArray{R,1,MatView{R,false},Tuple{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int}}},Tuple{StepRange{Int,Int}},false}
+
+struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
+    psds::PType
+    r::Vector{Int}
+    ϵ::R
+
+    Ω::Vector{R}
+    w_psd::Vector{R}
+    P_psds::Vector{Matrix{R}}
+
+    A::AType
+    At::AtType
+    a_free::AVType
+    a_psd::AVType
+    a_psds::APVType
+    b::BType
+    c::CType
+    c_free::CVType
+    c_psd::CVType
+    C_psds::Vector{PackedMatrix{R,CVType,:LS}}
+    ω_free::VecView{R,true}
+    ω_psd::VecView{R,true}
+    Ω_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+    W_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+
+    function SpecBMData(num_vars::Integer, num_frees::Integer, psds::AbstractVector{<:Integer}, r::Vector{Int}, ϵ::R,
+        A::AbstractMatrix{R}, At::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R}) where {R}
+        @inbounds begin
+            @assert(length(psds) == length(r))
+            num_psdvars = sum(packedsize, psds, init=0)
+            @assert(num_frees + num_psdvars == num_vars)
+            num_psds = length(r)
+            # allocated problem data
+            Ω = zeros(R, num_vars)
+            w_psd = zeros(R, num_psdvars)
+            W_psds = Vector{PackedMatrix{R,typeof(@view(w_psd[begin:end])),:LS}}(undef, num_psds)
+            P_psds = Vector{Matrix{R}}(undef, num_psds)
+            # views into existing data
+            a_free = @view(A[:, 1:num_frees])
+            a_psd = @view(A[:, num_frees+1:end])
+            a_psds = Vector{typeof(@view(A[:, begin:end]))}(undef, num_psds)
+            c_free = @view(c[1:num_frees])
+            c_psd = @view(c[num_frees+1:end])
+            C_psds = Vector{PackedMatrix{R,typeof(@view(c[begin:end])),:LS}}(undef, num_psds)
+            ω_free = @view(Ω[1:num_frees])
+            ω_psd = @view(Ω[num_frees+1:end])
+            Ω_psds = Vector{PackedMatrix{R,typeof(@view(Ω[begin:end])),:LS}}(undef, num_psds)
+            i = num_frees +1
+            for (j, (nⱼ, rⱼ)) in enumerate(zip(psds, r))
+                # initialize all the data and connect the views appropriately
+                dimⱼ = packedsize(nⱼ)
+                Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, @view(Ω[i:i+dimⱼ-1]), :LS)
+                # An initial point Ω₀ ∈ 𝕊ⁿ.  As in the reference implementation, we take zero for the free variables and the
+                # vectorized identity for the PSD variables.
+                for k in PackedMatrices.PackedDiagonalIterator(Ωⱼ, 0)
+                    Ωⱼ[k] = one(R)
+                end
+                # Initialize W̄₀ ∈ 𝕊₊ⁿ with tr(W̄₀) = 1. As in the reference implementation, we take the (1,1) elementary matrix.
+                # Note that the reference implementation only allows for a single block; we map this to multiple semidefinite
+                # constraints not merely by mimicking a block-diagonal matrix, but taking the constraints into account
+                # individually!
+                W_psds[j] = Wⱼ = PackedMatrix(nⱼ, @view(w_psd[i-num_frees:i-num_frees+dimⱼ-1]), :LS)
+                Wⱼ[1, 1] = one(R)
+                # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can do
+                # this explicitly.
+                P_psds[j] = Pⱼ = zeros(R, nⱼ, rⱼ)
+                for k in 1:rⱼ
+                    Pⱼ[k, k] = one(R)
+                end
+                a_psds[j] = @view(A[:, i:i+dimⱼ-1])
+                C_psds[j] = PackedMatrix(nⱼ, @view(c[i:i+dimⱼ-1]), :LS)
+
+                i += dimⱼ
+            end
+        end
+
+        return new{R,typeof(psds),typeof(A),typeof(At),typeof(a_free),typeof(a_psds),typeof(b),typeof(c),typeof(c_free)}(
+            psds, r, ϵ,
+            Ω, w_psd, P_psds,
+            A, At, a_free, a_psd, a_psds, b, c, c_free, c_psd, C_psds, ω_free, ω_psd, Ω_psds, W_psds
+        )
+    end
+end
+
+function Base.getproperty(d::SpecBMData, name::Symbol)
+    name === :num_vars && return length(getfield(d, :Ω))
+    name === :num_conds && return size(getfield(d, :A), 1)
+    name === :num_frees && return size(getfield(d, :a_free), 2)
+    name === :num_psds && return length(getfield(d, :psds))
+    return getfield(d, name)
+end
+Base.propertynames(::SpecBMData) = (:num_vars, :num_conds, :num_frees, :num_psds, fieldnames(SpecBMData)...)
+
+struct SpecBMMastersolverData{R}
+    Xstar::Vector{R}
+    sstar_psd::Vector{R}
+    γstars::Vector{R}
+    ystar::Vector{R}
+    wstar_psd::Vector{R}
+
+    xstar_free::VecView{R,true}
+    xstar_psd::VecView{R,true}
+    Xstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+    Sstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+    Wstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+
+    function SpecBMMastersolverData(data::SpecBMData{R}) where {R}
+        @inbounds begin
+            num_psds = data.num_psds
+            num_conds = data.num_conds
+            num_frees = data.num_frees
+            # allocated mastersolver output data
+            Xstar = similar(data.Ω)
+            sstar_psd = Vector{R}(undef, sum(packedsize, data.r, init=0))
+            γstars = Vector{R}(undef, num_psds)
+            ystar = Vector{R}(undef, num_conds)
+            wstar_psd = similar(data.w_psd)
+            # views into existing data
+            xstar_free = @view(Xstar[1:num_frees])
+            xstar_psd = @view(Xstar[num_frees+1:end])
+            Xstar_psds = Vector{PackedMatrix{R,typeof(@view(Xstar[begin:end])),:LS}}(undef, num_psds)
+            Sstar_psds = Vector{PackedMatrix{R,typeof(@view(sstar_psd[begin:end])),:LS}}(undef, num_psds)
+            Wstar_psds = Vector{PackedMatrix{R,typeof(@view(wstar_psd[begin:end])),:LS}}(undef, num_psds)
+
+            i_n = num_frees +1
+            i_r = 1
+            for (j, (nⱼ, rⱼ)) in enumerate(zip(data.psds, data.r))
+                dimⱼ = packedsize(nⱼ)
+                Xstar_psds[j] = PackedMatrix(nⱼ, @view(Xstar[i_n:i_n+dimⱼ-1]), :LS)
+                Wstar_psds[j] = PackedMatrix(nⱼ, @view(wstar_psd[i_n-num_frees:i_n-num_frees+dimⱼ-1]), :LS)
+                i_n += dimⱼ
+                rdimⱼ = packedsize(rⱼ)
+                Sstar_psds[j] = PackedMatrix(rⱼ, @view(sstar_psd[i_r:i_r+rdimⱼ-1]), :LS)
+                i_r += rdimⱼ
+            end
+        end
+
+        return new{R}(
+            Xstar, sstar_psd, γstars, ystar, wstar_psd,
+            xstar_free, xstar_psd, Xstar_psds, Sstar_psds, Wstar_psds
+        )
+    end
+end
+
+struct SpecBMCache{R,F,ACV,SS}
+    # data for the actual minimization
+    m₁::Vector{R}
+    m₂::Vector{R}
+    M::Symmetric{R,Matrix{R}}
+    # views into the data
+    M₁₁::MatView{R,false}
+    M₂₁::MatView{R,false}
+    M₂₂::MatView{R,false}
+    # data/views for the preprocessing stage
+    Pkrons::Vector{Matrix{R}}
+    m₂s::Vector{VecView{R,true}}
+    q₃::Vector{R}
+    Q₁₁::DiagView{R} # diagonal of M₁₁
+    Q₂₁s::Vector{SubArray{R,1,Matrix{R},Tuple{UnitRange{Int},Int},true}} # block-diagonal
+    Q₂₂::DiagView{R} # diagonal of M₂₂
+    Q₃₁::Matrix{R}
+    Q₃₂::Matrix{R}
+    Q₃₂s::Vector{SubArray{R,2,Matrix{R},Tuple{Base.Slice{Base.OneTo{Int}},UnitRange{Int}},true}}
+    Q₃₃inv::F
+    # some precomputed data
+    Σr::Int
+    twoAc::ACV
+    # and one temporary in various forms (shared memory!)
+    tmp::Vector{R}
+    # finally the subsolver
+    subsolver::SS
+
+    function SpecBMCache(data::SpecBMData{R}, AAt, subsolver, ρ) where {R}
+        @inbounds begin
+            rdims = packedsize.(data.r)
+            Σr = sum(rdims, init=0)
+            num_psds = data.num_psds
+            num_conds = data.num_conds
+            # allocated minimization data
+            m₁ = Vector{R}(undef, num_psds)
+            m₂ = Vector{R}(undef, Σr)
+            M = Matrix{R}(undef, num_psds + Σr, num_psds + Σr)
+            # views into the data
+            M₁₁ = @view(M[1:num_psds, 1:num_psds])
+            M₂₁ = @view(M[num_psds+1:end, 1:num_psds])
+            M₂₂ = @view(M[num_psds+1:end, num_psds+1:end])
+
+            # data/views for the preprocessing stage
+            Pkrons = Vector{Matrix{R}}(undef, num_psds)
+            m₂s = Vector{typeof(@view(m₂[begin:end]))}(undef, num_psds)
+            q₃ = Vector{R}(undef, num_conds)
+            Q₁₁ = @view(M₁₁[begin:num_psds+1:end])
+            Q₂₁s = Vector{typeof(@view(M₂₁[begin:end, begin]))}(undef, num_psds)
+            Q₂₂ = @view(M₂₂[begin:Σr+1:end])
+            Q₃₁ = Matrix{R}(undef, num_conds, num_psds)
+            Q₃₂ = Matrix{R}(undef, num_conds, Σr)
+            Q₃₂s = Vector{typeof(@view(Q₃₂[:, begin:end]))}(undef, num_psds)
+            Q₃₃inv = try EfficientCholmod(ldlt(AAt)) catch; qr(AAt) end
+            twoAc = rmul!(data.A * data.c, R(2)) # typically, A and c are sparse, so the * implementation is the best
+            tmp = Vector{R}(undef, max(num_conds * max(num_psds, Σr), maximum(data.r, init=0)^2, maximum(num_psds, init=0)^2))
+            i = 1
+            for (j, (nⱼ, rdimⱼ)) in enumerate(zip(data.psds, rdims))
+                Pkrons[j] = Matrix{R}(undef, packedsize(nⱼ), rdimⱼ)
+                m₂s[j] = @view(m₂[i:i+rdimⱼ-1])
+                Q₂₁s[j] = @view(M₂₁[i:i+rdimⱼ-1, j])
+                Q₃₂s[j] = @view(Q₃₂[:, i:i+rdimⱼ-1])
+                i += rdimⱼ
+            end
+            ss = specbm_setup_primal_subsolver(Val(subsolver), num_psds, data.r, rdims, Σr, ρ)
+        end
+
+        return new{R,typeof(Q₃₃inv),typeof(twoAc),typeof(ss)}(
+            m₁, m₂, Symmetric(M, :L),
+            M₁₁, M₂₁, M₂₂,
+            Pkrons, m₂s, q₃, Q₁₁, Q₂₁s, Q₂₂, Q₃₁, Q₃₂, Q₃₂s, Q₃₃inv,
+            Σr, twoAc,
+            tmp,
+            ss
+        )
+    end
+end
+
+gettmp(c::SpecBMCache, sizes...) = reshape(@view(c.tmp[1:*(sizes...)]), sizes...)
+
+function Base.getproperty(c::SpecBMCache, name::Symbol)
+    name === :q₁ && return getfield(c, :m₁)
+    name === :q₂s && return getfield(c, :m₂s)
+    return getfield(c, name)
+end
+Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
+
 """
-    specbm_primal(A, b, c; free=missing, psd::Vector{<:Integer}, ϵ=1e-4, β=0.1, α=1., αfree=α, maxiter=500, ml=0.001,
+    specbm_primal(A, b, c; num_frees=missing, psds::Vector{<:Integer}, ϵ=1e-4, β=0.1, α=1., αfree=α, maxiter=500, ml=0.001,
         mu=min(1.5β, 1), αmin=1e-5, αmax=1000., verbose=true, offset=0, rescale=true, max_cols, ρ, evec_past, evec_current,
         At=transpose(A), AAt=A*At, adaptive=true, step=1)
 """
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
-    free::Union{Missing,Integer}=missing, psd::AbstractVector{<:Integer},
+    num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
     ρ::Real, r_past::Union{<:AbstractVector{<:Integer},<:Integer}, r_current::Union{<:AbstractVector{<:Integer},<:Integer},
     ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=500,
     α::Real=1., adaptive::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
@@ -17,34 +251,35 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     #region Input validation
     subsolver === :Mosek || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
-    # We do not store the matrices A directly, but instead interpret all PSD variables by their vectorized upper triangle
-    # (contrary to the reference implementation, which uses vectorized full storage). Therefore, A contains the stacked
-    # vectorized matrices and C is also a vector. All free variables come before the PSD variables.
+    # We do not store the matrices A directly, but instead interpret all PSD variables by their scaled vectorized upper
+    # triangle (contrary to the reference implementation, which uses vectorized full storage). Therefore, A contains the
+    # (row-wise) stacked vectorized matrices with off-diagonals scaled by √2 and C is also a vector similarly scaled. All free
+    # variables come before the PSD variables.
     num_conds, num_vars = size(A)
     (num_conds == length(b) && num_vars == length(c)) || error("Incompatible dimensions")
-    all(j -> j > 0, psd) || error("PSD dimensions must be positive")
-    if ismissing(free)
-        free = num_vars - sum(packedsize, psd, init=0)
-        free ≥ 0 || error("Incompatible dimensions")
-    elseif free < 0
+    all(j -> j > 0, psds) || error("PSD dimensions must be positive")
+    if ismissing(num_frees)
+        num_frees = num_vars - sum(packedsize, psds, init=0)
+        num_frees ≥ 0 || error("Incompatible dimensions")
+    elseif num_frees < 0
         error("Number of free variables must be nonnegative")
-    elseif sum(packedsize, psd, init=0) + free != num_vars
+    elseif sum(packedsize, psds, init=0) + num_frees != num_vars
         error("Incompatible dimensions")
     end
-    num_psd = length(psd)
+    num_psds = length(psds)
     if isa(r_current, Integer)
         r_current ≥ 0 || error("r_current must be positive")
-        r_current = min.(r_current, psd)
-    elseif length(r_current) != num_psd
+        r_current = min.(r_current, psds)
+    elseif length(r_current) != num_psds
         error("Number of r_current must be the same as number of psd constraints")
     else
         all(x -> x ≥ 1, r_current) || error("r_current must be positive")
-        all(splat(≤), zip(r_current, psd)) || error("No r_current must not exceed its associated dimension")
+        all(splat(≤), zip(r_current, psds)) || error("No r_current must not exceed its associated dimension")
     end
     if isa(r_past, Integer)
         r_past ≥ 0 || error("r_past must be nonnegative")
-        r_past = min.(fill(r_past, num_psd), psd .- r_current) # which is guaranteed to be nonnegative
-    elseif length(r_past) != num_psd
+        r_past = min.(fill(r_past, num_psds), psds .- r_current) # which is guaranteed to be nonnegative
+    elseif length(r_past) != num_psds
         error("Number of r_past must be the same as number of psd constraints")
     else
         all(x -> x ≥ 0, r_past) || error("r_past must be nonnegative")
@@ -64,19 +299,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         α = inv(R(2))
     end
     if ismissing(At)
-        At = copy(transpose(A))
-        # A has off-diagonal elements scaled by a factor of 2 (required for scalar product between packed matrices), but we
-        # don't need this for At (returns packed matrix)
-        i = free +1
-        for nⱼ in psd
-            curcol = 2
-            i += 1
-            while curcol ≤ nⱼ
-                lmul!(inv(R(2)), @view(At[i:i+curcol-2, :]))
-                i += curcol
-                curcol += 1
-            end
-        end
+        At = transpose(A) # it would be best if A already was a transpose(At), as we need slices of rows in A
     end
     if ismissing(AAt)
         AAt = A * At
@@ -90,102 +313,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     invnormbplus1 = inv(norm(b) + one(R))
     invnormcplus1 = inv(norm(c) + one(R))
 
-    #region Allocations
-    # An initial point Ω₀ ∈ 𝕊ⁿ.  As in the reference implementation, we take zero for the free variables and the vectorized
-    # identity for the PSD variables.
-    Ω = zeros(R, num_vars)
-    Ω_psds = Vector{PackedMatrix{R,typeof(@view(Ω[begin:end]))}}(undef, num_psd)
-    # 1: Initialization. Let r = rₚ + r_c
-    r = r_past .+ r_current
-    rdims = packedsize.(r)
-    Σr = sum(rdims, init=0)
-    # Initialize W̄₀ ∈ 𝕊₊ⁿ with tr(W̄₀) = 1. As in the reference implementation, we take the (1,1) elementary matrix. Note that
-    # the reference implementation only allows for a single block; we map this to multiple semidefinite constraints not merely
-    # by mimicking a block-diagonal matrix, but taking the constraints into account individually!
-    Ws = Vector{PackedMatrix{R,Vector{R}}}(undef, num_psd)
-    # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can do this
-    # explicitly.
-    Ps = Vector{Matrix{R}}(undef, num_psd)
-    Pkrons = Vector{Matrix{R}}(undef, num_psd)
-    # We also need some temporaries to avoid allocations.
-    A_psds = Vector{typeof(@view(A[:, begin:end]))}(undef, num_psd)
-    At_psds = Vector{typeof(@view(At[begin:end, :]))}(undef, num_psd)
-    c_free = @view(c[1:free])
-    C_psds = Vector{PackedMatrix{R,Vector{R}}}(undef, num_psd)
-    bigbuf = Vector{R}(undef, max(num_conds * max(num_psd, Σr), maximum(r)^2, maximum(psd)^2))
-    γstars = Vector{R}(undef, num_psd)
-    Wstars = similar(Ws)
-    Sstar = @view(bigbuf[1:Σr])
-    Sstars = Vector{PackedMatrix{R,typeof(@view(Sstar[begin:end]))}}(undef, num_psd)
-    Xstar = similar(Ω)
-    Xstar_free = @view(Xstar[1:free])
-    Xstar_psds = similar(Ω_psds)
-    ystar = Vector{R}(undef, num_conds)
-    condtmp = similar(ystar)
-    i = free +1
-    @inbounds for (j, (nⱼ, rⱼ, rdimⱼ)) in enumerate(zip(psd, r, rdims))
-        dimⱼ = packedsize(nⱼ)
-        Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, @view(Ω[i:i+dimⱼ-1]))
-        for k in 1:nⱼ
-            Ωⱼ[k, k] = one(R)
-        end
-        Ws[j] = Wⱼ = PackedMatrix(nⱼ, zeros(R, dimⱼ))
-        Wⱼ[1, 1] = one(R)
-        Ps[j] = Pⱼ = zeros(R, nⱼ, rⱼ)
-        for k in 1:rⱼ
-            Pⱼ[k, k] = one(R)
-        end
-        Pkrons[j] = Matrix{R}(undef, rdimⱼ, dimⱼ)
-        A_psds[j] = @view(A[:, i:i+dimⱼ-1])
-        At_psds[j] = @view(At[i:i+dimⱼ-1, :])
-        C_psds[j] = Cⱼ = PackedMatrix{R}(undef, nⱼ) # @view(c[i:i+dimⱼ-1])
-        # Cⱼ will be a copy of c[i:i+dimⱼ-1], but with off-diagonals as they are (whereas in c, they have to be doubled)
-        let i=i, k=1, nextdiag=0, Cⱼ=vec(Cⱼ)
-            while k < length(Cⱼ)
-                Cⱼ[k:k+nextdiag-1] .= inv(R(2)) .* @view(c[i:i+nextdiag-1])
-                Cⱼ[k+nextdiag] = c[i+nextdiag]
-                nextdiag += 1
-                i += nextdiag
-                k += nextdiag
-            end
-        end
-        Wstars[j] = PackedMatrix{R}(undef, nⱼ)
-        # Sstars is initialized later, as we need a different index
-        Xstar_psds[j] = PackedMatrix(nⱼ, @view(Xstar[i:i+dimⱼ-1]))
-        i += dimⱼ
-    end
-    # To solve the main problem, several precomputations can be done, and a couple of preallocations will be useful
-    cache = let m₁ = Vector{R}(undef, num_psd),
-        m₂ = Vector{R}(undef, Σr),
-        M = Symmetric(Matrix{R}(undef, num_psd + Σr, num_psd + Σr), :L),
-        M₁₁ = @view(parent(M)[1:num_psd, 1:num_psd]),
-        M₂₂ = @view(parent(M)[num_psd+1:end, num_psd+1:end]),
-        M₂₁ = @view(parent(M)[num_psd+1:end, 1:num_psd]),
-        # q₁ = m₁
-        q₂s = Vector{typeof(@view(m₂[begin:end]))}(undef, num_psd),
-        q₃ = Vector{R}(undef, num_conds),
-        Q₁₁ = @view(M₁₁[begin:num_psd+1:end]), # this is a view to the diagonal of M₁₁
-        Q₃₃inv = try EfficientCholmod(ldlt(AAt)) catch; qr(AAt) end,
-        Q₂₁s = Vector{typeof(@view(M₂₁[begin:end, begin]))}(undef, num_psd), # this is really a block-diagonal matrix
-        Q₃₁ = Matrix{R}(undef, num_conds, num_psd),
-        Q₃₂ = Matrix{R}(undef, num_conds, Σr),
-        Q₃₂s = Vector{typeof(@view(Q₃₂[:, begin:end]))}(undef, num_psd),
-        minus2Ac = R(-2) * (A * c),
-        tmpm1 = reshape(@view(bigbuf[1:num_conds*num_psd]), (num_conds, num_psd)),
-        tmpm2 = reshape(@view(bigbuf[1:num_conds*Σr]), (num_conds, Σr)),
-        i = 1
-        @inbounds for (j, (rⱼ, dimⱼ)) in enumerate(zip(r, rdims))
-            q₂s[j] = @view(m₂[i:i+dimⱼ-1])
-            Q₂₁s[j] = @view(M₂₁[i:i+dimⱼ-1, j])
-            Q₃₂s[j] = @view(Q₃₂[:, i:i+dimⱼ-1])
-            Sstars[j] = PackedMatrix(rⱼ, @view(Sstar[i:i+dimⱼ-1]))
-            i += dimⱼ
-        end
-        (m₁, m₂, M, M₁₁, M₂₂, M₂₁, q₂s, q₃, Q₁₁, Q₃₃inv, Q₂₁s, Q₃₁, Q₃₂, Q₃₂s, minus2Ac, Pkrons, A, A_psds, At, At_psds, b, c,
-            c_free, C_psds, tmpm1, tmpm2, psd, r, Σr, ϵ)
-    end
-    subsolver_data = specbm_setup_primal_subsolver(Val(subsolver), num_psd, r, rdims, Σr, ρ)
-    #endregion
+    data = SpecBMData(num_vars, num_frees, psds, Int.(r_past .+ r_current), ϵ, A, At, b, c)
+    mastersolver = SpecBMMastersolverData(data)
+    cache = SpecBMCache(data, AAt, subsolver, ρ)
 
     # We need some additional variables for the adaptive strategy, following the naming in the reference implementation
     # (in the paper, the number of consecutive null steps N_c is used instead).
@@ -198,37 +328,38 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         # 3: solve (24) to obtain Xₜ₊₁*, γₜ*, Sₜ*
         # combined with
         # 4: form the iterate Wₜ* in (28) and dual iterate yₜ* in (29)
-        dfeasi, dfeasi_psd, dfeasi_free, gap = direction_qp_primal_free!(γstars, ystar, Wstars, Sstar, Sstars, Xstar,
-            Xstar_free, Xstar_psds, Ω, Ω_psds, Ws, Ps, !isone(t), α, cache, subsolver_data)
+        dfeasi, dfeasi_psd, dfeasi_free, gap = direction_qp_primal_free!(mastersolver, data, !isone(t), α, cache)
         # We also calculate some quality criteria here
         dual_feasi = max(dfeasi_free, dfeasi_psd)
         relative_dfeasi = sqrt(dfeasi * invnormcplus1)
         if has_descended
-            copyto!(condtmp, b) # we don't need y any more, so we can use it as a temporary
-            mul!(condtmp, A, Ω, true, -one(R))
-            relative_pfeasi = norm(condtmp) * invnormbplus1
+            relative_pfeasi = let tmp=gettmp(cache, length(b))
+                copyto!(tmp, b) # we don't need y any more, so we can use it as a temporary
+                mul!(tmp, A, data.Ω, true, -one(R))
+                norm(tmp) * invnormbplus1
+            end
             # else we no not need to recompute this, the value from the last iteration is still valid
         end
         # 5: if t = 0 and A(Ωₜ) ≠ b then
         if isone(t) && relative_pfeasi > ϵ # note: reference implementation does not check A(Ωₜ) ≠ b
-            copyto!(Ω, Xstar)
+            copyto!(data.Ω, mastersolver.Xstar)
         # 7: else
         else
             # 8: if (25) holds then
             # (25): β( F(Ωₜ) - ̂F_{Wₜ, Pₜ}(Xₜ₊₁*)) ≤ F(Ωₜ) - F(Xₜ₊₁*)
             # where (20): F(X) := ⟨C, X⟩ - ρ min(λₘᵢₙ(X), 0)
             if has_descended
-                FΩ = dot(c, Ω) - ρ * sum(min(eigmin(Ωⱼ), zero(R)) for Ωⱼ in Ω_psds; init=zero(R))
+                FΩ = dot(data.c, data.Ω) - ρ * sum(min(eigmin(Ωⱼ), zero(R)) for Ωⱼ in data.Ω_psds; init=zero(R))
                 # else we do not need to recalculate this, it did not change from the previous iteration
             end
-            cXstar = dot(c, Xstar)
-            Fmodel = cXstar - sum(dot(Wstarⱼ, Xstarⱼ) for (Wstarⱼ, Xstarⱼ) in zip(Wstars, Xstar_psds); init=zero(R))
-            FXstar = cXstar - ρ * sum(min(eigmin(Xstarⱼ), zero(R)) for Xstarⱼ in Xstar_psds; init=zero(R))
+            cXstar = dot(data.c, mastersolver.Xstar)
+            Fmodel = cXstar - dot(mastersolver.wstar_psd, mastersolver.xstar_psd)
+            FXstar = cXstar - ρ * sum(min(eigmin(Xstarⱼ), zero(R)) for Xstarⱼ in mastersolver.Xstar_psds; init=zero(R))
             estimated_drop = FΩ - Fmodel
             cost_drop = FΩ - FXstar
             if (has_descended = (β * estimated_drop ≤ cost_drop))
                 # 9: set primal iterate Ωₜ₊₁ = Xₜ₊₁*
-                copyto!(Ω, Xstar)
+                copyto!(data.Ω, mastersolver.Xstar)
                 # 6.1.1. Adaptive strategy (can only be lower case due to mₗ < β < mᵣ)
                 if adaptive
                     if mr * estimated_drop ≤ cost_drop
@@ -252,54 +383,52 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             relative_accuracy = estimated_drop / (abs(FΩ) + one(R))
         # 13: end if
         end
-        relative_gap = gap / (one(R) + abs(dot(c, Ω)) + abs(dot(b, ystar))) # now Ω is corrected
-        # 14: compute Pₜ₊₁ as (26), and ̄Wₜ₊₁ as (27)
+        relative_gap = gap / (one(R) + abs(dot(data.c, data.Ω)) + abs(dot(data.b, mastersolver.ystar))) # now Ω is corrected
+        # 14: compute Pₜ₊₁ as (26), and Wₜ₊₁ as (27)
         # (26): Pₜ₊₁ = orth([Vₜ; Pₜ Q₁])
         # where Vₜ: top r_c ≥ 1 eigenvectors of -Xₜ₊₁*
         # and S* = [Q₁ Q₂] * Diagonal(Σ₁, Σ₂) * [Q₁; Q₂] with division in (rₚ, r - rₚ)
-        # (27): ̄Wₜ₊₁ = 1/(γ* + tr(Σ₂)) * (γ* ̄Wₜ + Pₜ Q₂ Σ₂ Q₂ᵀ Pₜᵀ)
+        # (27): Wₜ₊₁ = 1/(γ* + tr(Σ₂)) * (γ* Wₜ + Pₜ Q₂ Σ₂ Q₂ᵀ Pₜᵀ)
         primal_feasi = zero(R)
-        @inbounds for (rⱼ, r_currentⱼ, r_pastⱼ, γstarⱼ, Wstarⱼ, Sstarⱼ, Xstarⱼ, Wⱼ, Pⱼ, tmpⱼ) in zip(r, r_current, r_past,
-                                                                            γstars, Wstars, Sstars, Xstar_psds, Ws, Ps, Pkrons)
+        @inbounds for (j, (nⱼ, rⱼ, r_currentⱼ, r_pastⱼ, Wⱼ, Pⱼ)) in
+            enumerate(zip(data.psds, data.r, r_current, r_past, data.W_psds, data.P_psds))
             # note: we adjusted r such that it cannot exceed the side dimension of Xstar_psd, but we cannot do the same with
             # r_current and r_past, as only their sum has an upper bound.
-            nⱼ = size(Xstarⱼ, 1)
-            @assert(size(Sstarⱼ) == (rⱼ, rⱼ))
-            V = r_currentⱼ < nⱼ ? eigen!(Xstarⱼ, 1:r_currentⱼ) : eigen!(Xstarⱼ)
+            V = r_currentⱼ < nⱼ ? eigen!(mastersolver.Xstar_psds[j], 1:r_currentⱼ) : eigen!(mastersolver.Xstar_psds[j])
             primal_feasi = min(primal_feasi, first(V.values))
             r_pastⱼ = min(r_pastⱼ, rⱼ)
             if iszero(r_pastⱼ)
-                copyto!(Wⱼ, Wstarⱼ)
+                copyto!(Wⱼ, mastersolvers.Wstars[j])
                 rmul!(Wⱼ, inv(tr(Wⱼ)))
                 copyto!(Pⱼ, V.vectors)
             else
-                γstarⱼ = max(γstarⱼ, zero(R)) # prevent numerical issues
-                Sstareig = eigen!(Sstarⱼ)
+                γstarⱼ = max(mastersolver.γstars[j], zero(R)) # prevent numerical issues
+                Sstareig = eigen!(mastersolver.Sstar_psds[j])
                 Q₁ = @view(Sstareig.vectors[:, end-r_pastⱼ+1:end]) # sorted in ascending order; we need the largest rₚ, but
                                                                    # the order doesn't really matter
                 Q₂ = @view(Sstareig.vectors[:, 1:end-r_pastⱼ])
                 Σ₂ = @view(Sstareig.values[1:end-r_pastⱼ])
-                tmpmⱼ_large = reshape(@view(tmpⱼ[1:nⱼ*rⱼ]), (nⱼ, rⱼ))
                 # Wⱼ = (γstar * Wⱼ + Pⱼ * Q₂ * Diagonal(Σ₂) * Q₂' * Pⱼ') / (γstar + tr(Σ₂))
                 den = γstarⱼ + sum(v -> max(v, zero(R)), Σ₂) # also prevent numerical issues here
-                if den > 1e-8
-                    tmpmⱼ_small = reshape(@view(bigbuf[1:rⱼ^2]), (rⱼ, rⱼ))
-                    tmpmⱼ_small2 = reshape(@view(tmpⱼ[1:length(Q₂)]), size(Q₂))
-                    mul!(tmpmⱼ_small2, Q₂, Diagonal(Σ₂))
-                    mul!(tmpmⱼ_small, tmpmⱼ_small2, transpose(Q₂))
-                    mul!(tmpmⱼ_large, Pⱼ, tmpmⱼ_small)
-                    tmpmⱼ_verylarge = reshape(@view(bigbuf[1:nⱼ^2]), (nⱼ, nⱼ))
-                    gemmt!('U', 'N', 'T', true, tmpmⱼ_large, Pⱼ, false, tmpmⱼ_verylarge)
-                    trttp!('U', tmpmⱼ_verylarge, vec(Wstarⱼ)) # Wstarⱼ is just another temporary now
+                #if den > sqrt(eps(R))
+                    newpart = PackedMatrix(rⱼ, zeros(R, packedsize(rⱼ)), :L)
+                    for (factor, newcol) in zip(Σ₂, eachcol(Q₂))
+                        if factor > zero(R) # just to be sure
+                            spr!(factor, newcol, newpart)
+                        end
+                    end
+                    newpart_scaled = packed_scale!(newpart)
                     den = inv(den)
-                    axpby!(den, vec(Wstarⱼ), γstarⱼ * den, vec(Wⱼ))
-                end # else no update of W
+                    mul!(Wⱼ, cache.Pkrons[j], newpart_scaled, den, γstarⱼ * den)
+                #end # else no update of W
                 # Pⱼ = orth([V.vectors Pⱼ*Q₁])
                 # for orthogonalization, we use QR to be numerically stable; unfortunately, this doesn't produce Q directly, so
-                # we need another temporary. For consistency with the reference implementation, we put Pⱼ*Q₁ first.
-                mul!(@view(tmpmⱼ_large[:, 1:r_pastⱼ]), Pⱼ, Q₁)
-                copyto!(@view(tmpmⱼ_large[:, r_pastⱼ+1:end]), V.vectors)
-                copyto!(Pⱼ, qr!(tmpmⱼ_large).Q)
+                # we need another temporary. For consistency with the reference implementation, we put Pⱼ*Q₁ first (although it
+                # uses orth, which is SVD-based).
+                tmp = gettmp(cache, nⱼ, rⱼ)
+                mul!(@view(tmp[:, 1:r_pastⱼ]), Pⱼ, Q₁)
+                copyto!(@view(tmp[:, r_pastⱼ+1:end]), V.vectors)
+                copyto!(Pⱼ, qr!(tmp).Q)
             end
         end
         # 15: if stopping criterion then
@@ -315,14 +444,14 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # 18: end for
     end
 
-    specbm_finalize_primal_subsolver(subsolver_data)
+    specbm_finalize_primal_subsolver!(cache.subsolver)
 
-    return FΩ + offset, Ω, ystar, quality
+    return FΩ + offset, data.Ω, mastersolver.ystar, quality
 end
 
 function specbm_setup_primal_subsolver end
-function specbm_finalize_primal_subsolver end
-function specbm_primal_subsolve end
+function specbm_finalize_primal_subsolver! end
+function specbm_primal_subsolve! end
 
 if isdefined(Mosek, :appendafes)
     if VersionNumber(Mosek.getversion()) ≥ v"10.1.11"
@@ -332,164 +461,120 @@ if isdefined(Mosek, :appendafes)
     end
 end
 
-@inline function direction_qp_primal_free!(γstars::AbstractVector{R}, ystar, Wstars, Sstar, Sstars, Xstar, Xstar_free,
-    Xstar_psds, Ω, Ω_psds, Ws, Ps, feasible, α, cache, subsolver) where {R}
-    m₁, m₂, M, M₁₁, M₂₂, M₂₁, q₂s, q₃, Q₁₁, Q₃₃inv, Q₂₁s, Q₃₁, Q₃₂, Q₃₂s, minus2Ac, Pkrons, A, A_psds, At, At_psds, b, c,
-        c_free, C_psds, tmpm1, tmpm2, psd, r, Σr, ϵ = cache
+@inline function direction_qp_primal_free!(mastersolver::SpecBMMastersolverData, data::SpecBMData, feasible::Bool, α::R,
+    cache::SpecBMCache) where {R}
     invα = inv(α)
-    # We need to (34): minimize dot(v, M, v) + dot(m, v) + c
-    #                      s.t. v = [γ; vec(S)]
+    # We need to (34): maximize dot(m, v) - dot(v, M, v) + const.
+    #                      s.t. v = [γ; svec(S)]
     #                           γ ≥ 0, S ∈ 𝕊₊ʳ, γ + tr(S) ≤ ρ
     # Note that as we have multiple PSD blocks which we all treat separately (and not just as a single block-diagonal
     # constraint, we actually get multiple γ and multiple S matrices), though there is just one ρ.
     # Creating the data from the given parameters is detailed in C.1
-    # We create a matrix Pkron (symmetrized Kronecked product) such that vec(Pᵀ W P) = Pkron*w, if w is the packed vector of W
-    # Pkronᵢ is packedsize(rᵢ) × packedsize(nᵢ)
-    @inbounds @fastmath for (Pⱼ, Pkronⱼ) in zip(Ps, Pkrons)
-        cols, rows = size(Pⱼ) # Pᵀ is to the left
+    # We create a matrix Pkron (symmetrized Kronecked product) such that svec(Pᵀ W P) = Pkronᵀ*w, if w is the packed and scaled
+    # vector of W. Note that due to the scaling, this is symmetric, so that svec(P U Pᵀ) = Pkron*u.
+    # Pkronᵢ is packedsize(nᵢ) × packedsize(rᵢ)
+    @inbounds @fastmath for (Pⱼ, Pkronⱼ) in zip(data.P_psds, cache.Pkrons)
+        rows, cols = size(Pⱼ)
         colidx = 1
         for l in 1:cols
-            for k in 1:l-1
+            rowidx = 1
+            for k in 1:rows
+                Pⱼkl = Pⱼ[k, l]
+                Pkronⱼ[rowidx, colidx] = Pⱼkl^2
+                rowidx += 1
+                @simd for p in k+1:rows
+                    Pkronⱼ[rowidx, colidx] = sqrt2 * Pⱼkl * Pⱼ[p, l]
+                    rowidx += 1
+                end
+            end
+            colidx += 1
+            for q in l+1:cols
                 rowidx = 1
-                for p in 1:rows
-                    @simd for q in 1:p
-                        Pkronⱼ[rowidx, colidx] = Pⱼ[k, q] * Pⱼ[l, p] + Pⱼ[l, q] * Pⱼ[k, p]
+                for k in 1:rows
+                    Pⱼkl, Pⱼkq = Pⱼ[k, l], Pⱼ[k, q]
+                    Pkronⱼ[rowidx, colidx] = sqrt2 * Pⱼkq * Pⱼkl
+                    rowidx += 1
+                    @simd for p in k+1:rows
+                        Pkronⱼ[rowidx, colidx] = Pⱼkq * Pⱼ[p, l] + Pⱼkl * Pⱼ[p, q]
                         rowidx += 1
                     end
                 end
                 colidx += 1
             end
-            rowidx = 1
-            for p in 1:rows
-                @simd for q in 1:p
-                    Pkronⱼ[rowidx, colidx] = Pⱼ[l, q] * Pⱼ[l, p]
-                    rowidx += 1
-                end
-            end
-            colidx += 1
         end
     end
     # m₁ = q₁ - Q₁₃ Q₃₃⁻¹ q₃
-    # q₁ = 2⟨W̄ⱼ, α Ωⱼ - Cⱼ⟩
-    # Q₃₁ = hcat(Aⱼ(W̄ⱼ))
-    # q₃ = -2α(b - A(Ω)) - 2A(C)
-    # We can use Xstar_psd as temporaries for 2(α Ωⱼ - Cⱼ)
-    twoαΩminusC = Xstar_psds
-    for (twoαΩminusCⱼ, Ωⱼ, Cⱼ) in zip(twoαΩminusC, Ω_psds, C_psds)
-        twoαΩminusCⱼ .= R(2) .* (α .* Ωⱼ .- Cⱼ)
-    end
-    m₁ .= dot.(Ws, twoαΩminusC) # q₁ ≡ m₁
-    mul!.(eachcol(Q₃₁), A_psds, Ws)
+    # q₁ = 2⟨Wⱼ, -α Ωⱼ + Cⱼ⟩
+    # Q₃₁ = [⟨Wⱼ, Aᵢⱼ⟩]ᵢⱼ
+    # q₃ = [2α(bᵢ - ⟨aᵢ, ω_free⟩ - ∑ⱼ ⟨Aᵢⱼ, Ωⱼ⟩) + 2(⟨c_free, aᵢ⟩ + ∑ⱼ ⟨Cⱼ, Aᵢⱼ⟩)
+    # We can use Xstar_psd as temporaries for 2(-α Ωⱼ + Cⱼ)
+    twoCminusαΩ = mastersolver.Xstar_psds
+    mastersolver.xstar_psd .= R(2) .* (data.c_psd .- α .* data.ω_psd)
+    cache.q₁ .= dot.(data.W_psds, twoCminusαΩ) # note that q₁ aliases m₁, so we already set the first part in m₁!
+    mul!(cache.Q₃₁, data.a_psd, data.w_psd)
     if feasible
-        copyto!(q₃, minus2Ac)
+        copyto!(cache.q₃, cache.twoAc)
     else
-        copyto!(q₃, b)
-        mul!(q₃, A, Ω, 2α, R(-2) * α)
-        q₃ .+= minus2Ac
+        copyto!(cache.q₃, data.b)
+        mul!(cache.q₃, data.A, data.Ω, R(-2) * α, R(2) * α)
+        cache.q₃ .+= cache.twoAc
     end
-    copyto!(ystar, q₃) # we'll construct ystar successively, let's save q₃ for the moment
-    ldiv!(Q₃₃inv, q₃) # now q₃ ← Q₃₃⁻¹ q₃
-    mul!(m₁, transpose(Q₃₁), q₃, -one(R), true)
+    copyto!(mastersolver.ystar, cache.q₃) # we'll construct ystar successively, let's save q₃ for the moment
+    ldiv!(cache.Q₃₃inv, cache.q₃) # now q₃ ← Q₃₃⁻¹ q₃
+    mul!(cache.m₁, transpose(cache.Q₃₁), cache.q₃, -one(R), true)
 
     # m₂ = q₂ - Q₂₃ Q₃₃⁻¹ q₃
-    # q₂ = (2vec(Pⱼᵀ (α Ωⱼ - Cⱼ) Pⱼ))
-    mul!.(q₂s, Pkrons, twoαΩminusC) # note that q₂s aliases m₂, so we already set the first part!
-    # Q₃₂ = [hcat(vec(Pⱼᵀ Aᵢ Pⱼ)ᵀ for j in 1:num_psd) for i in 1:num_conds]
-    mul!.(Q₃₂s, transpose.(At_psds), transpose.(Pkrons)) # transpose(At_psds) ≠ A_psds: the former contains the unscaled matrix
-    # correct the scaling
-    @inbounds for (q₂ⱼ, Q₃₂ⱼ, rⱼ) in zip(q₂s, Q₃₂s, r)
-        let i=2, nextdiag=1
-            for col in 2:rⱼ
-                @view(q₂ⱼ[i:i+nextdiag-1]) .*= R(2)
-                @view(Q₃₂ⱼ[:, i:i+nextdiag-1]) .*= R(2)
-                nextdiag += 1
-                i += nextdiag
-            end
-        end
-    end
-    # multiply each Q₃₂s by diag([1, 2, 1, 2, 2, 1, 2, 2, 2, ...])
-    mul!(m₂, transpose(Q₃₂), q₃, -one(R), true) # q₃ already contains the inverse part
+    # q₂ = (2vec(Pⱼᵀ (-α Ωⱼ + Cⱼ) Pⱼ))
+    mul!.(cache.q₂s, transpose.(cache.Pkrons), twoCminusαΩ) # note that q₂s aliases m₂, so we already set the first part in m₂!
+    # Q₃₂ = [vec(Pⱼᵀ Aᵢⱼ Pⱼ)ᵀ]ᵢⱼ
+    mul!.(cache.Q₃₂s, data.a_psds, cache.Pkrons)
+    mul!(cache.m₂, transpose(cache.Q₃₂), cache.q₃, -one(R), true) # q₃ already contains Q₃₃⁻¹ q₃
 
-    # M₁₁ = Q₁₁ - Q₁₃ Q₃₃⁻¹ Q₁₃ᵀ
-    # Q₁₁ = Diag(⟨W̄ⱼ, W̄ⱼ⟩)
-    ldiv!(tmpm1, Q₃₃inv, Q₃₁)
-    mul!(M₁₁, transpose(Q₃₁), tmpm1, -one(R), false) # note: tmpm1, tmpm2, and Sstar share memory
-    Q₁₁ .+= norm.(Ws) .^ 2 # Q₁₁ is a diagonal view into M₁₁
+    # M₁₁ = Q₁₁ - Q₃₁ᵀ Q₃₃⁻¹ Q₃₁
+    # Q₁₁ = Diag(⟨Wⱼ, Wⱼ⟩)
+    tmpm = gettmp(cache, size(cache.Q₃₁)...)
+    ldiv!(tmpm, cache.Q₃₃inv, cache.Q₃₁)
+    mul!(cache.M₁₁, transpose(cache.Q₃₁), tmpm, -one(R), false)
+    cache.Q₁₁ .+= LinearAlgebra.norm2.(data.W_psds) .^ 2 # Q₁₁ is a diagonal view into M₁₁
 
-    # M₁₂ = Q₁₂ - Q₁₃ Q₃₃⁻¹ Q₂₃ᵀ ⇔ M₂₁ = Q₂₁ - Q₂₃ Q₃₃⁻¹ Q₃₁
-    # Q₂₁ = Diag(vec(Pⱼᵀ W̄ⱼ Pⱼ)) - but this is a block diagonal for which there is no native support, so we use Vector{Vector}
-    fill!(M₂₁, zero(R))
-    mul!.(Q₂₁s, Pkrons, Ws) # note that Q₂₁ aliases M₂₁, so we already set the first part!
-    @inbounds for (Q₂₁ⱼ, rⱼ) in zip(Q₂₁s, r)
-        let i=2, nextdiag=1
-            for col in 2:rⱼ
-                @view(Q₂₁ⱼ[i:i+nextdiag-1]) .*= R(2)
-                nextdiag += 1
-                i += nextdiag
-            end
-        end
-    end
-    mul!(M₂₁, transpose(Q₃₂), tmpm1, -one(R), true) # tmpm already contains the inverse part
+    # M₂₁ = Q₂₁ - Q₃₂ᵀ Q₃₃⁻¹ Q₃₁
+    # Q₂₁ = Diag(svec(Pⱼᵀ Wⱼ Pⱼ)) - but this is a block diagonal for which there is no native support, so we use Vector{Vector}
+    fill!(cache.M₂₁, zero(R))
+    mul!.(cache.Q₂₁s, transpose.(cache.Pkrons), data.W_psds) # note that Q₂₁ aliases M₂₁, so we already set the first part!
+    mul!(cache.M₂₁, transpose(cache.Q₃₂), tmpm, -one(R), true) # tmpm already contains the inverse part
 
-    # M₂₂ = Q₂₂ - Q₂₃ Q₃₃⁻¹ Q₂₃ᵀ
+    # M₂₂ = Q₂₂ - Q₃₂ᵀ Q₃₃⁻¹ Q₃₂
     # Q₂₂ = id_{Σr}
-    ldiv!(tmpm2, Q₃₃inv, Q₃₂)
-    mul!(M₂₂, transpose(Q₃₂), tmpm2, -one(R), false)
-    # This is adding the identity - but vectorized off-diagonals actually need the factor 2
-    let i = 1, Δ = size(M₂₂, 1) +1 # next item on diagonal - this is a view, so we don't use stride
-        @inbounds for rⱼ in r
-            δ = -Δ
-            for col in 1:rⱼ
-                M₂₂[i:Δ:i+δ] .= @view(M₂₂[i:Δ:i+δ]) .+ R(2)
-                δ += Δ
-                M₂₂[i+δ] += one(R)
-                i += δ + Δ
-            end
-        end
-    end
+    tmpm = gettmp(cache, size(cache.Q₃₂)...)
+    ldiv!(tmpm, cache.Q₃₃inv, cache.Q₃₂)
+    mul!(cache.M₂₂, transpose(cache.Q₃₂), tmpm, -one(R), false)
+    cache.Q₂₂ .+= one(R) # Q₂₂ is a diagonal view into M₂₂
 
     # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
     # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
     # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
     # other solvers which have a similar syntax.
-    Mfact = cholesky!(M, RowMaximum(), tol=ϵ^2, check=false)
-    specbm_primal_subsolve(subsolver, Mfact, m₁, q₂s, Σr, γstars, Sstars, m₂) # we no longer need m₂, so it's scratch space now
+    Mfact = cholesky!(cache.M, RowMaximum(), tol=data.ϵ^2, check=false)
+    specbm_primal_subsolve!(mastersolver, cache, Mfact)
 
-    # Reconstruct y = Q₃₃⁻¹(-q₃/2 - Q₁₃ᵀ γ - Q₂₃ᵀ vec(S))
-    # Note that at this stage, y = q₃
-    mul!(ystar, Q₃₁, γstars, -one(R), inv(R(-2)))
-    mul!(ystar, Q₃₂, Sstar, -one(R), true)
-    ldiv!(Q₃₃inv, ystar)
-    # Reconstruct Wⱼ = γⱼ W̄ⱼ + Pⱼ Sⱼ Pⱼᵀ and Xⱼ = Ωⱼ + (W - C + A*(y))/α
-    Xstar_free .= .-c_free
-    for (Wstarⱼ, γstarⱼ, Wⱼ, Pkronⱼ, Sstarⱼ, Xstarⱼ, Cⱼ, nⱼ, rⱼ) in zip(Wstars, γstars, Ws, Pkrons, Sstars, Xstar_psds,
-                                                                        C_psds, psd, r)
-        copyto!(Wstarⱼ, Wⱼ)
-        # transpose(Pkronⱼ)*vec(Sstarⱼ) ≠ vec(Pⱼ Sⱼ Pⱼᵀ): the off-diagonal scaling is very different. It seems to be most
-        # reasonable to first overwrite Pkronⱼ with the proper rescaling (we don't need it any more) and then just do the
-        # multiplication.
-        Pkronᵀ = transpose(Pkronⱼ)
-        i = 2
-        for col in 2:rⱼ
-            @inbounds rmul!(@view(Pkronᵀ[:, i:i+col-2]), R(2))
-            i += col
-        end
-        i = 2
-        for row in 2:nⱼ
-            @inbounds rmul!(@view(Pkronᵀ[i:i+row-2, :]), inv(R(2)))
-            i += row
-        end
-        mul!(vec(Wstarⱼ), Pkronᵀ, Sstarⱼ, true, γstarⱼ)
-        Xstarⱼ .= Wstarⱼ .- Cⱼ
-    end
-    mul!(Xstar, At, ystar, invα, invα)
-    # before we complete the Ω reconstruction, calculate some feasibility quantifiers
-    dfeasible_psd = (α * sum(norm, Xstar_psds, init=zero(R)))^2
-    dfeasible_free = (α * norm(Xstar_free))^2
+    # Reconstruct y = Q₃₃⁻¹(q₃/2 - Q₃₁ γ - Q₃₂ svec(S))
+    # Note that at this stage, we have already saved the original value of q₃ in y
+    mul!(mastersolver.ystar, cache.Q₃₁, mastersolver.γstars, -one(R), inv(R(2)))
+    mul!(mastersolver.ystar, cache.Q₃₂, mastersolver.sstar_psd, -one(R), true)
+    ldiv!(cache.Q₃₃inv, mastersolver.ystar)
+    # Reconstruct Wstarⱼ = γstarⱼ Wⱼ + Pⱼ Sstarⱼ Pⱼᵀ and Xstarⱼ = Ωⱼ + (Wstar - C + A*(ystar))/α
+    copyto!(mastersolver.wstar_psd, data.w_psd)
+    mul!.(mastersolver.Wstar_psds, cache.Pkrons, mastersolver.Sstar_psds, one(R), mastersolver.γstars)
+    mastersolver.xstar_free .= .-data.c_free
+    mastersolver.xstar_psd .= mastersolver.wstar_psd .- data.c_psd
+    mul!(mastersolver.Xstar, data.At, mastersolver.ystar, invα, invα)
+    # before we complete by adding Ω, calculate some feasibility quantifiers
+    dfeasible_psd = (α * LinearAlgebra.norm2(mastersolver.xstar_psd))^2
+    dfeasible_free = (α * LinearAlgebra.norm2(mastersolver.xstar_free))^2
     dfeasible = dfeasible_free + dfeasible_psd
-    Xstar .+= Ω
+    mastersolver.Xstar .+= data.Ω
 
-    gap = abs(dot(b, ystar) - dot(c, Xstar))
+    gap = abs(dot(data.b, mastersolver.ystar) - dot(data.c, mastersolver.Xstar))
     return dfeasible, dfeasible_free, dfeasible_psd, gap
 end
 

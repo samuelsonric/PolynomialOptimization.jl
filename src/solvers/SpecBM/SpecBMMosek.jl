@@ -7,36 +7,34 @@ struct SpecBMSubsolverMosek
     M₂numterm::Vector{Int64}
     M₂ptrterm::Vector{Int64}
     M₂termidx::Vector{Int64}
-    lupermutations::Dict{Int,Vector{Int}}
 end
 
-function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psd, r, rdims, Σr, ρ)
+function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, ρ)
     task = Mosek.maketask()
     # Note that here, we use the macros for direct access. Often, this is more efficient as no index conversion is
     # necessary, so we do it everywhere for consistency. However, they are not part of the documented API, so we'll hope
     # that the interface does not change.
-    # first num_psd vars: γⱼ; following vars: triangles corresponding to vec(Sⱼ); last variable: objective
-    Mosek.@MSK_appendvars(task.task, num_psd +1)
-    Mosek.@MSK_putobjsense(task.task, Mosek.MSK_OBJECTIVE_SENSE_MINIMIZE.value)
-    Mosek.@MSK_putcj(task.task, num_psd, 1.)
+    # first num_psds vars: γⱼ; following vars: triangles corresponding to vec(Sⱼ); last variable: objective
+    Mosek.@MSK_appendvars(task.task, num_psds +1)
+    Mosek.@MSK_putobjsense(task.task, Mosek.MSK_OBJECTIVE_SENSE_MAXIMIZE.value)
+    Mosek.@MSK_putcj(task.task, num_psds, -1.)
     # γⱼ ≥ 0
-    Mosek.@MSK_putvarboundsliceconst(task.task, zero(Int32), num_psd, Mosek.MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(task.task, zero(Int32), num_psds, Mosek.MSK_BK_LO.value, 0., Inf)
     # objective variable: no bounds
-    Mosek.@MSK_putvarbound(task.task, num_psd, Mosek.MSK_BK_FR.value, -Inf, Inf)
+    Mosek.@MSK_putvarbound(task.task, num_psds, Mosek.MSK_BK_FR.value, -Inf, Inf)
     # Sⱼ ⪰ 0
     Mosek.@MSK_appendbarvars(task.task, length(r), convert(Vector{Int32}, r))
     # γⱼ + tr(Sⱼ) ≤ ρ
-    Mosek.@MSK_appendcons(task.task, num_psd)
-    Mosek.@MSK_putconboundsliceconst(task.task, zero(Int32), num_psd, Mosek.MSK_BK_UP.value, -Inf, ρ)
+    Mosek.@MSK_appendcons(task.task, num_psds)
+    Mosek.@MSK_putconboundsliceconst(task.task, zero(Int32), num_psds, Mosek.MSK_BK_UP.value, -Inf, ρ)
     ur = unique(r)
-    # with the same breath, also create sparse symmats for extracting vec(S)
+    # with the same breath, also create sparse symmats for extracting svec(S)
     sparsemats = sizehint!(Dict{Int,Vector{Int64}}(), length(ur))
     cfz = Iterators.countfrom(zero(Int32))
-    lupermutations = sizehint!(Dict{Int,Vector{Int}}(), length(ur))
-    let dims=Vector{Int32}(undef, maximum(rdims)), range=collect(Int32(0):Int32(max(num_psd -1, length(dims)))),
+    let dims=Vector{Int32}(undef, maximum(rdims)), range=collect(Int32(0):Int32(max(num_psds, length(dims)) -1)),
         values=ones(Float64, length(range)), traces=sizehint!(Dict{Int,Int}(), length(ur)),
         rows=range, columns=similar(dims), nzs=ones(Int64, length(dims))
-        Mosek.@MSK_putaijlist64(task.task, num_psd, range, range, values)
+        Mosek.@MSK_putaijlist64(task.task, num_psds, range, range, values)
         for (j, rⱼ) in zip(cfz, r)
             sparseidx = get!(() -> let idx=Ref{Int64}()
                 Mosek.@MSK_appendsparsesymmat(task.task, rⱼ, rⱼ, range, range, values, idx)
@@ -47,40 +45,32 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psd, r, rdims, Σr, ρ
         # We loop once more, which allows us to overwrite range as "rows"
         @inbounds for rⱼ in ur
             dimⱼ = packedsize(rⱼ)
-            lupermutation = Vector{Int}(undef, dimⱼ)
             k = 1
             for col in 0:rⱼ-1
-                curidx = col +1
-                Δ = rⱼ
-                for row in 0:col-1
-                    rows[k] = row
-                    columns[k] = col
-                    values[k] = .5 # triangle is doubled, we don't want this
-                    lupermutation[k] = curidx
-                    curidx += (Δ -= 1)
-                    k += 1
-                end
                 rows[k] = col
                 columns[k] = col
                 values[k] = 1.
-                lupermutation[k] = curidx
                 k += 1
+                for row in col+1:rⱼ-1
+                    rows[k] = row
+                    columns[k] = col
+                    values[k] = inv(sqrt2) # triangle is doubled, we don't want this
+                    k += 1
+                end
             end
             @assert(k -1 == dimⱼ)
             output = Vector{Int64}(undef, dimⱼ)
             fill!(dims, Int32(rⱼ))
-            # We flip rows and cols, as MOSEK wants the lower triangle
-            Mosek.@MSK_appendsparsesymmatlist(task.task, dimⱼ, dims, nzs, columns, rows, values, output)
+            Mosek.@MSK_appendsparsesymmatlist(task.task, dimⱼ, dims, nzs, rows, columns, values, output)
             sparsemats[dimⱼ] = output
-            lupermutations[dimⱼ] = lupermutation
         end
     end
     # quadratic objective constraint: F x + ⟨F̄, X̄⟩ + g ∈ D
     qc = Ref{Int64}()
-    conedim = num_psd + Σr +2
+    conedim = num_psds + Σr +2
     Mosek.@MSK_appendrquadraticconedomain(task.task, conedim, qc)
     Mosek.@MSK_appendafes(task.task, conedim)
-    Mosek.@MSK_putafefentry(task.task, 0, num_psd, 1.) # put the objective in the quadratic cone already
+    Mosek.@MSK_putafefentry(task.task, 0, num_psds, 1.) # put the objective in the quadratic cone already
     Mosek.@MSK_putafeg(task.task, 1, .5) # we need to minimize the actual square, so we use the rotated quadratic cone, but we
                                          # then have to fix the second variable to 1/2.
     Mosek.@MSK_appendaccseq(task.task, qc[], conedim, 0, C_NULL)
@@ -90,23 +80,22 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psd, r, rdims, Σr, ρ
     # And we need to look at the right part of Lᵀ (in dense storage format), which is the bottom part in L. This is bad, as
     # it is not in a contiguous storage. But the rows of the right part of Lᵀ are indeed in contiguous storage, and Mosek
     # provides a routine just to set these rows.
-    M₂barvaridx = collect(Int32(0):Int32(num_psd -1))
+    M₂barvaridx = collect(Int32(0):Int32(num_psds -1))
     M₂numterm = convert(Vector{Int64}, rdims)
     M₂ptrterm = isempty(rdims) ? Int64[] : accumulate(+, Iterators.flatten((zero(Int64),
                                                                             Iterators.take(rdims, length(rdims) -1))))
     M₂termidx = vcat((sparsemats[dimⱼ] for dimⱼ in rdims)...)
     # We put the γ data into the afes columnwise
-    M₁afeidx = collect(Int64(2):Int64(num_psd + Σr +1))
+    M₁afeidx = collect(Int64(2):Int64(num_psds + Σr +1))
     M₁val = similar(M₁afeidx, Float64)
-    return SpecBMSubsolverMosek(task, sparsemats, M₁afeidx, M₁val, M₂barvaridx, M₂numterm, M₂ptrterm,
-        M₂termidx, lupermutations)
+    return SpecBMSubsolverMosek(task, sparsemats, M₁afeidx, M₁val, M₂barvaridx, M₂numterm, M₂ptrterm, M₂termidx)
 end
 
-specbm_finalize_primal_subsolver(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
+specbm_finalize_primal_subsolver!(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
 
 #= old - assumes that we don't use barvars, but variables in the scalar psd cone
 let indices=Vector{Int32}(undef, maximum(rdims)), values=ones(Float64, length(indices) +1),
-    indices2=similar(indices), values2=similar(values), i=num_psd, sqrt2=sqrt(2) # zero-based
+    indices2=similar(indices), values2=similar(values), i=num_psds, sqrt2=sqrt(2) # zero-based
     @inbounds for (j, (rⱼ, dimⱼ)) in enumerate(zip(r, rdims))
         istart = i
         # first encode γⱼ + tr(Sⱼ) ≤ ρ, we need rⱼ +1 entries
@@ -159,16 +148,17 @@ function mosekdump(task, fn)
     end
 end
 
-function specbm_primal_subsolve(data::SpecBMSubsolverMosek, Mfact, m₁, m₂s, Σr, γstars, Sstars, tmp)
-    num_psd = length(m₁)
+function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}, Mfact) where {R,F,ACV}
+    data = cache.subsolver
+    num_psds = length(cache.m₁)
     cfz = Iterators.countfrom(zero(Int32))
     taskptr = data.task.task
-    Mosek.@MSK_putcslice(taskptr, 0, num_psd, m₁)
-    for (i, m₂) in zip(cfz, m₂s)
+    Mosek.@MSK_putcslice(taskptr, 0, length(cache.m₁), cache.m₁)
+    for (i, m₂) in zip(cfz, cache.m₂s)
         Mosek.@MSK_putbarcj(taskptr, i, length(m₂), data.sparsemats[length(m₂)], m₂)
     end
     pLᵀ = transpose(@view(Mfact.L[invperm(Mfact.p), 1:Mfact.rank]))
-    for (idx, col) in zip(zero(Int32):Int32(num_psd -1), eachcol(pLᵀ))
+    for (idx, col) in zip(zero(Int32):Int32(num_psds -1), eachcol(pLᵀ))
         copyto!(data.M₁val, col)
         Mosek.@MSK_putafefcol(
             taskptr,
@@ -179,8 +169,8 @@ function specbm_primal_subsolve(data::SpecBMSubsolverMosek, Mfact, m₁, m₂s, 
         )
     end
     let
-        pL₂ᵀ = @view(pLᵀ[:, num_psd+1:end])
-        buf = @view(tmp[1:size(pL₂ᵀ, 2)])
+        pL₂ᵀ = @view(pLᵀ[:, num_psds+1:end])
+        buf = gettmp(cache, size(pL₂ᵀ, 2))
         # in the afes, our row index starts with 2 - as 0 is the index of the upper bound variable (-> objective) and 1 is the
         # index of the fixed 1/2
         for (i, row) in zip(Iterators.countfrom(Int64(2)), eachrow(pL₂ᵀ))
@@ -188,11 +178,11 @@ function specbm_primal_subsolve(data::SpecBMSubsolverMosek, Mfact, m₁, m₂s, 
             Mosek.@MSK_putafebarfrow(
                 taskptr,
                 i,
-                num_psd,
+                num_psds,
                 data.M₂barvaridx,
                 data.M₂numterm,
                 data.M₂ptrterm,
-                Σr,
+                cache.Σr,
                 data.M₂termidx,
                 buf
             )
@@ -210,14 +200,13 @@ function specbm_primal_subsolve(data::SpecBMSubsolverMosek, Mfact, m₁, m₂s, 
     #Mosek.@MSK_writedata(taskptr, "task.task")
     #Mosek.@MSK_readdata(taskptr, "task.task")
     Mosek.optimize(data.task)
-    solutionstap = Ref{Int32}()
-    Mosek.@MSK_getsolsta(taskptr, Mosek.MSK_SOL_ITR.value, solutionstap)
-    solutionsta = Mosek.Solsta(solutionstap[])
+    solutionsta = Mosek.getsolsta(data.task, Mosek.MSK_SOL_ITR)
     solutionsta == Mosek.MSK_SOL_STA_OPTIMAL || error("Subsolver failed with status ", solutionsta)
-    Mosek.@MSK_getxxslice(taskptr, Mosek.MSK_SOL_ITR.value, 0, length(γstars), γstars)
-    for (j, Sⱼ) in zip(cfz, Sstars)
-        Mosek.@MSK_getbarxj(taskptr, Mosek.MSK_SOL_ITR.value, j, tmp)
-        @inbounds copyto!(Sⱼ, @view(tmp[data.lupermutations[length(Sⱼ)]]))
+    Mosek.@MSK_getxxslice(taskptr, Mosek.MSK_SOL_ITR.value, 0, length(mastersolver.γstars), mastersolver.γstars)
+    for (j, Sⱼ) in zip(cfz, mastersolver.Sstar_psds)
+        Sⱼunscaled = PackedMatrix(LinearAlgebra.checksquare(Sⱼ), vec(Sⱼ), :L)
+        Mosek.@MSK_getbarxj(taskptr, Mosek.MSK_SOL_ITR.value, j, Sⱼunscaled)
+        packed_scale!(Sⱼunscaled)
     end
     return
 end
