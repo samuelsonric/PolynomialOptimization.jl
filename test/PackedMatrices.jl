@@ -1,7 +1,6 @@
 using Test
 using PolynomialOptimization.PackedMatrices
 using LinearAlgebra, SparseArrays
-using Random
 
 setprecision(8)
 
