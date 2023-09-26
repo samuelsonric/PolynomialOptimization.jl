@@ -21,6 +21,7 @@ setprecision(8)
                 0.27758928139887895,0.09214560319184117,0.45340576959493983]
             pm = PackedMatrix(7, data)
             @test size(pm) == (7, 7)
+            @test LinearAlgebra.checksquare(pm) == 7
             @test eltype(pm) === elty
             @test packed_isupper(pm)
             @test !packed_islower(pm)
@@ -156,6 +157,7 @@ setprecision(8)
                 0.09214560319184117,0.45340576959493983]
             pm = PackedMatrix(7, data, :L)
             @test size(pm) == (7, 7)
+            @test LinearAlgebra.checksquare(pm) == 7
             @test eltype(pm) === elty
             @test !packed_isupper(pm)
             @test packed_islower(pm)
@@ -291,6 +293,7 @@ setprecision(8)
                 0.3925705265236962,0.13031356174695136,0.45340576959493983]
             pm = PackedMatrix(7, data, :US)
             @test size(pm) == (7, 7)
+            @test LinearAlgebra.checksquare(pm) == 7
             @test eltype(pm) === elty
             @test packed_isupper(pm)
             @test !packed_islower(pm)
@@ -422,6 +425,7 @@ setprecision(8)
                 0.13031356174695136,0.45340576959493983]
             pm = PackedMatrix(7, data, :LS)
             @test size(pm) == (7, 7)
+            @test LinearAlgebra.checksquare(pm) == 7
             @test eltype(pm) === elty
             @test !packed_isupper(pm)
             @test packed_islower(pm)
