@@ -84,7 +84,7 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
     M₂numterm = convert(Vector{Int64}, rdims)
     M₂ptrterm = isempty(rdims) ? Int64[] : accumulate(+, Iterators.flatten((zero(Int64),
                                                                             Iterators.take(rdims, length(rdims) -1))))
-    M₂termidx = vcat((sparsemats[dimⱼ] for dimⱼ in rdims)...)
+    M₂termidx = collect(Iterators.flatten(sparsemats[dimⱼ] for dimⱼ in rdims))
     # We put the γ data into the afes columnwise
     M₁afeidx = collect(Int64(2):Int64(num_psds + Σr +1))
     M₁val = similar(M₁afeidx, Float64)
