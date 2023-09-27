@@ -15,7 +15,7 @@ end
 The basic structure for a polynomial optimization problem.
 
 Generate this type using [`poly_problem`](@ref); perform optimizations by constructing an appropriate
-[`SparseAnalysisState`](@ref).
+[`AbstractSparsity`](@ref).
 
 See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`SparsityNone`](@ref), [`SparsityCorrelative`](@ref),
 [`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref).
@@ -80,7 +80,7 @@ MultivariatePolynomials.polynomial_type(::Union{PolyOptProblem{P},Type{PolyOptPr
 MultivariatePolynomials.monomial_type(::Union{PolyOptProblem{P,M},Type{PolyOptProblem{P,M}}}) where {P,M} = M
 MultivariatePolynomials.variable_union_type(::Union{PolyOptProblem{P,M,V},Type{PolyOptProblem{P,M,V}}}) where {P,M,V} = V
 """
-    variables(prob::Union{PolyOptProblem,SparseAnalysisState})
+    variables(prob::Union{PolyOptProblem,AbstractSparsity})
 
 Returns the variables associated to a given polynomial optimization problem. This defines the order in which solutions are
 returned.
@@ -89,7 +89,7 @@ See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions
 """
 MultivariatePolynomials.variables(prob::PolyOptProblem) = prob.variables
 """
-    nvariables(prob::Union{PolyOptProblem,SparseAnalysisState})
+    nvariables(prob::Union{PolyOptProblem,AbstractSparsity})
 
 Returns the number of variables associated to a given polynomial optimization problem. This defines the order in which
 solutions are returned.
@@ -98,7 +98,7 @@ See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions
 """
 MultivariatePolynomials.nvariables(prob::PolyOptProblem) = length(prob.variables)
 """
-    degree(prob::Union{PolyOptProblem,SparseAnalysisState})
+    degree(prob::Union{PolyOptProblem,AbstractSparsity})
 
 Returns the degree associated with a polynomial optimization problem.
 
@@ -106,7 +106,7 @@ See also [`poly_problem`](@ref).
 """
 MultivariatePolynomials.degree(prob::PolyOptProblem) = prob.degree
 """
-    isreal(prob::Union{PolyOptProblem,SparseAnalysisState})
+    isreal(prob::Union{PolyOptProblem,AbstractSparsity})
 
 Returns whether a given polynomial optimization problem contains only real-valued variables or also complex ones.
 """
@@ -640,7 +640,7 @@ poly_optimize(method::Union{<:Val,Symbol}, prob::PolyOptProblem, rest...; kwrest
 
 """
     last_moments(state::PolyOptProblem)
-    last_moments(state::SparseAnalysisState)
+    last_moments(state::AbstractSparsity)
 
 Returns the moments dictionary that was the result of the last optimization.
 Note that the results are associated with a _problem_, not with the sparse states. Therefore, the second form is merely a
@@ -653,7 +653,7 @@ last_moments(prob::PolyOptProblem) = prob.last_moments
 
 """
     last_objective(state::PolyOptProblem)
-    last_objective(state::SparseAnalysisState)
+    last_objective(state::AbstractSparsity)
 
 Returns the objective value that was the result of the last optimization, which is an underestimator of the actual problem.
 Note that the results are associated with a _problem_, not with the sparse states. Therefore, the second form is merely a

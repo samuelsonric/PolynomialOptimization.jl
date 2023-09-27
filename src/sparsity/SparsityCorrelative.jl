@@ -1,6 +1,6 @@
 export SparsityCorrelative
 
-mutable struct SparsityCorrelative <: SparseAnalysisState
+mutable struct SparsityCorrelative <: AbstractSparsity
     problem::PolyOptProblem
     graph::Graphs.SimpleGraph
     chordal_completion::Bool

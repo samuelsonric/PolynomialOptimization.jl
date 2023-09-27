@@ -1,23 +1,23 @@
 export sparse_problem, sparse_groupings, sparse_iterate!, sparse_optimize
 
 """
-    SparseAnalysisState
+    AbstractSparsity
 
 This is the general abstract type for any kind of sparse analysis of a polynomial optimization problem.
 Its concrete types can be used for analyzing and optimizing the problem.
 
 See also [`poly_problem`](@ref), [`PolyOptProblem`](@ref), [`sparse_optimize`](@ref).
 """
-abstract type SparseAnalysisState end
+abstract type AbstractSparsity end
 
 """
-    sparse_problem(state::SparseAnalysisState)
+    sparse_problem(state::AbstractSparsity)
 
 Return the instance of the [`PolyOptProblem`](@ref) that is associated with the current sparse problem.
 """
 function sparse_problem end
 """
-    sparse_groupings(state::SparseAnalysisState)
+    sparse_groupings(state::AbstractSparsity)
 
 Analyze the current state and return the bases and cliques as indicated by its sparsity.
 Return `(groupings, cliques)`, where `groupings` is a vector whose first entry corresponds to the objective and the others to
@@ -28,7 +28,7 @@ total problem. In the complex case, only the declared variables are returned.
 function sparse_groupings end
 
 """
-    sparse_iterate!(state::SparseAnalysisState; objective=true, zero=true, nonneg=true, psd=true)
+    sparse_iterate!(state::AbstractSparsity; objective=true, zero=true, nonneg=true, psd=true)
 
 Iterate the sparsity, which will lead to a more dense representation and might give better bounds at the expense of a more
 costly optimization. Return `nothing` if the iterations converged (`state` did not change any more), else return the new state.
@@ -61,7 +61,7 @@ function sparse_iterate! end
 # internal function
 function sparse_supports end
 
-function Base.show(io::IO, m::MIME"text/plain", x::SparseAnalysisState)
+function Base.show(io::IO, m::MIME"text/plain", x::AbstractSparsity)
     basis_groupings, variable_groupings = sparse_groupings(x)
     sort!.(variable_groupings, rev=true)
     sort!(variable_groupings, rev=true)
@@ -144,11 +144,11 @@ merge_cliques(cliques::AbstractVector{<:AbstractVector{T}}) where {T} =
     monomial_vector.(collect.(merge_cliques!(Set.(cliques))))
 
 """
-    sparse_optimize(method, state::SparseAnalysisState; verbose=false, clique_merging=true, solutions=false,
+    sparse_optimize(method, state::AbstractSparsity; verbose=false, clique_merging=true, solutions=false,
         certificate=false, kwargs...)
 
 Optimize a polynomial optimization problem that was construced via [`poly_problem`](@ref) and wrapped into a
-[`SparseAnalysisState`](@ref). Return the optimizer state, the best bound, and a list of potential optimal points. The latter
+[`AbstractSparsity`](@ref). Return the optimizer state, the best bound, and a list of potential optimal points. The latter
 is a vector of 2-tuples, where the first entry in each tuple corresponds to the optimal point and the second entry yields the
 largest violation of a constraint or the difference from the actual value of the objective at this point to the bound,
 whichever is larger. Unless this value is numerically zero, the optimal point is bogus; if it is numerically zero, the bound is
@@ -174,7 +174,7 @@ The following methods are currently supported:
 See also [`poly_all_solutions`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`optimality_certificate`](@ref).
 """
-function sparse_optimize(v::V, state::SparseAnalysisState; verbose::Bool=false, clique_merging::Bool=false,
+function sparse_optimize(v::V, state::AbstractSparsity; verbose::Bool=false, clique_merging::Bool=false,
     solutions::Bool=false, certificate::Bool=false, kwargs...) where {V<:Val}
     @verbose_info("Determining groupings...")
     t = @elapsed begin
@@ -209,8 +209,8 @@ end
 
 sparse_optimize(s::Symbol, rest...; kwrest...) = sparse_optimize(Val(s), rest...; kwrest...)
 
-last_moments(state::SparseAnalysisState) = last_moments(sparse_problem(state))
-last_objective(state::SparseAnalysisState) = last_objective(sparse_problem(state))
+last_moments(state::AbstractSparsity) = last_moments(sparse_problem(state))
+last_objective(state::AbstractSparsity) = last_objective(sparse_problem(state))
 
 function Base.mergewith(combine, d::AbstractVector{Pair{K,V}}) where {K,V}
     return mergewith(combine, d, K, V)
@@ -226,8 +226,8 @@ function Base.mergewith(combine, itr, K::Type, V::Type)
 end
 
 for fun in (:variables, :nvariables, :degree)
-    @eval MultivariatePolynomials.$fun(state::SparseAnalysisState) = $fun(sparse_problem(state))
+    @eval MultivariatePolynomials.$fun(state::AbstractSparsity) = $fun(sparse_problem(state))
 end
-Base.isreal(state::SparseAnalysisState) = isreal(sparse_problem(state))
+Base.isreal(state::AbstractSparsity) = isreal(sparse_problem(state))
 
 printstream(msg::String) = (print(msg); flush(stdout))

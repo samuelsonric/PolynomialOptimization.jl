@@ -12,9 +12,9 @@ Valid values are `tm_none` ([`SparsityNone`](@ref)), `tm_block` ([`SparsityTermB
 `chordal_completion = false`).
 " TermMode
 
-struct SparsityCorrelativeTerm <: SparseAnalysisState
+struct SparsityCorrelativeTerm <: AbstractSparsity
     problem::PolyOptProblem
-    cliques::Vector{SparseAnalysisState}
+    cliques::Vector{AbstractSparsity}
     constraint_locations::Vector{Pair{Int,Int}}
     index_maps::Vector{Base.ImmutableDict{Int,Int}}
 
@@ -69,7 +69,7 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
         end
 
         index_maps = Vector{Base.ImmutableDict{Int,Int}}(undef, length(cliques))
-        sparse_cliques = Vector{SparseAnalysisState}(undef, length(cliques))
+        sparse_cliques = Vector{AbstractSparsity}(undef, length(cliques))
         problems = Vector{typeof(problem)}(undef, length(cliques))
         @verbose_info("Generating subproblems and subbases")
         gentime = @elapsed begin

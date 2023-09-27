@@ -38,7 +38,7 @@ last_objective
 
 ## Sparsity
 ```@docs
-SparseAnalysisState
+AbstractSparsity
 SparsityNone
 SparsityCorrelative
 SparsityTerm

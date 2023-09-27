@@ -192,7 +192,7 @@ representation is extended (resp. converted into groupings).
 
 See also [`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref).
 """
-abstract type SparsityTerm <: SparseAnalysisState end
+abstract type SparsityTerm <: AbstractSparsity end
 
 sparse_problem(stl::SparsityTerm) = sparse_problem(stl.logic)
 

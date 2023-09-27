@@ -7,7 +7,7 @@ This is a wrapper that does not perform any kind of sparsity analysis.
 
 See also [`poly_problem`](@ref), [`sparse_optimize`](@ref).
 """
-struct SparsityNone <: SparseAnalysisState
+struct SparsityNone <: AbstractSparsity
     problem::PolyOptProblem
 end
 

@@ -1,7 +1,7 @@
 export poly_solutions_heuristic
 
 """
-    poly_solutions_heuristic(problem::Union{PolyOptProblem,SparseAnalysisState}; verbose=false)
+    poly_solutions_heuristic(problem::Union{PolyOptProblem,AbstractSparsity}; verbose=false)
 
 Apply a heuristic solution extraction mechanism to a solved polynomial optimization problem. If there is only a single
 solution, the heuristic will always work (but is much faster than a rank factorization). It may in certain cases also work if
@@ -49,7 +49,7 @@ function poly_solutions_heuristic(problem::PolyOptProblem; verbose::Bool=false)
     end
     return solutions
 end
-poly_solutions_heuristic(state::SparseAnalysisState; kwargs...) = poly_solutions_heuristic(sparse_problem(state); kwargs...)
+poly_solutions_heuristic(state::AbstractSparsity; kwargs...) = poly_solutions_heuristic(sparse_problem(state); kwargs...)
 
 @inline function solutions_heuristic_simple(problem::PolyOptProblem{P,M,V}, mons::Dict{M,Float64}) where {P,M,V}
     # In this part, we extract the parts of the solution by looking at the monomials that are powers of variables.

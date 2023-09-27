@@ -3,7 +3,7 @@ export moment_matrix, poly_solutions, poly_solution_badness, poly_all_solutions,
 struct MonomialMissing <: Exception end
 
 """
-    moment_matrix(problem::Union{PolyOptProblem,SparseAnalysisState}; max_deg=Inf, prefix=1)
+    moment_matrix(problem::Union{PolyOptProblem,AbstractSparsity}; max_deg=Inf, prefix=1)
 
 After a problem has been optimized, this function assembles the associated moment matrix (possibly by imposing a degree bound
 `max_deg`, and possibly multiplying each monomial by the monomial `prefix`, which does not add to `max_deg`).
@@ -49,7 +49,7 @@ function moment_matrix(problem::PolyOptProblem; max_deg=Inf, prefix=1)
         return Symmetric(moment_matrix(last_moments(problem), b, b, prefix))
     end
 end
-moment_matrix(sparse::SparseAnalysisState; kwargs...) = moment_matrix(sparse_problem(sparse); kwargs...)
+moment_matrix(sparse::AbstractSparsity; kwargs...) = moment_matrix(sparse_problem(sparse); kwargs...)
 
 struct PolynomialSolutions{O,has_length}
     var_to_idx
@@ -60,7 +60,7 @@ struct PolynomialSolutions{O,has_length}
 end
 
 """
-    poly_solutions(problem::Union{PolyOptProblem,SparseAnalysisState}, ϵ=1e-6, δ=1e-3; verbose=false)
+    poly_solutions(problem::Union{PolyOptProblem,AbstractSparsity}, ϵ=1e-6, δ=1e-3; verbose=false)
 
 Performs a multivariate Hankel decomposition of the full moment matrix that was obtained via optimization of the problem, using
 the [best currently known algorithm](https://doi.org/10.1016/j.laa.2017.04.015). This method is not deterministic due to a
@@ -75,7 +75,7 @@ This function returns an iterator.
 
 See also [`poly_optimize`](@ref), [`sparse_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
 """
-function poly_solutions(state::SparseAnalysisState, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false) where {R<:Real}
+function poly_solutions(state::AbstractSparsity, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false) where {R<:Real}
     if !(state isa SparsityNone || state isa SparsityCorrelative)
         @warn("poly_solutions requires a certain group structure in the moment matrix. For term sparsity, this is usually not satisfied and the results are probably useless or not to be trusted. Consider using poly_solutions_heuristic instead.")
     end
@@ -251,7 +251,7 @@ function poly_solutions_scaled(moments::Dict{M,R}, a1, a2, variables, ϵ::R, mis
 end
 
 """
-    poly_solution_badness(problem::Union{PolyOptProblem,SparseAnalysisState}, solution)
+    poly_solution_badness(problem::Union{PolyOptProblem,AbstractSparsity}, solution)
 
 Determines the badness of a solution by comparing the value of the objective with the value according to the last optimization
 that was done on the problem, and also by checking the violation of the constraints.
@@ -280,12 +280,12 @@ function poly_solution_badness(problem::PolyOptProblem, solution::Vector)
     end
     return violation
 end
-poly_solution_badness(state::SparseAnalysisState, args...) = poly_solution_badness(sparse_problem(state), args...)
+poly_solution_badness(state::AbstractSparsity, args...) = poly_solution_badness(sparse_problem(state), args...)
 
 function default_solution_method end
 
 """
-    poly_all_solutions(problem::Union{PolyOptProblem,SparseAnalysisState}, ϵ=1e-6, δ=1e-3; verbose=false,
+    poly_all_solutions(problem::Union{PolyOptProblem,AbstractSparsity}, ϵ=1e-6, δ=1e-3; verbose=false,
         rel_threshold=100, abs_threshold=Inf, method::Symbol)
 
 Obtains a vector of all the solutions to a previously optimized problem; then iterates over all of them and grades and sorts
@@ -300,7 +300,7 @@ The currently accepted methods are
 See also [`poly_optimize`](@ref), [`sparse_optimize`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`poly_solutions_heuristic`](@ref).
 """
-function poly_all_solutions(state::SparseAnalysisState, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
+function poly_all_solutions(state::AbstractSparsity, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
     rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=default_solution_method(state, missing)) where {R<:Real}
     if method === :heuristic
         sol_itr = poly_solutions_heuristic(sparse_problem(state); verbose)

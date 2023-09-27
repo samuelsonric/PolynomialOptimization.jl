@@ -37,7 +37,7 @@ include("./helpers/MatrixPolynomials.jl")
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")
 include("./Problem.jl")
-include("./sparsity/SparseAnalysis.jl")
+include("./sparsity/Sparsity.jl")
 include("./Tightening.jl")
 
 include("./SolutionExtraction.jl")
