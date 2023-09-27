@@ -440,7 +440,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             primal_feasi = min(primal_feasi, first(V.values))
             r_pastⱼ = min(r_pastⱼ, rⱼ)
             if iszero(r_pastⱼ)
-                copyto!(Wⱼ, mastersolvers.Wstars[j])
+                copyto!(Wⱼ, mastersolver.Wstar_psds[j])
                 rmul!(Wⱼ, inv(tr(Wⱼ)))
                 copyto!(Pⱼ, V.vectors)
             else
@@ -553,7 +553,7 @@ end
     twoCminusαΩ = mastersolver.Xstar_psds
     mastersolver.xstar_psd .= R(2) .* (data.c_psd .- α .* data.ω_psd)
     cache.q₁ .= dot.(data.W_psds, twoCminusαΩ) # note that q₁ aliases m₁, so we already set the first part in m₁!
-    mul!(cache.Q₃₁, data.a_psd, data.w_psd)
+    mul!.(eachcol(cache.Q₃₁), (data.a_psd,), data.W_psds)
     if feasible
         copyto!(cache.q₃, cache.twoAc)
     else
