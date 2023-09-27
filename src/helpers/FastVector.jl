@@ -30,14 +30,14 @@ FastVec{V}(; buffer::Integer=0) where {V} = FastVec{V}(undef, 0; buffer)
 
 Base.size(v::FastVec) = (v.len,)
 
-Base.@propagate_inbounds function Base.getindex(v::FastVec, i::Int)
+Base.@inline function Base.getindex(v::FastVec, i::Int)
     @boundscheck checkbounds(v, i)
     @inbounds return v.data[i]
 end
 
 Base.IndexStyle(::FastVec) = IndexLinear()
 
-Base.@propagate_inbounds function Base.setindex!(v::FastVec{V}, el::V, i::Int) where {V}
+Base.@inline function Base.setindex!(v::FastVec{V}, el::V, i::Int) where {V}
     @boundscheck checkbounds(v, i)
     @inbounds return v.data[i] = el
 end
