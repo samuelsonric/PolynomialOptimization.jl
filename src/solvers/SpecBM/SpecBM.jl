@@ -66,8 +66,8 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
                 # individually!
                 W_psds[j] = Wⱼ = PackedMatrix(nⱼ, @view(w_psd[i-num_frees:i-num_frees+dimⱼ-1]), :LS)
                 Wⱼ[1, 1] = one(R)
-                # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can do
-                # this explicitly.
+                # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can
+                # do this explicitly.
                 P_psds[j] = Pⱼ = zeros(R, nⱼ, rⱼ)
                 for k in 1:rⱼ
                     Pⱼ[k, k] = one(R)
@@ -634,7 +634,7 @@ end
     mul!(mastersolver.Xstar, data.At, mastersolver.ystar, invα, invα)
     # before we complete by adding Ω, calculate some feasibility quantifiers
     dfeasible_psd = (α * LinearAlgebra.norm2(mastersolver.xstar_psd))^2
-    dfeasible_free = (α * LinearAlgebra.norm2(mastersolver.xstar_free))^2
+    dfeasible_free = (α * norm(mastersolver.xstar_free))^2 # vector norm2 doesn't work on empty collections
     dfeasible = dfeasible_free + dfeasible_psd
     mastersolver.Xstar .+= data.Ω
 
