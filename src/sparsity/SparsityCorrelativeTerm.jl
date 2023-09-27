@@ -281,3 +281,5 @@ function sparse_supports(cts::SparsityCorrelativeTerm)
     end
     return merge_monomial_vectors(supports)
 end
+
+default_solution_method(::SparsityCorrelativeTerm, ::Any) = :mvhankel

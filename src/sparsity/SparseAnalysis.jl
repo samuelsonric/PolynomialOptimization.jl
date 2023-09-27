@@ -191,13 +191,15 @@ function sparse_optimize(v::V, state::SparseAnalysisState; verbose::Bool=false, 
         @verbose_info("Clique merging disabled. Block sizes:")
     end
     @verbose_info(sort!(collect(StatsBase.countmap(length.(Iterators.flatten(groupings)))), rev=true), "\nStarting optimization")
-    result = sparse_optimize(v, sparse_problem(state), groupings; verbose, kwargs...)
+    problem = sparse_problem(state)
+    result = sparse_optimize(v, problem, groupings; verbose, kwargs...)
+    problem.last_objective = result[2]
     if solutions
-        result = (result..., poly_all_solutions(state, result[2]; verbose))
+        result = (result..., poly_all_solutions(state; verbose, method=default_solution_method(state, v)))
     end
     if certificate
         if state isa SparsityNone
-            result = (result..., optimality_certificate(sparse_problem(state)))
+            result = (result..., optimality_certificate(problem))
         else
             result = (result..., :CertificateUnavailable)
         end
@@ -208,6 +210,7 @@ end
 sparse_optimize(s::Symbol, rest...; kwrest...) = sparse_optimize(Val(s), rest...; kwrest...)
 
 last_moments(state::SparseAnalysisState) = last_moments(sparse_problem(state))
+last_objective(state::SparseAnalysisState) = last_objective(sparse_problem(state))
 
 function Base.mergewith(combine, d::AbstractVector{Pair{K,V}}) where {K,V}
     return mergewith(combine, d, K, V)

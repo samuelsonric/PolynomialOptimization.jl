@@ -184,3 +184,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
     end
     return quality, -value
 end
+
+for sp in SparsityAny
+    @eval default_solution_method(::$sp, ::Val{:SpecBMSOS}) = :heuristic
+end

@@ -20,3 +20,5 @@ sparse_groupings(ns::SparsityNone) =
     [[ns.problem.basis], ([x.basis] for x in ns.problem.constraints)...], [ns.problem.variables]
 
 sparse_supports(ns::SparsityNone) = ns.problem.basis
+
+default_solution_method(::SparsityNone, ::Any) = :mvhankel

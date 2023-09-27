@@ -37,21 +37,25 @@ include("./helpers/MatrixPolynomials.jl")
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")
 include("./Problem.jl")
-include("./Tightening.jl")
 include("./sparsity/SparseAnalysis.jl")
+include("./Tightening.jl")
+
 include("./SolutionExtraction.jl")
 include("./SolutionExtractionHeuristic.jl")
-# Do we have Mosek version at least 10?
-isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
-include("./solvers/MosekSOS.jl")
-include("./solvers/COSMOMoment.jl")
-include("./solvers/SpecBMSOS.jl")
-include("./solvers/HypatiaMoment.jl")
+
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
 include("./sparsity/SparsityTerm.jl")
 include("./sparsity/SparsityTermBlock.jl")
 include("./sparsity/SparsityTermCliques.jl")
 include("./sparsity/SparsityCorrelativeTerm.jl")
+const SparsityAny = (SparsityNone,SparsityCorrelative,SparsityTerm,SparsityCorrelativeTerm)
+
+# Do we have Mosek version at least 10?
+isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
+include("./solvers/MosekSOS.jl")
+include("./solvers/COSMOMoment.jl")
+include("./solvers/SpecBMSOS.jl")
+include("./solvers/HypatiaMoment.jl")
 
 end
