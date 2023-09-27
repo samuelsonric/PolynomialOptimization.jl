@@ -170,12 +170,14 @@ struct SpecBMCache{R,F,ACV,SS}
     # some precomputed data
     Σr::Int
     twoAc::ACV
+    # caches for eigendecomposition
+    eigens::Vector{Tuple{Eigen{R,R,Matrix{R},Vector{R}},Vector{R},Vector{BLAS.BlasInt},Vector{BLAS.BlasInt},Matrix{R}}}
     # and one temporary in various forms (shared memory!)
     tmp::Vector{R}
     # finally the subsolver
     subsolver::SS
 
-    function SpecBMCache(data::SpecBMData{R}, AAt, subsolver, ρ) where {R}
+    function SpecBMCache(data::SpecBMData{R}, AAt, subsolver, ρ, r_current) where {R}
         @inbounds begin
             rdims = packedsize.(data.r)
             Σr = sum(rdims, init=0)
@@ -202,14 +204,26 @@ struct SpecBMCache{R,F,ACV,SS}
             Q₃₂s = Vector{typeof(@view(Q₃₂[:, begin:end]))}(undef, num_psds)
             Q₃₃inv = try EfficientCholmod(ldlt(AAt)) catch; qr(AAt) end
             twoAc = rmul!(data.A * data.c, R(2)) # typically, A and c are sparse, so the * implementation is the best
+            eigens = Vector{Tuple{Eigen{R,R,Matrix{R},Vector{R}},Vector{R},Vector{BLAS.BlasInt},Vector{BLAS.BlasInt},Matrix{R}}}(undef, num_psds)
             tmp = Vector{R}(undef, max(num_conds * max(num_psds, Σr), maximum(data.r, init=0)^2, maximum(num_psds, init=0)^2))
             i = 1
-            for (j, (nⱼ, rdimⱼ)) in enumerate(zip(data.psds, rdims))
+            for (j, (nⱼ, rⱼ, rdimⱼ, r_currentⱼ)) in enumerate(zip(data.psds, data.r, rdims, r_current))
                 Pkrons[j] = Matrix{R}(undef, packedsize(nⱼ), rdimⱼ)
                 m₂s[j] = @view(m₂[i:i+rdimⱼ-1])
                 Q₂₁s[j] = @view(M₂₁[i:i+rdimⱼ-1, j])
                 Q₃₂s[j] = @view(Q₃₂[:, i:i+rdimⱼ-1])
                 i += rdimⱼ
+                eigens[j] = ( # we need nⱼ buffer space for the eigenvalues
+                    Eigen(Vector{R}(undef, nⱼ), Matrix{R}(undef, nⱼ, min(r_currentⱼ, nⱼ))),
+                    Vector{R}(undef, 8nⱼ),
+                    Vector{BLAS.BlasInt}(undef, 5nⱼ),
+                    Vector{BLAS.BlasInt}(undef, nⱼ),
+                    Matrix{R}(undef, rⱼ, rⱼ)
+                )
+                # this is not excessive - LAPACK requires nⱼ buffer space for the eigenvalues even if less are requested
+                # while if r_currentⱼ == nⱼ, we will call spev! instead of spevx! which requires less workspace, we also need
+                # to find the minimum eigenvalue of Ωⱼ, for which we always call spevx! - so we also always provide the
+                # necessary buffer.
             end
             ss = specbm_setup_primal_subsolver(Val(subsolver), num_psds, data.r, rdims, Σr, ρ)
         end
@@ -219,6 +233,7 @@ struct SpecBMCache{R,F,ACV,SS}
             M₁₁, M₂₁, M₂₂,
             Pkrons, m₂s, q₃, Q₁₁, Q₂₁s, Q₂₂, Q₃₁, Q₃₂, Q₃₂s, Q₃₃inv,
             Σr, twoAc,
+            eigens,
             tmp,
             ss
         )
@@ -315,7 +330,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
 
     data = SpecBMData(num_vars, num_frees, psds, Int.(r_past .+ r_current), ϵ, A, At, b, c)
     mastersolver = SpecBMMastersolverData(data)
-    cache = SpecBMCache(data, AAt, subsolver, ρ)
+    cache = SpecBMCache(data, AAt, subsolver, ρ, r_current)
 
     # We need some additional variables for the adaptive strategy, following the naming in the reference implementation
     # (in the paper, the number of consecutive null steps N_c is used instead).
@@ -343,18 +358,45 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         # 5: if t = 0 and A(Ωₜ) ≠ b then
         if isone(t) && relative_pfeasi > ϵ # note: reference implementation does not check A(Ωₜ) ≠ b
             copyto!(data.Ω, mastersolver.Xstar)
+            # we need the eigendecomposition for later in every case
+            for (j, ((ev, work, iwork, ifail, _), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
+                if ==(size(ev.vectors)...)
+                    eigen!(Xstarⱼ; W=ev.values, Z=ev.vectors, work)
+                else
+                    @inbounds eigen!(Xstarⱼ, 1:r_current[j]; W=ev.values, Z=ev.vectors, work, iwork, ifail)
+                end
+            end
         # 7: else
         else
             # 8: if (25) holds then
             # (25): β( F(Ωₜ) - ̂F_{Wₜ, Pₜ}(Xₜ₊₁*)) ≤ F(Ωₜ) - F(Xₜ₊₁*)
             # where (20): F(X) := ⟨C, X⟩ - ρ min(λₘᵢₙ(X), 0)
             if has_descended
-                FΩ = dot(data.c, data.Ω) - ρ * sum(min(eigmin(Ωⱼ), zero(R)) for Ωⱼ in data.Ω_psds; init=zero(R))
+                Σ = zero(R)
+                for ((ev, work, iwork, ifail, _), Ωⱼ) in zip(cache.eigens, data.Ω_psds)
+                    Ωcopy = PackedMatrix(LinearAlgebra.checksquare(Ωⱼ), gettmp(cache, length(Ωⱼ)),
+                        PackedMatrices.packed_format(Ωⱼ))
+                    copyto!(Ωcopy, Ωⱼ)
+                    Σ += min(eigmin!(Ωcopy; W=ev.values, Z=ev.vectors, work, iwork, ifail), zero(R))
+                end
+                FΩ = dot(data.c, data.Ω) - ρ * Σ
                 # else we do not need to recalculate this, it did not change from the previous iteration
             end
             cXstar = dot(data.c, mastersolver.Xstar)
             Fmodel = cXstar - dot(mastersolver.wstar_psd, mastersolver.xstar_psd)
-            FXstar = cXstar - ρ * sum(min(eigmin(Xstarⱼ), zero(R)) for Xstarⱼ in mastersolver.Xstar_psds; init=zero(R))
+            Σ = zero(R)
+            for (j, ((ev, work, iwork, ifail), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
+                Xcopy = PackedMatrix(LinearAlgebra.checksquare(Xstarⱼ), gettmp(cache, length(Xstarⱼ)),
+                    PackedMatrices.packed_format(Xstarⱼ))
+                copyto!(Xcopy, Xstarⱼ)
+                if ==(size(ev.vectors)...)
+                    eigen!(Xcopy; W=ev.values, Z=ev.vectors, work)
+                else
+                    @inbounds eigen!(Xcopy, 1:r_current[j]; W=ev.values, Z=ev.vectors, work, iwork, ifail)
+                end
+                Σ += min(first(ev.values), zero(R))
+            end
+            FXstar = cXstar - ρ * Σ
             estimated_drop = FΩ - Fmodel
             cost_drop = FΩ - FXstar
             if (has_descended = (β * estimated_drop ≤ cost_drop))
@@ -390,11 +432,11 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         # and S* = [Q₁ Q₂] * Diagonal(Σ₁, Σ₂) * [Q₁; Q₂] with division in (rₚ, r - rₚ)
         # (27): Wₜ₊₁ = 1/(γ* + tr(Σ₂)) * (γ* Wₜ + Pₜ Q₂ Σ₂ Q₂ᵀ Pₜᵀ)
         primal_feasi = zero(R)
-        @inbounds for (j, (nⱼ, rⱼ, r_currentⱼ, r_pastⱼ, Wⱼ, Pⱼ)) in
-            enumerate(zip(data.psds, data.r, r_current, r_past, data.W_psds, data.P_psds))
+        @inbounds for (j, (nⱼ, rⱼ, r_pastⱼ, Wⱼ, Pⱼ, evⱼ)) in enumerate(zip(data.psds, data.r, r_past, data.W_psds, data.P_psds,
+                                                                           cache.eigens))
             # note: we adjusted r such that it cannot exceed the side dimension of Xstar_psd, but we cannot do the same with
             # r_current and r_past, as only their sum has an upper bound.
-            V = r_currentⱼ < nⱼ ? eigen!(mastersolver.Xstar_psds[j], 1:r_currentⱼ) : eigen!(mastersolver.Xstar_psds[j])
+            V = evⱼ[1]
             primal_feasi = min(primal_feasi, first(V.values))
             r_pastⱼ = min(r_pastⱼ, rⱼ)
             if iszero(r_pastⱼ)
@@ -403,7 +445,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 copyto!(Pⱼ, V.vectors)
             else
                 γstarⱼ = max(mastersolver.γstars[j], zero(R)) # prevent numerical issues
-                Sstareig = eigen!(mastersolver.Sstar_psds[j])
+                Sstareig = eigen!(mastersolver.Sstar_psds[j], W=evⱼ[1].values, Z=evⱼ[5], work=evⱼ[2])
                 Q₁ = @view(Sstareig.vectors[:, end-r_pastⱼ+1:end]) # sorted in ascending order; we need the largest rₚ, but
                                                                    # the order doesn't really matter
                 Q₂ = @view(Sstareig.vectors[:, 1:end-r_pastⱼ])
@@ -411,7 +453,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 # Wⱼ = (γstar * Wⱼ + Pⱼ * Q₂ * Diagonal(Σ₂) * Q₂' * Pⱼ') / (γstar + tr(Σ₂))
                 den = γstarⱼ + sum(v -> max(v, zero(R)), Σ₂) # also prevent numerical issues here
                 #if den > sqrt(eps(R))
-                    newpart = PackedMatrix(rⱼ, zeros(R, packedsize(rⱼ)), :L)
+                    newpart = PackedMatrix(rⱼ, fill!(gettmp(cache, packedsize(rⱼ)), zero(R)), :L)
                     for (factor, newcol) in zip(Σ₂, eachcol(Q₂))
                         if factor > zero(R) # just to be sure
                             spr!(factor, newcol, newpart)
