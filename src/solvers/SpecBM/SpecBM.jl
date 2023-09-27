@@ -257,7 +257,7 @@ Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
     num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
     ρ::Real, r_past::Union{<:AbstractVector{<:Integer},<:Integer}, r_current::Union{<:AbstractVector{<:Integer},<:Integer},
-    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=500,
+    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000,
     α::Real=1., adaptive::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
     ml::Real=0.001, mr::Real=min(1.5β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
