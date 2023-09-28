@@ -215,15 +215,15 @@ struct SpecBMCache{R,F,ACV,SS}
                 i += rdimⱼ
                 eigens[j] = ( # we need nⱼ buffer space for the eigenvalues
                     Eigen(Vector{R}(undef, nⱼ), Matrix{R}(undef, nⱼ, min(r_currentⱼ, nⱼ))),
-                    Vector{R}(undef, 8nⱼ),
+                    Vector{R}(undef, max(8nⱼ, 1 + 6rⱼ + rⱼ^2)),
                     Vector{BLAS.BlasInt}(undef, 5nⱼ),
                     Vector{BLAS.BlasInt}(undef, nⱼ),
                     Matrix{R}(undef, rⱼ, rⱼ)
                 )
                 # this is not excessive - LAPACK requires nⱼ buffer space for the eigenvalues even if less are requested
-                # while if r_currentⱼ == nⱼ, we will call spev! instead of spevx! which requires less workspace, we also need
-                # to find the minimum eigenvalue of Ωⱼ, for which we always call spevx! - so we also always provide the
-                # necessary buffer.
+                # while if r_currentⱼ == nⱼ, we will call spevd! instead of spevx! which has different workspace rules. But we
+                # also need to find the minimum eigenvalue of Ωⱼ, for which we always call spevx!, and we always need the full
+                # eigendecomposition of Sⱼ with spevd!.
             end
             ss = specbm_setup_primal_subsolver(Val(subsolver), num_psds, data.r, rdims, Σr, ρ)
         end
@@ -596,7 +596,7 @@ end
     twoCminusαΩ = mastersolver.Xstar_psds
     mastersolver.xstar_psd .= R(2) .* (data.c_psd .- α .* data.ω_psd)
     cache.q₁ .= dot.(data.W_psds, twoCminusαΩ) # note that q₁ aliases m₁, so we already set the first part in m₁!
-    mul!.(eachcol(cache.Q₃₁), (data.a_psd,), data.W_psds)
+    mul!.(eachcol(cache.Q₃₁), data.a_psds, data.W_psds)
     if feasible
         copyto!(cache.q₃, cache.twoAc)
     else
