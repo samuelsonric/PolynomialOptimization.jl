@@ -249,6 +249,22 @@ function Base.getproperty(c::SpecBMCache, name::Symbol)
 end
 Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
 
+struct SpecBMResult{R}
+    status::Symbol
+    objective::R
+    X::Vector{R}
+    y::Vector{R}
+    iterations::Int
+    quality::R
+    primal_infeas::R
+    dual_infeas::R
+    gap::R
+    rel_accuracy::R
+    rel_primal_infeas::R
+    rel_dual_infeas::R
+    rel_gap::R
+end
+
 """
     specbm_primal(A, b, c; num_frees=missing, psds::Vector{<:Integer}, ϵ=1e-4, β=0.1, α=1., αfree=α, maxiter=500, ml=0.001,
         mu=min(1.5β, 1), αmin=1e-5, αmax=1000., verbose=true, offset=0, rescale=true, max_cols, ρ, evec_past, evec_current,
@@ -336,19 +352,20 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # (in the paper, the number of consecutive null steps N_c is used instead).
     null_count = 0
     has_descended = true
+    status = :maxiter
 
     # 2: for t = 0, ..., tₘₐₓ do [we fix this to 1:maxiter]
-    local FΩ, relative_pfeasi, quality
-    for t in 1:maxiter
+    local FΩ, t, quality, primal_infeas, dual_infeas, gap, rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap
+    for outer t in 1:maxiter
         # 3: solve (24) to obtain Xₜ₊₁*, γₜ*, Sₜ*
         # combined with
         # 4: form the iterate Wₜ* in (28) and dual iterate yₜ* in (29)
         dfeasi, dfeasi_psd, dfeasi_free, gap = direction_qp_primal_free!(mastersolver, data, !isone(t), α, cache)
         # We also calculate some quality criteria here
-        dual_feasi = max(dfeasi_free, dfeasi_psd)
-        relative_dfeasi = sqrt(dfeasi * invnormcplus1)
+        dual_infeas = max(dfeasi_free, dfeasi_psd)
+        rel_dual_infeas = sqrt(dfeasi * invnormcplus1)
         if has_descended
-            relative_pfeasi = let tmp=gettmp(cache, length(b))
+            rel_primal_infeas = let tmp=gettmp(cache, length(b))
                 copyto!(tmp, b) # we don't need y any more, so we can use it as a temporary
                 mul!(tmp, A, data.Ω, true, -one(R))
                 norm(tmp) * invnormbplus1
@@ -356,7 +373,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             # else we no not need to recompute this, the value from the last iteration is still valid
         end
         # 5: if t = 0 and A(Ωₜ) ≠ b then
-        if isone(t) && relative_pfeasi > ϵ # note: reference implementation does not check A(Ωₜ) ≠ b
+        if isone(t) && rel_primal_infeas > ϵ # note: reference implementation does not check A(Ωₜ) ≠ b
             copyto!(data.Ω, mastersolver.Xstar)
             # we need the eigendecomposition for later in every case
             for (j, ((ev, work, iwork, ifail, _), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
@@ -422,22 +439,22 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 end
             # 12: end if
             end
-            relative_accuracy = estimated_drop / (abs(FΩ) + one(R))
+            rel_accuracy = estimated_drop / (abs(FΩ) + one(R))
         # 13: end if
         end
-        relative_gap = gap / (one(R) + abs(dot(data.c, data.Ω)) + abs(dot(data.b, mastersolver.ystar))) # now Ω is corrected
+        rel_gap = gap / (one(R) + abs(dot(data.c, data.Ω)) + abs(dot(data.b, mastersolver.ystar))) # now Ω is corrected
         # 14: compute Pₜ₊₁ as (26), and Wₜ₊₁ as (27)
         # (26): Pₜ₊₁ = orth([Vₜ; Pₜ Q₁])
         # where Vₜ: top r_c ≥ 1 eigenvectors of -Xₜ₊₁*
         # and S* = [Q₁ Q₂] * Diagonal(Σ₁, Σ₂) * [Q₁; Q₂] with division in (rₚ, r - rₚ)
         # (27): Wₜ₊₁ = 1/(γ* + tr(Σ₂)) * (γ* Wₜ + Pₜ Q₂ Σ₂ Q₂ᵀ Pₜᵀ)
-        primal_feasi = zero(R)
+        primal_infeas = zero(R)
         @inbounds for (j, (nⱼ, rⱼ, r_pastⱼ, Wⱼ, Pⱼ, evⱼ)) in enumerate(zip(data.psds, data.r, r_past, data.W_psds, data.P_psds,
                                                                            cache.eigens))
             # note: we adjusted r such that it cannot exceed the side dimension of Xstar_psd, but we cannot do the same with
             # r_current and r_past, as only their sum has an upper bound.
             V = evⱼ[1]
-            primal_feasi = min(primal_feasi, first(V.values))
+            primal_infeas = min(primal_infeas, first(V.values))
             r_pastⱼ = min(r_pastⱼ, rⱼ)
             if iszero(r_pastⱼ)
                 copyto!(Wⱼ, mastersolver.Wstar_psds[j])
@@ -478,17 +495,21 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         isone(t) && continue
         # Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. | Rel. gap | Descent step | Consecutive null steps
         iszero(t % step) && @verbose_info(@sprintf("%9d | %16g | %13g | %11g | %11g | %13g | %16g | %14g | %11g | %12s | %22d",
-            t, FΩ + offset, primal_feasi, dual_feasi, gap, relative_accuracy, relative_pfeasi, relative_dfeasi, relative_gap,
+            t, FΩ + offset, primal_infeas, dual_infeas, gap, rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap,
             has_descended, null_count))
-        quality = max(relative_accuracy, relative_pfeasi, relative_dfeasi, relative_gap, -primal_feasi)
-        quality < ϵ && break
+        quality = max(rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap, -primal_infeas)
+        if quality < ϵ
+            status = :ok
+            break
+        end
         # 17: end if
     # 18: end for
     end
 
     specbm_finalize_primal_subsolver!(cache.subsolver)
 
-    return FΩ + offset, data.Ω, mastersolver.ystar, quality
+    return SpecBMResult(status, FΩ + offset, data.Ω, mastersolver.ystar, t, quality, primal_infeas, dual_infeas, gap,
+        rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap)
 end
 
 function specbm_setup_primal_subsolver end

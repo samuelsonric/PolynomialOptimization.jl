@@ -171,18 +171,18 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solve_time = @elapsed begin
-        value, _, mon_vals, quality = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, offset,
-            kwargs...)
+        result = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, offset, kwargs...)
     end
     @verbose_info("Optimization complete in ", solve_time, " seconds")
 
+    mon_vals = result.y
     empty!(problem.last_moments)
     sizehint!(problem.last_moments, nconstrs +1)
     problem.last_moments[constant_monomial(problem.objective)] = 1.
     for (mon, i) in sbm.constraint_mappings
         push!(problem.last_moments, mon => -mon_vals[i])
     end
-    return quality, -value
+    return result.status, -result.objective
 end
 
 for sp in SparsityAny
