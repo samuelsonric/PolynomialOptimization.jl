@@ -11,22 +11,23 @@ end
 
 function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, ρ)
     task = Mosek.maketask()
+    taskptr = task.task
     # Note that here, we use the macros for direct access. Often, this is more efficient as no index conversion is
     # necessary, so we do it everywhere for consistency. However, they are not part of the documented API, so we'll hope
     # that the interface does not change.
     # first num_psds vars: γⱼ; following vars: triangles corresponding to vec(Sⱼ); last variable: objective
-    Mosek.@MSK_appendvars(task.task, num_psds +1)
-    Mosek.@MSK_putobjsense(task.task, Mosek.MSK_OBJECTIVE_SENSE_MAXIMIZE.value)
-    Mosek.@MSK_putcj(task.task, num_psds, -1.)
+    Mosek.@MSK_appendvars(taskptr, num_psds +1)
+    Mosek.@MSK_putobjsense(taskptr, Mosek.MSK_OBJECTIVE_SENSE_MAXIMIZE.value)
+    Mosek.@MSK_putcj(taskptr, num_psds, -1.)
     # γⱼ ≥ 0
-    Mosek.@MSK_putvarboundsliceconst(task.task, zero(Int32), num_psds, Mosek.MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(taskptr, zero(Int32), num_psds, Mosek.MSK_BK_LO.value, 0., Inf)
     # objective variable: no bounds
-    Mosek.@MSK_putvarbound(task.task, num_psds, Mosek.MSK_BK_FR.value, -Inf, Inf)
+    Mosek.@MSK_putvarbound(taskptr, num_psds, Mosek.MSK_BK_FR.value, -Inf, Inf)
     # Sⱼ ⪰ 0
-    Mosek.@MSK_appendbarvars(task.task, length(r), convert(Vector{Int32}, r))
+    Mosek.@MSK_appendbarvars(taskptr, length(r), convert(Vector{Int32}, r))
     # γⱼ + tr(Sⱼ) ≤ ρ
-    Mosek.@MSK_appendcons(task.task, num_psds)
-    Mosek.@MSK_putconboundsliceconst(task.task, zero(Int32), num_psds, Mosek.MSK_BK_UP.value, -Inf, ρ)
+    Mosek.@MSK_appendcons(taskptr, num_psds)
+    Mosek.@MSK_putconboundsliceconst(taskptr, zero(Int32), num_psds, Mosek.MSK_BK_UP.value, -Inf, ρ)
     ur = unique(r)
     # with the same breath, also create sparse symmats for extracting svec(S)
     sparsemats = sizehint!(Dict{Int,Vector{Int64}}(), length(ur))
@@ -34,13 +35,13 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
     let dims=Vector{Int32}(undef, maximum(rdims)), range=collect(Int32(0):Int32(max(num_psds, length(dims)) -1)),
         values=ones(Float64, length(range)), traces=sizehint!(Dict{Int,Int}(), length(ur)),
         rows=range, columns=similar(dims), nzs=ones(Int64, length(dims))
-        Mosek.@MSK_putaijlist64(task.task, num_psds, range, range, values)
+        Mosek.@MSK_putaijlist64(taskptr, num_psds, range, range, values)
         for (j, rⱼ) in zip(cfz, r)
             sparseidx = get!(() -> let idx=Ref{Int64}()
-                Mosek.@MSK_appendsparsesymmat(task.task, rⱼ, rⱼ, range, range, values, idx)
+                Mosek.@MSK_appendsparsesymmat(taskptr, rⱼ, rⱼ, range, range, values, idx)
                 idx[]
             end, traces, rⱼ)
-            Mosek.@MSK_putbaraij(task.task, j, j, 1, Ref(sparseidx), values)
+            Mosek.@MSK_putbaraij(taskptr, j, j, 1, Ref(sparseidx), values)
         end
         # We loop once more, which allows us to overwrite range as "rows"
         @inbounds for rⱼ in ur
@@ -61,19 +62,19 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
             @assert(k -1 == dimⱼ)
             output = Vector{Int64}(undef, dimⱼ)
             fill!(dims, Int32(rⱼ))
-            Mosek.@MSK_appendsparsesymmatlist(task.task, dimⱼ, dims, nzs, rows, columns, values, output)
+            Mosek.@MSK_appendsparsesymmatlist(taskptr, dimⱼ, dims, nzs, rows, columns, values, output)
             sparsemats[dimⱼ] = output
         end
     end
     # quadratic objective constraint: F x + ⟨F̄, X̄⟩ + g ∈ D
     qc = Ref{Int64}()
     conedim = num_psds + Σr +2
-    Mosek.@MSK_appendrquadraticconedomain(task.task, conedim, qc)
-    Mosek.@MSK_appendafes(task.task, conedim)
-    Mosek.@MSK_putafefentry(task.task, 0, num_psds, 1.) # put the objective in the quadratic cone already
-    Mosek.@MSK_putafeg(task.task, 1, .5) # we need to minimize the actual square, so we use the rotated quadratic cone, but we
-                                         # then have to fix the second variable to 1/2.
-    Mosek.@MSK_appendaccseq(task.task, qc[], conedim, 0, C_NULL)
+    Mosek.@MSK_appendrquadraticconedomain(taskptr, conedim, qc)
+    Mosek.@MSK_appendafes(taskptr, conedim)
+    Mosek.@MSK_putafefentry(taskptr, 0, num_psds, 1.) # put the objective in the quadratic cone already
+    Mosek.@MSK_putafeg(taskptr, 1, .5) # we need to minimize the actual square, so we use the rotated quadratic cone, but we
+                                       # then have to fix the second variable to 1/2.
+    Mosek.@MSK_appendaccseq(taskptr, qc[], conedim, 0, C_NULL)
     # the rest is set dynamically, but we also need further caches. The aim is to do one Cholesky factorization of the
     # matrix M and then just assign this data portion verbatim. Note that we only have direct access to the lower
     # triangular part, i.e., M = L * Lᵀ, so here we must put Lᵀ in the afes.
