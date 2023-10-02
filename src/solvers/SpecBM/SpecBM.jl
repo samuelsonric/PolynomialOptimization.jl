@@ -635,12 +635,7 @@ end
     mul!(cache.M₂₂, transpose(cache.Q₃₂), tmpm, -one(R), false)
     cache.Q₂₂ .+= one(R) # Q₂₂ is a diagonal view into M₂₂
 
-    # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
-    # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
-    # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
-    # other solvers which have a similar syntax.
-    Mfact = cholesky!(cache.M, RowMaximum(), tol=data.ϵ^2, check=false)
-    specbm_primal_subsolve!(mastersolver, cache, Mfact)
+    specbm_primal_subsolve!(mastersolver, cache)
 
     # Reconstruct y = Q₃₃⁻¹(q₃/2 - Q₃₁ γ - Q₃₂ svec(S))
     # Note that at this stage, we have already saved the original value of q₃ in y

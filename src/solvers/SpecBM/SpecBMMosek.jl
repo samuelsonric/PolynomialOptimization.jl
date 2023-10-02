@@ -149,7 +149,12 @@ function mosekdump(task, fn)
     end
 end
 
-function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}, Mfact) where {R,F,ACV}
+function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}
+    # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
+    # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
+    # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
+    # other solvers which have a similar syntax.
+    Mfact = cholesky!(cache.M, RowMaximum(), tol=sqrt(eps(R)), check=false)
     data = cache.subsolver
     num_psds = length(cache.m₁)
     cfz = Iterators.countfrom(zero(Int32))
