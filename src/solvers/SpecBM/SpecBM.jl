@@ -278,9 +278,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     ml::Real=0.001, mr::Real=min(1.5β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
-    subsolver::Symbol=:Mosek) where {R}
+    subsolver::Symbol=:Hypatia) where {R}
     #region Input validation
-    subsolver === :Mosek || error("Unsupported subsolver ", subsolver)
+    subsolver ∈ (:Mosek, :Hypatia) || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
     # We do not store the matrices A directly, but instead interpret all PSD variables by their scaled vectorized upper
     # triangle (contrary to the reference implementation, which uses vectorized full storage). Therefore, A contains the
@@ -523,6 +523,7 @@ if isdefined(Mosek, :appendafes)
         @warn "The SpecBM method Mosek is not available: upgrade your Mosek distribution to at least version 10.1.11."
     end
 end
+include("SpecBMHypatia.jl")
 
 # identical to the implementation in SparseArrays, we just extend the allowed type for A, as this is already working
 function LinearAlgebra.mul!(C::StridedVecOrMat, A::SparseArrays.SparseMatrixCSCView, B::SparseArrays.DenseInputVecOrMat,
