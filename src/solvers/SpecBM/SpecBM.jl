@@ -205,7 +205,7 @@ struct SpecBMCache{R,F,ACV,SS}
             Q₃₃inv = try EfficientCholmod(ldlt(AAt)) catch; qr(AAt) end
             twoAc = rmul!(data.A * data.c, R(2)) # typically, A and c are sparse, so the * implementation is the best
             eigens = Vector{Tuple{Eigen{R,R,Matrix{R},Vector{R}},Vector{R},Vector{BLAS.BlasInt},Vector{BLAS.BlasInt},Matrix{R}}}(undef, num_psds)
-            tmp = Vector{R}(undef, max(num_conds * max(num_psds, Σr), maximum(data.r, init=0)^2, maximum(num_psds, init=0)^2))
+            tmp = Vector{R}(undef, max(num_conds * max(num_psds, Σr), maximum(data.r, init=0)^2, maximum(data.psds, init=0)^2))
             i = 1
             for (j, (nⱼ, rⱼ, rdimⱼ, r_currentⱼ)) in enumerate(zip(data.psds, data.r, rdims, r_current))
                 Pkrons[j] = Matrix{R}(undef, packedsize(nⱼ), rdimⱼ)
