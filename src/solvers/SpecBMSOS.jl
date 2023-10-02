@@ -3,7 +3,6 @@ include("SpecBM/SpecBM.jl")
 struct SpecBMState{M,R}
     psds::FastVec{Int}
     A::Tuple{FastVec{Int},FastVec{Int},FastVec{R}}
-    c::Tuple{FastVec{Int},FastVec{R}}
     constraint_mappings::Dict{M,Int}
 end
 
@@ -21,10 +20,7 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
             sqr = grouping[exp1] * grouping[exp2]
             for mon_constr in constraint
                 @inbounds for term in rem(sqr * mon_constr, gröbner_basis)
-                    if isconstant(term)
-                        push!(sbm.c[1], i)
-                        push!(sbm.c[2], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
-                    elseif gröbner_basis isa EmptyGröbnerBasis
+                    if gröbner_basis isa EmptyGröbnerBasis
                         unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                         unsafe_push!(sbm.A[2], i)
                         unsafe_push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
@@ -58,10 +54,7 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
                 for block_i in (exp1 == exp2 ? block_j : 1):block_size
                     for mon_constr in constraint[block_i, block_j]
                         for term in rem(sqr * mon_constr, gröbner_basis)
-                            if isconstant(term)
-                                push!(sbm.c[1], i)
-                                push!(sbm.c[2], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
-                            elseif gröbner_basis isa EmptyGröbnerBasis
+                            if gröbner_basis isa EmptyGröbnerBasis
                                 unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 unsafe_push!(sbm.A[2], i)
                                 unsafe_push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
@@ -90,6 +83,17 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
             (FastVec{Int}(), FastVec{Float64}()),
             Dict{M,Int}()
         )
+        # add lower bound. This must be done in the beginning, so that the free variable for this is created first.
+        if isone(problem.prefactor)
+            push!(sbm.A[1], get_constraint!(sbm, constant_monomial(problem.objective)))
+            push!(sbm.A[2], 1)
+            push!(sbm.A[3], 1.0)
+        else
+            append!(sbm.A[1], get_constraint!(sbm, monomial(x)) for x in problem.prefactor)
+            append!(sbm.A[2], Iterators.repeated(1, length(problem.prefactor)))
+            append!(sbm.A[3], Float64.(coefficients(problem.prefactor)))
+        end
+
         # We need to put equality constraints (-> free variables) to the front, so we just take care of them beforehand,
         # avoiding moving data. This is also why we don't need a sos_matrix_eq! function - the only difference is the
         # characterization of the free variables
@@ -106,7 +110,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
                 end
             end
         end
-        num_frees = isempty(sbm.A[2]) ? 0 : last(sbm.A[2])
+        num_frees = last(sbm.A[2])
         # SOS term for objective
         for grouping in groupings[1]
             @assert(issorted(grouping, by=degree))
@@ -146,32 +150,26 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
             end
             A, SparseMatrixCSC(nvars, nconstrs, csrrowptr, csrcolval, csrnzval)
         end
-        c = sparsevec(sbm.c..., nvars, +)
-        # We need to put the objective constraints in b, but the constant contribution, if present, belongs to c in principle.
+        c = SparseVector{Float64,Int}(nvars, [1], [-1.])
         # Will we work with sparse vectors at all?
         if 5length(problem.objective) < nconstrs
             b_idx = FastVec{Int}(buffer=length(problem.objective))
             b_val = FastVec{Float64}(buffer=length(problem.objective))
             for x in problem.objective
-                if !isconstant(x)
-                    unsafe_push!(b_idx, get_constraint!(sbm, monomial(x)))
-                    unsafe_push!(b_val, Float64(coefficient(x)))
-                end
+                unsafe_push!(b_idx, get_constraint!(sbm, monomial(x)))
+                unsafe_push!(b_val, Float64(coefficient(x)))
             end
             b = sparsevec(finish!(b_idx), finish!(b_val), nconstrs, +)
         else
             b = zeros(nconstrs)
             for x in problem.objective
-                if !isconstant(x)
-                    @inbounds b[get_constraint!(sbm, monomial(x))] = coefficient(x)
-                end
+                @inbounds b[get_constraint!(sbm, monomial(x))] = coefficient(x)
             end
         end
-        offset = -Float64(coefficient(problem.objective, constant_monomial(problem.objective)))
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solve_time = @elapsed begin
-        result = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, offset, kwargs...)
+        result = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, kwargs...)
     end
     @verbose_info("Optimization complete in ", solve_time, " seconds")
 
