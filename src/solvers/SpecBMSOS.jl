@@ -9,7 +9,7 @@ end
 get_constraint!(sbm::SpecBMState{M}, mon::M) where {M} =
     get!(sbm.constraint_mappings, mon, length(sbm.constraint_mappings) +1)
 
-function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVector{M}, constraint::P, psd::Union{Val{true},Val{false}}) where {P,M}
+function sos_matrix!(sbm::SpecBMState{M,R}, gröbner_basis, grouping::AbstractVector{M}, constraint::P, psd::Union{Val{true},Val{false}}) where {P,M,R}
     lg = length(grouping)
     psd isa Val{true} && push!(sbm.psds, lg)
     items = (lg * (lg + 1)) >> 1
@@ -23,11 +23,11 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
                     if gröbner_basis isa EmptyGröbnerBasis
                         unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                         unsafe_push!(sbm.A[2], i)
-                        unsafe_push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
+                        unsafe_push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
                     else
                         push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                         push!(sbm.A[2], i)
-                        push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
+                        push!(sbm.A[3], psd isa Val{false} || exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
                     end
                 end
             end
@@ -37,7 +37,7 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
     return
 end
 
-function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVector{M}, constraint::AbstractMatrix{P}, ::Val{true}) where {P, M}
+function sos_matrix!(sbm::SpecBMState{M,R}, gröbner_basis, grouping::AbstractVector{M}, constraint::AbstractMatrix{P}, ::Val{true}) where {P,M,R}
     block_size = LinearAlgebra.checksquare(constraint)
     isone(block_size) && @inbounds return sos_matrix!(sbm, gröbner_basis, grouping, constraint[1, 1])
     lg = length(grouping)
@@ -57,11 +57,11 @@ function sos_matrix!(sbm::SpecBMState{M}, gröbner_basis, grouping::AbstractVect
                             if gröbner_basis isa EmptyGröbnerBasis
                                 unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 unsafe_push!(sbm.A[2], i)
-                                unsafe_push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
+                                unsafe_push!(sbm.A[3], exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
                             else
                                 push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 push!(sbm.A[2], i)
-                                push!(sbm.A[3], exp2 == exp1 ? Float64(coefficient(term)) : sqrt2 * coefficient(term))
+                                push!(sbm.A[3], exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
                             end
                         end
                     end
@@ -76,22 +76,23 @@ end
 function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, groupings::Vector{<:Vector{<:AbstractVector{M}}};
     verbose::Bool=false, kwargs...) where {P,M,V}
     @assert(!problem.complex)
+    R = coefficient_type(problem.objective)
+    R <: AbstractFloat || (R = Float64)
     setup_time = @elapsed begin
         sbm = SpecBMState(
             FastVec{Int}(buffer=length(groupings)),
-            (FastVec{Int}(), FastVec{Int}(), FastVec{Float64}()),
-            (FastVec{Int}(), FastVec{Float64}()),
+            (FastVec{Int}(), FastVec{Int}(), FastVec{R}()),
             Dict{M,Int}()
         )
         # add lower bound. This must be done in the beginning, so that the free variable for this is created first.
         if isone(problem.prefactor)
             push!(sbm.A[1], get_constraint!(sbm, constant_monomial(problem.objective)))
             push!(sbm.A[2], 1)
-            push!(sbm.A[3], 1.0)
+            push!(sbm.A[3], one(R))
         else
             append!(sbm.A[1], get_constraint!(sbm, monomial(x)) for x in problem.prefactor)
             append!(sbm.A[2], Iterators.repeated(1, length(problem.prefactor)))
-            append!(sbm.A[3], Float64.(coefficients(problem.prefactor)))
+            append!(sbm.A[3], R.(coefficients(problem.prefactor)))
         end
 
         # We need to put equality constraints (-> free variables) to the front, so we just take care of them beforehand,
@@ -138,7 +139,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
             coolen = length(A_coo[1])
             csrrowptr = Vector{Int}(undef, nconstrs +1)
             csrcolval = Vector{Int}(undef, coolen)
-            csrnzval = Vector{Float64}(undef, coolen)
+            csrnzval = Vector{R}(undef, coolen)
             A = SparseArrays.sparse!(A_coo..., nconstrs, nvars, +, Vector{Int}(undef, nvars), csrrowptr, csrcolval, csrnzval,
                 A_coo...)
             # Now the csr data already contain the CSR representation of A - which, when seen as CSC, corresponds to the
@@ -150,14 +151,14 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
             end
             A, SparseMatrixCSC(nvars, nconstrs, csrrowptr, csrcolval, csrnzval)
         end
-        c = SparseVector{Float64,Int}(nvars, [1], [-1.])
+        c = SparseVector{R,Int}(nvars, [1], [-one(R)])
         # Will we work with sparse vectors at all?
         if 5length(problem.objective) < nconstrs
             b_idx = FastVec{Int}(buffer=length(problem.objective))
-            b_val = FastVec{Float64}(buffer=length(problem.objective))
+            b_val = FastVec{R}(buffer=length(problem.objective))
             for x in problem.objective
                 unsafe_push!(b_idx, get_constraint!(sbm, monomial(x)))
-                unsafe_push!(b_val, Float64(coefficient(x)))
+                unsafe_push!(b_val, R(coefficient(x)))
             end
             b = sparsevec(finish!(b_idx), finish!(b_val), nconstrs, +)
         else
@@ -178,7 +179,7 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
     sizehint!(problem.last_moments, nconstrs +1)
     problem.last_moments[constant_monomial(problem.objective)] = 1.
     for (mon, i) in sbm.constraint_mappings
-        push!(problem.last_moments, mon => -mon_vals[i])
+        push!(problem.last_moments, mon => -Float64(mon_vals[i]))
     end
     return result.status, -result.objective
 end
