@@ -94,61 +94,6 @@ end
 
 specbm_finalize_primal_subsolver!(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
 
-#= old - assumes that we don't use barvars, but variables in the scalar psd cone
-let indices=Vector{Int32}(undef, maximum(rdims)), values=ones(Float64, length(indices) +1),
-    indices2=similar(indices), values2=similar(values), i=num_psds, sqrt2=sqrt(2) # zero-based
-    @inbounds for (j, (rⱼ, dimⱼ)) in enumerate(zip(r, rdims))
-        istart = i
-        # first encode γⱼ + tr(Sⱼ) ≤ ρ, we need rⱼ +1 entries
-        indices[1] = j -1 # γⱼ
-        for col in 2:rⱼ+1
-            indices[col] = i
-            i += col
-        end
-        # we directly call the macro - there's no bounds check involved, so we don't even need views.
-        Mosek.@MSK_putarow(task.task, Int32(j -1), Int32(rⱼ +1), indices, values)
-
-        # next encode Sⱼ ∈ 𝕊ʳ₊, we need rⱼ(rⱼ +1)÷2 entries. We have the vectorized upper triangle; MOSEK expects the
-        # scaled and vectorized lower triangle.
-        indices[1:dimⱼ] = 0:dimⱼ-1
-        k = 1
-        firstindex = 0
-        firstindexΔ = 1
-        for col in 1:rⱼ
-            indices2[k] = col
-            values2[k] = 1.
-            k += 1
-
-            curindexΔ = col
-            curindex = firstindex + curindexΔ
-            for row in col+1:rⱼ
-                indices2[k] = curindex # col + row * (row -1) ÷ 2 -1
-                values2[k] = sqrt2
-                k += 1
-
-                curindexΔ += 1
-                curindex += curindexΔ
-            end
-
-            firstindexΔ += 1
-            firstindex += firstindexΔ
-        end
-        Mosek.@MSK_putafefentrylist(task, dimⱼ, indices, indices2, values)
-    end
-end=#
-
-function mosekdump(task, fn)
-    Mosek.writedata(task, "temptask.task")
-    try
-        newtask = Mosek.maketask() do t
-            Mosek.readdata(t, "temptask.task")
-            Mosek.writedata(t, fn)
-        end
-    finally
-        rm("temptask.task")
-    end
-end
-
 function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}
     # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
     # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
