@@ -273,7 +273,7 @@ end
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
     num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
     ρ::Real, r_past::Union{<:AbstractVector{<:Integer},<:Integer}, r_current::Union{<:AbstractVector{<:Integer},<:Integer},
-    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000,
+    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000, maxnodescent::Integer=15,
     α::Real=1., adaptive::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
     ml::Real=0.001, mr::Real=min(1.5β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
@@ -322,11 +322,13 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     0 < β < 1 || error("β must be in (0, 1)")
     ϵ ≥ 0 || error("ϵ must be nonnegative")
     maxiter > 1 || error("maxiter must be larger than 1")
+    maxnodescent ≥ 0 || error("maxnodescent must be nonnegative")
     # Adaptive parameters mᵣ > β, 0 < mₗ < β
     if adaptive
         mr > β || error("mr must be larger than β")
         0 < ml < β || error("ml must be in (0, β)")
         0 < Nmin || error("Nmin must be positive")
+        !iszero(maxnodescent) || maxnodescent ≥ Nmin || error("maxnodescend must not be smaller than Nmin")
         α = inv(R(2))
     end
     if ismissing(At)
@@ -352,7 +354,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # (in the paper, the number of consecutive null steps N_c is used instead).
     null_count = 0
     has_descended = true
-    status = :maxiter
+    status = :IterationLimit
 
     # 2: for t = 0, ..., tₘₐₓ do [we fix this to 1:maxiter]
     local FΩ, t, quality, primal_infeas, dual_infeas, gap, rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap
@@ -499,10 +501,15 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             has_descended, null_count))
         quality = max(rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap, -primal_infeas)
         if quality < ϵ
-            status = :ok
+            status = :Optimal
             break
         end
         # 17: end if
+
+        if !iszero(maxnodescent) && null_count ≥ maxnodescent
+            status = :SlowProgress
+            break
+        end
     # 18: end for
     end
 
