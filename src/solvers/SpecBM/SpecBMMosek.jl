@@ -92,6 +92,10 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
     return SpecBMSubsolverMosek(task, sparsemats, M₁afeidx, M₁val, M₂barvaridx, M₂numterm, M₂ptrterm, M₂termidx)
 end
 
+specbm_adjust_penalty_subsolver!(data::SpecBMSubsolverMosek, ρ) =
+    Mosek.@MSK_putconboundsliceconst(data.task.task, zero(Int32), Int32(length(data.M₂barvaridx)), Mosek.MSK_BK_UP.value, -Inf,
+        ρ)
+
 specbm_finalize_primal_subsolver!(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
 
 function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}

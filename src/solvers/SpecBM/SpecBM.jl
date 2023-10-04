@@ -273,8 +273,8 @@ end
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
     num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
     ρ::Real, r_past::Union{<:AbstractVector{<:Integer},<:Integer}, r_current::Union{<:AbstractVector{<:Integer},<:Integer},
-    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000, maxnodescent::Integer=15,
-    α::Real=1., adaptive::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
+    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000, maxnodescent::Integer=15, adaptiveρ::Bool=false,
+    α::Real=1., adaptiveα::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
     ml::Real=0.001, mr::Real=min(1.5β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
@@ -324,7 +324,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     maxiter > 1 || error("maxiter must be larger than 1")
     maxnodescent ≥ 0 || error("maxnodescent must be nonnegative")
     # Adaptive parameters mᵣ > β, 0 < mₗ < β
-    if adaptive
+    if adaptiveα
         mr > β || error("mr must be larger than β")
         0 < ml < β || error("ml must be in (0, β)")
         0 < Nmin || error("Nmin must be positive")
@@ -340,8 +340,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     #endregion
 
     @verbose_info("SpecBM Primal Solver with parameters ρ = $ρ, r_past = $r_past, r_current = $r_current, ϵ = $ϵ, β = $β, $α ",
-        adaptive ? "∈ [$αmin, $αmax], ml = $ml, mr = $mr" : "= $α")
-    @verbose_info("Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. |    Rel. gap | Descent step | Consecutive null steps")
+        adaptiveα ? "∈ [$αmin, $αmax], ml = $ml, mr = $mr" : "= $α")
+    @verbose_info("Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. |    Rel. gap | Descent step | Consecutive null steps",
+        adaptiveρ ? " | Dual trace" : "")
 
     invnormbplus1 = inv(norm(b) + one(R))
     invnormcplus1 = inv(norm(c) + one(R))
@@ -354,6 +355,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # (in the paper, the number of consecutive null steps N_c is used instead).
     null_count = 0
     has_descended = true
+    changed_ρ = false
     status = :IterationLimit
 
     # 2: for t = 0, ..., tₘₐₓ do [we fix this to 1:maxiter]
@@ -390,7 +392,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             # 8: if (25) holds then
             # (25): β( F(Ωₜ) - ̂F_{Wₜ, Pₜ}(Xₜ₊₁*)) ≤ F(Ωₜ) - F(Xₜ₊₁*)
             # where (20): F(X) := ⟨C, X⟩ - ρ min(λₘᵢₙ(X), 0)
-            if has_descended
+            if has_descended || changed_ρ
                 Σ = zero(R)
                 for ((ev, work, iwork, ifail, _), Ωⱼ) in zip(cache.eigens, data.Ω_psds)
                     Ωcopy = PackedMatrix(LinearAlgebra.checksquare(Ωⱼ), gettmp(cache, length(Ωⱼ)),
@@ -422,7 +424,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 # 9: set primal iterate Ωₜ₊₁ = Xₜ₊₁*
                 copyto!(data.Ω, mastersolver.Xstar)
                 # 6.1.1. Adaptive strategy (can only be lower case due to mₗ < β < mᵣ)
-                if adaptive
+                if adaptiveα
                     if mr * estimated_drop ≤ cost_drop
                         α = max(α / 2, αmin)
                     end
@@ -432,7 +434,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             else
                 # 11: set primal iterate Ωₜ₊₁ = Ωₜ (no-op)
                 # 6.1.1. Adaptive strategy (can only be upper case)
-                if adaptive
+                if adaptiveα
                     null_count += 1
                     if null_count ≥ Nmin && ml * estimated_drop ≥ cost_drop
                         α = min(2α, αmax)
@@ -495,10 +497,30 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         # 15: if stopping criterion then
         #     16: quit
         isone(t) && continue
+
+        # Our own dynamic strategy to increase ρ if necessary. If ρ was chosen too small, we will be able to reduce our primal
+        # objective more and more at the expense of completely losing primal feasibility (because it cannot be achieved
+        # anyway). This means that the constraint is (more than) active. Let's figure out the trace of the dual
+        # Zⱼ = Cⱼ - ∑ᵢⱼ Aᵢⱼ yᵢ.
+        if adaptiveρ
+            trdual = zero(R)
+            # Adapt the parameter ρ if necessary.
+            for (aⱼ, Cⱼ) in zip(data.a_psds, data.C_psds)
+                for i in PackedMatrices.PackedDiagonalIterator(Cⱼ, 0)
+                    trdual += Cⱼ[i] - dot(@view(aⱼ[:, i]), mastersolver.ystar)
+                end
+            end
+            changed_ρ = trdual > R(1.1) * ρ
+            if changed_ρ
+                ρ *= R(2)
+                specbm_adjust_penalty_subsolver!(cache.subsolver, ρ)
+            end
+        end
+
         # Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. | Rel. gap | Descent step | Consecutive null steps
         iszero(t % step) && @verbose_info(@sprintf("%9d | %16g | %13g | %11g | %11g | %13g | %16g | %14g | %11g | %12s | %22d",
             t, FΩ + offset, primal_infeas, dual_infeas, gap, rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap,
-            has_descended, null_count))
+            has_descended, null_count), adaptiveρ ? @sprintf(" | %10g%s", trdual, changed_ρ ? " !" : "") : "")
         quality = max(rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap, -primal_infeas)
         if quality < ϵ
             status = :Optimal
@@ -520,6 +542,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
 end
 
 function specbm_setup_primal_subsolver end
+function specbm_adjust_penalty_subsolver! end
 function specbm_finalize_primal_subsolver! end
 function specbm_primal_subsolve! end
 

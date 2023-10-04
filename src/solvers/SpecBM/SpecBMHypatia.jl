@@ -1,6 +1,7 @@
 struct SpecBMSubsolverHypatia{R}
     model::Hypatia.Models.Model{R}
     triupos::Vector{Int}
+    ρpos::UnitRange{Int}
     solver::Hypatia.Solvers.Solver{R}
 end
 
@@ -96,6 +97,7 @@ function specbm_setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr,
                 c, Matrix{R}(undef, 0, length(c)), Vector{R}(undef, 0), G, h, cones
             ),
             finish!(triupos),
+            sidedim+1:sidedim+num_psds,
             Hypatia.Solvers.Solver{R}(
                 verbose=false,
                 syssolver=Hypatia.Solvers.SymIndefSparseSystemSolver{Float64}(),
@@ -105,6 +107,8 @@ function specbm_setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr,
         )
     end
 end
+
+specbm_adjust_penalty_subsolver!(data::SpecBMSubsolverHypatia, ρ) = @inbounds data.model.h[data.ρpos] .= ρ
 
 specbm_finalize_primal_subsolver!(data::SpecBMSubsolverHypatia) = nothing
 
