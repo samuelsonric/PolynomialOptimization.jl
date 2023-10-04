@@ -525,26 +525,29 @@ if isdefined(Mosek, :appendafes)
 end
 include("SpecBMHypatia.jl")
 
-# identical to the implementation in SparseArrays, we just extend the allowed type for A, as this is already working
-function LinearAlgebra.mul!(C::StridedVecOrMat, A::SparseArrays.SparseMatrixCSCView, B::SparseArrays.DenseInputVecOrMat,
-    α::Number, β::Number)
-    size(A, 2) == size(B, 1) || throw(DimensionMismatch())
-    size(A, 1) == size(C, 1) || throw(DimensionMismatch())
-    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    nzv = nonzeros(A)
-    rv = rowvals(A)
-    if β != 1
-        β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
-    end
-    for k in 1:size(C, 2)
-        @inbounds for col in 1:size(A, 2)
-            αxj = B[col,k] * α
-            for j in nzrange(A, col)
-                C[rv[j], k] += nzv[j]*αxj
+if VERSION < v"1.10-"
+    # identical to the implementation in SparseArrays, we just extend the allowed type for A, as this is already working
+    # in Julia 1.10, the methods signatures were rewritten a lot and this is now supported natively.
+    function LinearAlgebra.mul!(C::StridedVecOrMat, A::SparseArrays.SparseMatrixCSCView, B::SparseArrays.DenseInputVecOrMat,
+        α::Number, β::Number)
+        size(A, 2) == size(B, 1) || throw(DimensionMismatch())
+        size(A, 1) == size(C, 1) || throw(DimensionMismatch())
+        size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+        nzv = nonzeros(A)
+        rv = rowvals(A)
+        if β != 1
+            β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
+        end
+        for k in 1:size(C, 2)
+            @inbounds for col in 1:size(A, 2)
+                αxj = B[col,k] * α
+                for j in nzrange(A, col)
+                    C[rv[j], k] += nzv[j]*αxj
+                end
             end
         end
+        C
     end
-    C
 end
 
 @inline function direction_qp_primal_free!(mastersolver::SpecBMMastersolverData, data::SpecBMData, feasible::Bool, α::R,
