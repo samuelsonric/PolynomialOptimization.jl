@@ -366,7 +366,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         rel_dual_infeas = sqrt(dfeasi * invnormcplus1)
         if has_descended
             rel_primal_infeas = let tmp=gettmp(cache, length(b))
-                copyto!(tmp, b) # we don't need y any more, so we can use it as a temporary
+                copyto!(tmp, b)
                 mul!(tmp, A, data.Ω, true, -one(R))
                 norm(tmp) * invnormbplus1
             end
