@@ -1,3 +1,4 @@
+# These tests require Mosek!
 include("./shared.jl")
 
 @testset "Example 6.1" begin
@@ -21,7 +22,7 @@ Objective: 10.0x₁x₂ - x₁x₂x₃
 12: 0 ≤ -20.0x₁x₂ + 3.0x₁x₂x₃
 Size of full basis: 10"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ -0.05208 atol = 1e-5
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ -0.05208 atol = 1e-5
     end
 end
 
@@ -41,7 +42,7 @@ Objective: x₃⁴ + x₂⁴ + x₁⁴ + x₃⁶ - 3.0x₁²x₂²x₃² + x₁�
 6: 0 ≤ 2.0x₃⁴ + 2.0x₂⁴ + 2.0x₁⁴ + 3.0x₃⁶ - 9.0x₁²x₂²x₃² + 3.0x₁²x₂⁴ + 3.0x₁⁴x₂²
 Size of full basis: 35"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 1/3 atol = 1e-7
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 1/3 atol = 1e-7
     end
 end
 
@@ -73,7 +74,7 @@ Objective: x₃x₄ + x₂x₃ + x₁x₂ + x₄³ + x₃³ + x₂³ + x₁³ - 
 18: 0 ≤ -2.0x₃x₄ - x₂x₃ - 3.0x₄³ - 3.0x₃³ + 6.0x₁x₂x₃x₄
 Size of full basis: 35"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 1e-5
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 1e-5
     end
 end
 
@@ -98,7 +99,7 @@ Objective: 50.0x₂² + x₁²
 11: 0 ≤ 220.0x₂² + 0.4x₁x₂ + 3.2x₁² - 160.0x₂⁴ + 6468.8x₁x₂³ + 320.0x₁²x₂² - 0.8x₁³x₂ - 6.4x₁⁴ - 2880.0x₁x₂⁵ - 57.6x₁³x₂³
 Size of full basis: 15"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 112.6516994 atol = 1e-6
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 112.6516994 atol = 1e-6
     end
 end
 
@@ -123,7 +124,7 @@ Objective: x₃³ - x₂x₃² - x₂²x₃ + x₂³ - x₁x₃² + 4.0x₁x₂x
 11: 0 ≤ 3.0x₃³ - 2.0x₂x₃² - x₂²x₃ - 2.0x₁x₃² + 4.0x₁x₂x₃ - x₁²x₃
 Size of full basis: 35"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.9491545329 atol = 1e-6
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.9491545329 atol = 1e-6
     end
 end
 
@@ -154,7 +155,7 @@ Objective: 1.0 - x₄ - x₃ - x₂ - x₁ + x₄² + x₃x₄ + x₃² + x₂x�
 16: 0 ≤ -0.5x₄ + x₄² + 0.5x₃x₄ + 0.5x₂x₄ + 0.5x₁x₄ - 1.5x₄³ + x₃x₄² + 0.5x₃²x₄ + x₂x₄² - 1.5x₂x₃x₄ + 0.5x₂²x₄ + x₁x₄² - 1.5x₁x₃x₄ - 1.5x₁x₂x₄ + 0.5x₁²x₄ + 2.0x₄⁴ - 1.5x₃x₄³ - 0.5x₃³x₄ - 1.5x₂x₄³ + x₂x₃x₄² + 0.5x₂x₃²x₄ + 0.5x₂²x₃x₄ - 0.5x₂³x₄ - 1.5x₁x₄³ + x₁x₃x₄² + 0.5x₁x₃²x₄ + x₁x₂x₄² - 1.5x₁x₂x₃x₄ + 0.5x₁x₂²x₄ + 0.5x₁²x₃x₄ + 0.5x₁²x₂x₄ - 0.5x₁³x₄
 Size of full basis: 70"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 4 atol = 1e-6
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 4 atol = 1e-6
     end
 end
 
@@ -175,7 +176,7 @@ Objective: x₂² + x₂⁴x₃² + x₁²x₃⁴ - 3.0x₁²x₂²x₃² + x₁
 7: 0 ≤ -2.0x₂ - 4.0x₂³x₃² + 6.0x₁²x₂x₃² - 2.0x₁⁴x₂ - 2.0x₁x₃⁵ + 6.0x₁x₂²x₃³ - 4.0x₁³x₂²x₃
 Size of full basis: 56"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 2e-5
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 2e-5
     end
 end
 
@@ -202,7 +203,7 @@ Objective: 3.0 - 2.0x₃ - 2.0x₂ - 2.0x₁ + x₃² + x₂² + x₁² + x₃²
 8: 0 ≤ 2.0 - 2.0x₃ - 2.0x₃x₄² + 6.0x₃²x₄ - 4.0x₃³ + 4.0x₁x₂x₄ - 4.0x₁x₂x₃ - 2.0x₁x₂² - 2.0x₁²x₂
 Size of full basis: 35"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.3918305004 atol = 1e-6
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.3918305004 atol = 1e-6
     end
 end
 
@@ -240,6 +241,6 @@ Objective: 1.0 - 2.0x₄ + 2.0x₃ + 2.0x₂ - 2.0x₁ + x₄² - 2.0x₃x₄ + 
 24: 0 ≤ 2.0x₄ - 2.0x₄² + 2.0x₃x₄ - 2.0x₂x₄ - 2.0x₁x₄
 Size of full basis: 15"
     if optimize
-        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 2e-5
+        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0 atol = 2e-5
     end
 end

@@ -1,4 +1,4 @@
-using Test
+include("./shared.jl")
 
 @testset "PolynomialOptimization" begin
     @testset "no sparsity" begin
@@ -16,8 +16,11 @@ using Test
     @testset "correlative and term sparsity" begin
         include("./SparsityCorrelativeTerm.jl")
     end
-    @testset "tightening using Nie's method" begin
-        include("./Tightening.jl")
+    if :MosekSOS ∈ all_solvers
+        # Tightening requires Mosek at the moment
+        @testset "tightening using Nie's method" begin
+            include("./Tightening.jl")
+        end
     end
     @testset "multiplication by prefactor using Mai et al.'s method" begin
         include("./Noncompact.jl")
