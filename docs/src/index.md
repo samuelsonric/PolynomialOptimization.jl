@@ -9,6 +9,8 @@ It _directly_ interfaces the solvers [Mosek](https://www.mosek.com/) (version 10
 with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
 modelling framework, it introduces a significant overhead that is omitted in this way.
+It also features a pure Julia implementation of the large-scale
+[primal SpectralBundle method](https://doi.org/10.48550/arXiv.2307.07651) by Liao et al.
 
 ## Overview
 ```@contents
@@ -17,5 +19,5 @@ Depth=3
 
 ## Index
 ```@index
-Modules=[PolynomialOptimization]
+Modules=[PolynomialOptimization,PolynomialOptimization.PackedMatrices]
 ```

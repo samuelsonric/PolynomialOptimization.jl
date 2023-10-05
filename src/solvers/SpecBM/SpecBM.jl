@@ -1,3 +1,5 @@
+export SpecBMResult, specbm_primal
+
 # This is an implementation of the SpecPM primal solver, https://arxiv.org/abs/2307.07651v1 with a reference implementation on
 # https://github.com/soc-ucsd/SpecBM.git, tightly integrated with the PolynomialOptimization framework
 const VecView{R,cont} = SubArray{R,1,Vector{R},Tuple{UnitRange{Int}},cont}
@@ -57,7 +59,7 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
                 Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, @view(Ω[i:i+dimⱼ-1]), :LS)
                 # An initial point Ω₀ ∈ 𝕊ⁿ.  As in the reference implementation, we take zero for the free variables and the
                 # vectorized identity for the PSD variables.
-                for k in PackedMatrices.PackedDiagonalIterator(Ωⱼ, 0)
+                for k in PackedDiagonalIterator(Ωⱼ)
                     Ωⱼ[k] = one(R)
                 end
                 # Initialize W̄₀ ∈ 𝕊₊ⁿ with tr(W̄₀) = 1. As in the reference implementation, we take the (1,1) elementary matrix.
@@ -249,10 +251,32 @@ function Base.getproperty(c::SpecBMCache, name::Symbol)
 end
 Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
 
+"""
+    SpecBMResult
+
+Contains the result of a SpecBM run
+
+# Fields
+- `status::Symbol`: one of `:Optimal`, `:IterationLimit`, `:SlowProgress`
+- `objective::R`: the objective value
+- `x::Vector{R}`: the optimal vector of primal variables: first, `num_frees` free variables, then all scaled vectorized lower
+  triangles of the PSD variables
+- `y::Vector{R}`: the optimal vector of dual variables, one for each constraint
+- `iterators::Int`: the number of iterations until the given status was reached
+- `quality::R`: the optimality quantifier that is compared against `ϵ` to determine convergence, which is determined by the
+  maximum of the relative quantities below and the negative primal infeasibility.
+- `primal_infeas::R`
+- `dual_infeas::R`
+- `gap::R`
+- `rel_accuracy::R`
+- `rel_primal_infeas::R`
+- `rel_dual_infeas::R`
+- `rel_gap`
+"""
 struct SpecBMResult{R}
     status::Symbol
     objective::R
-    X::Vector{R}
+    x::Vector{R}
     y::Vector{R}
     iterations::Int
     quality::R
@@ -265,20 +289,77 @@ struct SpecBMResult{R}
     rel_gap::R
 end
 
-"""
-    specbm_primal(A, b, c; num_frees=missing, psds::Vector{<:Integer}, ϵ=1e-4, β=0.1, α=1., αfree=α, maxiter=500, ml=0.001,
-        mu=min(1.5β, 1), αmin=1e-5, αmax=1000., verbose=true, offset=0, rescale=true, max_cols, ρ, evec_past, evec_current,
-        At=transpose(A), AAt=A*At, adaptive=true, step=1)
+@doc raw"""
+    specbm_primal(A, b, c; num_frees=missing, psds, ρ, r_past, r_current, ϵ=1e-4, β=0.1, maxiter=10000, maxnodescent=15,
+        adaptiveρ=false, α=1., adaptiveα=true, αmin=1e-5, αmax=1000., ml=0.001, mu=min(1.5β, 1), Nmin=10, verbose=false,
+        step=20, offset=0, At=transpose(A), AAt=A*At, subsolver=:Mosek)
+
+Solves the minimization problem
+```math
+    \min_x \{ ⟨c, x⟩ : A x = b, x = (x_{\mathrm{free}}, \operatorname{svec}(X_1), \dotsc), X_i ⪰ 0,
+              \sum_i \operatorname{tr}(X_i) ≤ ρ \} + \mathit{offset}
+```
+where the vector ``x`` contains `num_frees` free variables, followed by the vectorized and scaled lower triangles of PSD
+matrices ``X_i`` that have side dimensions given in `psds`. _Scaled_ here means that the off-diagonal elements must be
+multiplied by ``\sqrt2`` when going from the matrix to its vectorization, so that scalar products are preserved. This
+corresponds to the `:LS` format of a [`PackedMatrix`](@ref).
+
+# Arguments
+## Problem formulation
+- `A::AbstractMatrix{R}`: a sparse or dense matrix
+- `At::AbstractMatrix{R}`: the transpose of `A`. If omitted, `transpose(A)` is used instead. However, if the transpose is
+  already known in explicit form (in particular, as another `SparseMatrixCSC`), some operations can be carried out faster.
+- `AAt::AbstractMatrix{R}`: the product `A*At`, which is also calculated automatically, but can be given if it is already
+  known.
+- `b::AbstractVector{R}`: a dense or sparse vector
+- `c::AbstractVector{R}`: a dense or sparse vector
+- `offset::Real`: an offset that is added to the objective
+- `num_frees`: the number of free variables in the problem. The first `num_frees` entries in ``x`` will be free. If this value
+  is omitted, it is automatically calculated based on the dimensions of `A` and `psds`.
+- `psds::AbstractVector{<:Integer}`: a vector that, for each semidefinite matrix in the problem, specifies its side dimension.
+  A side dimension of ``n`` will affect ``\frac{n(n +1)}{2}`` variables.
+- `ρ::Real`: an upper bound on the total trace in the problem. Note that by setting `adaptiveρ=true`, this bound will
+  effectively be removed by dynamically growing as necessary. In this case, the value specified here is the initial value.
+- `adaptiveρ::Bool`: effectively sets ``\rho \to \infty``; note that an initial `ρ` still has to be provided.
+## Spectral bundle parameters
+- `r_past::Integer`: the number of past eigenvectors to keep, must be nonnegative
+- `r_current::Integer`: the number of current eigenvectors to keep, must be positive
+- `β::Real`: A step is recognized as a descent step if the decrease in the objective value is at least a factor
+  ``\beta \in (0, 1)`` smaller than the decrease predicted by the model.
+- `α::Real`: the regularization parameter for the augmented Lagrangian; must be positive
+- `adaptiveα::Bool=true`: enables adaptive updating of `α` depending on the following five parameters, as described in
+  [Liao et al](https://doi.org/10.48550/arXiv.2307.07651).
+- `αmin::Real`: lower bound for the adaptive algorithm that `α` may not exceed
+- `αmax::Real`: upper bound for the adaptive algorithm that `α` may not exceed
+- `ml::Real`: `α` is doubled if the decrease in the objective value is at least a factor ``m_{\mathrm l} \in (0, \beta)``
+  larger than predicted by the model, provided no descent step was recognized for at least `Nmin` iterations.
+- `mu::Real`: `α` is halved if the decrease in the objective value is at least a factor ``m_{\mathrm u} > \beta`` smaller than
+  predicted by the model.
+- `Nmin::Integer`: minimum number of no-descent-steps before `ml` becomes relevant
+- `subsolver::Symbol`: subsolver to solve the quadratic semidefinite subproblem in every iteration of SpecBM. Currently,
+  `:Hypatia` and `:Mosek` are supported; however, note that Mosek will require at least version 10.1.11 (better 10.1.13 to
+  avoid some rare crashes).
+## Termination criteria
+- `ϵ::Real`: minimum quality of the result in order for the algorithm to terminate successfully (status `:Optimal`)
+- `maxiter::Integer`: maximum number of iterations before the algorithm terminates anyway (status `:IterationLimit`). Must be
+  at least `2`.
+- `maxnodescent::Integer`: maximum number of consecutive iterations that may report no descent step before the algorithm
+  terminates (status `:SlowProgress`). Must be positive or zero to disable this check.
+## Logging
+- `verbose::Bool`: print the status every `step` iterations. Note that the first (incomplete) iteration will never be printed.
+- `step::Integer`: skip a number of iterations and only print every `step`th.
+
+See also [`SpecBMResult`](@ref).
 """
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
     num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
     ρ::Real, r_past::Union{<:AbstractVector{<:Integer},<:Integer}, r_current::Union{<:AbstractVector{<:Integer},<:Integer},
-    ϵ::Real=1e-4, β::Real=0.1, maxiter::Integer=10000, maxnodescent::Integer=15, adaptiveρ::Bool=false,
-    α::Real=1., adaptiveα::Bool=true, αmin::Real=1e-5, αmax::Real=1000.,
-    ml::Real=0.001, mr::Real=min(1.5β, 1), Nmin::Integer=10,
+    ϵ::Real=R(1e-4), β::Real=R(0.1), maxiter::Integer=10000, maxnodescent::Integer=15, adaptiveρ::Bool=false,
+    α::Real=R(1.), adaptiveα::Bool=true, αmin::Real=R(1e-5), αmax::Real=R(1000.),
+    ml::Real=R(0.001), mr::Real=min(R(1.5) * β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
-    subsolver::Symbol=:Hypatia) where {R}
+    subsolver::Symbol=:Mosek) where {R<:AbstractFloat}
     #region Input validation
     subsolver ∈ (:Mosek, :Hypatia) || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
@@ -337,10 +418,11 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     if ismissing(AAt)
         AAt = A * At
     end
+    step ≥ 1 || error("step must be positive")
     #endregion
 
     @verbose_info("SpecBM Primal Solver with parameters ρ = $ρ, r_past = $r_past, r_current = $r_current, ϵ = $ϵ, β = $β, $α ",
-        adaptiveα ? "∈ [$αmin, $αmax], ml = $ml, mr = $mr" : "= $α")
+        adaptiveα ? "∈ [$αmin, $αmax], ml = $ml, mr = $mr" : "= $α", ", subsolver = $subsolver")
     @verbose_info("Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. |    Rel. gap | Descent step | Consecutive null steps",
         adaptiveρ ? " | Dual trace" : "")
 
@@ -506,7 +588,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             trdual = zero(R)
             # Adapt the parameter ρ if necessary.
             for (aⱼ, Cⱼ) in zip(data.a_psds, data.C_psds)
-                for i in PackedMatrices.PackedDiagonalIterator(Cⱼ, 0)
+                for i in PackedDiagonalIterator(Cⱼ)
                     trdual += Cⱼ[i] - dot(@view(aⱼ[:, i]), mastersolver.ystar)
                 end
             end

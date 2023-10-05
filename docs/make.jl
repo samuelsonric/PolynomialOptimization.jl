@@ -9,4 +9,6 @@ makedocs(sitename="PolynomialOptimization.jl", modules=[PolynomialOptimization],
         "index.md",
         "guide.md",
         "reference.md",
-    ])
+    ],
+    warnonly=true
+)

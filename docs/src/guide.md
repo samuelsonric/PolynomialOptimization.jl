@@ -47,7 +47,9 @@ point $x$ such that the objective evaluated at $x$ gives our bound, then this bo
 difficulty now lies in finding the point. `PolynomialOptimization` implements a state of the art
 [solution extraction algorithm](https://doi.org/10.1016/j.laa.2017.04.015), which can relatively quickly (the cost is
 essentially that of performing an SVD on the moment matrix) obtain solutions. This will only be guaranteed to work if the
-problem was indeed optimal and there were finitely many solutions in the first place.
+problem was indeed optimal, there were finitely many solutions in the first place, and a "good" moment matrix is obtained
+(i.e., a dense matrix and no low-rank solver was employed) - but there is an alternative which might work well in case these
+conditions are not satisfied (apart from optimality, obviously), more on this below.
 The function [`poly_solutions`](@ref) gives an iterator that delivers all the (potential) solutions one at a time in an
 arbitrary order.
 Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solutions and grades them according to how much they
@@ -148,8 +150,8 @@ Block sizes:
   [5 => 1, 2 => 1, 1 => 3]
 ```
 We get a basis of size `5`, one of size `2`, and three bases of size `1` (here, by _basis_ we mean a set of monomials that
-indexes the moment/SOS matrices). `PolynomialOptimization` will model these by a `5x5` semidefinite matrix, a rotated
-second-order cone, as well as three linear constraints. This is much cheaper than a `10x10` semidefinite matrix.
+indexes the moment/SOS matrices). `PolynomialOptimization` will model these by a `5 × 5` semidefinite matrix, a rotated
+second-order cone, as well as three linear constraints. This is much cheaper than a `10 × 10` semidefinite matrix.
 Let's optimize the sparse problem:
 ```Julia
 julia> sparse_optimize(:MosekSOS, tbs, solutions=true)
@@ -159,11 +161,11 @@ Again, we get the same optimal value, so introducing the sparsity did not make o
 guaranteed), and we are still able to get the same optimal solutions.
 
 Note that perhaps surprisingly, `PolynomialOptimization` can still deliver good optimal points despite the fact that term
-sparsity was in effect. The usual extraction algorithms will fail, as for every moment $m$, they also require the moment $m x$
-to be present for all variables $x$ - term sparsity will fail to provide this.
-Hence, `poly_all_solutions` will automatically switch to a different heuristical solution extraction algorithm that is always
-successful in the simple case of a rank-1 moment matrix, but can also often also give good results in the more general case
-such as here. As a rule of thumb, if all the solutions encoded in the moment matrix differ only by the signs or phases of
+sparsity was in effect. The usual extraction algorithms will fail, as for every moment ``m``, they also require the moment
+``m x`` to be present for all variables ``x`` - term sparsity will fail to provide this.
+Hence, [`poly_all_solutions`](@ref) will automatically switch to a different heuristical solution extraction algorithm that is
+always successful in the simple case of a rank-1 moment matrix, but can also often also give good results in the more general
+case such as here. As a rule of thumb, if all the solutions encoded in the moment matrix differ only by the signs or phases of
 individual components, the heuristic will be successful. Still, the fact that the moments may encode multiple solutions may be
 an issue that can prevent successfully obtaining a solution vector. We will introduce a way to bypass this problem below.
 
@@ -215,10 +217,27 @@ the problem. The following methods are currently supported:
 - `:COSMOMoment`: for real-valued problems, requires COSMO and uses a moment-matrix approach. This is imprecise and not too
   fast, but can scale to very large sizes.
 - `:HypatiaMoment`: for any kind of problem, requires Hypatia. This is moderately precise and not too fast. Complex-valued
-  problems are modeled uses Hypatia's complex PSD cone. Note that by default, a sparse solver is used (unless the problem was
-  constructed with a `factor_coercive` different from one). This is typically a good idea for large systems with not too much
-  monomials. However, if you have a very dense system, the sparse solver will take forever; better pass `dense=true` to the
-  optimization routine. This will then be much faster (and always much more accurate).
+  problems are modeled uses Hypatia's complex PSD cone.
+  !!! tip
+      Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
+      one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
+      system, the sparse solver will take forever; better pass `dense=true` to the optimization routine. This will then be much
+      faster (and always much more accurate).
+- `:SpecBMSOS`: for real-valued problems, requires Mosek or Hypatia as subsolvers and uses a SOS approach. This is more precise
+  than COSMO and not very fast for small-scale problems, but scales very well. Note that some default parameters for the SpecBM
+  solver are assumed here (in particular, `r_past` and `r_current`) that can be played with.
+  !!! tip
+      In case a sphere or ball constraint with radius ``R`` is present for all variables, setting the parameter
+      ``\rho = (1 + R)^{d -1}`` (where ``d`` is the [`degree`](@ref) of the problem) and disabling `adaptiveρ = false` can be a
+      good idea.
+  This solver does not come as an extra package, but was written specifically for `PolynomialOptimization`. For details, see
+  the [`specbm_primal`](@ref) documentation.
+  !!! info
+      The dense solution extraction mechanism will not work very well with this solver, as it truncates the rank of the full
+      moment matrix. However, this will usually lead to a result of almost rank 1, for which the solution extraction heuristic
+      works quite well. Therefore, if you pass `solutions=true` to the optimization function, it will automatically invoke the
+      heuristic function. However, if you  want to use `poly_all_solutions` after the optimization was already done, remember
+      to set the `heuristic` parameter manually.
 
 Note that by passing the keyword argument `verbose=true` to the optimization function, we get some more insight into what
 happens behind the hood. Let's redo the last optimization.

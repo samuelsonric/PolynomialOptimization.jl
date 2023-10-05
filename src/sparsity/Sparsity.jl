@@ -143,7 +143,7 @@ end
 merge_cliques(cliques::AbstractVector{<:AbstractVector{T}}) where {T} =
     monomial_vector.(collect.(merge_cliques!(Set.(cliques))))
 
-"""
+@doc raw"""
     sparse_optimize(method, state::AbstractSparsity; verbose=false, clique_merging=true, solutions=false,
         certificate=false, kwargs...)
 
@@ -170,9 +170,15 @@ The following methods are currently supported:
 - `:COSMOMoment`: for real-valued problems, requires COSMO and uses a moment-matrix approach. This is imprecise and not too
   fast, but can scale to very large sizes.
 - `:HypatiaMoment`: for any kind of problem, requires Hypatia. This is moderately precise and not too fast.
+- `:SpecBMSOS`: for real-valued problems, requires Mosek or Hypatia as subsolvers and uses a SOS approach. This is more precise
+  than COSMO and not very fast for small-scale problems, but scales very well. Note that some default parameters for the SpecBM
+  solver are assumed here (in particular, `r_past` and `r_current`) that can be played with.
+  In case a sphere or ball constraint with radius ``R`` is present for all variables, setting the parameter
+  ``\rho = (1 + R)^{d -1}`` (where ``d`` is the [`degree`](@ref) of the problem) and disabling `adaptiveρ = false` can be a
+  good idea.
 
 See also [`poly_all_solutions`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
-[`optimality_certificate`](@ref).
+[`optimality_certificate`](@ref), [`specbm_primal`](@ref).
 """
 function sparse_optimize(v::V, state::AbstractSparsity; verbose::Bool=false, clique_merging::Bool=false,
     solutions::Bool=false, certificate::Bool=false, kwargs...) where {V<:Val}

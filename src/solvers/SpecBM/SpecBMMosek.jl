@@ -1,3 +1,5 @@
+VersionNumber(Mosek.getversion()) < v"10.1.13" && @warn("Consider upgrading your version of Mosek to avoid rare crashes.")
+
 struct SpecBMSubsolverMosek
     task::Mosek.MSKtask
     sparsemats::Dict{Int,Vector{Int64}}
@@ -152,6 +154,8 @@ function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache:
     # Bug in Mosek < 10.1.11 (that's why we disable the method for these versions): The changed data will not be processed
     # correctly in the solution. In principle, a very inefficient solution is to store the task in TASK format (others are also
     # broken prior to 10.1.11) and re-load it. We don't even offer this as a workaround, but hypothetically speaking, it works.
+    # Note in Mosek < 10.1.13, the result will be correct if you get it, but sometimes, assertions can be triggered that crash
+    # Julia.
     #Mosek.@MSK_writedata(taskptr, "task.task")
     #Mosek.@MSK_readdata(taskptr, "task.task")
     Mosek.optimize(data.task)

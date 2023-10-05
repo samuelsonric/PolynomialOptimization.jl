@@ -142,7 +142,8 @@ Defines how equality constraints are internally handled.
 - `emSimple` just adds the equality constraints to the problem without apply any Gröbner-based methods and does not exploit
   ideal reduction. The preprocessing time can be greatly simplified.
 - `emInequalities` transparently rewrites the equality constraint in terms of two inequality constraints. No ideal methods are
-  used whatsoever.
+  used whatsoever. This method is certainly not recommended; it will raise the complexity needlessly and even introduce
+  linearly dependent constraints which might violate the assumptions in some solvers.
 
 See also [`poly_problem`](@ref).
 """
