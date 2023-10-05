@@ -13,7 +13,7 @@ if !@isdefined(all_solvers)
         end
         true
     catch e
-        if e isa Mosek.MosekError && Mosek.MSK_RES_ERR_LICENSE ≤ e.rcode ≤ Mosek.MSK_RES_ERR_LICENSE_NO_SERVER_LINE
+        if e isa Mosek.MosekError && Mosek.MSK_RES_ERR_LICENSE.value ≤ e.rcode ≤ Mosek.MSK_RES_ERR_LICENSE_NO_SERVER_LINE.value
             false
         else
             rethrow(e)
