@@ -1,16 +1,4 @@
-using Test
-using PolynomialOptimization
-using MultivariatePolynomials
-import DynamicPolynomials
-
-all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment];
-complex_solvers = [:MosekMoment, :HypatiaMoment];
-
-function strRep(x)
-    io = IOBuffer()
-    show(io, "text/plain", x)
-    return String(take!(io))
-end
+include("./shared.jl")
 
 # These tests are a bit problematic, since the chordal extension is not unique. Even if the algorithm is fully specified, the
 # actual results depend on the internal structure of the graphs (i.e., term order). So do not expect identical results when
@@ -27,10 +15,10 @@ Variable cliques:
 Block sizes:
   [3 => 4]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ -0.0035512 atol = 1e-6
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ -0.0035512 atol = 1e-6
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ -0.0035512 atol = 2e-3
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ -0.0035512 atol = 1e-6
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ -0.0035512 atol = 1e-6
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ -0.0035512 atol = 1e-6
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ -0.0035512 atol = 2e-3
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ -0.0035512 atol = 1e-6
     end
 
     # paper says that the iterations terminate. However, this is a result of the paper always considering the constant term to
@@ -41,10 +29,10 @@ Variable cliques:
 Block sizes:
   [4 => 2, 3 => 1]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0. atol = 1e-9
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-8
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-7
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0. atol = 1e-9
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-8
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-7
     end
 
     @test isnothing(sparse_iterate!(sp))
@@ -62,10 +50,10 @@ Block sizes:
   [24 => 1, 23 => 2, 21 => 1, 20 => 2, 18 => 2, 7 => 7, 1 => 15]
   [12 => 1, 9 => 1, 7 => 1, 1 => 6]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-6
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 2e-5
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-7
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-6
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 2e-5
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-7
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermCliques with 1 constraint(s)
@@ -94,10 +82,10 @@ Variable cliques:
 Block sizes:
   [20 => 2, 19 => 1, 18 => 1, 17 => 2, 16 => 2, 15 => 2, 14 => 1, 11 => 4, 8 => 2, 7 => 3, 6 => 3, 5 => 2, 3 => 1]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-6
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-6
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermCliques with 0 constraint(s)
@@ -171,10 +159,10 @@ Block sizes:
   [4 => 1, 2 => 5]
   [3 => 2]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0.5355788 atol = 1e-7
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0.5355788 atol = 1e-7
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0.5355788 atol = 2e-4
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0.5355788 atol = 1e-6
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0.5355788 atol = 1e-7
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0.5355788 atol = 1e-7
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0.5355788 atol = 2e-4
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0.5355788 atol = 1e-6
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermCliques with 1 constraint(s)
@@ -202,10 +190,10 @@ Variable cliques:
 Block sizes:
   [18 => 3, 17 => 4, 15 => 2, 14 => 3, 13 => 3, 12 => 4, 11 => 5, 10 => 4, 9 => 8, 8 => 3, 7 => 4, 6 => 11, 4 => 5, 1 => 35]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 1e-7
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
-        @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-6
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-5
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 1e-7
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-6
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-5
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermCliques with 0 constraint(s)

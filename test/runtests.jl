@@ -1,7 +1,5 @@
 using Test
 
-#optimize = all(x != "noopt" for x in ARGS);
-optimize = true
 @testset "PolynomialOptimization" begin
     @testset "no sparsity" begin
         include("./SparsityNone.jl")

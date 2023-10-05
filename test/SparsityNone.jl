@@ -1,10 +1,4 @@
-using Test
-using PolynomialOptimization
-using MultivariatePolynomials
-import DynamicPolynomials
-
-all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment];
-complex_solvers = [:MosekMoment, :HypatiaMoment];
+include("./shared.jl")
 
 @testset "Some real-valued examples (scalar)" begin
     DynamicPolynomials.@polyvar x[1:2]

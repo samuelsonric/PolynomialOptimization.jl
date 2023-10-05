@@ -1,16 +1,4 @@
-using Test
-using PolynomialOptimization
-using MultivariatePolynomials
-import DynamicPolynomials
-
-all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment];
-complex_solvers = [:MosekMoment, :HypatiaMoment];
-
-function strRep(x)
-    io = IOBuffer()
-    show(IOContext(io, :limit => true, :displaysize => (10, 10)), "text/plain", x)
-    return String(take!(io))
-end;
+include("./shared.jl")
 
 @testset "Example 3.1 from correlative term sparsity paper" begin
     DynamicPolynomials.@polyvar x[1:3]
@@ -105,10 +93,10 @@ Variable cliques:
 Block sizes:
   [10 => 48]"
     if optimize
-        @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-6
-        @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 2e-6
-        @test sparse_optimize(:COSMOMoment, sp, eps_abs=1e-8, eps_rel=1e-8)[2] ≈ 0 atol = 1e-4
-        @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-5
+        :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-6
+        :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 2e-6
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp, eps_abs=1e-8, eps_rel=1e-8)[2] ≈ 0 atol = 1e-4
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-5
     end
 end
 

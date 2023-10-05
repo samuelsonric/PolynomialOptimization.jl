@@ -1,13 +1,4 @@
-using Test
-using PolynomialOptimization
-using MultivariatePolynomials
-import DynamicPolynomials
-
-function strRep(x)
-    io = IOBuffer()
-    show(io, "text/plain", x)
-    return String(take!(io))
-end;
+include("./shared.jl")
 
 @testset "Example 6.1" begin
     DynamicPolynomials.@polyvar x[1:3]

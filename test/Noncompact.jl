@@ -1,16 +1,4 @@
-using Test
-using PolynomialOptimization
-using MultivariatePolynomials
-import DynamicPolynomials
-
-all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment];
-complex_solvers = [:MosekMoment, :HypatiaMoment];
-
-function strRep(x)
-    io = IOBuffer()
-    show(io, "text/plain", x)
-    return String(take!(io))
-end;
+include("./shared.jl")
 
 @testset "POP 1 (Motzkin)" begin
     DynamicPolynomials.@polyvar x[1:2]
@@ -198,9 +186,9 @@ Objective: 8.00001 + 3.0e-5x₈² + 3.0e-5x₇² + 3.0e-5x₆² + 3.0e-5x₅² +
 Size of full basis: 165"
     # this problem reformulation seems to be close to ill-posed
     if optimize
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ -112.014 atol = 2e-3
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ -112.014 atol = 2e-3
         # MosekMoment: unknown
-        # @test poly_optimize(:HypatiaMoment, prob, dense=true)[2] ≈ -112.014 atol = 2e-3 # takes 6 minutes
+        # :HypatiaMoment ∈ all_solvers && @test poly_optimize(:HypatiaMoment, prob, dense=true)[2] ≈ -112.014 atol = 2e-3 # takes 6 minutes
     end
 end
 
@@ -226,9 +214,9 @@ Objective: 127.00001 - 40.0x₈ - 2.0x₇ - 80.0x₆ - 4.0x₅ - 80.0x₄ - 4.0x
 8: 0 ≤ x₈
 Size of full basis: 165"
     if optimize
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ 1.0072 atol = 2e-2
-        @test poly_optimize(:MosekMoment, prob)[2] ≈ 1.0072 atol = 2e-2
-        #@test poly_optimize(:HypatiaMoment, prob, dense=true)[2] ≈ 1.0072 atol = 2e-2 # takes 3:40 minutes
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 1.0072 atol = 2e-2
+        :MosekMoment ∈ all_solvers && @test poly_optimize(:MosekMoment, prob)[2] ≈ 1.0072 atol = 2e-2
+        #:HypatiaMoment ∈ all_solvers && @test poly_optimize(:HypatiaMoment, prob, dense=true)[2] ≈ 1.0072 atol = 2e-2 # takes 3:40 minutes
     end
 end
 
@@ -319,7 +307,7 @@ Objective was scaled by the prefactor 1.0 + 15.0x₂² + 15.0x₁² + 105.0x₂�
 1: 0 = -x₂² + x₁³
 Size of full basis: 171"
     if optimize
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.98476 atol = 3e-3
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 0.98476 atol = 3e-3
         # Hypatia is the only one of the others that gives something close to a good result (30s)
     end
 
@@ -350,7 +338,7 @@ Objective was scaled by the prefactor 1.0 + x₁₀² + x₉² + x₈² + x₇²
 5: 0 = x₁₀ - x₉ + 0.16666666666666666x₄ - 0.16666666666666666x₉²
 Size of full basis: 286"
     if optimize
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ 1.321664 atol = 1e-6
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 1.321664 atol = 1e-6
     end
 end
 
@@ -419,9 +407,9 @@ Size of full basis: 15"
     if optimize
         @test_broken poly_optimize(:MosekMoment, prob)[2] ≈ -8.5578 atol = 1e-4
         # ^ this once worked, but now Mosek's status is UNKNOWN
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ -8.5578 atol = 1e-4
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ -8.5578 atol = 1e-4
         # COSMO is pretty bad
-        @test poly_optimize(:HypatiaMoment, prob)[2] ≈ -8.5578 atol = 1e-4
+        :HypatiaMoment ∈ all_solvers && @test poly_optimize(:HypatiaMoment, prob)[2] ≈ -8.5578 atol = 1e-4
     end
 end
 
@@ -459,7 +447,7 @@ Objective was scaled by the prefactor 1.0 + 5.0x₃² + 5.0x₂² + 5.0x₁² + 
 4: 0 ≤ x₃
 Size of full basis: 120"
     if optimize
-        @test poly_optimize(:MosekSOS, prob)[2] ≈ 2 atol = 1e-4
+        :MosekSOS ∈ all_solvers && @test poly_optimize(:MosekSOS, prob)[2] ≈ 2 atol = 1e-4
     end
 end
 
