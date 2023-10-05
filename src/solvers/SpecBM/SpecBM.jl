@@ -292,7 +292,7 @@ end
 @doc raw"""
     specbm_primal(A, b, c; num_frees=missing, psds, ρ, r_past, r_current, ϵ=1e-4, β=0.1, maxiter=10000, maxnodescent=15,
         adaptiveρ=false, α=1., adaptiveα=true, αmin=1e-5, αmax=1000., ml=0.001, mu=min(1.5β, 1), Nmin=10, verbose=false,
-        step=20, offset=0, At=transpose(A), AAt=A*At, subsolver=:Mosek)
+        step=20, offset=0, At=transpose(A), AAt=A*At, subsolver=:Mosek, callback=(data, mastersolver_data)->nothing)
 
 Solves the minimization problem
 ```math
@@ -348,6 +348,9 @@ corresponds to the `:LS` format of a [`PackedMatrix`](@ref).
 ## Logging
 - `verbose::Bool`: print the status every `step` iterations. Note that the first (incomplete) iteration will never be printed.
 - `step::Integer`: skip a number of iterations and only print every `step`th.
+## Advanced solver interaction
+- `callback::Function`: a callback that is called with the last problem data (type `SpecBMData`) and the last mastersolver data
+  (type `SpecBMMastersolverData`) before the mastersolver is called anew. Changes to the structures may be made.
 
 See also [`SpecBMResult`](@ref).
 """
@@ -359,7 +362,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     ml::Real=R(0.001), mr::Real=min(R(1.5) * β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
-    subsolver::Symbol=:Mosek) where {R<:AbstractFloat}
+    subsolver::Symbol=:Mosek, callback::Function=(data, mastersolver_data) -> nothing) where {R<:AbstractFloat}
     #region Input validation
     subsolver ∈ (:Mosek, :Hypatia) || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
@@ -443,6 +446,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # 2: for t = 0, ..., tₘₐₓ do [we fix this to 1:maxiter]
     local FΩ, t, quality, primal_infeas, dual_infeas, gap, rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap
     for outer t in 1:maxiter
+        t > 2 && callback(data, mastersolver)
         # 3: solve (24) to obtain Xₜ₊₁*, γₜ*, Sₜ*
         # combined with
         # 4: form the iterate Wₜ* in (28) and dual iterate yₜ* in (29)
