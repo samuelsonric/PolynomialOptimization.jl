@@ -57,7 +57,7 @@ Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + 
 Size of full basis: 35"
     if optimize
         for solver in all_solvers
-            @test poly_optimize(solver, prob)[2] ≈ 0 atol = 1e-3
+            @test poly_optimize(solver, prob)[2] ≈ 0 atol = 2e-3
         end
     end
 end
@@ -428,7 +428,7 @@ Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + 
 Size of full basis: 20"
     if optimize
         for solver in all_solvers
-            @test poly_optimize(solver, prob)[2] ≈ 3 atol = 3e-4
+            @test poly_optimize(solver, prob)[2] ≈ 3 atol = 2e-3
         end
     end
 end

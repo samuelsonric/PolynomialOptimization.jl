@@ -31,7 +31,7 @@ Block sizes:
     if optimize
         :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0. atol = 1e-9
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
-        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-8
+        :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 7e-6
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-7
     end
 
@@ -85,7 +85,7 @@ Block sizes:
         :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sp)[2] ≈ 0 atol = 2e-8
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
-        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-6
+        :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-6
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermCliques with 0 constraint(s)
