@@ -1,40 +1,44 @@
+```@meta
+DocTestFilters = [
+  r"\d\.\d+e-\d+" => s"~0~",
+  r"(\d*)\.(\d{6})\d+" => s"\1.\2~"
+]
+DocTestSetup = :(import Random; Random.seed!(1234))
+```
 # Walkthrough
 
 We start the Julia session by including the required packages.
-```Julia
-julia> using PolynomialOptimization
-julia> using DynamicPolynomials
+```jldoctest walkthrough
+julia> using PolynomialOptimization, DynamicPolynomials
 ```
-Note that we import `PolynomialOptimization` before `DynamicPolynomials` (and possibly `MultivariatePolynomials`). This is
-important as currently, we hack into those package to provide support for complex-valued polynomials. Hopefully, this will soon
-be integrated into the packages themselves.
 
 ## A simple unconstrained problem
 ### Constructing the problem
 Next, we define some simple optimization problem.
-```Julia
+```jldoctest walkthrough
 julia> @polyvar x[1:3];
+
 julia> prob = poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3], 2)
 Real-valued polynomial optimization hierarchy of degree 2 in 3 variable(s)
-Objective: x₁⁴ + x₁²x₂² + x₁²x₃² + x₂⁴ + x₂²x₃² + x₃⁴ + x₂x₃ + 1
+Objective: 1 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴
 Size of full basis: 10
 ```
 This is a very simple problem: We have three variables and want to minimize an unconstrained objective function, using a
 Lasserre relaxation of order `2`. In fact, `2` is the minimal degree: By passing `0` for the degree, the minimal degree will be
 determined automatically.
-```Julia
+```jldoctest walkthrough
 julia> prob = poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3], 0)
 [ Info: Automatically selecting minimal degree 2 for the relaxation
 Real-valued polynomial optimization hierarchy of degree 2 in 3 variable(s)
-Objective: x₁⁴ + x₁²x₂² + x₁²x₃² + x₂⁴ + x₂²x₃² + x₃⁴ + x₂x₃ + 1
+Objective: 1 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴
 Size of full basis: 10
 ```
 
 ### Densely solving the problem
 Since this problem is so small, we can solve it directly without any sparsity consideration.
-```Julia
+```jldoctest walkthrough
 julia> poly_optimize(:MosekSOS, prob)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483392931)
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708)
 ```
 The solution that we found was indeed optimal and the value is `0.9166...`.
 Note that "optimal" here means that the solver converged for the given problem. However, the _given problem_ is the second
@@ -54,9 +58,9 @@ Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solution
 violate the bound or constraints, if any were given. The solutions are then return in a best-to-worst order.
 When calling [`poly_optimize`](@ref), the keyword argument `solutions` can be set to `true`, which will automatically call
 [`poly_all_solutions`](@ref):
-```Julia
+```jldoctest walkthrough
 julia> poly_optimize(:MosekSOS, prob, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483392931, [([-2.3921125960809997e-18, -0.40826233531625955, 0.4082623353161486], 1.8721902916851718e-8), ([-3.771718492228676e-18, 0.4082623353162627, -0.40826233531615175], 1.8721902916851718e-8)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708, [([-6.606736016739881e-19, -0.40826233164450954, 0.40826233164465725], 1.86899188348022e-8), ([-3.4904134953445265e-18, 0.4082623316445086, -0.4082623316446563], 1.86899188348022e-8)])
 ```
 Now, the third argument of the return value contains a vector with all solutions along with their badnesses (which can also be
 calculated manually using [`poly_solution_badness`](@ref)). Since here, the badness is of the order of $10^{-8}$, i.e.,
@@ -65,9 +69,9 @@ numerically zero, the points are indeed valid global minima.
 Note that the solution extraction functions just give a vector of numbers; to assign these numbers to variables, the function
 [`variables`](@ref) can be applied to the problem. This is particularly useful if there are multiple variables created at
 different times, occurring differently in the constraints, such that the order is not clear beforehand.
-```Julia
+```jldoctest walkthrough
 julia> variables(prob)
-3-element Vector{PolyVar{true}}:
+3-element Vector{Variable{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}}:
  x₁
  x₂
  x₃
@@ -77,45 +81,47 @@ A second way to check for optimality is to use the flat extension/truncation cri
 [Curto and Fialkow](https://doi.org/10.1090/S0002-9947-00-02472-7) and improved by [Nie](https://arxiv.org/abs/1106.2384v2).
 This is a sufficient criterion for optimality, and it can be manually checked by calling [`optimality_certificate`](@ref) on
 the problem (it will only work with non-sparse problems). The function will return `:Optimal` if the given minimum value can
-be certified to be optimal; else it will return `:Unknown`. The invocation of this function can also be automated by setting
-the keyword argument `certificate` to `true` when invoking [`poly_optimize`](@ref). However, note that this is just a
-sufficient criterion, and the solution might be optimal even if it is violated:
-```Julia
+be certified to be optimal; else it will return `:Unknown`:
+```jldoctest walkthrough
 julia> optimality_certificate(prob)
-:Unknown
+:Optimal
 ```
-In this case, we'd need to go to the third level in the hierarchy in order to get a positive certificate. Calculating the
-certificate will involve calculating the ranks of several matrices (and is more complicated in the complex case) and is
-therefore also disabled by default.
+The invocation of this function can also be automated by setting the keyword argument `certificate` to `true` when invoking
+[`poly_optimize`](@ref). However, note that this is just a sufficient criterion, and the solution might be optimal even if it
+is violated.
+
+Calculating the certificate will involve calculating the ranks of several matrices (and is more complicated in the complex
+case) and is therefore also disabled by default.
 
 ### Using the Newton polytope
 The current example is an unconstrained optimization problem; hence, the size of the full basis, which is 10, may be larger
 than actually necessary. It is not a simple problem to determine the relevant basis elements in general; but unconstrained
 problems allow for the Newton polytope technique. Using it is as simple as only passing the objective (leaving out the degree)
 to [`poly_problem`](@ref):
-```Julia
+```jldoctest walkthrough
 julia> poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3])
 Real-valued polynomial optimization hierarchy of degree 2 in 3 variable(s)
-Objective: x₁⁴ + x₁²x₂² + x₁²x₃² + x₂⁴ + x₂²x₃² + x₃⁴ + x₂x₃ + 1
+Objective: 1 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴
 Size of full basis: 10
 ```
 In this case, no basis reduction was possible. However, in other cases, this can work. For example, if you want to inspect the
 Newton polytope of the polynomials whose squares might make up a certain objective, you  can call [`newton_polytope`](@ref)
 directly:
-```Julia
-julia> @polyvar x y
+```jldoctest walkthrough
+julia> @polyvar x y;
+
 julia> newton_polytope(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1)
-4-element Vector{Monomial{true}}:
- x²y
- xy²
- xy
+4-element Vector{Monomial{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}}:
  1
+ xy
+ xy²
+ x²y
 ```
 This reveals that, were the Motzkin representable by a sum of squares, the equality
 ```math
-x^4 y^2 + x^2 y^4 - 3 x^2 y^2 + 1 = \sum_i (\alpha_i x^2 y + \beta_i x y^2 + \gamma_i x y + \delta_i)^2
+x^4 y^2 + x^2 y^4 - 3 x^2 y^2 + 1 = \sum_i (\alpha_i + \beta_i x y + \gamma_i x y^2 + \delta_i x^2 y)^2
 ```
-would have to hold; but expanding the right-hand side will lead to the coefficient ``\sum_i \gamma_i^2`` in front of the
+would have to hold; but expanding the right-hand side will lead to the coefficient ``\sum_i \beta_i^2`` in front of the
 monomial ``x^2 y^2``, which cannot be negative; hence, the Motzkin polynomial is not a sum of squares.
 
 Note that the calculation of the Newton polytope currently requires Mosek.
@@ -130,7 +136,7 @@ There are four kinds of sparsity implemented in `PolynomialOptimization`:
 - [`SparsityCorrelativeTerm`](@ref)
 Applying the analysis as simple as passing the problem to the respective type. For this particular problem, there is no
 correlative sparsity:
-```Julia
+```jldoctest walkthrough
 julia> SparsityCorrelative(prob)
 SparsityCorrelative with 0 constraint(s)
 Variable cliques:
@@ -139,7 +145,7 @@ Block sizes:
   [10 => 1]
 ```
 So there is only a single clique, leading to a basis of size `10`. However, there is term sparsity:
-```Julia
+```jldoctest walkthrough
 julia> tbs = SparsityTermBlock(prob)
 SparsityTermBlock with 0 constraint(s)
 Variable cliques:
@@ -151,9 +157,9 @@ We get a basis of size `5`, one of size `2`, and three bases of size `1` (here, 
 indexes the moment/SOS matrices). `PolynomialOptimization` will model these by a `5x5` semidefinite matrix, a rotated
 second-order cone, as well as three linear constraints. This is much cheaper than a `10x10` semidefinite matrix.
 Let's optimize the sparse problem:
-```Julia
+```jldoctest walkthrough
 julia> sparse_optimize(:MosekSOS, tbs, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.916666648342404, [([0.0, 0.4082608082296415, -0.4082685270025584], 1.8900428111479073e-8), ([0.0, -0.4082608082296415, 0.4082685270025584], 1.8900428111479073e-8)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483442845, [([0.0, 0.408268526962408, -0.4082608081907362], 1.8898544951184704e-8), ([0.0, -0.408268526962408, 0.4082608081907362], 1.8898544951184704e-8)])
 ```
 Again, we get the same optimal value, so introducing the sparsity did not make our relaxation worse (which is _per se_ not
 guaranteed), and we are still able to get the same optimal solutions.
@@ -171,7 +177,7 @@ Assume that our term sparsity gave a worse bound than the dense case (which in g
 problem is typically far too large to be solved; but we just don't get a proper optimal point, though this could also be due to
 the Lasserre hierarchy level being insufficient). Then, we could try to iterate the term sparsity hierarchy, keeping the same
 level in the Lasserre hierarchy.
-```Julia
+```jldoctest walkthrough
 julia> sparse_iterate!(tbs)
 SparsityTermBlock with 0 constraint(s)
 Variable cliques:
@@ -188,7 +194,7 @@ terminated and nothing more can (for term sparsity: must) be done (as the last l
 problem).
 
 We can also try what happens if we use term sparsity with chordal cliques instead of connected components:
-```Julia
+```jldoctest walkthrough
 julia> tcs = SparsityTermCliques(prob)
 SparsityTermCliques with 0 constraint(s)
 Variable cliques:
@@ -197,7 +203,7 @@ Block sizes:
   [4 => 1, 2 => 2, 1 => 3]
 
 julia> sparse_optimize(:MosekSOS, tcs, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666618078856, [([0.0, 0.40826934273815213, -0.40827645479440017], 6.103714644822844e-9), ([0.0, -0.40826934273815213, 0.40827645479440017], 6.103714644822844e-9)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666618119728, [([0.0, 0.408276454560621, -0.4082693425664344], 6.099606819631731e-9), ([0.0, -0.408276454560621, 0.4082693425664344], 6.099606819631731e-9)])
 ```
 So again, we get the same optimal result, can extract a solution point with even better accuary, and the problem was smaller,
 as we now have just a basis of size `4` instead of `5` (at the cost of another quadratic constraint, which is much cheaper than
@@ -223,13 +229,13 @@ the problem. The following methods are currently supported:
 Note that by passing the keyword argument `verbose=true` to the optimization function, we get some more insight into what
 happens behind the hood. Let's redo the last optimization.
 ```Julia
-julia> sparse_optimize(:MosekSOS, tcs, solution=true, verbose=true)
+julia> sparse_optimize(:MosekSOS, tcs, solutions=true, verbose=true)
 Determining groupings...
-Determined grouping in 6.52e-5 seconds
+Determined grouping in 1.44e-5 seconds
 Clique merging disabled. Block sizes:
 [4 => 1, 2 => 2, 1 => 3]
 Starting optimization
-Setup complete in 0.0002685 seconds
+Setup complete in 0.0001057 seconds
 Problem
   Name                   :
   Objective sense        : maximize
@@ -239,7 +245,7 @@ Problem
   Disjunctive cons.      : 0
   Cones                  : 2
   Scalar variables       : 10
-  Matrix variables       : 1
+  Matrix variables       : 1 (scalarized: 10)
   Integer variables      : 0
 
 Optimizer started.
@@ -251,47 +257,36 @@ Freed constraints in eliminator : 0
 Eliminator terminated.
 Eliminator - tries                  : 1                 time                   : 0.00
 Lin. dep.  - tries                  : 1                 time                   : 0.00
-Lin. dep.  - number                 : 0
+Lin. dep.  - primal attempts        : 1                 successes              : 1
+Lin. dep.  - dual attempts          : 0                 successes              : 0
+Lin. dep.  - primal deps.           : 0                 dual deps.             : 0
 Presolve terminated. Time: 0.00
-Problem
-  Name                   :
-  Objective sense        : maximize
-  Type                   : CONIC (conic optimization problem)
-  Constraints            : 20
-  Affine conic cons.     : 0
-  Disjunctive cons.      : 0
-  Cones                  : 2
-  Scalar variables       : 10
-  Matrix variables       : 1
-  Integer variables      : 0
-
 Optimizer  - threads                : 8
 Optimizer  - solved problem         : the primal
 Optimizer  - Constraints            : 11
 Optimizer  - Cones                  : 3
 Optimizer  - Scalar variables       : 11                conic                  : 8
 Optimizer  - Semi-definite variables: 1                 scalarized             : 10
-Factor     - setup time             : 0.00              dense det. time        : 0.00
-Factor     - ML order time          : 0.00              GP order time          : 0.00
+Factor     - setup time             : 0.00
+Factor     - dense det. time        : 0.00              GP order time          : 0.00
 Factor     - nonzeros before factor : 60                after factor           : 60
-Factor     - dense dim.             : 0                 flops                  : 8.46e+02
+Factor     - dense dim.             : 0                 flops                  : 8.67e+02
 ITE PFEAS    DFEAS    GFEAS    PRSTATUS   POBJ              DOBJ              MU       TIME
-0   1.0e+00  1.0e+00  1.0e+00  0.00e+00   0.000000000e+00   0.000000000e+00   1.0e+00  0.00
-1   2.5e-01  2.5e-01  1.2e-01  8.79e-01   4.603493496e-01   5.031535243e-01   2.5e-01  0.00
-2   2.9e-02  2.9e-02  4.1e-03  9.93e-01   8.774106262e-01   8.861354829e-01   2.9e-02  0.00
-3   6.2e-03  6.2e-03  3.8e-04  1.14e+00   9.137178230e-01   9.155191208e-01   6.2e-03  0.00
-4   9.0e-04  9.0e-04  2.2e-05  1.05e+00   9.161039142e-01   9.163311344e-01   9.0e-04  0.00
-5   4.5e-05  4.5e-05  2.5e-07  1.02e+00   9.166506402e-01   9.166607688e-01   4.5e-05  0.00
-6   4.3e-07  4.3e-07  2.3e-10  1.00e+00   9.166662556e-01   9.166663522e-01   4.3e-07  0.00
-7   4.7e-08  4.7e-08  8.2e-12  1.00e+00   9.166666155e-01   9.166666264e-01   4.7e-08  0.00
-8   5.4e-09  5.4e-09  3.2e-13  1.00e+00   9.166666618e-01   9.166666631e-01   5.4e-09  0.00
-Optimizer terminated. Time: 0.02
+0   1.0e+00  1.0e+00  1.0e+00  0.00e+00   -0.000000000e+00  -0.000000000e+00  1.0e+00  0.01
+1   2.5e-01  2.5e-01  1.2e-01  8.79e-01   4.603493496e-01   5.031535243e-01   2.5e-01  0.03
+2   2.9e-02  2.9e-02  4.1e-03  9.93e-01   8.774106262e-01   8.861354829e-01   2.9e-02  0.03
+3   6.2e-03  6.2e-03  3.8e-04  1.14e+00   9.137178230e-01   9.155191208e-01   6.2e-03  0.03
+4   9.0e-04  9.0e-04  2.2e-05  1.05e+00   9.161039142e-01   9.163311344e-01   9.0e-04  0.03
+5   4.5e-05  4.5e-05  2.5e-07  1.02e+00   9.166506402e-01   9.166607688e-01   4.5e-05  0.03
+6   4.3e-07  4.3e-07  2.3e-10  1.00e+00   9.166662556e-01   9.166663522e-01   4.3e-07  0.03
+7   4.7e-08  4.7e-08  8.2e-12  1.00e+00   9.166666155e-01   9.166666264e-01   4.7e-08  0.03
+8   5.4e-09  5.4e-09  3.2e-13  1.00e+00   9.166666618e-01   9.166666631e-01   5.4e-09  0.03
+Optimizer terminated. Time: 0.08
 
 Optimization complete
 [ Info: The signs/phases of the following variables are still unknown: x[2], x[3]
 Extracted all signs/phases, found 2 possible solution(s)
-Checking validity of the solutions
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666618078856, [([0.0, 0.40826934273815213, -0.40827645479440017], 6.103714644822844e-9), ([0.0, -0.40826934273815213, 0.40827645479440017], 6.103714644822844e-9)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666618119728, [([0.0, 0.408276454560621, -0.4082693425664344], 6.099606819631731e-9), ([0.0, -0.408276454560621, 0.4082693425664344], 6.099606819631731e-9)])
 ```
 So first, `PolynomialOptimization` will determine the bases for the matrices according to the sparsity pattern.
 At this step, if the optional keyword argument `clique_merging` is set to `true` (default is `false`), an attempt will be made
@@ -304,21 +299,37 @@ constructed; then Mosek runs. Having completed the optimization, `PolynomialOpti
 moments that were available. It finds appropriate magnitudes for the variables, but there may be sign ambiguities, which can
 indeed be resolved.
 
-We can also manually have a look at the moments that were available for solution extraction:
-```Julia
-julia> last_moments(prob)
-Dict{Monomial{true}, Float64} with 11 entries:
-  x₃²    => 0.16669
-  x₂⁴    => 0.0277835
+Indeed, due to sparsity, the moment matrix is full of unknowns:
+```jldoctest walkthrough
+julia> moment_matrix(prob)
+10×10 LinearAlgebra.Symmetric{Float64, Matrix{Float64}}:
+   1.0         NaN         NaN         …  NaN             3.22241e-8
+ NaN             0.166684   -0.166687     NaN           NaN
+ NaN            -0.166687    0.16669      NaN           NaN
+ NaN           NaN         NaN            NaN           NaN
+   0.166684    NaN         NaN            NaN             5.28195e-9
+  -0.166687    NaN         NaN         …  NaN           NaN
+   0.16669     NaN         NaN            NaN             5.61848e-9
+ NaN           NaN         NaN            NaN           NaN
+ NaN           NaN         NaN              5.61848e-9  NaN
+   3.22241e-8  NaN         NaN            NaN            -3.13437e-9
+```
+As this matrix is not very informative, we can also manually have a look at the moments that were available for solution
+extraction:
+```jldoctest walkthrough
+julia> sort(PolynomialOptimization.last_moments(prob))
+OrderedCollections.OrderedDict{Monomial{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}, Float64} with 11 entries:
   1      => 1.0
-  x₃⁴    => 0.0277854
-  x₁²x₂² => 5.28163e-9
-  x₁²    => 3.22222e-8
-  x₂²x₃² => 0.0277845
-  x₁²x₃² => 5.61816e-9
+  x₃²    => 0.166684
   x₂x₃   => -0.166687
-  x₁⁴    => -3.13486e-9
-  x₂²    => 0.166684
+  x₂²    => 0.16669
+  x₁²    => 3.22241e-8
+  x₃⁴    => 0.0277835
+  x₂²x₃² => 0.0277845
+  x₂⁴    => 0.0277854
+  x₁²x₃² => 5.28195e-9
+  x₁²x₂² => 5.61848e-9
+  x₁⁴    => -3.13437e-9
 ```
 This reveals how the package is able to return solutions without having access to the full moment matrix. There are values for
 the squares of the variables available, so we can deduce two possible candidates for the original variables - at least, if the
@@ -346,11 +357,12 @@ Equality constraints are implemented in three different ways in this package. Al
 argument `zero` to [`poly_problem`](@ref), which constrains those polynomials to be zero. The method can be chosen by
 using the `equality_method` keyword, which can either be specified for all constraints together or even chosen individually for
 each constraint. Valid choices for the methods are documented in [`EqualityMethod`](@ref).
-```Julia
+```jldoctest walkthrough
 julia> @polyvar x[1:2];
+
 julia> poly_optimize(:MosekSOS, poly_problem(-(x[1] -1)^2 - (x[1] - x[2])^2 - (x[2] -3)^2, 1,
                                              zero=[(x[1] - 1.5)^2 + (x[2] - 2.5)^2 - .5]), solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, -3.999999989793517, [([0.9999767219767653, 2.9999767173404606], 1.500750634875203e-10)])
+(Mosek.MSK_SOL_STA_OPTIMAL, -3.9999999872802183, [([0.999947762870286, 2.9999477608105107], 9.938330158831832e-9)])
 ```
 Note that when grading the quality of a solution, the package will determine the violation of the constraints as well as how
 far the actual value is away from what it should be, and return the worst of all violations.
@@ -379,14 +391,15 @@ disabled by default.
 Inequality constraints are implemented using Putinar's Positivstellensatz or localizing matrices. They can be specified by
 passing the keyword argument `nonneg` to [`poly_problem`](@ref), which constraints those polynomials to be greater or
 equal to zero.
-```Julia
+```jldoctest walkthrough
 julia> @polyvar x[1:2];
+
 julia> poly_optimize.(:MosekSOS, [poly_problem(-(x[1]-1)^2 - (x[1]-x[2])^2 - (x[2]-3)^2, i,
                                                nonneg=[1-(x[1]-1)^2, 1-(x[1]-x[2])^2, 1-(x[2]-3)^2]) for i in 1:2],
                       solutions=true)
 2-element Vector{Tuple{Mosek.Solsta, Float64, Vector{Tuple{Vector{Float64}, Float64}}}}:
- (Mosek.MSK_SOL_STA_OPTIMAL, -2.999999999626025, [([1.6532933768701226, 2.224919010979244], 1.6457013582516082)])
- (Mosek.MSK_SOL_STA_OPTIMAL, -2.00000000172626, [([0.9999999975925994, 1.9999999931047932], 1.3790413255776457e-8), ([1.9999999906975054, 2.9999999590933153], 8.353962677176696e-8), ([1.9999999917961266, 1.9999999522274106], 9.554518065613138e-8)])
+ (Mosek.MSK_SOL_STA_OPTIMAL, -2.999999999626022, [([1.6532933768666775, 2.22491901096593], 1.6457013582467503)])
+ (Mosek.MSK_SOL_STA_OPTIMAL, -2.0000000017385773, [([1.9999999922656364, 1.999999993783448], 1.2433104323861244e-8), ([1.0000000096725086, 2.0000000038288634], 2.1083594425874708e-8), ([1.9999999929336008, 2.999999983084451], 3.5569676981594966e-8)])
 ```
 This is an example where the first relaxation level is not optimal, but the second is, which can clearly be seen from the
 vanishing badnesses of the solutions in the latter case.
@@ -395,14 +408,15 @@ vanishing badnesses of the solutions in the latter case.
 `PolynomialOptimization` also supports conditions that constrain a matrix that is made up of polynomials to be positive
 semidefinite. They can be specified by passing the keyword argument `psd` to [`poly_problem`](@ref); note that the
 matrices must be symmetric/hermitian.
-```Julia
+```jldoctest walkthrough
 julia> @polyvar x[1:2];
+
 julia> poly_optimize.(:MosekSOS, [poly_problem(-x[1]^2 - x[2]^2, i, zero=[x[1]+x[2]-1],
                                                psd=[[1-4x[1]*x[2]  x[1]; x[1]  4-x[1]^2-x[2]^2]]) for i in 1:2],
                       solutions=true)
 2-element Vector{Tuple{Mosek.Solsta, Float64, Vector{Tuple{Vector{Float64}, Float64}}}}:
- (Mosek.MSK_SOL_STA_OPTIMAL, -3.999999998038271, [([-0.5811321995597589, 1.581132199559759], 1.1623063321884262)])
- (Mosek.MSK_SOL_STA_OPTIMAL, -3.9048915352982325, [([-0.8047780449611077, 1.8047780449611077], 4.207317205739969e-8)])
+ (Mosek.MSK_SOL_STA_OPTIMAL, -3.9999999893976312, [([0.0169918405518539, 1.206598785994368], 2.5438306363892087)])
+ (Mosek.MSK_SOL_STA_OPTIMAL, -3.9048915698274054, [([-0.8047780608362405, 1.8047780608640278], 6.352054437996912e-9)])
 ```
 At second level, we get the optimal solution.
 
@@ -418,26 +432,39 @@ is printed. However, once the required degree is reached, increasing the degree 
 Also note that integer-valued coefficients will necessarily be converted to floating point during the processes of tightening.
 This might fail in some corner cases; then simply convert the types manually.
 Complex-valued problems are not supported at the moment; and PSD constraints will be skipped during the tightening.
-```Julia
+```jldoctest walkthrough
 julia> @polyvar x y;
-julia> poly_optimize(:MosekSOS, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 6), solutions=true)
-(Mosek.MSK_SOL_STA_PRIM_ILLPOSED_CER, -4.505910348833973e-9, [([0.0, 0.0], 1.0000000045059103)])
+
+julia> poly_optimize(:MosekSOS, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 6),)
+(Mosek.MSK_SOL_STA_UNKNOWN, -1.2006611520952588)
 ```
 Without tightening, all the orders from third to sixth of a minimization of the Motzkin polynomial are ill-posed. The first
 valid formulation is of seventh order. However, adding the tightening equalities (here, as there are no additional constraints,
 this just means to add the condition $\nabla\mathrm{objective} = 0$), the fifth order is already sufficient:
-```Julia
+```jldoctest walkthrough
 julia> prob = poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 5, tighter=true)
 Real-valued polynomial optimization hierarchy of degree 5 in 2 variable(s)
-Objective: x⁴y² + x²y⁴ - 3.0x²y² + 1.0
+Objective: 1.0 - 3.0x²y² + x²y⁴ + x⁴y²
 2 constraints
-1: 0 = 4.0x³y² + 2.0xy⁴ - 6.0xy²
-2: 0 = 2.0x⁴y + 4.0x²y³ - 6.0x²y
+1: 0 = -6.0xy² + 2.0xy⁴ + 4.0x³y²
+2: 0 = -6.0x²y + 4.0x²y³ + 2.0x⁴y
 Size of full basis: 21
 
 julia> poly_optimize(:MosekSOS, prob, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 7.566557217530723e-8, [([1.0000006443510576, 1.0000006443510574], 7.566058993846192e-8)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 7.498632991088676e-8, [([-1.3773715396383412, 0.10057679856541127], 0.9790292955627293), ([1.3773715977287757, -0.10057587483596053], 0.9790296784991895), ([-6.249667177593761e-7, -3.69550718528367e-6], 0.9999999250136701), ([1.0116289982646125, 0.6579691078011111], 1.4958853214169816), ([-1.0116281079177019, -0.6579658871872855], 1.495889207339651)])
 ```
+Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized,
+you'll get a vastly different result whenever the extraction is performced), so let's try to get the solution via the heuristic
+method:
+```jldoctest walkthrough
+julia> poly_all_solutions(prob, ans[2], heuristic=true)
+4-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([1.0000006425873473, 1.0000006425873476], 7.711065512783222e-6)
+ ([1.0000006425873473, -1.0000006425873476], 7.711065512783222e-6)
+ ([-1.0000006425873473, 1.0000006425873476], 7.711065512783222e-6)
+ ([-1.0000006425873473, -1.0000006425873476], 7.711065512783222e-6)
+```
+This was successful in delivering multiple solutions.
 
 ### Helping convergence
 Another way to modify the problem is to exploit a prefactor in the objective.
@@ -451,16 +478,16 @@ neighborhood of the original problem.
 
 By using the `noncompact=(ϵ, k)` when constructing the problem using [`poly_problem`](@ref), this is done automatically.
 Let us apply this to the Motzkin case:
-```Julia
+```jldoctest walkthrough
 julia> prob = poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 0, noncompact=(1e-5, 1))
 [ Info: Automatically selecting minimal degree 4 for the relaxation
 Real-valued polynomial optimization hierarchy of degree 4 in 2 variable(s)
-Objective: 1.0e-5x⁸ + 1.00004x⁶y² + 2.00006x⁴y⁴ + 1.00004x²y⁶ + 1.0e-5y⁸ + 4.0e-5x⁶ - 1.99988x⁴y² - 1.99988x²y⁴ + 4.0e-5y⁶ + 6.000000000000001e-5x⁴ - 2.9998799999999997x²y² + 6.000000000000001e-5y⁴ + 1.00004x² + 1.00004y² + 1.00001
-Objective was scaled by the prefactor x² + y² + 1.0
+Objective: 1.00001 + 1.00004y² + 1.00004x² + 6.000000000000001e-5y⁴ - 2.99988x²y² + 6.000000000000001e-5x⁴ + 4.0e-5y⁶ - 1.9998799999999999x²y⁴ - 1.9998799999999999x⁴y² + 4.0e-5x⁶ + 1.0e-5y⁸ + 1.00004x²y⁶ + 2.00006x⁴y⁴ + 1.00004x⁶y² + 1.0e-5x⁸
+Objective was scaled by the prefactor 1.0 + y² + x²
 Size of full basis: 15
 
 julia> poly_optimize(:MosekSOS, prob)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.00026998172528386815)
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.0002699817510293385)
 ```
 Indeed, now a basis of degree 4 was sufficient to find that the minimum value looks pretty nonnegative. However, this is hard
 to quantify, as for this, we'd have to extract a solution from the perturbed `prob`. The algorithm to do this is not
@@ -481,37 +508,46 @@ As soon as [`poly_problem`](@ref) detects complex variables, it switches to the 
 equality constraints will no longer be handled by Gröbner basis methods, but instead as two separate inequality constraints.
 For complex-valued optimizations, only the methods `:MosekMoment` (which requires Mosek 10+) and `:HypatiaMoment` are
 available.
-```Julia
+```jldoctest walkthrough
 julia> @polycvar z;
-julia> prob = poly_problem(z + conj(z), 1, zero=[z*conj(z)-1]);
+
+julia> prob = poly_problem(z + conj(z), 1, zero=[z*conj(z)-1])
+Complex-valued polynomial optimization hierarchy of degree 1 in 1 variable(s)
+Objective: z̅ + z
+1 constraints
+1: 0 = -1 + zz̅
+Size of full basis: 2
+
 julia> poly_optimize(:MosekMoment, prob, solutions=true)
 (Mosek.MSK_SOL_STA_OPTIMAL, -2.0, Tuple{Vector{ComplexF64}, Float64}[([-0.9999999999999998 + 0.0im], 4.440892098500626e-16)])
 ```
 The dense solution extraction mechanism also works in the complex case.
 
 Let's try a more complicated example from the paper on the complex-valued Lasserre hierarchy (example 4.1):
-```Julia
+```jldoctest walkthrough
 julia> @polycvar z[1:2];
+
 julia> prob = poly_problem(3 - z[1]*conj(z[1]) - .5im*z[1]*conj(z[2])^2 + .5im*z[2]^2*conj(z[1]), 3,
                            zero=[z[1]*conj(z[1])-.25z[1]^2-.25conj(z[1])^2-1, # abs(z₁)^2 - z₁^2/4 - conj(z₁)^2/4 = 1
                                  z[1]*conj(z[1])+z[2]*conj(z[2])-3, # abs(z₁)^2 + abs(z₂)^2 = 3
                                  im*z[2]-im*conj(z[2])], # i z₂ - i conj(z₂) = 0
                            nonneg=[z[2]+conj(z[2])]); # z₂ + conj(z₂) ≥ 0
+
 julia> poly_optimize(:MosekMoment, prob, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.42817479499599975, Tuple{Vector{ComplexF64}, Float64}[([2.695688878989238e-18 - 0.8164965277154765im, 1.5275251790901432 + 5.333185915395668e-18im], 2.474741958025106e-7)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.42817479301608063, Tuple{Vector{ComplexF64}, Float64}[([-3.6122336560339377e-19 - 0.8164965282947129im, 1.5275251770456384 + 1.8756076739619624e-22im], 2.527743721003617e-7)])
 ```
 Indeed, this solution gives the same objective value and satisfies the constraints, so we found the optimum!
 
 And finally something with matrices:
-```Julia
-julia> @polycvar z[1:2];
-julia> poly_optimize(:MosekMoment, poly_problem(-x[1]*conj(x[1]) - x[2]*conj(x[2]), 2,
-                                                psd=[[1-2*(x[1]*x[2]+conj(x[1]*x[2]))  x[1]
-                                                      conj(x[1])  4-x[1]*conj(x[1])-x[2]*conj(x[2])]]))
-(Mosek.MSK_SOL_STA_OPTIMAL, -3.999999918874431, [([0.000631210850055003, 1.99999988011182], 3.1932358310108857e-7), ([-0.000631210850055003, -1.99999988011182], 3.1932358310108857e-7)])
+```jldoctest walkthrough
+julia> poly_optimize(:MosekMoment, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]), 2,
+                                                psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
+                                                      conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]),
+                                                solutions=true)
+(Mosek.MSK_SOL_STA_OPTIMAL, -3.99999999999958, Tuple{Vector{ComplexF64}, Float64}[([0.00032581374225659825 + 0.31721348382746006im, -0.0004222689801944649 + 0.41112266595024033im], 3.7303534747539064), ([-0.00032581374225671474 - 0.3172134838274599im, 0.00042226898019461705 - 0.4111226659502403im], 3.7303534747539064), ([-8.439790218534579e-17 - 2.986143062453593e-17im, 7.99953121580816e-17 + 7.748718103830187e-17im], 3.99999999999958)])
 ```
-
-Note that the implementation of the solution extraction algorithm also works in the complex case even though the moment matrix
-is no longer of Hankel form; the theory is powerful enough to handle this "minor detail." The built-in heuristic will still try
+Note that the solution extraction algorithm in principle also works in the complex case even though the moment matrix is no
+longer of Hankel form; the theory is powerful enough to handle this "minor detail." The built-in heuristic will still try
 to find good solutions and can sometimes do so even in the case of multiple solutions if they only differ in the phase of
-variables.
+variables. However, as in the real case, there is no guarantee that the solutions can be decomposed in atomic measures, and
+therefore the extraction may also fail, which is shown here.
