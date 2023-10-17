@@ -16,12 +16,12 @@ modelling framework, it introduces a significant overhead that is omitted in thi
 
 
 ## Compatibility notice
-Currently, the required complex-valued functionality depends on a not-yet-merged request in
-[`MultivariatePolynomials`](https://github.com/JuliaAlgebra/MultivariatePolynomials.jl/pull/213). For this reason, the package
-is not available on the registry at this moment. You have to manually install the necessary parts:
+Currently, the required complex-valued functionality is merged into `MultivariatePolynomials`, but a new release has not been
+made yet. The corresponding implementation in `DynamicPolynomials` has not been merged so far. For this reason, the package is
+not available on the registry at this moment. You have to manually install the necessary parts:
 ```
 julia> ]
-pkg> add https://github.com/projekter/MultivariatePolynomials.jl
+pkg> add MultivariatePolynomials.jl#master
 pkg> add https://github.com/projekter/DynamicPolynomials.jl.git
 pkg> add https://github.com/projekter/PolynomialOptimization.jl.git
 ```

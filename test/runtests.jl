@@ -1,6 +1,10 @@
 include("./shared.jl")
+using Documenter: doctest;
 
 @testset "PolynomialOptimization" begin
+    @testset "Documentation" begin
+        doctest(PolynomialOptimization)
+    end
     @testset "no sparsity" begin
         include("./SparsityNone.jl")
     end

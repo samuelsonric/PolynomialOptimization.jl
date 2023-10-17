@@ -7,6 +7,7 @@ on:
     branches:
       - main
     tags: '*'
+  workflow_dispatch:
 jobs:
   test:
     name: Julia ${{ matrix.version }} - Windows 11 - ${{ matrix.arch }} - ${{ github.event_name }}
@@ -25,21 +26,21 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v1
-        env:
-          cache-name: cache-artifacts
-        with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
+      # - uses: actions/cache@v1
+      #   env:
+      #     cache-name: cache-artifacts
+      #   with:
+      #     path: ~/.julia/artifacts
+      #     key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-test-${{ env.cache-name }}-
+      #       ${{ runner.os }}-test-
+      #       ${{ runner.os }}-
       - name: complex polynomials
         shell: julia --project=@. {0}
         run: |
           using Pkg
-          Pkg.add(PackageSpec(url="https://github.com/projekter/MultivariatePolynomials.jl", rev="master"))
+          Pkg.add(PackageSpec(name="MultivariatePolynomials", rev="master"))
           Pkg.add(PackageSpec(url="https://github.com/projekter/DynamicPolynomials.jl.git", rev="master"))
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

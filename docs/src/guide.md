@@ -3,7 +3,7 @@ DocTestFilters = [
   r"\d\.\d+e-\d+" => s"~0~",
   r"(\d*)\.(\d{6})\d+" => s"\1.\2~"
 ]
-DocTestSetup = :(import Random; Random.seed!(1234))
+DocTestSetup = :(using OrderedCollections; import Random; Random.seed!(1234))
 ```
 # Walkthrough
 
@@ -60,7 +60,7 @@ When calling [`poly_optimize`](@ref), the keyword argument `solutions` can be se
 [`poly_all_solutions`](@ref):
 ```jldoctest walkthrough
 julia> poly_optimize(:MosekSOS, prob, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708, [([-6.606736016739881e-19, -0.40826233164450954, 0.40826233164465725], 1.86899188348022e-8), ([-3.4904134953445265e-18, 0.4082623316445086, -0.4082623316446563], 1.86899188348022e-8)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708, [([-3.490413483367849e-18, 0.4082623316445083, -0.40826233164465603], 1.8689918723779897e-8), ([-6.606736136506623e-19, -0.4082623316445094, 0.4082623316446571], 1.8689918945824502e-8)])
 ```
 Now, the third argument of the return value contains a vector with all solutions along with their badnesses (which can also be
 calculated manually using [`poly_solution_badness`](@ref)). Since here, the badness is of the order of $10^{-8}$, i.e.,
@@ -317,8 +317,8 @@ julia> moment_matrix(prob)
 As this matrix is not very informative, we can also manually have a look at the moments that were available for solution
 extraction:
 ```jldoctest walkthrough
-julia> sort(PolynomialOptimization.last_moments(prob))
-OrderedCollections.OrderedDict{Monomial{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}, Float64} with 11 entries:
+julia> sort!(OrderedDict(PolynomialOptimization.last_moments(prob)))
+OrderedDict{Monomial{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}, Float64} with 11 entries:
   1      => 1.0
   x₃²    => 0.166684
   x₂x₃   => -0.166687
@@ -451,7 +451,7 @@ Objective: 1.0 - 3.0x²y² + x²y⁴ + x⁴y²
 Size of full basis: 21
 
 julia> poly_optimize(:MosekSOS, prob, solutions=true)
-(Mosek.MSK_SOL_STA_OPTIMAL, 7.498632991088676e-8, [([-1.3773715396383412, 0.10057679856541127], 0.9790292955627293), ([1.3773715977287757, -0.10057587483596053], 0.9790296784991895), ([-6.249667177593761e-7, -3.69550718528367e-6], 0.9999999250136701), ([1.0116289982646125, 0.6579691078011111], 1.4958853214169816), ([-1.0116281079177019, -0.6579658871872855], 1.495889207339651)])
+(Mosek.MSK_SOL_STA_OPTIMAL, 7.498632991088676e-8, [([1.3773712843876245, -0.10057757230854977], 0.9790289701701173), ([-1.377371853142852, 0.10057509984621968], 0.9790300044049999), ([2.040045393701433e-7, -4.5790255116079024e-6], 0.9999999250136701), ([-3.30820623610704e-7, 2.388719148053721e-6], 0.9999999250136701), ([-1.0116293986075067, -0.6579701637590685], 1.4958840724932927), ([1.0116277115628407, 0.6579648451465371], 1.4958904394057368)])
 ```
 Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized,
 you'll get a vastly different result whenever the extraction is performced), so let's try to get the solution via the heuristic
