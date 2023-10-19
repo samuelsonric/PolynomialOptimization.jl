@@ -1,12 +1,22 @@
 export newton_polytope
 
 """
-    newton_polytope(method, objective; verbose=false, preprocess=true)
+    newton_polytope(method, objective; verbose=false, preprocess_quick=false, preprocess_fine=true, preprocess=nothing,
+        parameters...)
 
 Calculates the Newton polytope for the sum of squares optimization of a given objective. This requires the availability of a
-linear solver. Currently, `:Mosek` is the only supported method (which is also the default). If preprocessing is turned on,
-the monomials in the objective will first be checked for redundancies, leading to a possibly smaller extremal set.
-For large initial sets of monomials (≥ 10⁵), this function will use all available threads to speed up the process.
+linear solver. Currently, `:Mosek` is the only supported method (which is also the default). There are two preprocessing
+methods:
+- `preprocess_quick` is the Akl-Toussaint heuristic based. It is only helpful if the objective is very unbalanced with regard
+  to the occurring powers, and therefore disabled by default. Every monomial will be checked against a linear program that
+  scales as the number of variables in the objective.
+- `preprocess_fine` performs an extensive reduction of the possible number of monomials that comprise the convex hull. Every
+  monomial will be checked against a linear program that scales as the number of monomials in the objective (though it might
+  become more efficient when monomials are ruled out).
+After preprocessing is done, the monomials in the Newton polytope are filtered by performing linear programs that scale at most
+in the number of monomials in the objective, or less if they were filtered by preprocessing.
+For large initial sets of monomials (≥ 10⁵), the final function will use all available threads to speed up the process.
+The parameters will be passed on to the linear solver.
 """
 newton_polytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     newton_polytope(Val(method), objective; kwargs...)
@@ -14,17 +24,82 @@ newton_polytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolyn
 newton_polytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     newton_polytope(Val(:Mosek), objective; kwargs...)
 
-function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess::Bool=true,
-    parameters...) where {P<:AbstractPolynomialLike}
-    coeffs = exponents.(monomials(objective))
+function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=false,
+    preprocess_fine::Bool=true, preprocess::Union{Nothing,Bool}=nothing, parameters...) where {P<:AbstractPolynomialLike}
+    coeffs = [exponents(mon) for mon in monomials(objective)]
     nc = length(coeffs)
     nv = nvariables(objective)
-    if preprocess
+    @verbose_info("Removing reduncancies from the convex hull - ", nc, " initial candidates")
+    if !isnothing(preprocess)
+        preprocess_quick = preprocess_fine = preprocess
+    end
+    preprocess_quick && let
+        # eliminate all the coefficients that by the Akl-Toussaint heuristic cannot be part of the convex hull anyway
+        # For typical polynomial problems which tend to have powers occurring relatively evenly distributed, this heuristic
+        # will not lead to any reduction, so the quick preprocessing is disabled by default.
+        @verbose_info("Removing reduncancies from the convex hull - quick heuristic")
+        vertices = Matrix{Int}(undef, nv, 2nv)
+        lowestpoints = @view(vertices[:, 1:nv])
+        highestpoints = @view(vertices[:, nv+1:2nv])
+        for col in eachcol(lowestpoints)
+            copyto!(col, first(coeffs))
+        end
+        copyto!(highestpoints, lowestpoints)
+        # we might also add the sum of all coordinates, or differences (but there are 2^nv ways to combine, so let's skip it)
+        @inbounds for coeff in coeffs
+            for (i, coeffᵢ) in enumerate(coeff)
+                if lowestpoints[i, i] > coeffᵢ
+                    copyto!(@view(lowestpoints[:, i]), coeff)
+                end
+                if highestpoints[i, i] < coeffᵢ
+                    copyto!(@view(highestpoints[:, i]), coeff)
+                end
+            end
+        end
+        required_coeffs = Vector{Bool}(undef, nc)
+        # now every point that is not a member of the convex polytope determined by vertices can be dropped immediately
+        lastinfo = time_ns()
+        preproc_time = @elapsed let task=Mosek.Task(Mosek.msk_global_env)
+            try
+                # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
+                for (k, v) in parameters
+                    Mosek.putparam(task, string(k), v)
+                end
+                Mosek.appendvars(task, size(vertices, 2))
+                Mosek.putvarboundsliceconst(task, 1, size(vertices, 2) +1, Mosek.MSK_BK_LO, 0., Inf)
+                Mosek.appendcons(task, nv)
+                idxs = collect(1:nv)
+                for (i, vert) in enumerate(eachcol(vertices))
+                    Mosek.putacol(task, i, idxs, vert)
+                end
+                fx = fill(Mosek.MSK_BK_FX, nv)
+                for (i, coeff) in enumerate(coeffs)
+                    Mosek.putconboundslice(task, 1, nv +1, fx, coeff, coeff)
+                    Mosek.optimize(task)
+                    @inbounds required_coeffs[i] = Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
+                    if verbose
+                        nextinfo = time_ns()
+                        if nextinfo - lastinfo > 10_000_000_000
+                            print("Status update: ", i, " of ", nc, "\r")
+                            flush(stdout)
+                            lastinfo = nextinfo
+                        end
+                    end
+                end
+            finally
+                Mosek.deletetask(task)
+            end
+        end
+        keepat!(coeffs, required_coeffs)
+        nc = length(coeffs)
+        @verbose_info("Found ", length(coeffs), " potential extremal points of the convex hull in ", preproc_time, " seconds")
+    end
+    if preprocess_fine let
+        # eliminate all the coefficients that are redundant themselves to make the linear system smaller
+        @verbose_info("Removing redundancies from the convex hull - more detailed")
         required_coeffs = fill(true, nc)
-        # first eliminate all the coefficients that are redundant themselves to make the linear system smaller
-        @verbose_info("Removing redundancies from the convex hull")
-        preproc_time = @elapsed begin
-            Mosek.maketask() do task
+        preproc_time = @elapsed let task=Mosek.Task(Mosek.msk_global_env)
+            try
                 # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
                 for (k, v) in parameters
                     Mosek.putparam(task, string(k), v)
@@ -65,12 +140,14 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
                     end
                 end
                 # we now have the points that make up the linear hull
+            finally
+                Mosek.deletetask(task)
             end
         end
-        @inbounds coeffs = coeffs[required_coeffs]
+        keepat!(coeffs, required_coeffs)
         nc = length(coeffs)
         @verbose_info("Found ", length(coeffs), " extremal points of the convex hull in ", preproc_time, " seconds")
-    else
+    end else
         @verbose_info("Skipping preprocessing, there are ", nc, " possibly non-extremal points")
     end
 
@@ -93,15 +170,42 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
             end
             Mosek.putarow(task, nv +1, collect(1:nc), fill(1., nc))
             Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
-            deg = maxdegree(objective) ÷ 2
-            num = binomial(nv + deg, nv)
+            maxdeg, mindeg = 0, typemax(Int)
+            maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
+            # do some hopefully quick preprocessing (on top of the previous preprocessing)
+            for coeff in coeffs
+                deg = 0
+                @inbounds for (i, coeffᵢ) in enumerate(coeff)
+                    deg += coeffᵢ
+                    if coeffᵢ > maxmultideg[i]
+                        maxmultideg[i] = coeffᵢ
+                    end
+                    if coeffᵢ < minmultideg[i]
+                        minmultideg[i] = coeffᵢ
+                    end
+                end
+                if deg > maxdeg
+                    maxdeg = deg
+                end
+                if deg < mindeg
+                    mindeg = deg
+                end
+            end
+            maxmultideg .= div.(maxmultideg, 2, RoundDown)
+            minmultideg .= div.(minmultideg, 2, RoundUp)
+            maxdeg = div(maxdeg, 2, RoundDown)
+            mindeg = div(mindeg, 2, RoundUp)
+            mons = monomials(variables(objective), mindeg:maxdeg,
+                m -> all(x -> x[1] ≤ x[2] ≤ x[3], zip(minmultideg, exponents(m), maxmultideg)))
+            num = length(mons)
             sizehint!(candidates, num)
             bk = fill(Mosek.MSK_BK_FX, nv)
+            nthreads = Threads.nthreads()
             @verbose_info("Starting point selection among ", num, " possible monomials")
-            if num < 100_000
+            if num < 100_000 || isone(nthreads)
                 # single threading is better
                 verbose && (lastinfo = time_ns())
-                for (i, candidate) in enumerate(monomials(variables(objective), 0:deg))
+                for (i, candidate) in enumerate(mons)
                     exps = exponents(candidate) .<< 1 # half the polytope
                     Mosek.putconboundslice(task, 1, nv +1, bk, exps, exps)
                     Mosek.optimize(task)
@@ -122,8 +226,6 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
                 # we do multithreading, but note that we need to copy the task for every thread
                 ccall(:jl_enter_threaded_region, Cvoid, ())
                 try
-                    nthreads = Threads.nthreads()
-                    mons = monomials(variables(objective), 0:deg)
                     local orddiv, remdiv
                     while true
                         orddiv, remdiv = divrem(length(mons), nthreads)
@@ -139,7 +241,7 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
                     itemcounts = fill(orddiv, nthreads)
                     itemcounts[1:remdiv] .= orddiv +1
                     items = let i = 1;
-                        [(i += ic; @view(mons[i-ic:i-1])) for ic in itemcounts]
+                        [(i += ic; @view(mons[i-ic:i-1])) for ic in itemcounts]::Vector{typeof(@view(mons[begin:end]))}
                     end
                     check = Base.Event()
                     local taskfun
@@ -147,7 +249,9 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
                         _task = tasks[tid]
                         _candidates = similar(candidates, 0, buffer=itemcounts[tid])
                         @inbounds for candidate in items[tid]
-                            exps = exponents(candidate) .<< 1 # half the polytope
+                            exps = exponents(candidate)
+                            all(x -> x[1] ≤ x[2] ≤ x[3], zip(minmultideg, exps, maxmultideg)) || continue
+                            exps = exps .<< 1 # half the polytope
                             Mosek.putconboundslice(_task, 1, nv +1, bk, exps, exps)
                             Mosek.optimize(_task)
                             if Mosek.getsolsta(_task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
@@ -181,7 +285,7 @@ function newton_polytope(::Val{:Mosek}, objective::P; verbose::Bool=false, prepr
                         while !istaskdone(thread)
                             wait(check)
                             reset(check)
-                            istaskdone(thread) && unsafe_append!(candidates, fetch(thread))
+                            istaskdone(thread) && unsafe_append!(candidates, fetch(thread)::typeof(candidates))
                             if verbose
                                 print("Status update: ", floor(Int, 100*sum(nums)/num), "%\r")
                                 flush(stdout)

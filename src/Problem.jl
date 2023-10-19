@@ -336,7 +336,7 @@ In case `AbstractAlgebra` is loaded, the polynomials may instead be of the time 
 ring. In this case, all polynomials in `custom_basis` must be monomials, and `equality_method` cannot be `emAssumeGröbner`.
 
 
-    poly_problem(objective; perturbation=0., verbose=false, preprocess=true)
+    poly_problem(objective; perturbation=0., verbose=false, kwargs...)
 
 Analyze an unconstrained polynomial optimization problem and return a [`PolyOptProblem`](@ref) that can be used for sparse
 analysis and optimization. This differs from using the full version of this method in that the Newton polytope is calculated in
@@ -367,12 +367,12 @@ function poly_problem(objective::P, degree::Int;
 end
 
 function poly_problem(objective::P; perturbation::Union{Float64,<:AbstractVector{Float64}}=0.0,
-    verbose::Bool=false, preprocess::Bool=true) where {P}
+    verbose::Bool=false, kwargs...) where {P}
     vars = variables(objective)
     @assert(all(isreal, vars))
     # no constraints, so we use the Newton polytope as the basis
     deg = maxdegree(objective) ÷ 2
-    basis = newton_polytope(:Mosek, objective; verbose, preprocess)
+    basis = newton_polytope(:Mosek, objective; verbose, kwargs...)
     return poly_problem(objective, deg, P[], P[], AbstractMatrix{P}[], basis, perturbation; verbose)
 end
 
