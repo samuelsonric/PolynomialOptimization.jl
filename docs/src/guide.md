@@ -105,13 +105,15 @@ Objective: 1 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁
 Size of full basis: 10
 ```
 In this case, no basis reduction was possible. However, in other cases, this can work. For example, if you want to inspect the
-Newton polytope of the polynomials whose squares might make up a certain objective, you  can call [`newton_polytope`](@ref)
-directly:
+Newton polytope of the polynomials whose squares might make up a certain objective, you can call [`newton_halfpolytope`](@ref)
+directly (the name comes from the fact that you pass the objective to the function [`newton_halfpolytope`](@ref), and by a
+[theorem by Reznick](https://doi.org/10.1215/S0012-7094-78-04519-2), the Newton polytope of the decomposition functions that
+have to be squared to give the objective will be contained in half the Newton polytope of the objective itself):
 ```jldoctest walkthrough
 julia> @polyvar x y;
 
-julia> newton_polytope(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1)
-4-element Vector{Monomial{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}}:
+julia> newton_halfpolytope(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1)
+4-element MonomialVector{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}:
  1
  xy
  xy²
@@ -124,7 +126,10 @@ x^4 y^2 + x^2 y^4 - 3 x^2 y^2 + 1 = \sum_i (\alpha_i + \beta_i x y + \gamma_i x 
 would have to hold; but expanding the right-hand side will lead to the coefficient ``\sum_i \beta_i^2`` in front of the
 monomial ``x^2 y^2``, which cannot be negative; hence, the Motzkin polynomial is not a sum of squares.
 
-Note that the calculation of the Newton polytope currently requires Mosek.
+Note that the calculation of the Newton polytope currently requires Mosek. There are some preprocessing options that may be
+able to speed up the calculation, although it is already extremely fast by itself and can calculate the correct basis for
+objectives with hundreds of terms in a decent time (which can be further reduced by multithreading). Check out the
+documentation for [`newton_halfpolytope`](@ref) for more information.
 
 In case you already happen to know a (better) choice of basis, you may provide this basis to [`poly_problem`](@ref).
 

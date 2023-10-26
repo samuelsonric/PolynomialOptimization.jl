@@ -17,6 +17,10 @@ import StatsBase
 
 const sqrt2 = sqrt(2.0)
 
+macro myinbounds(expr)
+    esc(expr)
+end
+
 macro verbose_info(str...)
     quote
         if $(esc(:verbose))
@@ -29,6 +33,7 @@ end
 include("./helpers/FastVector.jl")
 include("./helpers/ComplexPolynomials.jl")
 include("./helpers/MatrixPolynomials.jl")
+include("./helpers/Allocations.jl")
 
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")

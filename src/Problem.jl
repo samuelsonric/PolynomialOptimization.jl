@@ -340,10 +340,10 @@ ring. In this case, all polynomials in `custom_basis` must be monomials, and `eq
 
 Analyze an unconstrained polynomial optimization problem and return a [`PolyOptProblem`](@ref) that can be used for sparse
 analysis and optimization. This differs from using the full version of this method in that the Newton polytope is calculated in
-order to automatically determine a suitable basis. The keyword arguments are passed through to [`newton_polytope`](@ref).
+order to automatically determine a suitable basis. The keyword arguments are passed through to [`newton_halfpolytope`](@ref).
 
 See also [`PolyOptProblem`](@ref), [`poly_optimize`](@ref), [`SparsityNone`](@ref), [`SparsityCorrelative`](@ref),
-[`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref), [`newton_polytope`](@ref),
+[`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref), [`newton_halfpolytope`](@ref),
 [`EqualityMethod`](@ref).
 """
 function poly_problem(objective::P, degree::Int;
@@ -372,7 +372,7 @@ function poly_problem(objective::P; perturbation::Union{Float64,<:AbstractVector
     @assert(all(isreal, vars))
     # no constraints, so we use the Newton polytope as the basis
     deg = maxdegree(objective) ÷ 2
-    basis = newton_polytope(:Mosek, objective; verbose, kwargs...)
+    basis = newton_halfpolytope(:Mosek, objective; verbose, kwargs...)
     return poly_problem(objective, deg, P[], P[], AbstractMatrix{P}[], basis, perturbation; verbose)
 end
 

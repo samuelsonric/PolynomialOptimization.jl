@@ -8,7 +8,7 @@ CurrentModule = PolynomialOptimization
 ```@docs
 PolyOptProblem
 poly_problem
-newton_polytope
+newton_halfpolytope
 EqualityMethod
 variables
 nvariables
