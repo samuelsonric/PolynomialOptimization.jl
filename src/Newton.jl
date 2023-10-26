@@ -777,13 +777,13 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
         ccall(:jl_enter_threaded_region, Cvoid, ())
         try
             threads = Vector{Task}(undef, nthreads)
-            for tid in 1:nthreads
-                newtask = if tid < nthreads -1
+            # We start the task with tid 1 only after we kicked off all the rest, as it will run in the main thread. In this
+            # way, all the other threads can already start working while we feed them data.
+            for tid in nthreads:-1:2
+                newtask = if tid > 2
                     Mosek.Task(task)
-                elseif tid == nthreads -1
-                    secondtask
                 else
-                    task
+                    secondtask
                 end
                 @inbounds threads[tid] = @runtaskon tid newton_polytope_do_taskfun($V, $tid, $newtask, $ranges, $nv, $mindeg,
                     $maxdeg, $bk, $cond, $allprogress, $allacceptance, $verbose)
@@ -798,11 +798,13 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
                 put!(ranges, (copy(minmultideg), copy(maxmultideg)))
             end
             close(ranges)
+            @verbose_info("All tasks set up")
+            @inbounds threads[1] = @runtaskon 1 newton_polytope_do_taskfun($V, 1, task, $ranges, $nv, $mindeg, $maxdeg,
+                $bk, $cond, $allprogress, $allacceptance, $verbose)
             # Note that these are not "worker threads", but the first one is actually the main thread - which means
             # that as soon as this function yields and the task takes over (which will never yield), the notification
             # mechanism will never be triggered until the first thread finished. This is why the first thread yields
             # in the callbacks (if the verbosity requires it; else we will collect all the candidates at the end).
-            @verbose_info("All tasks set up")
             if verbose
                 timer = let num=num, cond=cond, allprogress=allprogress, allacceptance=allacceptance
                     Timer(1; interval=1) do _
@@ -811,6 +813,7 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
                         # to get consistent results, we also read in a lock
                         progress = allprogress[]
                         acceptance = allacceptance[]
+                        unlock(cond)
                         print("Status update: ", (100progress)÷num, "%, acceptance: ",
                             iszero(progress) ? 0 : (100acceptance)÷progress, "%   \r")
                         flush(stdout)
