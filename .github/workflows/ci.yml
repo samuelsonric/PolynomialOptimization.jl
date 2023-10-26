@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - Windows 11 - ${{ matrix.arch }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }} - Windows 11 - ${{ matrix.threads }} thread(s) - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: self-hosted
     strategy:
       fail-fast: false
@@ -18,6 +18,9 @@ jobs:
         version:
           # - '1.9'
           - '1'
+        threads:
+          - '1'
+          - '4'
         arch:
           - x64
     steps:
@@ -47,6 +50,7 @@ jobs:
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v3
         env:
+          JULIA_NUM_THREADS: ${{ matrix.threads }}
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: lcov.info
