@@ -25,6 +25,10 @@ using Documenter: doctest;
         @testset "tightening using Nie's method" begin
             include("./Tightening.jl")
         end
+        # Mosek is the only linear solver implemented at the moment
+        @testset "Newton" begin
+            include("./Newton.jl")
+        end
     end
     @testset "multiplication by prefactor using Mai et al.'s method" begin
         include("./Noncompact.jl")
