@@ -56,6 +56,16 @@ function Base.sizehint!(v::FastVec, len::Integer)
 end
 
 """
+    empty!(v::FastVec)
+
+Clears the vector without freeing the internal buffer.
+"""
+function Base.empty!(v::FastVec)
+    v.len = 0
+    return v
+end
+
+"""
     prepare_push!(v::FastVec, new_items::Integer)
 
 Prepares pushing (or appending) at last `new_items` in the future, in one or multiple calls. This ensures that the internal
@@ -109,7 +119,15 @@ calling [`unsafe_append!`](@ref) instead, which avoids the length check.
     oldlen = v.len
     v.len += length(els)
     length(v.data) < v.len && resize!(v.data, overallocation(v.len))
-    @inbounds copyto!(@view(v.data[oldlen+1:end]), els)
+    @inbounds copyto!(v.data, oldlen +1, els, 1, length(els))
+    return v
+end
+
+@inline function Base.append!(v::FastVec{V}, els::FastVec{V}) where {V}
+    oldlen = v.len
+    v.len += els.len
+    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    @inbounds copyto!(v.data, oldlen +1, els.data, 1, els.len)
     return v
 end
 
@@ -124,7 +142,15 @@ the case, it will lead to memory corruption. Call [`append!`](@ref) instead if y
     oldlen = v.len
     v.len += length(els)
     @assert(length(v.data) ≥ v.len)
-    @inbounds copyto!(@view(v.data[oldlen+1:end]), els)
+    @inbounds copyto!(v.data, oldlen +1, els, 1, length(els))
+    return v
+end
+
+@inline function unsafe_append!(v::FastVec{V}, els::FastVec{V}) where {V}
+    oldlen = v.len
+    v.len += els.len
+    @assert(length(v.data) ≥ v.len)
+    @inbounds copyto!(v.data, oldlen +1, els.data, 1, els.len)
     return v
 end
 
@@ -145,6 +171,15 @@ calling [`unsafe_prepend!`](@ref) instead, which avoids the length check.
     return v
 end
 
+@inline function Base.prepend!(v::FastVec{V}, els::FastVec{V}) where {V}
+    oldlen = v.len
+    v.len += els.len
+    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    @inbounds copyto!(v.data, els.len +1, v.data, 1, oldlen) # must always work correctly with overlapping
+    @inbounds copyto!(v.data, 1, els.data, 1, els.len)
+    return v
+end
+
 """
     unsafe_prepend!(v::FastVec, els::AbstractVector)
 
@@ -158,6 +193,15 @@ the case, it will lead to memory corruption. Call [`prepend!`](@ref) instead if 
     @assert(length(v.data) ≥ v.len)
     @inbounds copyto!(v.data, length(els) +1, v.data, 1, oldlen) # must always work correctly with overlapping
     @inbounds copyto!(v.data, els)
+    return v
+end
+
+@inline function unsafe_prepend!(v::FastVec{V}, els::FastVec{V}) where {V}
+    oldlen = v.len
+    v.len += els.len
+    @assert(length(v.data) ≥ v.len)
+    @inbounds copyto!(v.data, els.len +1, v.data, 1, oldlen) # must always work correctly with overlapping
+    @inbounds copyto!(v.data, 1, els.data, 1, els.len)
     return v
 end
 

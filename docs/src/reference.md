@@ -66,6 +66,7 @@ implementation has not changed. Our own `FastVec` is a bit more specific than th
 ```@docs
 FastVec
 Base.sizehint!(::FastVec, ::Integer)
+Base.empty!(::FastVec)
 prepare_push!
 Base.push!(::FastVec{V}, el) where {V}
 unsafe_push!
