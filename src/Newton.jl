@@ -703,7 +703,6 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
             # are still fine.
         end
     end
-    nthreads = 16
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -782,11 +781,9 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
                 cutat += 1
             end
         end
-        if verbose
-            cond = Threads.SpinLock()
-            allprogress = Ref(0)
-            allacceptance = Ref(0)
-        end
+        cond = Threads.SpinLock()
+        allprogress = Ref(0)
+        allacceptance = Ref(0)
         # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
         ccall(:jl_enter_threaded_region, Cvoid, ())
         try
