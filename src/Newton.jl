@@ -1,20 +1,5 @@
 export newton_halfpolytope
 
-macro runtaskon(ontid, expr)
-    letargs = Base._lift_one_interp!(expr)
-
-    thunk = esc(:(() -> ($expr)))
-    quote
-        let $(letargs...)
-            local task = Task($thunk)
-            task.sticky = true # do not allow migration of the task between different threads!
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), task, $(esc(ontid)) -1)
-            schedule(task)
-            task
-        end
-    end
-end
-
 """
     newton_halfpolytope(method, objective; verbose=false, preprocess_quick=false, preprocess_randomized=false,
         preprocess_fine=false, preprocess=nothing, parameters...)
@@ -164,7 +149,7 @@ function newton_polytope_preproc_remove(::Val{:Mosek}, nv, nc, getvarcon, verbos
             nextinfo = time_ns()
             if nextinfo - lastinfo > 1_000_000_000
                 if verbose
-                    print("Status update: ", nc - i, " of ", nc, " (removed ", 100(removed + lastremoved) ÷ (nc - i +1),
+                    print("\33[2KStatus update: ", nc - i, " of ", nc, " (removed ", 100(removed + lastremoved) ÷ (nc - i +1),
                         "% so far)\r")
                     flush(stdout)
                     lastinfo = nextinfo
@@ -348,9 +333,6 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
     if nthreads * subset_size > nc
         nthreads = div(nc, subset_size, RoundUp)
     end
-    if verbose
-        whitespaces = " " ^ ceil(Int, log10(nthreads * subset_size))
-    end
     if isone(nthreads)
         let
             _subset = sample(required_coeffs, subset_size, nc)
@@ -366,8 +348,7 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
                 end
                 nc -= totaldrop
                 if verbose
-                    print("Status update: ", nc, " remaining extremal points, last drop was ", totaldrop, whitespaces,
-                        "\r")
+                    print("\33[2KStatus update: ", nc, " remaining extremal points, last drop was ", totaldrop, "\r")
                     flush(stdout)
                 end
                 (totaldrop < 20 || 10totaldrop < subset_size) && break
@@ -387,7 +368,7 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
             # Initialize all threads; as everything is already set up, they will directly start
             threads = Vector{Task}(undef, nthreads)
             for (tid, start) in enumerate(1:subset_size:subset_size*nthreads)
-                @inbounds threads[tid] = @runtaskon tid newton_polytope_preproc_randomized_taskfun($V, $coeffs, $nv,
+                @inbounds threads[tid] = Threads.@spawn newton_polytope_preproc_randomized_taskfun($V, $coeffs, $nv,
                    $subset_size, $required_coeffs, $(@view(allsubs[start:start+subset_size-1])), $done, $(events[tid]),
                    $stop; $parameters...)
             end
@@ -402,8 +383,7 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
                 end
                 nc -= totaldrop
                 if verbose
-                    print("Status update: ", nc, " remaining extremal points, last drop was ", totaldrop, whitespaces,
-                        "\r")
+                    print("\33[2KStatus update: ", nc, " remaining extremal points, last drop was ", totaldrop, "\r")
                     flush(stdout)
                 end
                 totalsize = nthreads * subset_size
@@ -587,12 +567,21 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
 end
 #endregion
 
-function newton_polytope_do_taskfun(::Val{:Mosek}, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
-    verbose)
+function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
+    allcandidates, notifier, init_time, num)
+    # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
+    verbose = notifier[] != 0
+    isnotifier = false
     powers = Vector{Int}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
     candidates = FastVec{Vector{Int}}()
     try
+        lastappend = time_ns()
+        if verbose
+            lastinfo = lastappend
+            Δprogress = 0
+        end
+        Δacceptance = 0
         while true
             local curminrange, curmaxrange
             try
@@ -601,11 +590,6 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, tid, task, ranges, nv, mindeg
                 e isa InvalidStateException && break
                 rethrow(e)
             end
-            if verbose
-                lastinfo = time_ns()
-                Δprogress = 0
-            end
-            Δacceptance = 0
             for powers in MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers)
                 # check the previous power in the linear program and add it if possible
                 copyto!(tmp, powers)
@@ -619,24 +603,51 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, tid, task, ranges, nv, mindeg
                 if verbose
                     Δprogress += 1
                     nextinfo = time_ns()
-                    if nextinfo - lastinfo > 1_000_000_000
-                        # maybe better to have a single lock instead of two atomic adds (although this should be a
-                        # fairly cheap operation, and this callback isn't executed so often anyway)
-                        lock(cond)
-                        allprogress[] += Δprogress
-                        allacceptance[] += Δacceptance
+                    if nextinfo - lastinfo > 1_000_000_000 && trylock(cond)
+                        # no reason to block, we can also just retry in the next iteration
+                        progress = allprogress[] += Δprogress
+                        acceptance = allacceptance[] += Δacceptance
+                        if !isnotifier && notifier[] == 1
+                            isnotifier = true
+                            notifier[] = 2
+                        end
                         unlock(cond)
                         Δprogress = 0
                         Δacceptance = 0
-                        isone(tid) && yield()
+                        lastinfo = nextinfo
+                        if isnotifier
+                            rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                            @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                                100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                            flush(stdout)
+                        end
                     end
                 end
             end
+            # make sure that we update the main list regularly, but not ridiculously often
+            nextappend = time_ns()
+            if nextappend - lastappend > 10_000_000_000 && trylock(cond)
+                try
+                    append!(allcandidates, candidates)
+                finally
+                    unlock(cond)
+                end
+                empty!(candidates)
+                lastappend = nextappend
+            end
+        end
+        if isnotifier
+            notifier[] = 1
+        end
+        lock(cond)
+        try
+            append!(allcandidates, candidates)
+        finally
+            unlock(cond)
         end
     finally
         Mosek.deletetask(task)
     end
-    return finish!(candidates)
 end
 
 function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
@@ -687,11 +698,12 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
                 @verbose_info("Memory requirements of a single thread: ", div(mem, 1024*1024, RoundUp), " MiB")
                 nthreads = min(nthreads, Sys.free_memory() ÷ mem +2)
             end
-            # Note that this is potentially still an overestimation, as our candidates list will also grow. But this is
+            # Note that this is potentially still an underestimation, as our candidates list will also grow. But this is
             # something that can potentially be swapped, so if swap space is available beyond the free_memory limit, then we
             # are still fine.
         end
     end
+    nthreads = 16
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -700,7 +712,8 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
         # single threading is better
         let
             tmp = Vector{Float64}(undef, nv)
-            lastinfo = time_ns()
+            init_time = time_ns()
+            lastinfo = init_time
             progress = 0
             for powers in moniter
                 # check the previous power in the linear program and add it if possible
@@ -711,15 +724,16 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
                     # this candidate is part of the Newton polytope
                     push!(candidates, copy(powers))
                 end
-                progress += 1
-                nextinfo = time_ns()
-                if nextinfo - lastinfo > 1_000_000_000
-                    if verbose
-                        print("Status update: ", (100progress)÷num, "%, acceptance: ",
-                            iszero(progress) ? 0 : (100length(candidates))÷progress, "%   \r")
+                if verbose
+                    progress += 1
+                    nextinfo = time_ns()
+                    if nextinfo - lastinfo > 1_000_000_000
+                        rem_sec = round(Int, ((time_ns() - init_time) / 1_000_000_000progress) * (num - progress))
+                        @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                            100progress / num, 100length(candidates) / progress, rem_sec ÷ 60, rem_sec % 60)
                         flush(stdout)
+                        lastinfo = nextinfo
                     end
-                    lastinfo = nextinfo
                 end
             end
         end
@@ -779,15 +793,17 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
             threads = Vector{Task}(undef, nthreads)
             # We start the task with tid 1 only after we kicked off all the rest, as it will run in the main thread. In this
             # way, all the other threads can already start working while we feed them data.
-            for tid in nthreads:-1:2
-                newtask = if tid > 2
-                    Mosek.Task(task)
-                else
-                    secondtask
-                end
-                @inbounds threads[tid] = @runtaskon tid newton_polytope_do_taskfun($V, $tid, $newtask, $ranges, $nv, $mindeg,
-                    $maxdeg, $bk, $cond, $allprogress, $allacceptance, $verbose)
+            init_time = time_ns()
+            notifier = Ref(verbose ? 1 : 0)
+            for tid in nthreads:-1:3
+                # secondtask has a solution, so we just use task (better than deletesolution).
+                # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
+                # parallel, even if we make sure not to modify the base task until all copies are done.
+                @inbounds threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $(Mosek.Task(task)), $ranges, $nv,
+                    $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
             end
+            @inbounds threads[2] = Threads.@spawn newton_polytope_do_taskfun($V, $secondtask, $ranges, $nv, $mindeg, $maxdeg,
+                $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
             # All threads are running and waiting for stuff to do. So let's now feed them with their jobs.
             cutlen = nv - cutat
             cutat += 1 # cutat is now the first entry to be fixed
@@ -799,35 +815,15 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
             end
             close(ranges)
             @verbose_info("All tasks set up")
-            @inbounds threads[1] = @runtaskon 1 newton_polytope_do_taskfun($V, 1, task, $ranges, $nv, $mindeg, $maxdeg,
-                $bk, $cond, $allprogress, $allacceptance, $verbose)
-            # Note that these are not "worker threads", but the first one is actually the main thread - which means
-            # that as soon as this function yields and the task takes over (which will never yield), the notification
-            # mechanism will never be triggered until the first thread finished. This is why the first thread yields
-            # in the callbacks (if the verbosity requires it; else we will collect all the candidates at the end).
-            if verbose
-                timer = let num=num, cond=cond, allprogress=allprogress, allacceptance=allacceptance
-                    Timer(1; interval=1) do _
-                        local progress, acceptance
-                        lock(cond)
-                        # to get consistent results, we also read in a lock
-                        progress = allprogress[]
-                        acceptance = allacceptance[]
-                        unlock(cond)
-                        print("Status update: ", (100progress)÷num, "%, acceptance: ",
-                            iszero(progress) ? 0 : (100acceptance)÷progress, "%   \r")
-                        flush(stdout)
-                    end
-                end
-            end
+            @inbounds threads[1] = Threads.@spawn newton_polytope_do_taskfun($V, $task, $ranges, $nv, $mindeg, $maxdeg,
+                $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
             for thread in threads
-                append!(candidates, fetch(thread)::Vector{Vector{Int}})
+                wait(thread)
             end
-            close(timer)
         finally
             ccall(:jl_exit_threaded_region, Cvoid, ())
         end
-        @verbose_info("All tasks have finished, sorting the output")
+        @verbose_info("\33[2KAll tasks have finished, sorting the output")
         # We need to return the appropriate monomial order, but due to the partitioning and multithreading, our output
         # is unordered (not completely, we have ordered of varying length, but does this help?).
         # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
