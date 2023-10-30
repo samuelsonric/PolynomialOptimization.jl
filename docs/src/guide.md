@@ -58,7 +58,7 @@ Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solution
 violate the bound or constraints, if any were given. The solutions are then return in a best-to-worst order.
 When calling [`poly_optimize`](@ref), the keyword argument `solutions` can be set to `true`, which will automatically call
 [`poly_all_solutions`](@ref):
-```jldoctest walkthrough
+```Julia
 julia> poly_optimize(:MosekSOS, prob, solutions=true)
 (Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708, [([-3.490413483367849e-18, 0.4082623316445083, -0.40826233164465603], 1.8689918723779897e-8), ([-6.606736136506623e-19, -0.4082623316445094, 0.4082623316446571], 1.8689918945824502e-8)])
 ```
@@ -396,7 +396,7 @@ disabled by default.
 Inequality constraints are implemented using Putinar's Positivstellensatz or localizing matrices. They can be specified by
 passing the keyword argument `nonneg` to [`poly_problem`](@ref), which constraints those polynomials to be greater or
 equal to zero.
-```jldoctest walkthrough
+```Julia
 julia> @polyvar x[1:2];
 
 julia> poly_optimize.(:MosekSOS, [poly_problem(-(x[1]-1)^2 - (x[1]-x[2])^2 - (x[2]-3)^2, i,
@@ -446,7 +446,7 @@ julia> poly_optimize(:MosekSOS, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 6)
 Without tightening, all the orders from third to sixth of a minimization of the Motzkin polynomial are ill-posed. The first
 valid formulation is of seventh order. However, adding the tightening equalities (here, as there are no additional constraints,
 this just means to add the condition $\nabla\mathrm{objective} = 0$), the fifth order is already sufficient:
-```jldoctest walkthrough
+```Julia
 julia> prob = poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, 5, tighter=true)
 Real-valued polynomial optimization hierarchy of degree 5 in 2 variable(s)
 Objective: 1.0 - 3.0x²y² + x²y⁴ + x⁴y²
@@ -461,7 +461,7 @@ julia> poly_optimize(:MosekSOS, prob, solutions=true)
 Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized,
 you'll get a vastly different result whenever the extraction is performced), so let's try to get the solution via the heuristic
 method:
-```jldoctest walkthrough
+```Julia
 julia> poly_all_solutions(prob, ans[2], heuristic=true)
 4-element Vector{Tuple{Vector{Float64}, Float64}}:
  ([1.0000006425873473, 1.0000006425873476], 7.711065512783222e-6)
@@ -544,7 +544,7 @@ julia> poly_optimize(:MosekMoment, prob, solutions=true)
 Indeed, this solution gives the same objective value and satisfies the constraints, so we found the optimum!
 
 And finally something with matrices:
-```jldoctest walkthrough
+```Julia
 julia> poly_optimize(:MosekMoment, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]), 2,
                                                 psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
                                                       conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]),
