@@ -800,7 +800,37 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, max
     end
 end
 
-function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
+function monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, batchsize)
+    # to calculate the part-range-sizes, we have to duplicate some code from length(::MonomialIterator), but our particular
+    # application here is too special to integrate it: We start calculating the length of the iterator starting from the left
+    # and as soon as we hit the batchsize boundary, we know that all the parts to the right should be done by individual
+    # tasks.
+    cutat = 1
+    occurrences = zeros(Int, maxdeg +1)
+    @inbounds for deg₁ in minmultideg[1]:min(maxmultideg[1], maxdeg)
+        occurrences[deg₁+1] = 1
+    end
+    nextround = similar(occurrences)
+    restmax = sum(@view(maxmultideg[2:end]), init=0)
+    for (minᵢ, maxᵢ) in Iterators.drop(zip(minmultideg, maxmultideg), 1)
+        restmax -= min(maxᵢ, maxdeg)
+        fill!(nextround, 0)
+        for degᵢ in minᵢ:min(maxᵢ, maxdeg)
+            for (degⱼ, occⱼ) in zip(Iterators.countfrom(0), occurrences)
+                newdeg = degᵢ + degⱼ
+                newdeg > maxdeg && break
+                @inbounds nextround[newdeg+1] += occⱼ
+            end
+        end
+        sum(@view(nextround[max(mindeg - restmax +1, 1):end])) > batchsize && break
+        occurrences, nextround = nextround, occurrences
+        cutat += 1
+    end
+    return cutat
+end
+
+function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose;
+    parameters...)
     nv, nc = size(coeffs)
     # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
     # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
@@ -830,9 +860,9 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmulti
         Mosek.@MSK_putarow(task.task, nv, nc, idxs, tmp)
     end
     Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
-    bk = fill(Mosek.MSK_BK_FX, nv)
     if num < 10_000 || isone(nv)
         nthreads = 1
+        secondtask = nothing
     else
         nthreads = Threads.nthreads()
         if nthreads > 1
@@ -854,6 +884,13 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmulti
             # are still fine.
         end
     end
+    isone(nthreads) || Mosek.putintparam(task, Mosek.MSK_IPAR_NUM_THREADS, 1) # single-threaded for Mosek itself
+    return moniter, num, nthreads, task, secondtask
+end
+
+function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, moniter,
+    num, nthreads, task, secondtask)
+    bk = fill(Mosek.MSK_BK_FX, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -878,7 +915,7 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmulti
                     progress += 1
                     nextinfo = time_ns()
                     if nextinfo - lastinfo > 1_000_000_000
-                        rem_sec = round(Int, ((time_ns() - init_time) / 1_000_000_000progress) * (num - progress))
+                        rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
                         @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                             100progress / num, 100length(candidates) / progress, rem_sec ÷ 60, rem_sec % 60)
                         flush(stdout)
@@ -899,39 +936,13 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmulti
 
         # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
         # TODO: There is no monomial_ordering, so we cannot even do this
+        return finish!(candidates)
     else
-        Mosek.putintparam(task, Mosek.MSK_IPAR_NUM_THREADS, 1) # single-threaded for Mosek itself
         ranges = Base.Channel{NTuple{2,Vector{Int}}}(typemax(Int))
         threadsize = div(num, nthreads, RoundUp)
         @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
             threadsize, " candidates")
-        # to calculate the part-range-sizes, we have to duplicate some code from length(::MonomialIterator), but our particular
-        # application here is too special to integrate it: We start calculating the length of the iterator starting from the
-        # left and as soon as we hit the threadsize boundary, we know that all the parts to the right should be done by
-        # individual tasks.
-        cutat = 1
-        let
-            occurrences = zeros(Int, maxdeg +1)
-            @inbounds for deg₁ in minmultideg[1]:min(maxmultideg[1], maxdeg)
-                occurrences[deg₁+1] = 1
-            end
-            nextround = similar(occurrences)
-            restmax = sum(@view(maxmultideg[2:end]), init=0)
-            for (minᵢ, maxᵢ) in Iterators.drop(zip(minmultideg, maxmultideg), 1)
-                restmax -= min(maxᵢ, maxdeg)
-                fill!(nextround, 0)
-                for degᵢ in minᵢ:min(maxᵢ, maxdeg)
-                    for (degⱼ, occⱼ) in zip(Iterators.countfrom(0), occurrences)
-                        newdeg = degᵢ + degⱼ
-                        newdeg > maxdeg && break
-                        @inbounds nextround[newdeg+1] += occⱼ
-                    end
-                end
-                sum(@view(nextround[max(mindeg - restmax +1, 1):end])) > threadsize && break
-                occurrences, nextround = nextround, occurrences
-                cutat += 1
-            end
-        end
+        cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
         cond = Threads.SpinLock()
         allprogress = Ref(0)
         allacceptance = Ref(0)
@@ -975,46 +986,50 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmulti
         # We need to return the appropriate monomial order, but due to the partitioning and multithreading, our output
         # is unordered (not completely, we have ordered of varying length, but does this help?).
         # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
-        sort!(candidates, lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
+        return sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
         # TODO: This is not appropriate, but as long as we cannot query the actual ordering, let's go for the default.
     end
-    return finish!(candidates)
 end
+
+newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...) =
+    newton_halfpolytope_do_execute(V, size(coeffs, 1), mindeg, maxdeg, minmultideg, maxmultideg, verbose,
+        newton_halfpolytope_do_prepare(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)...)
 
 function newton_halfpolytope(V::Val{:Mosek}, objective::P; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
-    nv = size(coeffs, 1)
-
-    maxdeg, mindeg = 0, typemax(Int)
-    maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
-    # do some hopefully quick preprocessing (on top of the previous preprocessing)
-    for coeff in eachcol(coeffs)
-        deg = 0
-        @inbounds for (i, coeffᵢ) in enumerate(coeff)
-            deg += coeffᵢ
-            if coeffᵢ > maxmultideg[i]
-                maxmultideg[i] = coeffᵢ
-            end
-            if coeffᵢ < minmultideg[i]
-                minmultideg[i] = coeffᵢ
-            end
-        end
-        if deg > maxdeg
-            maxdeg = deg
-        end
-        if deg < mindeg
-            mindeg = deg
-        end
-    end
-    maxmultideg .= div.(maxmultideg, 2, RoundDown)
-    minmultideg .= div.(minmultideg, 2, RoundUp)
-    maxdeg = div(maxdeg, 2, RoundDown)
-    mindeg = div(mindeg, 2, RoundUp)
     newton_time = @elapsed begin
+        nv = size(coeffs, 1)
+
+        maxdeg, mindeg = 0, typemax(Int)
+        maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
+        # do some hopefully quick preprocessing (on top of the previous preprocessing)
+        for coeff in eachcol(coeffs)
+            deg = 0
+            @inbounds for (i, coeffᵢ) in enumerate(coeff)
+                deg += coeffᵢ
+                if coeffᵢ > maxmultideg[i]
+                    maxmultideg[i] = coeffᵢ
+                end
+                if coeffᵢ < minmultideg[i]
+                    minmultideg[i] = coeffᵢ
+                end
+            end
+            if deg > maxdeg
+                maxdeg = deg
+            end
+            if deg < mindeg
+                mindeg = deg
+            end
+        end
+        maxmultideg .= div.(maxmultideg, 2, RoundDown)
+        minmultideg .= div.(minmultideg, 2, RoundUp)
+        maxdeg = div(maxdeg, 2, RoundDown)
+        mindeg = div(mindeg, 2, RoundUp)
+
         candidates = newton_halfpolytope_do(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
     end
 
-    @verbose_info("Found ", length(candidates), " elements in the Newton polytope superset in ", newton_time, " seconds")
+    @verbose_info("Found ", length(candidates), " elements in the Newton polytope in ", newton_time, " seconds")
     return makemonovec(variables(objective), candidates)
 end
 
