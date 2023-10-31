@@ -35,19 +35,18 @@ newton_halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
 #region Preprocessing for the full Newton polytope convex hull
 function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameters...)
     # eliminate all the coefficients that by the Akl-Toussaint heuristic cannot be part of the convex hull anyway
-    nv = length(first(coeffs))
-    nc = length(coeffs)
+    nv, nc = size(coeffs)
     vertexindices = fill(1, 2nv)
     lowestidx = @view(vertexindices[1:nv])
     highestidx = @view(vertexindices[nv+1:2nv])
     # we might also add the points with the smallest/largest sum of all coordinates, or differences (but there are 2^nv ways to
     # combine, so let's skip it)
-    @inbounds for (j, coeff) in enumerate(coeffs)
+    @inbounds for (j, coeff) in enumerate(eachcol(coeffs))
         for (i, coeffᵢ) in enumerate(coeff)
-            if coeffs[lowestidx[i]][i] > coeffᵢ
+            if coeffs[i, lowestidx[i]] > coeffᵢ
                 lowestidx[i] = j
             end
-            if coeffs[highestidx[i]][i] < coeffᵢ
+            if coeffs[i, highestidx[i]] < coeffᵢ
                 highestidx[i] = j
             end
         end
@@ -70,7 +69,7 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
             idxs = collect(Int32(0):Int32(max(nv, nvertices) -1))
             tmp = Vector{Float64}(undef, max(nv, nvertices))
             for (i, vert) in zip(Iterators.countfrom(zero(Int32)), vertexindices)
-                @inbounds copyto!(tmp, coeffs[vert])
+                @inbounds copyto!(tmp, @view(coeffs[:, vert]))
                 Mosek.@MSK_putacol(task.task, i, nv, idxs, tmp)
             end
             @inbounds fill!(@view(tmp[1:nvertices]), 1.)
@@ -78,7 +77,7 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
             Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
         end
         fx = fill(Mosek.MSK_BK_FX, nv)
-        for (i, coeff) in enumerate(coeffs)
+        for (i, coeff) in enumerate(eachcol(coeffs))
             if insorted(i, vertexindices)
                 @inbounds required_coeffs[i] = true
                 continue
@@ -312,8 +311,8 @@ function newton_polytope_preproc_randomized_taskfun(V::Val{:Mosek}, coeffs, nv, 
     event, stop; parameters...)
     @inbounds while !stop[]
         dropped = 0
-        for (cfi, rem) in zip(subset, newton_polytope_preproc_remove(V, nv, subset_size, i -> coeffs[subset[i]], false;
-                                                                     MSK_IPAR_NUM_THREADS="1", parameters...))
+        for (cfi, rem) in zip(subset, newton_polytope_preproc_remove(V, nv, subset_size, i -> @view(coeffs[:, subset[i]]),
+                                                                     false; MSK_IPAR_NUM_THREADS="1", parameters...))
             required_coeffs[cfi] = rem
             if !rem
                 dropped += 1
@@ -325,7 +324,8 @@ function newton_polytope_preproc_randomized_taskfun(V::Val{:Mosek}, coeffs, nv, 
     end
 end
 
-function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verbose; parameters...)
+function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, verbose; parameters...)
+    nv, nc = size(coeffs)
     nthreads = Threads.nthreads()
     subset_size = min(1000, nc ÷ 20) # samples too small -> no chance of success; samples too large -> takes too long
     @assert(subset_size ≥ 1)
@@ -336,12 +336,12 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
     if isone(nthreads)
         let
             _subset = sample(required_coeffs, subset_size, nc)
-            while true
+            @inbounds while true
                 totaldrop = 0
                 for (cfi, rem) in zip(_subset, newton_polytope_preproc_remove(V, nv, subset_size,
-                                                                              i -> @inbounds(coeffs[_subset[i]]), false);
+                                                                              i -> @view(coeffs[:, _subset[i]]), false);
                                                                               parameters...)
-                    @inbounds required_coeffs[cfi] = rem
+                    required_coeffs[cfi] = rem
                     if !rem
                         totaldrop += 1
                     end
@@ -412,6 +412,156 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, nv, nc, verb
         end
     end
     return required_coeffs
+end
+
+# Delete "columns" from a vector that is interpreted as a matrix of height inc
+function keepcol!(A::Vector, m::Vector{Bool}, inc)
+    d = length(A) ÷ inc
+    length(m) == d || throw(BoundsError(A, m))
+    i = 1
+    from = 1
+    @inbounds while from ≤ d && !m[from]
+        from += 1
+    end
+    to = from
+    @inbounds while to ≤ d
+        if m[to]
+            to += 1
+        else
+            len = to - from # [from, to)
+            isone(from) || copyto!(A, (i -1) * inc +1, A, (from -1) * inc +1, len * inc)
+            i += len
+            from = to +1
+            while from ≤ d && !m[from]
+                from += 1
+            end
+            to = from
+        end
+    end
+    if from ≤ d
+        len = to - from # [from, to), as now to = d +1
+        isone(from) || copyto!(A, (i -1) * inc +1, A, (from -1) * inc +1, len * inc)
+        i += len
+    end
+    Base._deleteend!(A, (d - i +1) * inc)
+    return A
+end
+
+if VERSION < v"1.11"
+    # mutable struct jl_array_t
+    #     data::Ptr{Cvoid}
+    #     length::UInt
+    #     flags::UInt16 # how:2, ndims:9, pooled:1, ptrarray:1, hasptr:1, isshared:1, isaligned:1
+    #     elsize::UInt16
+    #     offset::UInt32
+    #     nrows::UInt
+    #     maxsize::UInt
+    # end
+
+    unsafe_array_get_flags(a::AbstractArray) = unsafe_load(Ptr{UInt16}(pointer_from_objref(a)) + sizeof(Ptr) + sizeof(UInt))
+    unsafe_array_set_flags!(a::AbstractArray, flags::UInt16) = unsafe_store!(Ptr{UInt16}(pointer_from_objref(a)) +
+        sizeof(Ptr) + sizeof(UInt), flags)
+
+    # Reshape a vector according to the reshaping expression, then execute expr, and make sure that it is unshared again
+    # afterwards
+    # Two forms:
+    # - @reshape_temp(myreshaped = reshape(myvec, dims...), expr that uses myreshaped)
+    # - @reshape_temp(reshape(myarr, dim...), expr that uses myarr as if it were now reshaped)
+    macro reshape_temp(reshaping, expr)
+        if reshaping.head === :call && length(reshaping.args) ≥ 3 && reshaping.args[1] === :reshape &&
+            reshaping.args[2] isa Symbol
+            original = reshaping.args[2]
+            target = original
+            reshaping_expr = reshaping
+        else
+            (reshaping.head === :(=) && length(reshaping.args) === 2 && reshaping.args[1] isa Symbol &&
+                reshaping.args[2] isa Expr && reshaping.args[2].head === :call && length(reshaping.args[2].args) ≥ 3 &&
+                reshaping.args[2].args[1] === :reshape && reshaping.args[2].args[2] isa Symbol) ||
+                error("@reshape_temp expect a reshape or reshape-assignment as first parameter")
+            original = reshaping.args[2].args[2]
+            target = reshaping.args[1]
+            reshaping_expr = reshaping.args[2]
+        end
+        quote
+            iszero(unsafe_array_get_flags($(esc(original))) & 0b0_1_0_0_0_000000000_00) ||
+                error("@reshape_temp requires unshared vector in the beginning")
+            let
+                local result
+                let $(esc(target))=$(esc(reshaping_expr))
+                    result=$(esc(expr))
+                end
+                unsafe_array_set_flags!($(esc(original)), unsafe_array_get_flags($(esc(original))) & 0b1_0_1_1_1_111111111_11)
+                result
+            end
+        end
+    end
+else
+    macro reshape_temp(reshaping, expr)
+        if reshaping.head === :call && length(reshaping.args) ≥ 3 && reshaping.args[1] === :reshape &&
+            reshaping.args[2] isa Symbol
+            target = reshaping.args[2]
+            reshaping_expr = reshaping
+        else
+            (reshaping.head === :(=) && length(reshaping.args) === 2 && reshaping.args[1] isa Symbol &&
+                reshaping.args[2] isa Expr && reshaping.args[2].head === :call && length(reshaping.args[2].args) ≥ 3 &&
+                reshaping.args[2].args[1] === :reshape && reshaping.args[2].args[2] isa Symbol) ||
+                error("@reshape_temp expect a reshape or reshape-assignment as first parameter")
+            target = reshaping.args[1]
+            reshaping_expr = reshaping.args[2]
+        end
+        quote
+            let $(esc(target))=$(esc(reshaping_expr))
+                esc($expr)
+            end
+        end
+    end
+end
+
+function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=false,
+    preprocess_randomized::Bool=false, preprocess_fine::Bool=false, preprocess::Union{Nothing,Bool}=nothing,
+    parameters...) where {P<:AbstractPolynomialLike}
+    if !isnothing(preprocess)
+        preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
+    end
+    @verbose_info("Determining Newton polytope (quick preprocessing: ", preprocess_quick, ", randomized preprocessing: ",
+        preprocess_randomized, ", fine preprocessing: ", preprocess_fine, ")")
+    nv = nvariables(objective)
+    nc = length(objective)
+    coeffs = Vector{Int}(undef, nv * nc)
+    i = 1
+    for mon in monomials(objective)
+        @inbounds copyto!(coeffs, i, exponents(mon), 1, nv)
+        i += nv
+    end
+    if preprocess_quick
+        @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", nc, " initial candidates")
+        preproc_time = @elapsed keepcol!(coeffs,
+            @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_quick(V, coeffs, verbose; parameters...)), nv)
+        nc = length(coeffs) ÷ nv
+        @verbose_info("Found ", nc, " potential extremal points of the convex hull in ", preproc_time, " seconds")
+    end
+    if preprocess_randomized
+        if nc ≥ 100
+            @verbose_info("Removing redundancies from the convex hull - randomized, ", nc, " initial candidates")
+            preproc_time = @elapsed keepcol!(coeffs,
+                @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_randomized(V, coeffs, verbose; parameters...)),
+                nv)
+            nc = length(coeffs) ÷ nv
+            @verbose_info("Found ", nc, " extremal points of the convex hull via randomization in ", preproc_time, " seconds")
+        else
+            @info("Removing redundancies from the convex hull via randomization was requested, but skipped due to the small size of the problem")
+        end
+    end
+    if preprocess_fine
+        # eliminate all the coefficients that are redundant themselves to make the linear system smaller
+        @verbose_info("Removing redundancies from the convex hull - fine, ", nc, " initial candidates")
+        preproc_time = @elapsed keepcol!(coeffs,
+            @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_remove(V, nv, nc,
+                i -> @inbounds(@view coeffs[:, i]), verbose; parameters...)), nv)
+        nc = length(coeffs) ÷ nv
+        @verbose_info("Found ", nc, " extremal points of the convex hull in ", preproc_time, " seconds")
+    end
+    return parameters, reshape(coeffs, nv, nc)
 end
 #endregion
 
@@ -650,7 +800,8 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, max
     end
 end
 
-function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
+function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
+    nv, nc = size(coeffs)
     # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
     # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
     # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
@@ -671,7 +822,7 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
     let
         idxs = collect(Int32(0):Int32(max(nv, nc) -1))
         tmp = Vector{Float64}(undef, max(nv, nc))
-        for (i, cf) in zip(Iterators.countfrom(zero(Int32)), coeffs)
+        for (i, cf) in zip(Iterators.countfrom(zero(Int32)), eachcol(coeffs))
             @inbounds @view(tmp[1:nv]) .= 0.5 .* cf
             Mosek.@MSK_putacol(task.task, i, nv, idxs, tmp)
         end
@@ -830,47 +981,14 @@ function newton_halfpolytope_do(V::Val{:Mosek}, coeffs, nv, nc, mindeg, maxdeg, 
     return finish!(candidates)
 end
 
-function newton_halfpolytope(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=false,
-    preprocess_randomized::Bool=false, preprocess_fine::Bool=false,
-    preprocess::Union{Nothing,Bool}=nothing, parameters...) where {P<:AbstractPolynomialLike}
-    if !isnothing(preprocess)
-        preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
-    end
-    @verbose_info("Determining Newton polytope (quick preprocessing: ", preprocess_quick, ", randomized preprocessing: ",
-        preprocess_randomized, ", fine preprocessing: ", preprocess_fine, ")")
-    coeffs = [exponents(mon) for mon in monomials(objective)]
-    nc = length(coeffs)
-    nv = nvariables(objective)
-    if preprocess_quick
-        @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", nc, " initial candidates")
-        preproc_time = @elapsed keepat!(coeffs, newton_polytope_preproc_quick(V, coeffs, verbose; parameters...))
-        nc = length(coeffs)
-        @verbose_info("Found ", length(coeffs), " potential extremal points of the convex hull in ", preproc_time, " seconds")
-    end
-    if preprocess_randomized
-        if nc ≥ 100
-            @verbose_info("Removing redundancies from the convex hull - randomized, ", nc, " initial candidates")
-            preproc_time = @elapsed keepat!(coeffs, newton_polytope_preproc_randomized(V, coeffs, nv, nc, verbose;
-                parameters...))
-            nc = length(coeffs)
-            @verbose_info("Found ", nc, " extremal points of the convex hull via randomization in ", preproc_time, " seconds")
-        else
-            @info("Removing redundancies from the convex hull via randomization was requested, but skipped due to the small size of the problem")
-        end
-    end
-    if preprocess_fine
-        # eliminate all the coefficients that are redundant themselves to make the linear system smaller
-        @verbose_info("Removing redundancies from the convex hull - fine, ", nc, " initial candidates")
-        preproc_time = @elapsed keepat!(coeffs, newton_polytope_preproc_remove(V, nv, nc, i -> @inbounds(coeffs[i]), verbose;
-                                                                               parameters...))
-        nc = length(coeffs)
-        @verbose_info("Found ", nc, " extremal points of the convex hull in ", preproc_time, " seconds")
-    end
+function newton_halfpolytope(V::Val{:Mosek}, objective::P; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
+    parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
+    nv = size(coeffs, 1)
 
     maxdeg, mindeg = 0, typemax(Int)
     maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
     # do some hopefully quick preprocessing (on top of the previous preprocessing)
-    for coeff in coeffs
+    for coeff in eachcol(coeffs)
         deg = 0
         @inbounds for (i, coeffᵢ) in enumerate(coeff)
             deg += coeffᵢ
@@ -893,8 +1011,7 @@ function newton_halfpolytope(V::Val{:Mosek}, objective::P; verbose::Bool=false, 
     maxdeg = div(maxdeg, 2, RoundDown)
     mindeg = div(mindeg, 2, RoundUp)
     newton_time = @elapsed begin
-        candidates = newton_halfpolytope_do(V, coeffs, nv, nc, mindeg, maxdeg, minmultideg, maxmultideg, verbose;
-            parameters...)
+        candidates = newton_halfpolytope_do(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
     end
 
     @verbose_info("Found ", length(candidates), " elements in the Newton polytope superset in ", newton_time, " seconds")
