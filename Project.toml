@@ -14,17 +14,24 @@ Mosek = "6405355b-0ac2-5fba-af84-adbd65488c0e"
 MultivariatePolynomials = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
 MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SemialgebraicSets = "8e049039-38e8-557d-ae3a-bc521ccf6204"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
+[weakdeps]
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+
+[extensions]
+PolynomialOptimizationMPI = "MPI"
+
+[compat]
+julia = "1.9"
+
 [extras]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Documenter", "OrderedCollections", "Random", "Test"]
-
-[compat]
-julia = "1.9"

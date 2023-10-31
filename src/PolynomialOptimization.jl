@@ -16,6 +16,7 @@ import MutableArithmetics
 import StatsBase
 
 const sqrt2 = sqrt(2.0)
+const haveMPI = Ref{Bool}(false)
 
 macro myinbounds(expr)
     esc(expr)

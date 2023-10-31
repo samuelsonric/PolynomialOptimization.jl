@@ -23,14 +23,23 @@ After preprocessing is done, the monomials in the half Newton polytope are const
 min/max-degree constraint using [`MonomialIterator`](@ref) and taken over into the basis if they are contained in the convex
 polytope whose vertices were determined based on the objective and preprocessing; this is done by performing a linear program
 for each candidate monomial.
-For large initial sets of monomials (≥ 10⁴), the final construction will use multithreading if possible.
 The `parameters` will be passed on to the linear solver in every case (preprocessing and construction).
+
+!!! Multithreading
+    For large initial sets of monomials (≥ 10⁴), the final construction will use multithreading if possible. Make sure to start
+    Julia with an appropriate number of threads configured.
+
+!!! Distributed computing
+    This function is capable of using MPI for multi-node distributed computing. For this, make sure to start Julia using
+    `mpiexec`, appropriately configured; then load the `MPI` package in addition to `PolynomialOptimization` and initialize it
+    properly. This function is compatible with the MPI thread level `MPI.THREAD_FUNNELED` if multithreading is used in
+    combination with MPI. Currently, only the main function will use MPI.
 """
 newton_halfpolytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
-    newton_halfpolytope(Val(method), objective; kwargs...)
+    newton_halfpolytope(Val(method), objective, Val(haveMPI[]); kwargs...)
 
 newton_halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
-    newton_halfpolytope(Val(:Mosek), objective; kwargs...)
+    newton_halfpolytope(Val(:Mosek), objective, Val(haveMPI[]); kwargs...)
 
 #region Preprocessing for the full Newton polytope convex hull
 function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameters...)
@@ -998,7 +1007,7 @@ newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxm
     newton_halfpolytope_do_execute(V, size(coeffs, 1), mindeg, maxdeg, minmultideg, maxmultideg, verbose,
         newton_halfpolytope_do_prepare(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)...)
 
-function newton_halfpolytope(V::Val{:Mosek}, objective::P; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
+function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
     newton_time = @elapsed begin
         nv = size(coeffs, 1)
