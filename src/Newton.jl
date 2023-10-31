@@ -1,4 +1,4 @@
-export newton_halfpolytope
+export MonomialIterator, newton_halfpolytope
 
 """
     newton_halfpolytope(method, objective; verbose=false, preprocess_quick=false, preprocess_randomized=false,

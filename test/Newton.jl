@@ -7,9 +7,9 @@ using LinearAlgebra
     for mindeg in 0:4, maxdeg in 0:4, minmultideg in multiit, maxmultideg in multiit
         minm, maxm = collect(minmultideg), collect(maxmultideg)
         if mindeg > maxdeg || any(minmultideg .> maxmultideg)
-            @test_throws ErrorException PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+            @test_throws ErrorException MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
         else
-            mi = PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+            mi = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
             exp = exponents.(monomials(x, mindeg:maxdeg, m -> all(minm .≤ exponents(m) .≤ maxm)))
             @test collect(mi) == exp
             @test length(mi) == length(exp)
