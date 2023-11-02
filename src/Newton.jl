@@ -882,6 +882,8 @@ function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, m
             # Note that this is potentially still an underestimation, as our candidates list will also grow. But this is
             # something that can potentially be swapped, so if swap space is available beyond the free_memory limit, then we
             # are still fine.
+        else
+            secondtask = nothing
         end
     end
     isone(nthreads) || Mosek.putintparam(task, Mosek.MSK_IPAR_NUM_THREADS, 1) # single-threaded for Mosek itself
