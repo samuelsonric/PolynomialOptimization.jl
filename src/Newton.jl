@@ -331,7 +331,8 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, verbose; par
     @assert(subset_size ≥ 1)
     required_coeffs = fill(true, nc)
     if nthreads * subset_size > nc
-        nthreads = div(nc, subset_size, RoundUp)
+        nthreads = nc ÷ subset_size # we could squeeze in another incomplete thread, but this would make the code more
+                                    # complicated than necessary without a real benefit
     end
     if isone(nthreads)
         let
