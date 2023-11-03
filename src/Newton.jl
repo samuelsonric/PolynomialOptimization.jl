@@ -529,7 +529,7 @@ end
 
 function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=false,
     preprocess_randomized::Bool=false, preprocess_fine::Bool=false, preprocess::Union{Nothing,Bool}=nothing,
-    parameters...) where {P<:AbstractPolynomialLike}
+    warn_disable_randomization::Bool=true, parameters...) where {P<:AbstractPolynomialLike}
     if !isnothing(preprocess)
         preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
     end
@@ -559,7 +559,8 @@ function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=fal
             nc = length(coeffs) ÷ nv
             @verbose_info("Found ", nc, " extremal points of the convex hull via randomization in ", preproc_time, " seconds")
         else
-            @info("Removing redundancies from the convex hull via randomization was requested, but skipped due to the small size of the problem")
+            warn_disable_randomization &&
+                @info("Removing redundancies from the convex hull via randomization was requested, but skipped due to the small size of the problem")
         end
     end
     if preprocess_fine
@@ -727,21 +728,36 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
 end
 #endregion
 
-function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
+@inline function newton_polytope_do_worker(::Val{:Mosek}, task, bk, moniter, tmp, add_callback, verbose_callback)
+    Δacceptance = 0
+    Δprogress = 0
+    for powers in moniter
+        # check the previous power in the linear program and add it if possible
+        copyto!(tmp, powers)
+        Mosek.putconboundslice(task, 1, length(bk) +1, bk, tmp, tmp)
+        Mosek.optimize(task)
+        if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
+            # this candidate is part of the Newton polytope
+            @inline add_callback(powers)
+            Δacceptance += 1
+        end
+        if !isnothing(verbose_callback)
+            Δprogress, Δacceptance = @inline verbose_callback(Δprogress += 1, Δacceptance)
+        end
+    end
+end
+
+function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
     allcandidates, notifier, init_time, num)
     # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
     verbose = notifier[] != 0
-    isnotifier = false
+    lastappend = time_ns()
+    isnotifier = Ref(false) # necessary due to the capturing/boxing bug
+    lastinfo = Ref{Int}(lastlappend)
     powers = Vector{Int}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
     candidates = FastVec{Vector{Int}}()
     try
-        lastappend = time_ns()
-        if verbose
-            lastinfo = lastappend
-            Δprogress = 0
-        end
-        Δacceptance = 0
         while true
             local curminrange, curmaxrange
             try
@@ -750,40 +766,34 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, max
                 e isa InvalidStateException && break
                 rethrow(e)
             end
-            for powers in MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers)
-                # check the previous power in the linear program and add it if possible
-                copyto!(tmp, powers)
-                Mosek.putconboundslice(task, 1, nv +1, bk, tmp, tmp)
-                Mosek.optimize(task)
-                if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
-                    # this candidate is part of the Newton polytope
-                    push!(candidates, copy(powers))
-                    Δacceptance += 1
-                end
-                if verbose
-                    Δprogress += 1
+            newton_polytope_do_worker(V, task, bk,
+                MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers), tmp,
+                let candidates=candidates; p -> push!(candidates, copy(p)) end,
+                !verbose ? nothing : let isnotifier=isnotifier, lastinfo=lastinfo
+                (Δprogress, Δacceptance) -> let
                     nextinfo = time_ns()
-                    if nextinfo - lastinfo > 1_000_000_000 && trylock(cond)
+                    if nextinfo - lastinfo[] > 1_000_000_000 && trylock(cond)
                         # no reason to block, we can also just retry in the next iteration
                         progress = allprogress[] += Δprogress
                         acceptance = allacceptance[] += Δacceptance
-                        if !isnotifier && notifier[] == 1
-                            isnotifier = true
+                        if !isnotifier[] && notifier[] == 1
+                            isnotifier[] = true
                             notifier[] = 2
                         end
                         unlock(cond)
-                        Δprogress = 0
-                        Δacceptance = 0
-                        lastinfo = nextinfo
-                        if isnotifier
+                        lastinfo[] = nextinfo
+                        if isnotifier[]
                             rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
                             @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                                 100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
                             flush(stdout)
                         end
+                        return 0, 0
+                    else
+                        return Δprogress, Δacceptance
                     end
                 end
-            end
+            end)
             # make sure that we update the main list regularly, but not ridiculously often
             nextappend = time_ns()
             if nextappend - lastappend > 10_000_000_000 && trylock(cond)
@@ -796,7 +806,7 @@ function newton_polytope_do_taskfun(::Val{:Mosek}, task, ranges, nv, mindeg, max
                 lastappend = nextappend
             end
         end
-        if isnotifier
+        if isnotifier[]
             notifier[] = 1
         end
         lock(cond)
@@ -909,34 +919,23 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     candidates = FastVec{Vector{Int}}()
     if isone(nthreads)
         # single threading is better
-        let
-            tmp = Vector{Float64}(undef, nv)
-            init_time = time_ns()
-            lastinfo = init_time
-            progress = 0
-            for powers in moniter
-                # check the previous power in the linear program and add it if possible
-                copyto!(tmp, powers)
-                Mosek.putconboundslice(task, 1, nv +1, bk, tmp, tmp)
-                Mosek.optimize(task)
-                if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
-                    # this candidate is part of the Newton polytope
-                    push!(candidates, copy(powers))
+        newton_polytope_do_worker(V, task, bk, moniter, Vector{Float64}(undef, nv),
+            let candidates=candidates; p -> push!(candidates, copy(p)) end,
+            !verbose ? nothing : let init_time=time_ns(), lastinfo=Ref(init_time)
+            (progress, acceptance) -> let
+                nextinfo = time_ns()
+                if nextinfo - lastinfo[] > 1_000_000_000
+                    rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                    @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                        100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                    flush(stdout)
+                    lastinfo[] = nextinfo
                 end
-                if verbose
-                    progress += 1
-                    nextinfo = time_ns()
-                    if nextinfo - lastinfo > 1_000_000_000
-                        rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
-                        @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
-                            100progress / num, 100length(candidates) / progress, rem_sec ÷ 60, rem_sec % 60)
-                        flush(stdout)
-                        lastinfo = nextinfo
-                    end
-                end
+                return progress, acceptance
             end
-        end
+        end)
         Mosek.deletetask(task)
+        verbose && print("\33[2K")
         # How about the order of monomials? Currently, the monomial order can be defined to be arbitrary, but monomials
         # in DynamicPolynomials always outputs Graded{LexOrder}. Therefore, it is currently not possible to use
         # different ordering in DP, and this translates to PolynomialOptimization, unless the user chooses to generate
