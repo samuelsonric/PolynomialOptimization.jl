@@ -24,11 +24,9 @@ isroot(::RootRank) = true
 MPIRank(rank::Integer) = iszero(rank) ? RootRank() : OtherRank(rank)
 
 function PolynomialOptimization.newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond,
-    allprogress, allacceptance, allcandidates, notifier, init_time, num, comm, rank::MPIRank)
-    # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
-    verbose = notifier[] != 0
+    allprogress, allacceptance, allcandidates, verbose, init_time, num, comm, rank::MPIRank, restthreads)
     lastappend = time_ns()
-    isnotifier = Ref(false) # necessary due to the capturing/boxing bug
+    isnotifier = MPI.Is_thread_main()
     Δprogress_acceptance = Vector{Int}(undef, 2)
     if verbose
         lastinfo = Ref(lastappend)
@@ -63,34 +61,28 @@ function PolynomialOptimization.newton_polytope_do_taskfun(V::Val{:Mosek}, task,
                             # no reason to block, we can also just retry in the next iteration
                             allprogress[] += Δprogress
                             allacceptance[] += Δacceptance
-                            if !isnotifier[] && notifier[] == 1
-                                isnotifier[] = true
-                                notifier[] = 2
-                            end
                             unlock(cond)
                             lastinfo[] = nextinfo
                             result = 0, 0
                         else
                             result = Δprogress, Δacceptance
                         end
-                        if nextinfo - lastsync[] > 10_000_000_000
+                        if isnotifier && nextinfo - lastsync[] > 10_000_000_000
                             progress, acceptance = 0, 0
                             @inbounds while MPI.Test(req[])
                                 progress += Δprogress_acceptance[1]
                                 acceptance += Δprogress_acceptance[2]
-                                req[] = MPI.Irecv!(Δprogress_acceptance, comm, tag=1)
+                                req[] = MPI.Irecv!(req[].buffer, comm, tag=1)
                             end
                             lock(cond)
                             progress = allprogress[] += progress
                             acceptance = allacceptance[] += acceptance
                             unlock(cond)
                             lastsync[] = nextinfo
-                            if isnotifier[]
-                                rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
-                                @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
-                                    100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
-                                flush(stdout)
-                            end
+                            rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                            @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                                100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                            flush(stdout)
                         end
                         return result
                     end
@@ -99,31 +91,26 @@ function PolynomialOptimization.newton_polytope_do_taskfun(V::Val{:Mosek}, task,
                 PolynomialOptimization.newton_polytope_do_worker(V, task, bk,
                     MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers), tmp,
                     let candidates=candidates; p -> append!(candidates, p) end,
-                    !verbose ? nothing : let isnotifier=isnotifier, lastinfo=lastinfo, lastsync=lastsync,
-                                             Δprogress_acceptance=Δprogress_acceptance
+                    !verbose ? nothing : let lastinfo=lastinfo, lastsync=lastsync, Δprogress_acceptance=Δprogress_acceptance
                     (Δprogress, Δacceptance) -> let
                         nextinfo = time_ns()
                         if nextinfo - lastinfo[] > 1_000_000_000 && trylock(cond)
                             # no reason to block, we can also just retry in the next iteration
                             allprogress[] += Δprogress
                             allacceptance[] += Δacceptance
-                            if !isnotifier[] && notifier[] == 1
-                                isnotifier[] = true
-                                notifier[] = 2
-                            end
                             unlock(cond)
                             lastinfo[] = nextinfo
                             result = 0, 0
                         else
                             result = Δprogress, Δacceptance
                         end
-                        @inbounds if nextinfo - lastsync[] > 10_000_000_000 && trylock(cond)
+                        @inbounds if isnotifier && nextinfo - lastsync[] > 10_000_000_000 && trylock(cond)
                             Δprogress_acceptance[1] = allprogress[]
                             Δprogress_acceptance[2] = allacceptance[]
                             allprogress[] = 0
                             allacceptance[] = 0
                             unlock(cond)
-                            MPI.Send!(Δprogress_acceptance, comm, dest=root, tag=1)
+                            MPI.Send(Δprogress_acceptance, comm, dest=root, tag=1)
                             lastsync[] = nextinfo
                         end
                         return result
@@ -139,6 +126,15 @@ function PolynomialOptimization.newton_polytope_do_taskfun(V::Val{:Mosek}, task,
                 lock(cond)
                 try
                     append!(allcandidates, candidates)
+                finally
+                    unlock(cond)
+                end
+                empty!(candidates)
+                lastappend = nextappend
+            end
+            if isnotifier && nextappend - lastsync[] > 10_000_000_000
+                lock(cond)
+                try
                     allprogress[] += Δprogress_
                     allacceptance[] += Δacceptance_
                     @inbounds if !isroot(rank)
@@ -150,32 +146,101 @@ function PolynomialOptimization.newton_polytope_do_taskfun(V::Val{:Mosek}, task,
                 finally
                     unlock(cond)
                 end
-                empty!(candidates)
                 Δprogress_, Δacceptance_ = 0, 0
                 isroot(rank) || MPI.Send(Δprogress_acceptance, comm, dest=root, tag=1)
-                lastappend = nextappend
+                lastsync[] = nextappend
             end
-        end
-        if isnotifier[]
-            notifier[] = 1
         end
         lock(cond)
         try
             append!(allcandidates, candidates)
             allprogress[] += Δprogress_
             allacceptance[] += Δacceptance_
-            @inbounds if !isroot(rank)
+            @inbounds if !isroot(rank) && isnotifier
                 Δprogress_acceptance[1] = allprogress[]
                 Δprogress_acceptance[2] = allacceptance[]
                 allprogress[] = 0
                 allacceptance[] = 0
             end
+            restthreads[] -= 1
         finally
             unlock(cond)
         end
-        @inbounds isroot(rank) || iszero(Δprogress_acceptance[1]) || MPI.Send(Δprogress_acceptance, comm, dest=root, tag=1)
+        @inbounds isroot(rank) || !isnotifier || iszero(Δprogress_acceptance[1]) ||
+            MPI.Send(Δprogress_acceptance, comm, dest=root, tag=1)
     finally
         Mosek.deletetask(task)
+    end
+    # Now we are done in this thread, but we must funnel all communication through the main thread. So if we are the main
+    # thread, we have to wait for all other threads and still do our processing.
+    if verbose && isnotifier
+        if isroot(rank)
+            resttasks = MPI.Comm_size(comm) -1
+            nobuf = MPI.Buffer(nothing, 0, MPI.Datatype(Int))
+            taskfinish = MPI.Irecv!(nobuf, comm, tag=4)
+            # we cannot use the automatic Buffer(nothing) wrapper, as it uses DATATYPE_NULL, which may not be received.
+            while restthreads[] ≥ 1
+                sleep(1)
+                nextinfo = time_ns()
+                while MPI.Test(taskfinish)
+                    resttasks -= 1
+                    # taskfinish.buffer will be nothing, as was set by MPI.Test since we had a null request
+                    taskfinish = MPI.Irecv!(nobuf, comm, tag=4)
+                end
+                if nextinfo - lastsync[] > 10_000_000_000
+                    progress, acceptance = 0, 0
+                    @inbounds while MPI.Test(req[])
+                        progress += Δprogress_acceptance[1]
+                        acceptance += Δprogress_acceptance[2]
+                        req[] = MPI.Irecv!(req[].buffer, comm, tag=1)
+                    end
+                    lock(cond)
+                    progress = allprogress[] += progress
+                    acceptance = allacceptance[] += acceptance
+                    unlock(cond)
+                    lastsync[] = nextinfo
+                    rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                    @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                        100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                    flush(stdout)
+                end
+            end
+            while resttasks ≥ 1
+                sleep(10)
+                nextinfo = time_ns()
+                while MPI.Test(taskfinish)
+                    resttasks -= 1
+                    taskfinish = MPI.Irecv!(nobuf, comm, tag=4)
+                end
+                progress, acceptance = 0, 0
+                @inbounds while MPI.Test(req[])
+                    progress += Δprogress_acceptance[1]
+                    acceptance += Δprogress_acceptance[2]
+                    req[] = MPI.Irecv!(req[].buffer, comm, tag=1)
+                end
+                progress = allprogress[] += progress
+                acceptance = allacceptance[] += acceptance
+                rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                    100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                flush(stdout)
+            end
+        else
+            while restthreads[] ≥ 1
+                nextinfo = time_ns()
+                @inbounds if nextinfo - lastsync[] > 10_000_000_000 && trylock(cond)
+                    Δprogress_acceptance[1] = allprogress[]
+                    Δprogress_acceptance[2] = allacceptance[]
+                    allprogress[] = 0
+                    allacceptance[] = 0
+                    unlock(cond)
+                    MPI.Send(Δprogress_acceptance, comm, dest=root, tag=1)
+                    lastsync[] = nextinfo
+                end
+                sleep(1)
+            end
+            MPI.Send(MPI.Buffer(nothing, 0, MPI.Datatype(Int)), comm, dest=root, tag=4)
+        end
     end
 end
 
@@ -281,7 +346,7 @@ function PolynomialOptimization.newton_halfpolytope(V::Val{:Mosek}, objective::P
                                             @inbounds while MPI.Test(req[])
                                                 progress += Δprogress_acceptance[1]
                                                 acceptance += Δprogress_acceptance[2]
-                                                req[] = MPI.Irecv!(Δprogress_acceptance, comm, tag=1)
+                                                req[] = MPI.Irecv!(req[].buffer, comm, tag=1)
                                             end
                                             allprogress[] = progress
                                             allacceptance[] = acceptance
@@ -348,18 +413,18 @@ function PolynomialOptimization.newton_halfpolytope(V::Val{:Mosek}, objective::P
                 # We start the task with tid 1 only after we kicked off all the rest, as it will run in the main thread. In
                 # this way, all the other threads can already start working while we feed them data.
                 init_time = time_ns()
-                notifier = Ref(verbose ? 1 : 0)
+                restthreads = Ref(nthreads)
                 for tid in nthreads:-1:3
                     # secondtask has a solution, so we just use task (better than deletesolution).
                     # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
                     # parallel, even if we make sure not to modify the base task until all copies are done.
                     @inbounds threads[tid] = Threads.@spawn PolynomialOptimization.newton_polytope_do_taskfun($V,
                         $(Mosek.Task(task)), $ranges, $nv, $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance,
-                        $allcandidates, $notifier, $init_time, $num, $comm, $rank)
+                        $allcandidates, $verbose, $init_time, $num, $comm, $rank, $restthreads)
                 end
                 @inbounds threads[2] = Threads.@spawn PolynomialOptimization.newton_polytope_do_taskfun($V, $secondtask,
-                    $ranges, $nv, $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $allcandidates, $notifier,
-                    $init_time, $num, $comm, $rank)
+                    $ranges, $nv, $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $allcandidates, $verbose,
+                    $init_time, $num, $comm, $rank, $restthreads)
                 # All threads are running and waiting for stuff to do. So let's now feed them with their jobs.
                 cutlen = nv - cutat_thread
                 cutat += 1 # cutat is now the first entry to be fixed for the worker
@@ -385,8 +450,8 @@ function PolynomialOptimization.newton_halfpolytope(V::Val{:Mosek}, objective::P
                 close(ranges)
                 isroot(rank) && @verbose_info("All tasks set up")
                 @inbounds threads[1] = Threads.@spawn PolynomialOptimization.newton_polytope_do_taskfun($V, $task, $ranges,
-                    $nv, $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $allcandidates, $notifier, $init_time,
-                    $num, $comm, $rank)
+                    $nv, $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $allcandidates, $verbose, $init_time,
+                    $num, $comm, $rank, $restthreads)
                 for thread in threads
                     wait(thread)
                 end
