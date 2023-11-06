@@ -729,8 +729,8 @@ end
 #endregion
 
 @inline function newton_polytope_do_worker(::Val{:Mosek}, task, bk, moniter, tmp, add_callback, verbose_callback)
-    Δacceptance = 0
     Δprogress = 0
+    Δacceptance = 0
     for powers in moniter
         # check the previous power in the linear program and add it if possible
         copyto!(tmp, powers)
@@ -745,6 +745,7 @@ end
             Δprogress, Δacceptance = @inline verbose_callback(Δprogress += 1, Δacceptance)
         end
     end
+    return Δprogress, Δacceptance
 end
 
 function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
@@ -757,6 +758,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
     powers = Vector{Int}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
     candidates = FastVec{Vector{Int}}()
+    Δprogress_ = 0
+    Δacceptance_ = 0
     try
         while true
             local curminrange, curmaxrange
@@ -766,7 +769,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
                 e isa InvalidStateException && break
                 rethrow(e)
             end
-            newton_polytope_do_worker(V, task, bk,
+            δprogress_, δacceptance_ = newton_polytope_do_worker(V, task, bk,
                 MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers), tmp,
                 let candidates=candidates; p -> push!(candidates, copy(p)) end,
                 !verbose ? nothing : let isnotifier=isnotifier, lastinfo=lastinfo
@@ -774,8 +777,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
                     nextinfo = time_ns()
                     if nextinfo - lastinfo[] > 1_000_000_000 && trylock(cond)
                         # no reason to block, we can also just retry in the next iteration
-                        progress = allprogress[] += Δprogress
-                        acceptance = allacceptance[] += Δacceptance
+                        progress = (allprogress[] += Δprogress)
+                        acceptance = (allacceptance[] += Δacceptance)
                         if !isnotifier[] && notifier[] == 1
                             isnotifier[] = true
                             notifier[] = 2
@@ -794,15 +797,22 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
                     end
                 end
             end)
+            # but in case there is no next iteration, we don't want to forget about the progress that we made
+            Δprogress_ += δprogress_
+            Δacceptance_ += δacceptance_
             # make sure that we update the main list regularly, but not ridiculously often
             nextappend = time_ns()
-            if nextappend - lastappend > 10_000_000_000 && trylock(cond)
+            if nextappend - lastappend > 10_000_000_000
+                lock(cond)
                 try
                     append!(allcandidates, candidates)
+                    allprogress[] += Δprogress_
+                    allacceptance[] += Δacceptance_
                 finally
                     unlock(cond)
                 end
                 empty!(candidates)
+                Δprogress_, Δacceptance_ = 0, 0
                 lastappend = nextappend
             end
         end
@@ -812,6 +822,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
         lock(cond)
         try
             append!(allcandidates, candidates)
+            allprogress[] += Δprogress_
+            allacceptance[] += Δacceptance_
         finally
             unlock(cond)
         end
