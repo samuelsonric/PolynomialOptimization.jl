@@ -753,7 +753,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
     verbose = notifier[] != 0
     lastappend = time_ns()
     isnotifier = Ref(false) # necessary due to the capturing/boxing bug
-    lastinfo = Ref{Int}(lastlappend)
+    lastinfo = Ref{Int}(lastappend)
     powers = Vector{Int}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
     candidates = FastVec{Vector{Int}}()

@@ -195,7 +195,7 @@ function PolynomialOptimization.newton_halfpolytope(V::Val{:Mosek}, objective::P
             threadsize = div(workersize, nthreads, RoundUp)
             cutat = PolynomialOptimization.monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, workersize)
             cutat_thread = PolynomialOptimization.monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
-            if cutat_thread < cutat # why would this even happen?
+            if cutat_thread ≥ cutat # why would > even happen?
                 nthreads = 1
             end
         end
@@ -297,7 +297,7 @@ function PolynomialOptimization.newton_halfpolytope(V::Val{:Mosek}, objective::P
                 # We start the task with tid 1 only after we kicked off all the rest, as it will run in the main thread. In
                 # this way, all the other threads can already start working while we feed them data.
                 init_time = time_ns()
-                notifier = Ref(verbose)
+                notifier = Ref(verbose ? 1 : 0)
                 for tid in nthreads:-1:3
                     # secondtask has a solution, so we just use task (better than deletesolution).
                     # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
