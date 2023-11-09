@@ -93,10 +93,10 @@ function poly_solutions(state::SparseAnalysisState, ϵ::R=1e-6, δ::R=1e-3; verb
     if problem.gröbner_basis isa EmptyGröbnerBasis
         missing_func = (_) -> throw(MonomialMissing())
     else
-        missing_func = (mon) -> let r = rem(mon, problem.gröbner_basis)
+        missing_func = @capture((mon) -> let r = rem(mon, $problem.gröbner_basis)
             isempty(r) ? zero(R) : λ^degree(mon) * sum(coefficient(t) *
-                                                       get((_) -> throw(MonomialMissing()), moments, monomial(t)) for t in r)
-        end
+                                                       get((_) -> throw(MonomialMissing()), $moments, monomial(t)) for t in r)
+        end)
     end
     @verbose_info("Starting solution extraction per clique")
     extraction_time = @elapsed begin

@@ -31,9 +31,19 @@ The `parameters` will be passed on to the linear solver in every case (preproces
 
 !!! Distributed computing
     This function is capable of using MPI for multi-node distributed computing. For this, make sure to start Julia using
-    `mpiexec`, appropriately configured; then load the `MPI` package in addition to `PolynomialOptimization` and initialize it
-    properly. This function is compatible with the MPI thread level `MPI.THREAD_FUNNELED` if multithreading is used in
-    combination with MPI. Currently, only the main function will use MPI.
+    `mpiexec`, appropriately configured; then load the `MPI` package in addition to `PolynomialOptimization` (this is required
+    for distributed computing to work). If `MPI.Init` was not called before, `PolynomialOptimization` will do it for you.
+    This function is compatible with the MPI thread level `MPI.THREAD_FUNNELED` if multithreading is used in combination with
+    MPI. Currently, only the main function will use MPI, not the preprocessing.
+    Note that the function will assume that each MPI worker has the same number of threads available. Further note that Julia's
+    GC works in a multithreaded context using the SIGSEG signal. This is known to cause problems among all MPI backends, which
+    can usually be fixed by using the most recent version of MPI and setting some environment variables. Not all of these
+    settings are incorporated into the MPI package yet. For OpenMPI and Intel MPI, set `ENV["IPATH_NO_BACKTRACE"] = "1"`.
+
+!!! Verbose output
+    The `verbose` option generates very helpful output to observe the current progress. It also works in a multithreaded and
+    distributed context. However, consider the fact that providing these messages requires additional computational and
+    communication effort and should not be enabled when speed matters.
 """
 newton_halfpolytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     newton_halfpolytope(Val(method), objective, Val(haveMPI[]); kwargs...)
@@ -684,12 +694,10 @@ end
 Base.IteratorSize(::Type{<:MonomialIterator}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:MonomialIterator}) = Base.HasEltype()
 Base.eltype(::Type{<:MonomialIterator}) = Vector{Int}
-Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::MonomialIterator)
+function Base.length(iter::MonomialIterator, ::Val{:detailed})
+    # internal function without checks or quick path
     # ~ O(n*d^2)
     maxdeg = iter.maxdeg
-    iter.Σminmultideg > maxdeg && return 0
-    iter.Σmaxmultideg < iter.mindeg && return 0
-    @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1])
     occurrences = zeros(Int, maxdeg +1)
     @inbounds for deg₁ in iter.minmultideg[1]:min(iter.maxmultideg[1], maxdeg)
         occurrences[deg₁+1] = 1
@@ -706,7 +714,14 @@ Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::
         end
         occurrences, nextround = nextround, occurrences
     end
-    return sum(@view(occurrences[iter.mindeg+1:end]))
+    return occurrences
+end
+Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::MonomialIterator)
+    maxdeg = iter.maxdeg
+    iter.Σminmultideg > maxdeg && return 0
+    iter.Σmaxmultideg < iter.mindeg && return 0
+    @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1])
+    @inbounds return sum(@view(@inline(length(iter, Val(:detailed)))[iter.mindeg+1:end]), init=0)
 end
 
 function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers, δ, from)
@@ -728,9 +743,8 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
 end
 #endregion
 
-@inline function newton_polytope_do_worker(::Val{:Mosek}, task, bk, moniter, tmp, add_callback, verbose_callback)
-    Δprogress = 0
-    Δacceptance = 0
+@inline function newton_polytope_do_worker(::Val{:Mosek}, task, bk, moniter, tmp, Δprogress, Δacceptance, add_callback,
+    verbose_callback)
     for powers in moniter
         # check the previous power in the linear program and add it if possible
         copyto!(tmp, powers)
@@ -739,13 +753,12 @@ end
         if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
             # this candidate is part of the Newton polytope
             @inline add_callback(powers)
-            Δacceptance += 1
+            Δacceptance isa Ref && (Δacceptance[] += 1)
         end
-        if !isnothing(verbose_callback)
-            Δprogress, Δacceptance = @inline verbose_callback(Δprogress += 1, Δacceptance)
-        end
+        Δprogress isa Ref && (Δprogress[] += 1)
+        isnothing(verbose_callback) || @inline verbose_callback()
     end
-    return Δprogress, Δacceptance
+    return
 end
 
 function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, maxdeg, bk, cond, allprogress, allacceptance,
@@ -758,8 +771,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
     powers = Vector{Int}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
     candidates = FastVec{Vector{Int}}()
-    Δprogress_ = 0
-    Δacceptance_ = 0
+    Δprogress = Ref(0)
+    Δacceptance = Ref(0)
     try
         while true
             local curminrange, curmaxrange
@@ -769,50 +782,41 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
                 e isa InvalidStateException && break
                 rethrow(e)
             end
-            δprogress_, δacceptance_ = newton_polytope_do_worker(V, task, bk,
-                MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers), tmp,
-                let candidates=candidates; p -> push!(candidates, copy(p)) end,
-                !verbose ? nothing : let isnotifier=isnotifier, lastinfo=lastinfo
-                (Δprogress, Δacceptance) -> let
+            newton_polytope_do_worker(V, task, bk, MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange,
+                powers), tmp, Δprogress, Δacceptance, @capture(p -> push!($candidates, copy(p))),
+                !verbose ? nothing : @capture(() -> let
                     nextinfo = time_ns()
-                    if nextinfo - lastinfo[] > 1_000_000_000 && trylock(cond)
+                    if nextinfo - $lastinfo[] > 1_000_000_000 && trylock(cond)
                         # no reason to block, we can also just retry in the next iteration
-                        progress = (allprogress[] += Δprogress)
-                        acceptance = (allacceptance[] += Δacceptance)
-                        if !isnotifier[] && notifier[] == 1
+                        progress = (allprogress[] += $Δprogress[])
+                        acceptance = (allacceptance[] += $Δacceptance[])
+                        if !$isnotifier[] && notifier[] == 1
                             isnotifier[] = true
                             notifier[] = 2
                         end
                         unlock(cond)
                         lastinfo[] = nextinfo
+                        Δprogress[] = 0
+                        Δacceptance[] = 0
                         if isnotifier[]
                             rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
                             @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                                 100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
                             flush(stdout)
                         end
-                        return 0, 0
-                    else
-                        return Δprogress, Δacceptance
                     end
-                end
-            end)
-            # but in case there is no next iteration, we don't want to forget about the progress that we made
-            Δprogress_ += δprogress_
-            Δacceptance_ += δacceptance_
+                end)
+            )
             # make sure that we update the main list regularly, but not ridiculously often
             nextappend = time_ns()
             if nextappend - lastappend > 10_000_000_000
                 lock(cond)
                 try
                     append!(allcandidates, candidates)
-                    allprogress[] += Δprogress_
-                    allacceptance[] += Δacceptance_
                 finally
                     unlock(cond)
                 end
                 empty!(candidates)
-                Δprogress_, Δacceptance_ = 0, 0
                 lastappend = nextappend
             end
         end
@@ -822,8 +826,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
         lock(cond)
         try
             append!(allcandidates, candidates)
-            allprogress[] += Δprogress_
-            allacceptance[] += Δacceptance_
+            allprogress[] += Δprogress[]
+            allacceptance[] += Δacceptance[]
         finally
             unlock(cond)
         end
@@ -859,6 +863,39 @@ function monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, batchsize)
         cutat += 1
     end
     return cutat
+end
+
+function newton_halfpolytope_analyze(coeffs)
+    # This is some quick preprocessing to further restrict the potential degrees (actually, this is what SumOfSquares.jl calls
+    # Newton polytope)
+    nv = size(coeffs, 1)
+
+    maxdeg, mindeg = 0, typemax(Int)
+    maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
+    for coeff in eachcol(coeffs)
+        deg = 0
+        @inbounds for (i, coeffᵢ) in enumerate(coeff)
+            deg += coeffᵢ
+            if coeffᵢ > maxmultideg[i]
+                maxmultideg[i] = coeffᵢ
+            end
+            if coeffᵢ < minmultideg[i]
+                minmultideg[i] = coeffᵢ
+            end
+        end
+        if deg > maxdeg
+            maxdeg = deg
+        end
+        if deg < mindeg
+            mindeg = deg
+        end
+    end
+    maxmultideg .= div.(maxmultideg, 2, RoundDown)
+    minmultideg .= div.(minmultideg, 2, RoundUp)
+    maxdeg = div(maxdeg, 2, RoundDown)
+    mindeg = div(mindeg, 2, RoundUp)
+
+    return mindeg, maxdeg, minmultideg, maxmultideg
 end
 
 function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose;
@@ -929,23 +966,25 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{Vector{Int}}()
+    progress = Ref(0)
+    acceptance = Ref(0)
     if isone(nthreads)
         # single threading is better
-        newton_polytope_do_worker(V, task, bk, moniter, Vector{Float64}(undef, nv),
-            let candidates=candidates; p -> push!(candidates, copy(p)) end,
-            !verbose ? nothing : let init_time=time_ns(), lastinfo=Ref(init_time)
-            (progress, acceptance) -> let
+        init_time = time_ns()
+        lastinfo = Ref(init_time)
+        newton_polytope_do_worker(V, task, bk, moniter, Vector{Float64}(undef, nv), progress, acceptance,
+            @capture(p -> push!($candidates, copy(p))),
+            !verbose ? nothing : @capture(() -> let
                 nextinfo = time_ns()
-                if nextinfo - lastinfo[] > 1_000_000_000
-                    rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000progress) * (num - progress))
+                if nextinfo - $lastinfo[] > 1_000_000_000
+                    rem_sec = round(Int, ((nextinfo - $init_time) / (1_000_000_000 * $progress[])) * (num - progress[]))
                     @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
-                        100progress / num, 100acceptance / progress, rem_sec ÷ 60, rem_sec % 60)
+                        100progress[] / num, 100 * $acceptance[] / progress[], rem_sec ÷ 60, rem_sec % 60)
                     flush(stdout)
                     lastinfo[] = nextinfo
                 end
-                return progress, acceptance
-            end
-        end)
+            end)
+        )
         Mosek.deletetask(task)
         verbose && print("\33[2K")
         # How about the order of monomials? Currently, the monomial order can be defined to be arbitrary, but monomials
@@ -967,14 +1006,12 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
             threadsize, " candidates")
         cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
         cond = Threads.SpinLock()
-        allprogress = Ref(0)
-        allacceptance = Ref(0)
-        # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
         ccall(:jl_enter_threaded_region, Cvoid, ())
         try
+            # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
             threads = Vector{Task}(undef, nthreads)
-            # We start the task with tid 1 only after we kicked off all the rest, as it will run in the main thread. In this
-            # way, all the other threads can already start working while we feed them data.
+            # We can already start all the tasks; this main task that must still feed the data will continue running until we
+            # yield to the scheduler.
             init_time = time_ns()
             notifier = Ref(verbose ? 1 : 0)
             for tid in nthreads:-1:3
@@ -982,11 +1019,13 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                 # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
                 # parallel, even if we make sure not to modify the base task until all copies are done.
                 @inbounds threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $(Mosek.Task(task)), $ranges, $nv,
-                    $mindeg, $maxdeg, $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
+                    $mindeg, $maxdeg, $bk, $cond, $progress, $acceptance, $candidates, $notifier, $init_time, $num)
             end
             @inbounds threads[2] = Threads.@spawn newton_polytope_do_taskfun($V, $secondtask, $ranges, $nv, $mindeg, $maxdeg,
-                $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
-            # All threads are running and waiting for stuff to do. So let's now feed them with their jobs.
+                $bk, $cond, $progress, $acceptance, $candidates, $notifier, $init_time, $num)
+            @inbounds threads[1] = Threads.@spawn newton_polytope_do_taskfun($V, $task, $ranges, $nv, $mindeg, $maxdeg,
+                $bk, $cond, $progress, $acceptance, $candidates, $notifier, $init_time, $num)
+            # All tasks are created and waiting for stuff to do. So let's now feed them with their jobs.
             cutlen = nv - cutat
             cutat += 1 # cutat is now the first entry to be fixed
             for subtask in MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end],
@@ -996,9 +1035,6 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                 put!(ranges, (copy(minmultideg), copy(maxmultideg)))
             end
             close(ranges)
-            @verbose_info("All tasks set up")
-            @inbounds threads[1] = Threads.@spawn newton_polytope_do_taskfun($V, $task, $ranges, $nv, $mindeg, $maxdeg,
-                $bk, $cond, $allprogress, $allacceptance, $candidates, $notifier, $init_time, $num)
             for thread in threads
                 wait(thread)
             end
@@ -1021,35 +1057,7 @@ newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxm
 function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
     newton_time = @elapsed begin
-        nv = size(coeffs, 1)
-
-        maxdeg, mindeg = 0, typemax(Int)
-        maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
-        # do some hopefully quick preprocessing (on top of the previous preprocessing)
-        for coeff in eachcol(coeffs)
-            deg = 0
-            @inbounds for (i, coeffᵢ) in enumerate(coeff)
-                deg += coeffᵢ
-                if coeffᵢ > maxmultideg[i]
-                    maxmultideg[i] = coeffᵢ
-                end
-                if coeffᵢ < minmultideg[i]
-                    minmultideg[i] = coeffᵢ
-                end
-            end
-            if deg > maxdeg
-                maxdeg = deg
-            end
-            if deg < mindeg
-                mindeg = deg
-            end
-        end
-        maxmultideg .= div.(maxmultideg, 2, RoundDown)
-        minmultideg .= div.(minmultideg, 2, RoundUp)
-        maxdeg = div(maxdeg, 2, RoundDown)
-        mindeg = div(mindeg, 2, RoundUp)
-
-        candidates = newton_halfpolytope_do(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)
+        candidates = newton_halfpolytope_do(V, coeffs, newton_halfpolytope_analyze(coeffs)..., verbose; parameters...)
     end
 
     @verbose_info("Found ", length(candidates), " elements in the Newton polytope in ", newton_time, " seconds")
