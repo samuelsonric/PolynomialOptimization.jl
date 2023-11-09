@@ -1,7 +1,7 @@
 export MonomialIterator, newton_halfpolytope
 
 """
-    newton_halfpolytope(method, objective; verbose=false, preprocess_quick=false, preprocess_randomized=false,
+    newton_halfpolytope(method, objective; verbose=false, preprocess_quick=true, preprocess_randomized=false,
         preprocess_fine=false, preprocess=nothing, parameters...)
 
 Calculates the Newton polytope for the sum of squares optimization of a given objective, which is half the Newton polytope of
@@ -10,7 +10,7 @@ the objective itself. This requires the availability of a linear solver. Current
 There are three preprocessing methods which can be turned on individually or collectively using `preprocess`; depending on the
 problem, they may reduce the amount of time that is required to construct the convex hull of the full Newton polytope:
 - `preprocess_quick` is the Akl-Toussaint heuristic. Every monomial will be checked against a linear program that scales as the
-  number of variables in the objective.
+  number of variables in the objective. This is enabled by default.
 - `preprocess_randomized` performs a reduction of the possible number of monomials that comprise the convex hull by picking
   smaller random subsets of them and eliminating entries in the subset that can be expressed by other entries. This is a good
   idea if the number of candidate monomials for the vertices of the convex hull is huge (so that `preprocess_fine` will take
@@ -25,22 +25,23 @@ polytope whose vertices were determined based on the objective and preprocessing
 for each candidate monomial.
 The `parameters` will be passed on to the linear solver in every case (preprocessing and construction).
 
-!!! Multithreading
+!!! info "Multithreading"
     For large initial sets of monomials (≥ 10⁴), the final construction will use multithreading if possible. Make sure to start
     Julia with an appropriate number of threads configured.
 
-!!! Distributed computing
+!!! tip "Distributed computing"
     This function is capable of using MPI for multi-node distributed computing. For this, make sure to start Julia using
     `mpiexec`, appropriately configured; then load the `MPI` package in addition to `PolynomialOptimization` (this is required
     for distributed computing to work). If `MPI.Init` was not called before, `PolynomialOptimization` will do it for you.
     This function is compatible with the MPI thread level `MPI.THREAD_FUNNELED` if multithreading is used in combination with
     MPI. Currently, only the main function will use MPI, not the preprocessing.
+
     Note that the function will assume that each MPI worker has the same number of threads available. Further note that Julia's
     GC works in a multithreaded context using the SIGSEG signal. This is known to cause problems among all MPI backends, which
     can usually be fixed by using the most recent version of MPI and setting some environment variables. Not all of these
     settings are incorporated into the MPI package yet. For OpenMPI and Intel MPI, set `ENV["IPATH_NO_BACKTRACE"] = "1"`.
 
-!!! Verbose output
+!!! warning "Verbose output"
     The `verbose` option generates very helpful output to observe the current progress. It also works in a multithreaded and
     distributed context. However, consider the fact that providing these messages requires additional computational and
     communication effort and should not be enabled when speed matters.
@@ -537,7 +538,7 @@ else
     end
 end
 
-function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=false,
+function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=true,
     preprocess_randomized::Bool=false, preprocess_fine::Bool=false, preprocess::Union{Nothing,Bool}=nothing,
     warn_disable_randomization::Bool=true, parameters...) where {P<:AbstractPolynomialLike}
     if !isnothing(preprocess)
