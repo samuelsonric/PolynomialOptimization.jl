@@ -592,30 +592,32 @@ end
     MonomialIterator{O}(mindeg, maxdeg, minmultideg, maxmultideg, ownpowers=false)
 
 This is an advanced iterator that is able to iterate through all monomials with constraints specified not only by a minimum and
-maximum total degree, but also by individual variable degrees. `ownpowers` can be set to `true` (or be passed a `Vector{Int}`
-of appropriate length), which will make the iterator use the same vector of powers whenever it is used, so it must not be used
-multiple times simultaneously. Additionally, during iteration, no copy is created, so the vector must not be modified and
-accumulation e.g. by `collect` won't work.
+maximum total degree, but also by individual variable degrees. `ownpowers` can be set to `true` (or be passed a
+`Vector{<:Integer}` of appropriate length), which will make the iterator use the same vector of powers whenever it is used, so
+it must not be used multiple times simultaneously. Additionally, during iteration, no copy is created, so the vector must not
+be modified and accumulation e.g. by `collect` won't work.
+Note that the powers that this iterator returns will be of the common integer type of `mindeg`, `maxdeg`, and the element types
+of `minmultideg`, `maxmultideg` (and potentially `ownpowers`).
 """
-struct MonomialIterator{O<:AbstractMonomialOrdering,P}
+struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
     n::Int
-    mindeg::Int
-    maxdeg::Int
-    minmultideg::Vector{Int}
-    maxmultideg::Vector{Int}
+    mindeg::DI
+    maxdeg::DI
+    minmultideg::Vector{DI}
+    maxmultideg::Vector{DI}
     powers::P
-    Σminmultideg::Int
-    Σmaxmultideg::Int
+    Σminmultideg::DI
+    Σmaxmultideg::DI
 
-    function MonomialIterator{O}(mindeg::Integer, maxdeg::Integer, minmultideg::Vector{Int}, maxmultideg::Vector{Int},
-        ownpowers::Union{Bool,<:AbstractVector{Int}}=false) where {O}
+    function MonomialIterator{O}(mindeg::DI, maxdeg::DI, minmultideg::Vector{DI}, maxmultideg::Vector{DI},
+        ownpowers::Union{Bool,<:AbstractVector{DI}}=false) where {O,DI<:Integer}
         (mindeg < 0 || mindeg > maxdeg) && error("Invalid degree specification")
         n = length(minmultideg)
         (n != length(maxmultideg) ||
             any(minmax -> minmax[1] < 0 || minmax[1] > minmax[2], zip(minmultideg, maxmultideg))) &&
             error("Invalid multidegree specification")
         if ownpowers === true
-            powers = Vector{Int}(undef, n)
+            powers = Vector{DI}(undef, n)
         elseif ownpowers === false
             powers = nothing
         elseif length(ownpowers) != n
@@ -623,8 +625,8 @@ struct MonomialIterator{O<:AbstractMonomialOrdering,P}
         else
             powers = ownpowers
         end
-        new{O,typeof(powers)}(n, mindeg, maxdeg, minmultideg, maxmultideg, powers, sum(minmultideg, init=0),
-            sum(maxmultideg, init=0))
+        new{O,typeof(powers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, powers, sum(minmultideg, init=zero(DI)),
+            sum(maxmultideg, init=zero(DI)))
     end
 end
 
@@ -642,7 +644,7 @@ function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}) where {P}
     return P === Nothing ? copy(powers) : powers, (deg, powers)
 end
 
-function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{Int,<:AbstractVector{Int}}) where {P}
+function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{DI,<:AbstractVector{DI}}) where {P,DI}
     deg, powers = state
     deg ≤ iter.maxdeg || return nothing
     minmultideg, maxmultideg = iter.minmultideg, iter.maxmultideg
@@ -674,7 +676,7 @@ function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{I
         powers[j] += 1
         # this implies that we reset everything to the right of the increment to its minimum and then compensate for all
         # the reductions by increasing the powers again where possible
-        δ = sum(k -> powers[k] - minmultideg[k], j+1:i, init=0) -1
+        δ = sum(k -> powers[k] - minmultideg[k], j+1:i, init=zero(DI)) -1
         copyto!(powers, j +1, minmultideg, j +1, i - j)
         if powers_increment_right(iter, powers, δ, j +1)
             return P === Nothing ? copy(powers) : powers, (deg, powers)
@@ -682,7 +684,7 @@ function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{I
         break
     end
     # there's still hope: we can perhaps go to the next degree
-    deg += 1
+    deg += one(DI)
     deg > iter.maxdeg && return nothing
     copyto!(powers, minmultideg)
     if powers_increment_right(iter, powers, deg - iter.Σminmultideg, 1)
@@ -694,7 +696,7 @@ end
 
 Base.IteratorSize(::Type{<:MonomialIterator}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:MonomialIterator}) = Base.HasEltype()
-Base.eltype(::Type{<:MonomialIterator}) = Vector{Int}
+Base.eltype(::Type{MonomialIterator{O,P,DI}}) where {O,P,DI} = Vector{DI}
 function Base.length(iter::MonomialIterator, ::Val{:detailed})
     # internal function without checks or quick path
     # ~ O(n*d^2)
@@ -769,9 +771,9 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
     lastappend = time_ns()
     isnotifier = Ref(false) # necessary due to the capturing/boxing bug
     lastinfo = Ref{Int}(lastappend)
-    powers = Vector{Int}(undef, nv)
+    powers = Vector{typeof(maxdeg)}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
-    candidates = FastVec{Vector{Int}}()
+    candidates = FastVec{typeof(maxdeg)}()
     Δprogress = Ref(0)
     Δacceptance = Ref(0)
     try
@@ -784,7 +786,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
                 rethrow(e)
             end
             newton_polytope_do_worker(V, task, bk, MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange,
-                powers), tmp, Δprogress, Δacceptance, @capture(p -> push!($candidates, copy(p))),
+                powers), tmp, Δprogress, Δacceptance, @capture(p -> append!($candidates, p)),
                 !verbose ? nothing : @capture(() -> let
                     nextinfo = time_ns()
                     if nextinfo - $lastinfo[] > 1_000_000_000 && trylock(cond)
@@ -813,7 +815,10 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
             if nextappend - lastappend > 10_000_000_000
                 lock(cond)
                 try
-                    append!(allcandidates, candidates)
+                    prepare_push!(allcandidates, length(candidates) ÷ nv)
+                    for i in 1:nv:length(candidates)
+                        @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
+                    end
                 finally
                     unlock(cond)
                 end
@@ -826,7 +831,10 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
         end
         lock(cond)
         try
-            append!(allcandidates, candidates)
+            prepare_push!(allcandidates, length(candidates) ÷ nv)
+            for i in 1:nv:length(candidates)
+                @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
+            end
             allprogress[] += Δprogress[]
             allacceptance[] += Δacceptance[]
         finally
@@ -899,6 +907,17 @@ function newton_halfpolytope_analyze(coeffs)
     return mindeg, maxdeg, minmultideg, maxmultideg
 end
 
+function newton_halfpolytope_tighten(mindeg, maxdeg, minmultideg, maxmultideg)
+    # In the multithreading case, we need maintain multiple copies of portions of the powers, which might use more space than
+    # necessary. So instead of using copies, we take alternative smaller representations.
+    maxval = max(maxdeg, maximum(maxmultideg, init=0))
+    local T
+    for outer T in (UInt8, UInt16, UInt32, UInt64)
+        typemax(T) ≥ maxval && break
+    end
+    return convert(T, mindeg), convert(T, maxdeg), convert(Vector{T}, minmultideg), convert(Vector{T}, maxmultideg)
+end
+
 function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose;
     parameters...)
     nv, nc = size(coeffs)
@@ -906,8 +925,7 @@ function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, m
     # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
     # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
     # variables - this is commuting only.
-    moniter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true)
-    num = length(moniter)
+    num = length(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true))
     @verbose_info("Starting point selection among ", num, " possible monomials")
     # now we rebuild a task with this minimal number of extremal points and try to find every possible part of the Newton
     # polytope for SOS polynomials
@@ -957,24 +975,25 @@ function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, m
         end
     end
     isone(nthreads) || Mosek.putintparam(task, Mosek.MSK_IPAR_NUM_THREADS, 1) # single-threaded for Mosek itself
-    return moniter, num, nthreads, task, secondtask
+    return num, nthreads, task, secondtask
 end
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, moniter,
-    num, nthreads, task, secondtask)
+function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads,
+    task, secondtask)
     bk = fill(Mosek.MSK_BK_FX, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{Vector{Int}}()
+    candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int} anyway
     progress = Ref(0)
     acceptance = Ref(0)
     if isone(nthreads)
         # single threading is better
         init_time = time_ns()
         lastinfo = Ref(init_time)
-        newton_polytope_do_worker(V, task, bk, moniter, Vector{Float64}(undef, nv), progress, acceptance,
-            @capture(p -> push!($candidates, copy(p))),
+        newton_polytope_do_worker(V, task, bk,
+            MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true), Vector{Float64}(undef, nv),
+            progress, acceptance, @capture(p -> push!($candidates, copy(p))),
             !verbose ? nothing : @capture(() -> let
                 nextinfo = time_ns()
                 if nextinfo - $lastinfo[] > 1_000_000_000
@@ -1001,7 +1020,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         # TODO: There is no monomial_ordering, so we cannot even do this
         return finish!(candidates)
     else
-        ranges = Base.Channel{NTuple{2,Vector{Int}}}(typemax(Int))
+        ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
         threadsize = div(num, nthreads, RoundUp)
         @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
             threadsize, " candidates")
@@ -1051,14 +1070,17 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     end
 end
 
-newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...) =
-    newton_halfpolytope_do_execute(V, size(coeffs, 1), mindeg, maxdeg, minmultideg, maxmultideg, verbose,
-        newton_halfpolytope_do_prepare(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose; parameters...)...)
-
 function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
-    newton_time = @elapsed begin
-        candidates = newton_halfpolytope_do(V, coeffs, newton_halfpolytope_analyze(coeffs)..., verbose; parameters...)
+    newton_time = @elapsed candidates = let
+        analysis = newton_halfpolytope_analyze(coeffs)
+        num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., verbose; parameters...)
+        if isone(nthreads)
+            newton_halfpolytope_do_execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task, secondtask)
+        else
+            newton_halfpolytope_do_execute(V, size(coeffs, 1), newton_halfpolytope_tighten(analysis...)..., verbose, num,
+                nthreads, task, secondtask)
+        end
     end
 
     @verbose_info("Found ", length(candidates), " elements in the Newton polytope in ", newton_time, " seconds")

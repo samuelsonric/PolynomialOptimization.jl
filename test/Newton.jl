@@ -3,14 +3,14 @@ using LinearAlgebra
 
 @testset "Monomial iterator" begin
     DynamicPolynomials.@polyvar x[1:3]
-    multiit = Iterators.product(0:4, 0:4, 0:4)
-    for mindeg in 0:4, maxdeg in 0:4, minmultideg in multiit, maxmultideg in multiit
+    multiit = Iterators.product(0x0:0x4, 0x0:0x4, 0x0:0x4)
+    for mindeg in 0x0:0x4, maxdeg in 0x0:0x4, minmultideg in multiit, maxmultideg in multiit
         minm, maxm = collect(minmultideg), collect(maxmultideg)
         if mindeg > maxdeg || any(minmultideg .> maxmultideg)
             @test_throws ErrorException MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
         else
             mi = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
-            exp = exponents.(monomials(x, mindeg:maxdeg, m -> all(minm .≤ exponents(m) .≤ maxm)))
+            exp = exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ exponents(m) .≤ maxm)))
             @test collect(mi) == exp
             @test length(mi) == length(exp)
         end

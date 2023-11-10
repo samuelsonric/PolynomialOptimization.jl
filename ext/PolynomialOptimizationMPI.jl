@@ -4,7 +4,7 @@ using PolynomialOptimization, MultivariatePolynomials, Printf
 import MPI, Random, Mosek
 import PolynomialOptimization: @verbose_info, @capture, FastVec, prepare_push!, unsafe_push!, finish!,
     haveMPI, newton_polytope_preproc, newton_polytope_do_worker, newton_polytope_do_taskfun, monomial_cut,
-    newton_halfpolytope_analyze, newton_halfpolytope_do_prepare, newton_halfpolytope_do_execute, newton_halfpolytope_do,
+    newton_halfpolytope_analyze, newton_halfpolytope_tighten, newton_halfpolytope_do_prepare, newton_halfpolytope_do_execute,
     newton_halfpolytope, makemonovec
 
 __init__() = haveMPI[] = true
@@ -30,9 +30,9 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
     allcandidates, verbose, rank::MPIRank)
     lastappend = time_ns()
     lastinfo = Ref(lastappend)
-    powers = Vector{Int}(undef, nv)
+    powers = Vector{typeof(maxdeg)}(undef, nv)
     tmp = Vector{Float64}(undef, nv)
-    candidates = similar(allcandidates)
+    candidates = FastVec{typeof(maxdeg)}()
     Δprogress = Ref(0)
     Δacceptance = Ref(0)
     try
@@ -46,8 +46,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
             end
             newton_polytope_do_worker(V, task, bk,
                 MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers), tmp, Δprogress,
-                Δacceptance, isroot(rank) ? @capture(p -> push!($candidates, copy(p))) :
-                                            @capture(p -> append!($candidates, p)),
+                Δacceptance, @capture(p -> append!($candidates, p)),
                 !verbose ? nothing : @capture(() -> let
                     nextinfo = time_ns()
                     if nextinfo - $lastinfo[] > 1_000_000_000 && trylock($cond)
@@ -78,7 +77,14 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
             if nextappend - lastappend > 10_000_000_000
                 lock(cond)
                 try
-                    append!(allcandidates, candidates)
+                    if isroot(rank)
+                        prepare_push!(allcandidates, length(candidates) ÷ nv)
+                        for i in 1:nv:length(candidates)
+                            @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
+                        end
+                    else
+                        append!(allcandidates, candidates)
+                    end
                 finally
                     unlock(cond)
                 end
@@ -89,7 +95,14 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, task, ranges, nv, mindeg, ma
         # at the end, exit gracefully
         lock(cond)
         try
-            append!(allcandidates, candidates)
+            if isroot(rank)
+                prepare_push!(allcandidates, length(candidates) ÷ nv)
+                for i in 1:nv:length(candidates)
+                    @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
+                end
+            else
+                append!(allcandidates, candidates)
+            end
             allprogress[] += Δprogress[]
             allacceptance[] += Δacceptance[]
         finally
@@ -235,13 +248,13 @@ function newton_halfpolytope_notifier(num, progress, acceptance, init_time, cond
     return schedule(notifier), running, self_running
 end
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, moniter, num,
-    nthreads, task, secondtask, comm, rank::MPIRank)
+function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads,
+    task, secondtask, comm, rank::MPIRank)
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
 
     bk = fill(Mosek.MSK_BK_FX, nv)
-    candidates = isroot(rank) ? FastVec{Vector{Int}}() : FastVec{Int}()
+    candidates = isroot(rank) ? FastVec{Vector{Int}}() : FastVec{typeof(maxdeg)}()
     progress = Ref(0)
     acceptance = Ref(0)
     cutat_worker = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, workersize)
@@ -270,10 +283,10 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         flush(stdout)
     end
     if isone(nthreads)
-        powers = Vector{Int}(undef, nv)
+        powers = Vector{isroot(rank) ? Int : typeof(maxdeg)}(undef, nv)
         tmp = Vector{Float64}(undef, nv)
     else
-        ranges = Base.Channel{NTuple{2,Vector{Int}}}(typemax(Int))
+        ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
         cond = Threads.SpinLock()
         ccall(:jl_enter_threaded_region, Cvoid, ())
         # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
@@ -307,11 +320,11 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     workload = zeros(Int, nworkers)
     @inbounds for ranktask in MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat_worker:end],
         maxmultideg[cutat_worker:end], @view(minmultideg[cutat_worker:end]))
-        fixdeg = sum(ranktask, init=0)
+        fixdeg = sum(ranktask, init=zero(maxdeg))
         # The index i in occurrences_before that would have corresponded to the degree i-1 now corresponds to i-1+fixdeg.
         # Consequently, we only take those degrees into account that are at least mindeg, which now has start index
         # mindeg+1-fixdeg, and we need to introduce a new maxdegree cutoff.
-        tasklen = sum(@view(occurrences_before[max(1, mindeg + 1 - fixdeg):maxdeg + 1 - fixdeg]), init=0)
+        tasklen = sum(@view(occurrences_before[max(1, Base.bitcast(Int, mindeg + 1 - fixdeg)):maxdeg + 1 - fixdeg]), init=0)
         iszero(tasklen) && continue
         copyto!(maxmultideg, cutat_worker, ranktask, 1, cutlen_worker)
         # The lowest-rank worker with the least workload will get the job.
@@ -399,11 +412,6 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     return candidates
 end
 
-newton_halfpolytope_do(V::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose, comm, rank::MPIRank;
-    parameters...) = newton_halfpolytope_do_execute(V, size(coeffs, 1), mindeg, maxdeg, minmultideg, maxmultideg, verbose,
-        newton_halfpolytope_do_prepare(V, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose && isroot(rank);
-            parameters...)..., comm, rank)
-
 function newton_halfpolytope(V::Val{:Mosek}, objective::P, comm, rank::MPIRank; verbose::Bool=false, kwargs...) where {P<:AbstractPolynomialLike}
     nworkers = MPI.Comm_size(comm) # we don't need a master, everyone can do the same work
     isone(nworkers) && return newton_halfpolytope(V, objective, Val(false); verbose, kwargs...)
@@ -422,35 +430,45 @@ function newton_halfpolytope(V::Val{:Mosek}, objective::P, comm, rank::MPIRank; 
     nv = size(coeffs, 1)
 
     if isroot(rank)
-        newton_time = @elapsed begin
-            candidates = newton_halfpolytope_do(V, coeffs, newton_halfpolytope_analyze(coeffs)..., verbose, comm, rank;
+        newton_time = @elapsed allresult = let
+            analysis = newton_halfpolytope_analyze(coeffs)
+            num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., verbose;
                 parameters...)
+            tightened = newton_halfpolytope_tighten(analysis...)
+            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1), (isone(nthreads) ? analysis : tightened)...,
+                verbose, num, nthreads, task, secondtask, comm, rank)
+            T = typeof(tightened[1])
             sizes = Vector{Int}(undef, nworkers -1)
             for _ in 2:nworkers
                 size, status = MPI.Recv(Int, comm, MPI.Status, tag=2)
                 @inbounds sizes[status.source] = size
             end
             prepare_push!(candidates, sum(sizes, init=0))
-            buffer = Matrix{Int}(undef, nv, maximum(sizes, init=0))
+            buffer = Matrix{T}(undef, nv, maximum(sizes, init=0))
             @inbounds for (rankᵢ, sizeᵢ) in enumerate(sizes)
                 MPI.Recv!(buffer, comm, source=rankᵢ, tag=3)
-                for j in 1:sizeᵢ
-                    unsafe_push!(candidates, buffer[:, j])
+                for c in eachcol(@view(buffer[:, 1:sizeᵢ]))
+                    unsafe_push!(candidates, convert(Vector{Int}, c))
                 end
             end
-            allresult = sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
+            sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
         end
 
         @verbose_info("\33[2KFinished construction of all Newton polytope element on the workers in ", newton_time,
             " seconds.")
         return makemonovec(variables(objective), allresult)
     else
-        candidates = newton_halfpolytope_do(V, coeffs, newton_halfpolytope_analyze(coeffs)..., verbose, comm, rank;
-            parameters...)
-        localresult = reshape(finish!(candidates), nv, length(candidates) ÷ nv)
-        MPI.Send(size(localresult, 2), comm, dest=root, tag=2)
-        MPI.Send(localresult, comm, dest=root, tag=3)
-        return
+        let
+            analysis = newton_halfpolytope_analyze(coeffs)
+            num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., false;
+                parameters...)
+            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1), newton_halfpolytope_tighten(analysis...)...,
+                verbose, num, nthreads, task, secondtask, comm, rank)
+            localresult = reshape(finish!(candidates), nv, length(candidates) ÷ nv)
+            MPI.Send(size(localresult, 2), comm, dest=root, tag=2)
+            MPI.Send(localresult, comm, dest=root, tag=3)
+            return
+        end
     end
 end
 
