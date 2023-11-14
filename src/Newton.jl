@@ -76,7 +76,7 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
     required_coeffs = Vector{Bool}(undef, nc)
     # now every point that is not a member of the convex polytope determined by vertices can be dropped immediately
     lastinfo = time_ns()
-    task = Mosek.Task(Mosek.msk_global_env)
+    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
     try
         # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
         for (k, v) in parameters
@@ -121,7 +121,7 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
 end
 
 function newton_polytope_preproc_remove(::Val{:Mosek}, nv, nc, getvarcon, verbose; parameters...)
-    task = Mosek.Task(Mosek.msk_global_env)
+    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
     # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
     for (k, v) in parameters
         Mosek.putparam(task, string(k), v)
@@ -232,6 +232,7 @@ function sample!(a::AbstractVector{Bool}, total::Integer)
             end
         end
     end
+    error("No valid sample vector")
 end
 
 function samplepair!(a::AbstractVector{Bool}, total::Integer)
@@ -261,6 +262,7 @@ function samplepair!(a::AbstractVector{Bool}, total::Integer)
             end
         end
     end
+    error("No valid sample vector")
 end
 
 function fisher_yates_sample!(a::AbstractVector{Bool}, x::AbstractVector{<:Integer}, total::Integer)
@@ -616,17 +618,19 @@ struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
         (n != length(maxmultideg) ||
             any(minmax -> minmax[1] < 0 || minmax[1] > minmax[2], zip(minmultideg, maxmultideg))) &&
             error("Invalid multidegree specification")
+        Σminmultideg = sum(minmultideg, init=zero(DI))
+        Σmaxmultideg = sum(maxmultideg, init=zero(DI))
         if ownpowers === true
-            powers = Vector{DI}(undef, n)
+            return new{O,Vector{DI},DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, Vector{DI}(undef, n), Σminmultideg,
+                Σmaxmultideg)
         elseif ownpowers === false
-            powers = nothing
+            return new{O,Nothing,DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, nothing, Σminmultideg, Σmaxmultideg)
         elseif length(ownpowers) != n
             error("Invalid length of ownpowers")
         else
-            powers = ownpowers
+            return new{O,typeof(ownpowers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, ownpowers, Σminmultideg,
+                Σmaxmultideg)
         end
-        new{O,typeof(powers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, powers, sum(minmultideg, init=zero(DI)),
-            sum(maxmultideg, init=zero(DI)))
     end
 end
 
@@ -929,7 +933,7 @@ function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, m
     @verbose_info("Starting point selection among ", num, " possible monomials")
     # now we rebuild a task with this minimal number of extremal points and try to find every possible part of the Newton
     # polytope for SOS polynomials
-    task = Mosek.Task(Mosek.msk_global_env)
+    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
     # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
     for (k, v) in parameters
         Mosek.putparam(task, string(k), v)
