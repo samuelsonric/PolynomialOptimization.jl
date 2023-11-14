@@ -14,6 +14,7 @@ import Combinatorics
 import DynamicPolynomials
 import MutableArithmetics
 import StatsBase
+import BufferedStreams
 
 const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
