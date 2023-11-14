@@ -970,7 +970,7 @@ function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, m
                 @verbose_info("Memory requirements of a single thread could not be determined, using all available threads")
             else
                 @verbose_info("Memory requirements of a single thread: ", div(mem, 1024*1024, RoundUp), " MiB")
-                nthreads = min(nthreads, Sys.free_memory() ÷ mem +2)
+                nthreads = min(nthreads, Int(Sys.free_memory() ÷ mem +2))
             end
             # Note that this is potentially still an underestimation, as our candidates list will also grow. But this is
             # something that can potentially be swapped, so if swap space is available beyond the free_memory limit, then we
