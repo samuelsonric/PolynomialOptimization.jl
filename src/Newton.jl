@@ -1120,9 +1120,9 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     else
         candidates = FastVec{typeof(maxdeg)}()
     end
-    progress = Ref(0)
-    acceptance = Ref(0)
     if isone(nthreads) let
+        progress = Ref(0)
+        acceptance = Ref(0)
         if isnothing(filepath)
             fileprogress = nothing
             fileout = nothing
