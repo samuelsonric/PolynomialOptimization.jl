@@ -9,6 +9,7 @@ CurrentModule = PolynomialOptimization
 PolyOptProblem
 poly_problem
 newton_halfpolytope
+newton_halfpolytope_from_file
 MonomialIterator
 EqualityMethod
 variables

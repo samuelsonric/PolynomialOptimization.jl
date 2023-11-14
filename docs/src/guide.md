@@ -128,8 +128,8 @@ monomial ``x^2 y^2``, which cannot be negative; hence, the Motzkin polynomial is
 
 Note that the calculation of the Newton polytope currently requires Mosek. There are some preprocessing options that may be
 able to speed up the calculation, although it is already extremely fast by itself and can calculate the correct basis for
-objectives with hundreds of terms in a decent time (which can be further reduced by multithreading). Check out the
-documentation for [`newton_halfpolytope`](@ref) for more information.
+objectives with hundreds of terms in a decent time (which can be further reduced by multithreading or distributed computing).
+Check out the documentation for [`newton_halfpolytope`](@ref) for more information.
 
 In case you already happen to know a (better) choice of basis, you may provide this basis to [`poly_problem`](@ref).
 

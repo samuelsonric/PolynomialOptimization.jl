@@ -1371,8 +1371,9 @@ the objective itself. This function does not do any calculation, but instead loa
 
 !!! tip "Memory requirements"
     If the parameter `estimate` is set to `true`, the function will only analyze the size of the files and from this return an
-    estimation how many monomials the output fill contain. This is an overestimation, as it might happen that the files contain
-    a small number of duplicates if the calculation was interrupted and subsequently resumed.
+    estimation of how many monomials the output will contain. This is an overestimation, as it might happen that the files
+    contain a small number of duplicates if the calculation was interrupted and subsequently resumed (although this is not very
+    likely and the result should be pretty accurate).
 """
 function newton_halfpolytope_from_file(filepath::AbstractString, objective::P; estimate::Bool=false,
     verbose::Bool=false) where {P<:AbstractPolynomialLike}
