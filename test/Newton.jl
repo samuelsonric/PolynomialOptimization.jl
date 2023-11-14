@@ -42,7 +42,7 @@ end
     # First check the quick algo
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, preprocess_quick=true, verbose=true) ==
+        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, verbose=true) ==
             monomial_vector([1, y, x, x*y, x^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 5 initial candidates"
@@ -50,8 +50,8 @@ end
     # Then the same for the fine algo
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, preprocess_fine=true, verbose=true) ==
-            monomial_vector([1, y, x, x*y, x^2])
+        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, preprocess_quick=false, preprocess_fine=true,
+            verbose=true) == monomial_vector([1, y, x, x*y, x^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - fine, 5 initial candidates"
     @test startswith(output[3], "Found 4 extremal points of the convex hull in")
@@ -60,14 +60,15 @@ end
 @testset "Newton polytope (BPT Example 3.93)" begin
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, preprocess_quick=true, verbose=true) == monomial_vector([1, y, x, y^2])
+        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, verbose=true) == monomial_vector([1, y, x, y^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 4 initial candidates"
     @test startswith(output[3], "Found 3 potential extremal points of the convex hull")
 
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, preprocess_fine=true, verbose=true) == monomial_vector([1, y, x, y^2])
+        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, preprocess_quick=false, preprocess_fine=true, verbose=true) ==
+            monomial_vector([1, y, x, y^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - fine, 4 initial candidates"
     @test startswith(output[3], "Found 3 extremal points of the convex hull")
@@ -76,8 +77,8 @@ end
 @testset "Newton polytope (BPT, Example 3.95)" begin
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z,
-            preprocess_quick=true, verbose=true) == PolynomialOptimization.makemonovec([w, x, y, z],
+        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z, verbose=true) ==
+            PolynomialOptimization.makemonovec([w, x, y, z],
                 collect(PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(0, 8, [0, 0, 0, 0], [2, 2, 2, 2])))
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 20 initial candidates"
@@ -85,7 +86,7 @@ end
 
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z,
+        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z, preprocess_quick=false,
             preprocess_fine=true, verbose=true) == PolynomialOptimization.makemonovec([w, x, y, z],
                 collect(PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(0, 8, [0, 0, 0, 0], [2, 2, 2, 2])))
     end
