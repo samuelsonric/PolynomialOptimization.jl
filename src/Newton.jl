@@ -85,9 +85,9 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
         Mosek.appendvars(task, nvertices)
         Mosek.putvarboundsliceconst(task, 1, nvertices +1, Mosek.MSK_BK_LO, 0., Inf)
         Mosek.appendcons(task, nv +1)
+        tmp = Vector{Float64}(undef, max(nv, nvertices))
         let
             idxs = collect(Int32(0):Int32(max(nv, nvertices) -1))
-            tmp = Vector{Float64}(undef, max(nv, nvertices))
             for (i, vert) in zip(Iterators.countfrom(zero(Int32)), vertexindices)
                 @inbounds copyto!(tmp, @view(coeffs[:, vert]))
                 Mosek.@MSK_putacol(task.task, i, nv, idxs, tmp)
@@ -96,13 +96,14 @@ function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameter
             Mosek.@MSK_putarow(task.task, nv, nvertices, idxs, tmp)
             Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
         end
-        fx = fill(Mosek.MSK_BK_FX, nv)
+        fx = fill(Mosek.MSK_BK_FX.value, nv)
         for (i, coeff) in enumerate(eachcol(coeffs))
             if insorted(i, vertexindices)
                 @inbounds required_coeffs[i] = true
                 continue
             end
-            Mosek.putconboundslice(task, 1, nv +1, fx, coeff, coeff)
+            @inbounds copyto!(tmp, coeff)
+            Mosek.@MSK_putconboundslice(task.task, 0, nv, fx, tmp, tmp)
             Mosek.optimize(task)
             @inbounds required_coeffs[i] = Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) != Mosek.MSK_SOL_STA_OPTIMAL
             if verbose
@@ -755,7 +756,7 @@ end
     for powers in moniter
         # check the previous power in the linear program and add it if possible
         copyto!(tmp, powers)
-        Mosek.putconboundslice(task, 1, length(bk) +1, bk, tmp, tmp)
+        Mosek.@MSK_putconboundslice(task.task, 0, length(bk), bk, tmp, tmp)
         Mosek.optimize(task)
         if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
             # this candidate is part of the Newton polytope
@@ -984,7 +985,7 @@ end
 
 function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads,
     task, secondtask)
-    bk = fill(Mosek.MSK_BK_FX, nv)
+    bk = fill(Mosek.MSK_BK_FX.value, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
