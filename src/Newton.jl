@@ -785,7 +785,7 @@ end
 end
 
 function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses, acceptances,
-    allcandidates, notifier, init_time, num, filestuff)
+    allcandidates, notifier, init_time, init_progress, num, filestuff)
     # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
     verbose = notifier[] != 0
     lastappend = time_ns()
@@ -798,7 +798,9 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
     local curminrange, curmaxrange, iter
     if isnothing(filestuff)
         powers = Vector{typeof(maxdeg)}(undef, nv)
-        cut = 0 # required for capture below
+        fileprogress = nothing # required for capture below
+        fileout = nothing
+        cut = 0
     else
         fileprogress = filestuff[1]
         fileout = filestuff[2]
@@ -843,7 +845,8 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
                             if isnotifier[]
                                 allprogress = sum(progresses, init=0)
                                 allacceptance = sum(acceptances, init=0)
-                                rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000allprogress) * (num - allprogress))
+                                rem_sec = round(Int, ((nextinfo - init_time) /
+                                    (1_000_000_000 * (allprogress - init_progress))) * (num - allprogress))
                                 @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                                     100allprogress / num, 100allacceptance / allprogress, rem_sec ÷ 60, rem_sec % 60)
                                 flush(stdout)
@@ -1055,7 +1058,8 @@ Base.eltype(::Type{<:InitialStateIterator{I}}) where {I} = eltype(I)
 Base.length(iter::InitialStateIterator{I,S,<:Integer} where {I,S}) = length(iter.iter) - iter.skip_length
 Base.isdone(iter::InitialStateIterator, state=iter.initial_state) = Base.isdone(iter, state)
 
-function newton_halfpolytope_restore_status(fileprogress, mindeg, maxdeg, minmultideg, maxmultideg, powers=true)
+function newton_halfpolytope_restore_status(fileprogress, mindeg::I, maxdeg::I, minmultideg::AbstractVector{I},
+    maxmultideg::AbstractVector{I}, powers=true) where {I<:Integer}
     lastprogress = UInt8[]
     seekstart(fileprogress)
     nb = readbytes!(fileprogress, lastprogress, 2sizeof(Int) + sizeof(minmultideg))
@@ -1079,7 +1083,7 @@ function newton_halfpolytope_restore_status(fileprogress, mindeg, maxdeg, minmul
     end
 end
 
-function newton_halfpolytope_restore_status(fileprogress, powers, fixedsize)
+function newton_halfpolytope_restore_status(fileprogress, powers::Vector{<:Integer}, fixedsize::Integer)
     lastprogress = UInt8[]
     seekstart(fileprogress)
     T, len = eltype(powers), length(powers)
@@ -1109,8 +1113,10 @@ toSigned(x::UInt16) = Core.bitcast(Int16, x)
 toSigned(x::UInt32) = Core.bitcast(Int32, x)
 toSigned(x::UInt64) = Core.bitcast(Int64, x)
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads,
-    task, secondtask, filepath)
+function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
+    filepath)
+    @verbose_info("Preparing to determine Newton polytope (single-threaded)")
+
     bk = fill(Mosek.MSK_BK_FX.value, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
@@ -1120,216 +1126,230 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     else
         candidates = FastVec{typeof(maxdeg)}()
     end
-    if isone(nthreads) let
-        progress = Ref(0)
-        acceptance = Ref(0)
-        if isnothing(filepath)
-            fileprogress = nothing
-            fileout = nothing
-            iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true)
-        else
-            fileprogress = open("$filepath.prog", read=true, write=true, create=true, lock=false)
-            local iter
-            try
-                progress[], acceptance[], iter = newton_halfpolytope_restore_status(fileprogress, mindeg, maxdeg, minmultideg,
-                    maxmultideg)
-            catch
-                close(fileprogress)
-                rethrow()
-            end
-            if isnothing(iter)
-                close(fileprogress)
-                return progress[], acceptance[]
-            end
-            fileout = open("$filepath.out", append=true, lock=false)
-        end
-        # single threading is better
-        try
-            init_time = time_ns()
-            init_shift = progress[]
-            lastinfo = Ref(init_time)
-            newton_polytope_do_worker(V, task, bk, iter, Vector{Float64}(undef, nv), progress, acceptance,
-                isnothing(filepath) ? @capture(p -> push!($candidates, copy(p))) :
-                                      @capture(p -> append!($candidates, p)),
-                !verbose && isnothing(filepath) ? nothing : @capture(p -> let
-                    nextinfo = time_ns()
-                    if nextinfo - $lastinfo[] > 1_000_000_000
-                        if !isnothing($filepath)
-                            write($fileout, $candidates)
-                            flush(fileout)
-                            seekstart($fileprogress)
-                            write(fileprogress, $progress[], $acceptance[], p)
-                            flush(fileprogress)
-                            empty!(candidates)
-                        end
-                        if $verbose
-                            rem_sec = round(Int, ((nextinfo - $init_time) / (1_000_000_000 * (progress[] - $init_shift))) *
-                                                 (num - progress[]))
-                            @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
-                                100progress[] / num, 100 * acceptance[] / progress[], rem_sec ÷ 60, rem_sec % 60)
-                            flush(stdout)
-                        end
-                        lastinfo[] = nextinfo
-                    end
-                end)
-            )
-            Mosek.deletetask(task)
-            verbose && print("\33[2K")
-            # How about the order of monomials? Currently, the monomial order can be defined to be arbitrary, but monomials
-            # in DynamicPolynomials always outputs Graded{LexOrder}. Therefore, it is currently not possible to use
-            # different ordering in DP, and this translates to PolynomialOptimization, unless the user chooses to generate
-            # the monomials manually.
-            # Here, we can relatively easily make the basis compliant with the specified monomial ordering just by doing a
-            # sorting as a postprocessing. Of course, this is not efficient and it would be much better to create functions
-            # that directly generate the appropriate order, but let's defer this at least until #138 in DP is solved, for
-            # other monomial orderings won't be in widespread use before this anyway.
 
-            # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
-            # TODO: There is no monomial_ordering, so we cannot even do this
-            if !isnothing(fileout)
-                write(fileout, candidates)
-                seekstart(fileprogress)
-                write(fileprogress, progress[], acceptance[])
-                truncate(fileprogress, position(fileprogress))
-            end
-        finally
-            if isnothing(fileout)
-                return finish!(candidates)
-            else
-                close(fileout)
-                close(fileprogress)
-                return progress[], acceptance[]
-            end
+    progress = Ref(0)
+    acceptance = Ref(0)
+    if isnothing(filepath)
+        fileprogress = nothing
+        fileout = nothing
+        iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true)
+    else
+        fileprogress = open("$filepath.prog", read=true, write=true, create=true, lock=false)
+        local iter
+        try
+            progress[], acceptance[], iter = newton_halfpolytope_restore_status(fileprogress, mindeg, maxdeg, minmultideg,
+                maxmultideg)
+        catch
+            close(fileprogress)
+            rethrow()
         end
-    end else let
-        ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
-        threadsize = div(num, nthreads, RoundUp)
-        @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
-            threadsize, " candidates")
-        threadprogress = zeros(Int, nthreads)
-        threadacceptance = zeros(Int, nthreads)
-        cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
-        cutlen = nv - cutat
-        cutat += 1 # cutat is now the first entry to be fixed
-        if isnothing(filepath)
+        if isnothing(iter)
+            close(fileprogress)
+            return progress[], acceptance[]
+        end
+        fileout = open("$filepath.out", append=true, lock=false)
+    end
+    try
+        init_time = time_ns()
+        init_progress = progress[]
+        lastinfo = Ref(init_time)
+        newton_polytope_do_worker(V, task, bk, iter, Vector{Float64}(undef, nv), progress, acceptance,
+            isnothing(filepath) ? @capture(p -> push!($candidates, copy(p))) : @capture(p -> append!($candidates, p)),
+            !verbose && isnothing(filepath) ? nothing : @capture(p -> let
+                nextinfo = time_ns()
+                if nextinfo - $lastinfo[] > 1_000_000_000
+                    if !isnothing($filepath)
+                        write($fileout, $candidates)
+                        flush(fileout)
+                        seekstart($fileprogress)
+                        write(fileprogress, $progress[], $acceptance[], p)
+                        flush(fileprogress)
+                        empty!(candidates)
+                    end
+                    if $verbose
+                        rem_sec = round(Int, ((nextinfo - $init_time) / (1_000_000_000 * (progress[] - $init_progress))) *
+                                                (num - progress[]))
+                        @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
+                            100progress[] / num, 100 * acceptance[] / progress[], rem_sec ÷ 60, rem_sec % 60)
+                        flush(stdout)
+                    end
+                    lastinfo[] = nextinfo
+                end
+            end)
+        )
+        verbose && print("\33[2K")
+        # How about the order of monomials? Currently, the monomial order can be defined to be arbitrary, but monomials
+        # in DynamicPolynomials always outputs Graded{LexOrder}. Therefore, it is currently not possible to use
+        # different ordering in DP, and this translates to PolynomialOptimization, unless the user chooses to generate
+        # the monomials manually.
+        # Here, we can relatively easily make the basis compliant with the specified monomial ordering just by doing a
+        # sorting as a postprocessing. Of course, this is not efficient and it would be much better to create functions
+        # that directly generate the appropriate order, but let's defer this at least until #138 in DP is solved, for
+        # other monomial orderings won't be in widespread use before this anyway.
+
+        # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
+        # TODO: There is no monomial_ordering, so we cannot even do this
+        if !isnothing(fileout)
+            write(fileout, candidates)
+            seekstart(fileprogress)
+            write(fileprogress, progress[], acceptance[])
+            truncate(fileprogress, position(fileprogress))
+        end
+    finally
+        Mosek.deletetask(task)
+        if isnothing(fileout)
+            return finish!(candidates)
+        else
+            close(fileout)
+            close(fileprogress)
+            return progress[], acceptance[]
+        end
+    end
+end
+
+function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num,
+    nthreads::Integer, task, secondtask, filepath)
+    if isone(nthreads)
+        @assert(isnothing(secondtask))
+        return newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath)
+    end
+    bk = fill(Mosek.MSK_BK_FX.value, nv)
+    # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
+    # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
+    # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
+    if isnothing(filepath)
+        candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int}
+    else
+        candidates = FastVec{typeof(maxdeg)}()
+    end
+    ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
+    threadsize = div(num, nthreads, RoundUp)
+    @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
+        threadsize, " candidates")
+    threadprogress = zeros(Int, nthreads)
+    threadacceptance = zeros(Int, nthreads)
+    cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
+    cutlen = nv - cutat
+    cutat += 1 # cutat is now the first entry to be fixed
+    if isnothing(filepath)
+        iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end], maxmultideg[cutat:end],
+            @view(minmultideg[cutat:end]))
+    else
+        fileprogresses = Vector{IOStream}(undef, nthreads)
+        fileouts = Vector{IOStream}(undef, nthreads)
+        restores = Vector{Union{NTuple{3,Vector{typeof(maxdeg)}},Missing,Nothing}}(undef, nthreads)
+        maxitr = missing
+        @inbounds try
+            for i in 1:nthreads
+                fileprogresses[i] = fileprogress = open("$filepath-$i.prog", read=true, write=true, create=true, lock=false)
+                fileouts[i] = open("$filepath-$i.out", append=true, lock=false)
+                curpower = Vector{typeof(maxdeg)}(undef, nv)
+                currestore = newton_halfpolytope_restore_status(fileprogress, curpower, nv - cutat +1)
+                if isnothing(currestore)
+                    restores[i] = missing
+                else
+                    threadprogress[i], threadacceptance[i], curitr, curpower_ = currestore
+                    if isnothing(curitr)
+                        restores[i] = nothing
+                    else
+                        if ismissing(maxitr) || toSigned(compare(maxitr, curitr, Graded{LexOrder})) < 0
+                            maxitr = curitr
+                        end
+                        if isnothing(curpower_)
+                            restores[i] = missing
+                        else
+                            curminrange, curmaxrange = copy(minmultideg), copy(maxmultideg)
+                            copyto!(curminrange, cutat, curitr, 1, cutlen)
+                            copyto!(curmaxrange, cutat, curitr, 1, cutlen)
+                            restores[i] = (curminrange, curmaxrange, curpower)
+                        end
+                    end
+                end
+            end
+        catch
+            for i in 1:nthreads
+                isassigned(fileprogresses, i) || break
+                close(fileprogresses[i])
+                isassigned(fileouts, i) && close(fileouts[i])
+            end
+            rethrow()
+        end
+        if ismissing(maxitr)
             iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end], maxmultideg[cutat:end],
                 @view(minmultideg[cutat:end]))
         else
-            fileprogresses = Vector{IOStream}(undef, nthreads)
-            fileouts = Vector{IOStream}(undef, nthreads)
-            restores = Vector{Union{NTuple{3,Vector{typeof(maxdeg)}},Missing,Nothing}}(undef, nthreads)
-            maxitr = missing
-            @inbounds try
-                for i in 1:nthreads
-                    fileprogresses[i] = fileprogress = open("$filepath-$i.prog", read=true, write=true, create=true, lock=false)
-                    fileouts[i] = open("$filepath-$i.out", append=true, lock=false)
-                    curpower = Vector{typeof(maxdeg)}(undef, nv)
-                    currestore = newton_halfpolytope_restore_status(fileprogress, curpower, nv - cutat +1)
-                    if isnothing(currestore)
-                        restores[i] = missing
-                    else
-                        threadprogress[i], threadacceptance[i], curitr, curpower_ = currestore
-                        if isnothing(curitr)
-                            restores[i] = nothing
-                        else
-                            if ismissing(maxitr) || toSigned(compare(maxitr, curitr, Graded{LexOrder})) < 0
-                                maxitr = curitr
-                            end
-                            if isnothing(curpower_)
-                                restores[i] = missing
-                            else
-                                curminrange, curmaxrange = copy(minmultideg), copy(maxmultideg)
-                                copyto!(curminrange, cutat, curitr, 1, cutlen)
-                                copyto!(curmaxrange, cutat, curitr, 1, cutlen)
-                                restores[i] = (curminrange, curmaxrange, curpower)
-                            end
-                        end
-                    end
-                end
-            catch
-                for i in 1:nthreads
-                    isassigned(fileprogresses, i) || break
-                    close(fileprogresses[i])
-                    isassigned(fileouts, i) && close(fileouts[i])
-                end
-                rethrow()
-            end
-            if ismissing(maxitr)
-                iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end], maxmultideg[cutat:end],
-                    @view(minmultideg[cutat:end]))
+            iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end],
+                maxmultideg[cutat:end], @view(minmultideg[cutat:end])),
+                (typeof(maxdeg)(sum(maxitr, init=zero(maxdeg))), copyto!(@view(minmultideg[cutat:end]), maxitr)))
+        end
+    end
+    cond = Threads.SpinLock()
+    ccall(:jl_enter_threaded_region, Cvoid, ())
+    try
+        # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
+        threads = Vector{Union{Task,Nothing}}(undef, nthreads)
+        # We can already start all the tasks; this main task that must still feed the data will continue running until we
+        # yield to the scheduler.
+        init_time = time_ns()
+        init_progress = sum(threadprogress, init=0)
+        notifier = Ref(verbose ? 1 : 0)
+        @inbounds for tid in nthreads:-1:3
+            # secondtask has a solution, so we just use task (better than deletesolution).
+            # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
+            # parallel, even if we make sure not to modify the base task until all copies are done.
+            if isnothing(filepath)
+                filestuff = nothing
+            elseif isnothing(restores[tid])
+                threads[tid] = nothing
+                close(fileouts[tid])
+                close(fileprogresses[tid])
+                continue
             else
-                iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end],
-                    maxmultideg[cutat:end], @view(minmultideg[cutat:end])),
-                    (typeof(maxdeg)(sum(maxitr, init=zero(maxdeg))), copyto!(@view(minmultideg[cutat:end]), maxitr)))
+                filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
             end
+            threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $(Mosek.Task(task)), $ranges, $nv, $mindeg,
+                $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress,
+                $num, $filestuff)
         end
-        cond = Threads.SpinLock()
-        ccall(:jl_enter_threaded_region, Cvoid, ())
-        try
-            # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
-            threads = Vector{Union{Task,Nothing}}(undef, nthreads)
-            # We can already start all the tasks; this main task that must still feed the data will continue running until we
-            # yield to the scheduler.
-            init_time = time_ns()
-            notifier = Ref(verbose ? 1 : 0)
-            @inbounds for tid in nthreads:-1:3
-                # secondtask has a solution, so we just use task (better than deletesolution).
-                # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
-                # parallel, even if we make sure not to modify the base task until all copies are done.
-                if isnothing(filepath)
-                    filestuff = nothing
-                elseif isnothing(restores[tid])
-                    threads[tid] = nothing
-                    close(fileouts[tid])
-                    close(fileprogresses[tid])
-                    continue
-                else
-                    filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
-                end
-                threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $(Mosek.Task(task)), $ranges, $nv, $mindeg,
-                    $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $num,
-                    $filestuff)
+        @inbounds for (tid, taskₜ) in ((2, secondtask), (1, task))
+            if isnothing(filepath)
+                filestuff = nothing
+            elseif isnothing(restores[tid])
+                threads[tid] = nothing
+                close(fileouts[tid])
+                close(fileprogresses[tid])
+                continue
+            else
+                filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
             end
-            @inbounds for (tid, taskₜ) in ((2, secondtask), (1, task))
-                if isnothing(filepath)
-                    filestuff = nothing
-                elseif isnothing(restores[tid])
-                    threads[tid] = nothing
-                    close(fileouts[tid])
-                    close(fileprogresses[tid])
-                    continue
-                else
-                    filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
-                end
-                @inbounds threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg,
-                    $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $num,
-                    $filestuff)
-            end
-            # All tasks are created and waiting for stuff to do. So let's now feed them with their jobs.
+            @inbounds threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg,
+                $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress,
+                $num, $filestuff)
+        end
+        # All tasks are created and waiting for stuff to do. So let's now feed them with their jobs.
 
-            for subtask in iter
-                copyto!(maxmultideg, cutat, subtask, 1, cutlen) # minmultideg is already set appropriately due to the
-                                                                # @view trickery
-                put!(ranges, (copy(minmultideg), copy(maxmultideg)))
-            end
-            close(ranges)
-            for thread in threads
-                isnothing(thread) || wait(thread)
-            end
-        finally
-            ccall(:jl_exit_threaded_region, Cvoid, ())
+        for subtask in iter
+            copyto!(maxmultideg, cutat, subtask, 1, cutlen) # minmultideg is already set appropriately due to the
+                                                            # @view trickery
+            put!(ranges, (copy(minmultideg), copy(maxmultideg)))
         end
-        @verbose_info("\33[2KAll tasks have finished, sorting the output")
-        # We need to return the appropriate monomial order, but due to the partitioning and multithreading, our output
-        # is unordered (not completely, we have ordered of varying length, but does this help?).
-        # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
-        if isnothing(filepath)
-            return sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
-            # TODO: This is not appropriate, but as long as we cannot query the actual ordering, let's go for the default.
-        else
-            return sum(threadprogress, init=0), sum(threadacceptance, init=0)
+        close(ranges)
+        for thread in threads
+            isnothing(thread) || wait(thread)
         end
-    end end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
+    end
+    @verbose_info("\33[2KAll tasks have finished, sorting the output")
+    # We need to return the appropriate monomial order, but due to the partitioning and multithreading, our output
+    # is unordered (not completely, we have ordered of varying length, but does this help?).
+    # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
+    if isnothing(filepath)
+        return sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
+        # TODO: This is not appropriate, but as long as we cannot query the actual ordering, let's go for the default.
+    else
+        return sum(threadprogress, init=0), sum(threadacceptance, init=0)
+    end
 end
 
 function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose::Bool=false,
