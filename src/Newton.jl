@@ -1058,7 +1058,7 @@ Base.eltype(::Type{<:InitialStateIterator{I}}) where {I} = eltype(I)
 Base.length(iter::InitialStateIterator{I,S,<:Integer} where {I,S}) = length(iter.iter) - iter.skip_length
 Base.isdone(iter::InitialStateIterator, state=iter.initial_state) = Base.isdone(iter, state)
 
-function newton_halfpolytope_restore_status(fileprogress, mindeg::I, maxdeg::I, minmultideg::AbstractVector{I},
+function newton_halfpolytope_restore_status!(fileprogress, mindeg::I, maxdeg::I, minmultideg::AbstractVector{I},
     maxmultideg::AbstractVector{I}, powers=true) where {I<:Integer}
     lastprogress = UInt8[]
     seekstart(fileprogress)
@@ -1083,7 +1083,7 @@ function newton_halfpolytope_restore_status(fileprogress, mindeg::I, maxdeg::I, 
     end
 end
 
-function newton_halfpolytope_restore_status(fileprogress, powers::Vector{<:Integer}, fixedsize::Integer)
+function newton_halfpolytope_restore_status!(fileprogress, powers::Vector{<:Integer}, fixedsize::Integer)
     lastprogress = UInt8[]
     seekstart(fileprogress)
     T, len = eltype(powers), length(powers)
@@ -1138,7 +1138,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         fileprogress = open("$filepath.prog", read=true, write=true, create=true, lock=false)
         local iter
         try
-            progress[], acceptance[], iter = newton_halfpolytope_restore_status(fileprogress, mindeg, maxdeg, minmultideg,
+            progress[], acceptance[], iter = newton_halfpolytope_restore_status!(fileprogress, mindeg, maxdeg, minmultideg,
                 maxmultideg)
         catch
             close(fileprogress)
@@ -1245,7 +1245,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                 fileprogresses[i] = fileprogress = open("$filepath-$i.prog", read=true, write=true, create=true, lock=false)
                 fileouts[i] = open("$filepath-$i.out", append=true, lock=false)
                 curpower = Vector{typeof(maxdeg)}(undef, nv)
-                currestore = newton_halfpolytope_restore_status(fileprogress, curpower, nv - cutat +1)
+                currestore = newton_halfpolytope_restore_status!(fileprogress, curpower, nv - cutat +1)
                 if isnothing(currestore)
                     restores[i] = missing
                 else
