@@ -1112,6 +1112,7 @@ toSigned(x::UInt8) = Core.bitcast(Int8, x)
 toSigned(x::UInt16) = Core.bitcast(Int16, x)
 toSigned(x::UInt32) = Core.bitcast(Int32, x)
 toSigned(x::UInt64) = Core.bitcast(Int64, x)
+toSigned(x::Signed) = x
 
 function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
     filepath)
