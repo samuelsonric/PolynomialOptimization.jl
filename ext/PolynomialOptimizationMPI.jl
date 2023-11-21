@@ -296,8 +296,8 @@ function newton_halfpolytope_restore_status!(fileprogress, workload::Vector{Int}
             return nothing
         elseif nb == s
             lpp = Ptr{Int}(pointer(lastprogress))
-            unsafe_copyto!(pointer(workload), lpp + 2sizeof(Int), length(workload))
-            unsafe_copyto!(pointer(powers), lpp + 2sizeof(Int) + sizeof(workload), length(powers))
+            unsafe_copyto!(pointer(powers), lpp + 2sizeof(Int), length(powers))
+            unsafe_copyto!(pointer(workload), lpp + 2sizeof(Int) + sizeof(powers), length(workload))
             return unsafe_load(lpp), unsafe_load(lpp, 2)
         else
             error("Unknown progress file format - please delete existing files.")
@@ -407,6 +407,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                 end
                 if rank == minworkloadᵢ -1
                     # it's our job!
+                    lastworkload = Ref{typeof(workload)}()
                     copyto!(minmultideg, cutat_worker, ranktask, 1, cutlen_worker)
                     if initialize
                         iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg,
@@ -423,7 +424,11 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                                     write($fileout, $candidates)
                                     flush(fileout)
                                     seekstart($fileprogress)
-                                    write(fileprogress, $progress[], $acceptance[], $workload, p)
+                                    write(fileprogress, $progress[], $acceptance[], p)
+                                    if !isassigned($lastworkload) || lastworkload[] !== $workload
+                                        write(fileprogress, workload)
+                                        lastworkload[] = workload
+                                    end
                                     flush(fileprogress)
                                     empty!(candidates)
                                 end
@@ -442,7 +447,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                         flush(fileout)
                         seekstart(fileprogress)
                         # we always write the last completed iteration, which is maxmultideg
-                        write(fileprogress, progress[], acceptance[], workload, maxmultideg)
+                        write(fileprogress, progress[], acceptance[], maxmultideg, workload)
                         flush(fileprogress)
                         empty!(candidates)
                     end
