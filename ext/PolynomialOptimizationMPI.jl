@@ -347,7 +347,8 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
             restore = newton_halfpolytope_restore_status!(fileprogress, workload, powers)
         catch
             close(fileprogress)
-            MPI.Allgather!(success, comm)
+            MPI.Allgather!(MPI.UBuffer(success, 1), comm)
+            isroot(rank) && error("Unknown progress file format - please delete existing files.")
             return
         end
         @inbounds success[convert(Int, rank)+1] = true
