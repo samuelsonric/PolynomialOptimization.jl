@@ -746,6 +746,7 @@ Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::
     @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1])
     @inbounds return sum(@view(@inline(length(iter, Val(:detailed)))[iter.mindeg+1:end]), init=0)
 end
+moniter_state(powers::AbstractVector{DI}) where {DI} = (DI(sum(powers, init=zero(DI))), powers)
 
 function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers, δ, from)
     @assert(δ ≥ 0 && from ≥ 0)
@@ -810,7 +811,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
         else
             curminrange, curmaxrange, powers = filestuff[4]
             iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers),
-                (typeof(maxdeg)(sum(powers, init=zero(maxdeg))), powers))
+                moniter_state(powers))
             # @goto start - must be deferred as it would jump into a try block
         end
     end
@@ -1076,7 +1077,7 @@ function newton_halfpolytope_restore_status!(fileprogress, mindeg::I, maxdeg::I,
             end
             unsafe_copyto!(pointer(powers), Ptr{eltype(powers)}(lpp + 2sizeof(Int)), length(minmultideg))
             return progress, unsafe_load(lpp, 2), InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg,
-                minmultideg, maxmultideg, powers), (typeof(maxdeg)(sum(powers, init=zero(maxdeg))), powers), progress)
+                minmultideg, maxmultideg, powers), moniter_state(powers), progress)
         else
             error("Unknown progress file format - please delete existing files.")
         end
@@ -1214,6 +1215,13 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         @assert(isnothing(secondtask))
         return newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath)
     end
+
+    threadsize = div(num, nthreads, RoundUp)
+    @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
+        threadsize, " candidates")
+    cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
+    cutlen = nv - cutat
+    cutat += 1 # cutat is now the first entry to be fixed
     bk = fill(Mosek.MSK_BK_FX.value, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
@@ -1223,15 +1231,10 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     else
         candidates = FastVec{typeof(maxdeg)}()
     end
+
     ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
-    threadsize = div(num, nthreads, RoundUp)
-    @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
-        threadsize, " candidates")
     threadprogress = zeros(Int, nthreads)
     threadacceptance = zeros(Int, nthreads)
-    cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
-    cutlen = nv - cutat
-    cutat += 1 # cutat is now the first entry to be fixed
     if isnothing(filepath)
         iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end], maxmultideg[cutat:end],
             @view(minmultideg[cutat:end]))
@@ -1281,10 +1284,11 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         else
             iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat:end],
                 maxmultideg[cutat:end], @view(minmultideg[cutat:end])),
-                (typeof(maxdeg)(sum(maxitr, init=zero(maxdeg))), copyto!(@view(minmultideg[cutat:end]), maxitr)))
+                moniter_state(copyto!(@view(minmultideg[cutat:end]), maxitr)))
         end
     end
     cond = Threads.SpinLock()
+
     ccall(:jl_enter_threaded_region, Cvoid, ())
     try
         # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
@@ -1294,38 +1298,24 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         init_time = time_ns()
         init_progress = sum(threadprogress, init=0)
         notifier = Ref(verbose ? 1 : 0)
-        @inbounds for tid in nthreads:-1:3
+        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(Mosek.Task, Iterators.repeated(task))),
+                                                        ((2, secondtask), (1, task))))
+            if isnothing(filepath)
+                filestuff = nothing
+            elseif isnothing(restores[tid])
+                threads[tid] = nothing
+                close(fileouts[tid])
+                close(fileprogresses[tid])
+                continue
+            else
+                filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
+            end
             # secondtask has a solution, so we just use task (better than deletesolution).
             # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
             # parallel, even if we make sure not to modify the base task until all copies are done.
-            if isnothing(filepath)
-                filestuff = nothing
-            elseif isnothing(restores[tid])
-                threads[tid] = nothing
-                close(fileouts[tid])
-                close(fileprogresses[tid])
-                continue
-            else
-                filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
-            end
-            threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $(Mosek.Task(task)), $ranges, $nv, $mindeg,
-                $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress,
-                $num, $filestuff)
-        end
-        @inbounds for (tid, taskₜ) in ((2, secondtask), (1, task))
-            if isnothing(filepath)
-                filestuff = nothing
-            elseif isnothing(restores[tid])
-                threads[tid] = nothing
-                close(fileouts[tid])
-                close(fileprogresses[tid])
-                continue
-            else
-                filestuff = (fileprogresses[tid], fileouts[tid], cutat, restores[tid])
-            end
-            @inbounds threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg,
-                $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress,
-                $num, $filestuff)
+            threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg, $maxdeg, $bk,
+                $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress, $num,
+                $filestuff)
         end
         # All tasks are created and waiting for stuff to do. So let's now feed them with their jobs.
 
