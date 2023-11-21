@@ -5,7 +5,7 @@ import MPI, Random, Mosek
 import PolynomialOptimization: @verbose_info, @capture, FastVec, prepare_push!, unsafe_push!, finish!,
     haveMPI, newton_polytope_preproc, newton_polytope_do_worker, newton_polytope_do_taskfun, monomial_cut,
     newton_halfpolytope_analyze, newton_halfpolytope_tighten, newton_halfpolytope_do_prepare, InitialStateIterator,
-    newton_halfpolytope_restore_status!, newton_halfpolytope_do_execute, newton_halfpolytope, makemonovec
+    moniter_state, newton_halfpolytope_restore_status!, newton_halfpolytope_do_execute, newton_halfpolytope, makemonovec
 
 __init__() = haveMPI[] = true
 
@@ -361,6 +361,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         if !isnothing(restore)
             progress[] = restore[1]
             acceptance[] = restore[2]
+            copyto!(rankiter.powers, 1, powers, cutat_worker, cutlen_worker)
             initialize = true
         end
         fileout = open("$prefix.out", append=true, lock=false)
@@ -375,11 +376,10 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         # we can expect in an individual batch and then decide how many batches will be done by the rank.
         tmp = Vector{Float64}(undef, nv)
         lastinfo = Ref(init_time)
-        # unroll "for ranktask in rankiter" so that we can jump into the loop starting the the previous iteration
+        # unroll "for ranktask in rankiter" so that we can jump into the loop starting with the previous iteration
         if initialize
-            copyto!(rankiter.powers, 1, powers, cutat_worker, cutlen_worker)
             ranktask = rankiter.powers
-            rankiter_state = (typeof(maxdeg)(sum(ranktask, init=zero(maxdeg))), ranktask)
+            rankiter_state = moniter_state(ranktask)
             @goto start
         end
         rankiter_next = iterate(rankiter)
@@ -408,11 +408,9 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                 if rank == minworkloadᵢ -1
                     # it's our job!
                     copyto!(minmultideg, cutat_worker, ranktask, 1, cutlen_worker)
-                    # Here, we cannot just use moniter, although it points to the current minmultideg, maxmultideg - but
-                    # moniter in its initialization caches some data.
                     if initialize
                         iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg,
-                            maxmultideg, powers), (typeof(maxdeg)(sum(powers, init=zero(maxdeg))), powers))
+                            maxmultideg, powers), moniter_state(powers))
                     else
                         iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, powers)
                     end
