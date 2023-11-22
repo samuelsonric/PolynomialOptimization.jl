@@ -58,8 +58,11 @@ The `parameters` will be passed on to the linear solver in every case (preproces
     `filepath` with the extension `.out`, and for every `.out` file also a corresponding `.prog` file that captures the current
     status. The `.out` file(s) will hold the resulting basis in a binary format, the `.prog` file is a small indicator required
     for resuming the operation after an abort.
-    To load the data into RAM, use [`newton_halfpolytope_from_file`](@ref), which can also tell you exactly how much memory
+    This function will only `true` when it is finished and the data was stored to a file; it will _not_ load the actual data.
+    To do so, use [`newton_halfpolytope_from_file`](@ref) in a separate step, which can also tell you exactly how much memory
     will be required for this operation.
+
+See also [`newton_halfpolytope_from_file`](@ref).
 """
 newton_halfpolytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     newton_halfpolytope(Val(method), objective, Val(haveMPI[]); kwargs...)
@@ -1378,7 +1381,10 @@ the objective itself. This function does not do any calculation, but instead loa
 
 !!! info
     This function will not take into account the current Julia configuration, but instead lists all files that are compatible
-    with the given filepath. Therefore, you must make sure not to have multiple files from different configurations running.
+    with the given filepath. This allows you to, e.g., create the data in a multi-node context with moderate memory
+    requirements per CPU, but load it later in a single process with lots of memory available. However, this requires you not
+    to have multiple files from different configurations running.
+
     The function ignores the `.prog` files and just assembles the output of the `.out` files, so it does not check whether the
     calculation actually finished.
 
@@ -1387,10 +1393,12 @@ the objective itself. This function does not do any calculation, but instead loa
     estimation of how many monomials the output will contain. This is an overestimation, as it might happen that the files
     contain a small number of duplicates if the calculation was interrupted and subsequently resumed (although this is not very
     likely and the result should be pretty accurate).
+
+See also [`newton_halfpolytope`](@ref).
 """
 function newton_halfpolytope_from_file(filepath::AbstractString, objective::P; estimate::Bool=false,
     verbose::Bool=false) where {P<:AbstractPolynomialLike}
-    maxval=div(maxdegree(objective), 2, RoundDown)
+    maxval = div(maxdegree(objective), 2, RoundDown)
     local T
     for outer T in (UInt8, UInt16, UInt32, UInt64)
         typemax(T) ≥ maxval && break
@@ -1469,7 +1477,7 @@ function newton_halfpolytope_from_file(filepath::AbstractString, objective, esti
     length(candidates) == len || error("Calculated length does not match number of loaded monomials")
     @verbose_info("Loaded $len monomials into memory in $load_time seconds. Now sorting and removing duplicates.")
     sort_time = @elapsed begin
-        finalcandidates = unique!(sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0))
+        finalcandidates = Base._groupedunique!(sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0))
     end
     @verbose_info("Sorted all monomials and removed $(len - length(finalcandidates)) duplicates in $sort_time seconds")
     return makemonovec(variables(objective), finalcandidates)
