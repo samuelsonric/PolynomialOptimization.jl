@@ -693,7 +693,7 @@ end
 function newton_halfpolytope(V::Val{:Mosek}, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     filepath::Union{<:AbstractString,Nothing}=nothing, kwargs...) where {P<:AbstractPolynomialLike}
     nworkers = MPI.Comm_size(comm) # we don't need a master, everyone can do the same work
-    isone(nworkers) && return newton_halfpolytope(V, objective, Val(false); verbose, kwargs...)
+    isone(nworkers) && return newton_halfpolytope(V, objective, Val(false); verbose, filepath, kwargs...)
 
     MPI.Barrier(comm)
 
