@@ -846,8 +846,9 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
                             if isnotifier[]
                                 allprogress = sum(progresses, init=0)
                                 allacceptance = sum(acceptances, init=0)
-                                rem_sec = round(Int, ((nextinfo - init_time) /
-                                    (1_000_000_000 * (allprogress - init_progress))) * (num - allprogress))
+                                Δt = allprogress == $init_progress ? 1 : allprogress - init_progress
+                                # ^ if a finished job is started, this might happen
+                                rem_sec = round(Int, ((nextinfo - init_time) / 1_000_000_000Δt) * (num - allprogress))
                                 @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                                     100allprogress / num, 100allacceptance / allprogress, rem_sec ÷ 60, rem_sec % 60)
                                 flush(stdout)
@@ -1169,8 +1170,9 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
                         empty!(candidates)
                     end
                     if $verbose
-                        rem_sec = round(Int, ((nextinfo - $init_time) / (1_000_000_000 * (progress[] - $init_progress))) *
-                                                (num - progress[]))
+                        Δt = progress[] == $init_progress ? progress[] - init_progress : 1
+                        # ^ if a finished job is started, this might happen
+                        rem_sec = round(Int, ((nextinfo - $init_time) / 1_000_000_000Δt) * (num - progress[]))
                         @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
                             100progress[] / num, 100 * acceptance[] / progress[], rem_sec ÷ 60, rem_sec % 60)
                         flush(stdout)
@@ -1405,13 +1407,13 @@ function newton_halfpolytope_from_file(filepath::AbstractString, objective, esti
         matches = Regex("^$filepath-\\d+\\.out\$")
         dir = dirname(realpath("$filepath-1.out"))
         @verbose_info("Underlying data comes from single-node, multi-thread calculation")
-    elseif isfile("$filepath-n1.out")
+    elseif isfile("$filepath-n0.out")
         matches = Regex("^$filepath-n\\d+\\.out\$")
-        dir = dirname(realpath("$filepath-n1.out"))
+        dir = dirname(realpath("$filepath-n0.out"))
         @verbose_info("Underlying data comes from multi-node, single-thread calculation")
-    elseif isfile("$filepath-n1-1.out")
+    elseif isfile("$filepath-n0-1.out")
         matches = Regex("^$filepath-n\\d+-\\d+\\.out\$")
-        dir = dirname(realpath("$filepath-n1-1.out"))
+        dir = dirname(realpath("$filepath-n0-1.out"))
         @verbose_info("Underlying data comes from multi-node, multi-thread calculation")
     else
         error("Could not find data corresponding to the given filepath")
