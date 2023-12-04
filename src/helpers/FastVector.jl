@@ -218,6 +218,8 @@ Base.similar(::FastVec{V}, len::Integer; buffer::Integer=overallocation(len)) wh
 Base.similar(::FastVec{V}, ::Type{S}, len::Integer; buffer::Integer=overallocation(len)) where {V,S} =
     FastVec{S}(undef, len; buffer)
 
+Base.unsafe_convert(::Type{Ptr{V}}, v::FastVec{V}) where {V} = Base.unsafe_convert(Ptr{V}, v.data)
+
 # inspired by KristofferC's PushVector
 """
     finish!(v::FastVec)

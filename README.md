@@ -11,8 +11,8 @@ supports complex-valued problems and positive semidefinite constraints, and allo
 problems.
 It _directly_ interfaces the solvers [Mosek](https://www.mosek.com/) (version 10 strongly preferred, less features available
 with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
-and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
-modelling framework, it introduces a significant overhead that is omitted in this way.
+[Hypatia](https://github.com/chriscoey/Hypatia.jl), and [COPT](https://www.shanshu.ai/copt) without using `JuMP`. Despite
+`JuMP` being very performant for a modelling framework, it introduces a significant overhead that is omitted in this way.
 
 
 ## Compatibility notice

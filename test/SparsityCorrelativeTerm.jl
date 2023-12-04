@@ -23,6 +23,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0.625 atol = 1e-7
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0.625 atol = 1e-5
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0.625 atol = 1e-7
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0.625 atol = 1e-7
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityCorrelativeTerm with 2 cliques(s)
@@ -453,16 +454,19 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sps[1])[2] ≈ 0 atol = 1e-6
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sps[1])[2] ≈ 0 atol = 2e-3
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sps[1])[2] ≈ 0 atol = 1e-3 # numerical failure
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sps[1])[2] ≈ 0 atol = 1e-5
 
         :MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sps[2])[2] ≈ 0 atol = 1e-6
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sps[2])[2] ≈ 0 atol = 2e-7
         #:COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sps[2])[2] ≈ 0 atol=1e-3
         #:HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sps[2])[2] ≈ 0 atol=1e-3
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sps[2])[2] ≈ 0 atol = 1e-5
 
         #:MosekMoment ∈ all_solvers && @test sparse_optimize(:MosekMoment, sps[3])[2] ≈ 0 atol = 1e-6
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sps[3])[2] ≈ 0 atol = 2e-7
         #:COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sps[3])[2] ≈ 0 atol=1e-3
         #:HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sps[3])[2] ≈ 0 atol=1e-3
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sps[3])[2] ≈ 0 atol = 1e-6
     end
 
     @test isnothing(sparse_iterate!(sps[1]))
@@ -702,6 +706,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 38.0494 atol = 1e-4
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 38.0494 atol = 2e-1
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 38.0494 atol = 1e-4
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 38.0494 atol = 1e-4
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityCorrelativeTerm with 3 cliques(s)
@@ -734,6 +739,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 38.0514 atol = 1e-4
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 38.0514 atol = 2e-1
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 38.0514 atol = 1e-4
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 38.0514 atol = 1e-4
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityCorrelativeTerm with 3 cliques(s)
@@ -766,6 +772,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 38.0514 atol = 1e-4
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 38.0514 atol = 2e-1
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 38.0514 atol = 1e-4
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 38.0514 atol = 1e-4
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityCorrelativeTerm with 3 cliques(s)
@@ -878,6 +885,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0.283871 atol = 1e-6
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0.283871 atol = 1e-6
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp, dense=true)[2] ≈ 0.283871 atol = 1e-6
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0.283871 atol = 1e-6
     end
 
     @test isnothing(sparse_iterate!(sp))

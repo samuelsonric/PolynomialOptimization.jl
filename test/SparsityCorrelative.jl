@@ -97,6 +97,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 2e-6
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp, eps_abs=1e-8, eps_rel=1e-8)[2] ≈ 0 atol = 1e-4
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-5
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0 atol = 6e-6
     end
 end
 

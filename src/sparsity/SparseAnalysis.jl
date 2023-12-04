@@ -170,6 +170,7 @@ The following methods are currently supported:
 - `:COSMOMoment`: for real-valued problems, requires COSMO and uses a moment-matrix approach. This is imprecise and not too
   fast, but can scale to very large sizes.
 - `:HypatiaMoment`: for any kind of problem, requires Hypatia. This is moderately precise and not too fast.
+- `:COPTSOS`: for real-valued problems, requires COPT and uses a SOS approach. This is precise and fast.
 
 See also [`poly_all_solutions`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`optimality_certificate`](@ref).

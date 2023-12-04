@@ -230,6 +230,7 @@ the problem. The following methods are currently supported:
   constructed with a `factor_coercive` different from one). This is typically a good idea for large systems with not too much
   monomials. However, if you have a very dense system, the sparse solver will take forever; better pass `dense=true` to the
   optimization routine. This will then be much faster (and always much more accurate).
+- `:COPTSOS`: for real-valued problems, requires COPT and uses a SOS approach. This is typically a fast and precise method.
 
 Note that by passing the keyword argument `verbose=true` to the optimization function, we get some more insight into what
 happens behind the hood. Let's redo the last optimization.

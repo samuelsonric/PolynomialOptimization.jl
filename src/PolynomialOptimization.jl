@@ -10,6 +10,7 @@ import Graphs
 import Mosek
 import COSMO
 import Hypatia
+import COPT
 import Combinatorics
 import DynamicPolynomials
 import MutableArithmetics
@@ -99,11 +100,15 @@ isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
 include("./solvers/MosekSOS.jl")
 include("./solvers/COSMOMoment.jl")
 include("./solvers/HypatiaMoment.jl")
+include("./solvers/COPTSOS.jl")
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
 include("./sparsity/SparsityTerm.jl")
 include("./sparsity/SparsityTermBlock.jl")
 include("./sparsity/SparsityTermCliques.jl")
 include("./sparsity/SparsityCorrelativeTerm.jl")
+
+global copt_env::COPT.Env
+__init__() = global copt_env = COPT.Env()
 
 end

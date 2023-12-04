@@ -73,6 +73,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-7
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-6
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 2e-6
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0 atol = 1e-6
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermBlock with 1 constraint(s)
@@ -98,6 +99,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-8
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp)[2] ≈ 0 atol = 1e-6
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0 atol = 1e-7
     end
 
     @test isnothing(sparse_iterate!(sp))
@@ -159,6 +161,7 @@ Block sizes:
         :MosekSOS ∈ all_solvers && @test sparse_optimize(:MosekSOS, sp)[2] ≈ 0 atol = 1e-8
         :COSMOMoment ∈ all_solvers && @test sparse_optimize(:COSMOMoment, sp)[2] ≈ 0 atol = 1e-4
         :HypatiaMoment ∈ all_solvers && @test sparse_optimize(:HypatiaMoment, sp, dense=true)[2] ≈ 0 atol = 1e-7
+        :COPTSOS ∈ all_solvers && @test sparse_optimize(:COPTSOS, sp)[2] ≈ 0 atol = 1e-7
     end
 
     @test strRep(sparse_iterate!(sp)) == "SparsityTermBlock with 0 constraint(s)

@@ -19,7 +19,7 @@ if !@isdefined(all_solvers)
             rethrow(e)
         end
     end
-        all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment]
+        all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment, :COPTSOS]
         complex_solvers = [:MosekMoment, :HypatiaMoment]
     else
         all_solvers = [:COSMOMoment, :HypatiaMoment]
