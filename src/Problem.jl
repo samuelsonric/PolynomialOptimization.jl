@@ -35,7 +35,7 @@ struct PolyOptProblem{P,M,V,GB,MV<:AbstractVector{M}}
     function PolyOptProblem{P,M,V,GB,B}(objective::P, prefactor::P, variables::AbstractVector{V}, var_map::Dict{V,Int},
         degree::Int, basis::B, constraints::Vector{PolyOptConstraint{P,M}}, gröbner_basis::GB,
         complex::Bool) where {P,M,V,GB,B<:AbstractVector{M}}
-        @assert(V <: variable_union_type(P) && M <: monomial_type(P))
+        (V <: variable_union_type(P) && M <: monomial_type(P)) || error("Invalid types")
         return new{P,M,V,GB,B}(objective, prefactor, variables, var_map, degree, basis, constraints, gröbner_basis,
             complex, Dict{complex ? MonomialComplexContainer{M} : M,Float64}())
     end
@@ -358,7 +358,7 @@ function poly_problem(objective::P, degree::Int;
     perturbation_form::AbstractPolynomialLike=Base.zero(P), noncompact::Tuple{Real,Integer}=(0.,0),
     tighter::Bool=false, tighten::Bool=false, verbose::Bool=false) where {P<:AbstractPolynomialLike}
     T = polynomial_type(objective)
-    @assert all(coefficient.(custom_basis) .== 1)
+    all(coefficient.(custom_basis) .== 1) || error("The coefficients in a custom basis must all be one.")
     return poly_problem(convert(T, objective), degree, convert(Vector{T}, zero),
         convert(Vector{T}, nonneg), convert(Vector{Matrix{T}}, psd),
         convert(Vector{monomial_type(T)}, custom_basis), perturbation, equality_method, add_gröbner || add_groebner,
@@ -369,7 +369,7 @@ end
 function poly_problem(objective::P; perturbation::Union{Float64,<:AbstractVector{Float64}}=0.0,
     verbose::Bool=false, kwargs...) where {P}
     vars = variables(objective)
-    @assert(all(isreal, vars))
+    all(isreal, vars) || error("The Newton polytope only works on real-valued polynomials")
     # no constraints, so we use the Newton polytope as the basis
     deg = maxdegree(objective) ÷ 2
     basis = newton_halfpolytope(:Mosek, objective; verbose, kwargs...)
@@ -382,19 +382,19 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
     equality_method::Union{EqualityMethod,<:AbstractVector{EqualityMethod}}=emSimple, add_gröbner::Bool=false,
     factor_coercive::P=one(P), perturbation_coefficient::Float64=0., perturbation_form::P=Base.zero(P),
     noncompact::Tuple{Real,Integer}=(0.,0), tighter::Bool=false; verbose::Bool=false) where {P,M}
-    @assert(M <: monomial_type(P))
-    @assert(degree ≥ 0 && perturbation_coefficient ≥ 0 && noncompact[2] ≥ 0)
+    M <: monomial_type(P) || throw(ArgumentError("The basis must be made of monomials for the polynomial"))
+    (degree ≥ 0 && perturbation_coefficient ≥ 0 && noncompact[2] ≥ 0) || throw(ArgumentError("Invalid arguments"))
 
     variables = union(MultivariatePolynomials.variables(objective), MultivariatePolynomials.variables.(zero)...,
         MultivariatePolynomials.variables.(nonneg)..., MultivariatePolynomials.variables.(psd)...)
     complex = !all(isreal, variables)
     complex && filter!(!isconj, variables) # we only consider the "true" variables, not conjugates
-    complex && @assert(!(tighter ||
-                         any(isconj, variables) || any(isrealpart, variables) || any(isimagpart, variables)))
+    complex && tighter && error("Complex-valued problems cannot be tightened")
+    complex && @assert(!(any(isconj, variables) || any(isrealpart, variables) || any(isimagpart, variables)))
     if equality_method isa EqualityMethod
         equality_method = fill(equality_method, length(zero))
     else
-        @assert(length(equality_method) == length(zero))
+        length(equality_method) == length(zero) || throw(ArgumentError("Length of equality_method and zero must be identical"))
     end
     if !iszero(noncompact[1])
         perturbation_coefficient = noncompact[1]
@@ -415,19 +415,17 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         objective *= factor_coercive
     end
     if complex
-        @assert(imag(objective) == 0)
-        @assert(imag(factor_coercive) == 0)
-        @assert(all(constr -> imag(constr) == 0, nonneg))
-        @assert(all(constr -> constr' == constr, psd))
+        imag(objective) == 0 || error("Nonvanishing imaginary part in objective")
+        imag(factor_coercive) == 0 || error("Nonvanishing imaginary party in coercive factor")
+        all(constr -> imag(constr) == 0, nonneg) || error("Nonvanishing imaginary in nonnegative constraint")
+        all(constr -> constr' == constr, psd) || error("Nonhermitian PSD constraint")
         @inbounds for i in 1:length(zero)
-            if equality_method[i] == emCalculateGröbner
-                @assert(all(isreal, effective_variables(zero[i])))
-            elseif equality_method[i] == emAssumeGröbner
-                @assert(all(isreal, effective_variables(zero[i])))
+            if equality_method[i] ∈ (emCalculateGröbner, emAssumeGröbner)
+                all(isreal, effective_variables(zero[i])) || error("Gröbner basis requires real-valued variables only")
             end
         end
     else
-        @assert(all(constr -> transpose(constr) == constr, psd))
+        all(constr -> transpose(constr) == constr, psd) || error("Nonsymmetric PSD constraint")
     end
     if perturbation isa AbstractVector || !iszero(perturbation)
         @verbose_info("Constructing perturbation")
@@ -467,7 +465,7 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
                 have_calc = true
                 unsafe_push!(zero_gröbner_fv, i)
             elseif method == emAssumeGröbner
-                @assert(!have_calc, "If some parts of the Gröbner basis are already known while others must still be calculated, the known parts must precede the unknown ones.")
+                have_calc && error("If some parts of the Gröbner basis are already known while others must still be calculated, the known parts must precede the unknown ones.")
                 unsafe_push!(zero_gröbner_fv, i)
             end
         end
@@ -533,7 +531,6 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         end
     end
     if tighter
-        @assert(!complex, "Tightening is currently only implemented for real-valued problems.")
         @verbose_info("Beginning tightening process: Constructing the matrix C out of the constraints")
         zero_len = length(zero)
         nonneg_len = length(nonneg)

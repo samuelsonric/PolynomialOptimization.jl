@@ -41,11 +41,11 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
     """
     function SparsityCorrelativeTerm(correlative_sparsity::SparsityCorrelative;
         term_modes::Union{TermMode,<:AbstractVector{TermMode}}, verbose::Bool=false)
-        if term_modes isa TermMode
-            @assert(term_modes != tm_none)
+        (if term_modes isa TermMode
+            term_modes != tm_none
         else
-            @assert(!all(term_modes .== tm_none))
-        end
+            !all(term_modes .== tm_none)
+        end) || error("Term modes cannot all be none; use SparsityCorrelative instead.")
         problem = sparse_problem(correlative_sparsity)
         # This method is relatively slow. To counter the effects, we expand a lot of more idiomatic Julia broadcasts into
         # explicit loops, as we don't need to allocate all these temporaries...
@@ -151,7 +151,7 @@ end
 
 function SparsityCorrelativeTerm(problem::PolyOptProblem; clique_chordal_completion::Bool=true,
     term_mode::TermMode=tm_block, verbose::Bool=false)
-    @assert(term_mode != tm_none)
+    term_mode != tm_none || error("Term mode cannot be none; use SparsityCorrelative instead")
     return SparsityCorrelativeTerm(SparsityCorrelative(problem, chordal_completion=clique_chordal_completion);
         term_modes=term_mode, verbose)
 end
@@ -233,16 +233,16 @@ function sparse_iterate!(cts::SparsityCorrelativeTerm;
             end
         end
     elseif term_modes isa Pair{<:Integer,TermMode}
-        @assert(term_modes.first ≥ 1 && term_modes.first ≤ length(cts.cliques))
+        (term_modes.first ≥ 1 && term_modes.first ≤ length(cts.cliques)) || error("Invalid term mode index")
         convert_mode!(term_modes.first, to)
     elseif term_modes isa AbstractVector{Pair{<:Integer,TermMode}}
         for p in term_modes
-            @assert(p.first ≥ 1 && p.first ≤ length(cts.cliques))
+            (p.first ≥ 1 && p.first ≤ length(cts.cliques)) || error("Invalid term mode index")
             convert_mode!(p.first, p.second)
         end
     elseif term_modes isa AbstractDict{<:Integer,TermMode}
         for (i, tm) in term_modes
-            @assert(p.first ≥ 1 && p.first ≤ length(cts.cliques))
+            (p.first ≥ 1 && p.first ≤ length(cts.cliques)) || error("Invalid term mode index")
             convert_mode(i, tm)
         end
     end
