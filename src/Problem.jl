@@ -319,10 +319,11 @@ and sometimes, tightening might also increase the minimal degree required to opt
 Note that the problem will end up with more equality and inequality constraints than originally entered. The augmentation not
 change the solution of the original problem in case the minimum is attained at a critical point; if it is not, tightening will
 lead to missing this minimum.
-- `tighter::Bool`: if set to `true`, tries to automatically construct constraints using Nie's method. Note that the algorithm
-  internally needs to create lots of dense polynomials of appropriate degrees before solving for the coefficients. It is
-  therefore possible that for larger problems, this can take a very long time.
-  Automatic tightening requires the Mosek solver to be installed.
+- `tighter::Union{Bool,Symbol}`: if set to a valid solver or `true` (= choose default), tries to automatically construct
+  constraints using Nie's method. Note that the algorithm internally needs to create lots of dense polynomials of appropriate
+  degrees before solving for the coefficients. It is therefore possible that for larger problems, this can take a very long
+  time.
+  Currently, the only supported solver is `:Mosek`.
   The automatic detection of the minimal degree may not work together with this procedure. It will only consider the degrees
   required before tightning, not the increase in degree that may occur during the process.
   This parameter can also be called `tighten`; if any of those two is `true`, it is assumed that this was the intended value.
@@ -336,7 +337,7 @@ In case `AbstractAlgebra` is loaded, the polynomials may instead be of the time 
 ring. In this case, all polynomials in `custom_basis` must be monomials, and `equality_method` cannot be `emAssumeGröbner`.
 
 
-    poly_problem(objective; perturbation=0., verbose=false, kwargs...)
+    poly_problem(objective; perturbation=0., verbose=false, method=default_newton_method(), kwargs...)
 
 Analyze an unconstrained polynomial optimization problem and return a [`PolyOptProblem`](@ref) that can be used for sparse
 analysis and optimization. This differs from using the full version of this method in that the Newton polytope is calculated in
@@ -356,23 +357,26 @@ function poly_problem(objective::P, degree::Int;
     add_gröbner::Bool=false, add_groebner::Bool=false,
     factor_coercive::AbstractPolynomialLike=one(P), perturbation_coefficient::Float64=0.,
     perturbation_form::AbstractPolynomialLike=Base.zero(P), noncompact::Tuple{Real,Integer}=(0.,0),
-    tighter::Bool=false, tighten::Bool=false, verbose::Bool=false) where {P<:AbstractPolynomialLike}
+    tighter::Union{Bool,Symbol}=false, tighten::Union{Bool,Symbol}=false, verbose::Bool=false) where {P<:AbstractPolynomialLike}
     T = polynomial_type(objective)
     all(coefficient.(custom_basis) .== 1) || error("The coefficients in a custom basis must all be one.")
+    if tighten !== false
+        tighter = tighten
+    end
     return poly_problem(convert(T, objective), degree, convert(Vector{T}, zero),
         convert(Vector{T}, nonneg), convert(Vector{Matrix{T}}, psd),
         convert(Vector{monomial_type(T)}, custom_basis), perturbation, equality_method, add_gröbner || add_groebner,
-        convert(T, factor_coercive), perturbation_coefficient, convert(T, perturbation_form), noncompact, tighter || tighten;
+        convert(T, factor_coercive), perturbation_coefficient, convert(T, perturbation_form), noncompact, tighter;
         verbose)
 end
 
 function poly_problem(objective::P; perturbation::Union{Float64,<:AbstractVector{Float64}}=0.0,
-    verbose::Bool=false, kwargs...) where {P}
+    verbose::Bool=false, method::Symbol=default_newton_method(), kwargs...) where {P}
     vars = variables(objective)
     all(isreal, vars) || error("The Newton polytope only works on real-valued polynomials")
     # no constraints, so we use the Newton polytope as the basis
     deg = maxdegree(objective) ÷ 2
-    basis = newton_halfpolytope(:Mosek, objective; verbose, kwargs...)
+    basis = newton_halfpolytope(method, objective; verbose, kwargs...)
     return poly_problem(objective, deg, P[], P[], AbstractMatrix{P}[], basis, perturbation; verbose)
 end
 
@@ -381,7 +385,7 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
     perturbation::Union{Float64,<:AbstractVector{Float64}}=0.,
     equality_method::Union{EqualityMethod,<:AbstractVector{EqualityMethod}}=emSimple, add_gröbner::Bool=false,
     factor_coercive::P=one(P), perturbation_coefficient::Float64=0., perturbation_form::P=Base.zero(P),
-    noncompact::Tuple{Real,Integer}=(0.,0), tighter::Bool=false; verbose::Bool=false) where {P,M}
+    noncompact::Tuple{Real,Integer}=(0.,0), tighter::Union{Bool,Symbol}=false; verbose::Bool=false) where {P,M}
     M <: monomial_type(P) || throw(ArgumentError("The basis must be made of monomials for the polynomial"))
     (degree ≥ 0 && perturbation_coefficient ≥ 0 && noncompact[2] ≥ 0) || throw(ArgumentError("Invalid arguments"))
 
@@ -389,7 +393,7 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         MultivariatePolynomials.variables.(nonneg)..., MultivariatePolynomials.variables.(psd)...)
     complex = !all(isreal, variables)
     complex && filter!(!isconj, variables) # we only consider the "true" variables, not conjugates
-    complex && tighter && error("Complex-valued problems cannot be tightened")
+    complex && tighter !== false && error("Complex-valued problems cannot be tightened")
     complex && @assert(!(any(isconj, variables) || any(isrealpart, variables) || any(isimagpart, variables)))
     if equality_method isa EqualityMethod
         equality_method = fill(equality_method, length(zero))
@@ -399,7 +403,7 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
     if !iszero(noncompact[1])
         perturbation_coefficient = noncompact[1]
         # complex case? which kind of degree?
-        if isempty(zero) && isempty(nonneg) && !tighter
+        if isempty(zero) && isempty(nonneg) && tighter === false
             perturbation_form = (1 + variables' * variables)^ceil(Int, maxdegree(objective)/2)
         else
             perturbation_form = (1 + variables' * variables)^(maxdegree(objective)÷2 +1)
@@ -442,7 +446,10 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         end
     end
     new_p = promote_type(P, polynomial_type(objective)) # int polynomial may now be float polynomial due to perturbation
-    if tighter
+    if tighter === true
+        tighter = default_tightening_method()
+    end
+    if tighter !== false
         # Tightening uses numerical solvers, requires machine precision
         new_p = polynomial_type(new_p, Float64)
         objective = convert(new_p, objective)
@@ -530,11 +537,11 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
             end
         end
     end
-    if tighter
+    if tighter !== false
         @verbose_info("Beginning tightening process: Constructing the matrix C out of the constraints")
         zero_len = length(zero)
         nonneg_len = length(nonneg)
-        tighten!(objective, variables, degree, zero, nonneg, equality_method; verbose)
+        tighten!(tighter, objective, variables, degree, zero, nonneg, equality_method; verbose)
         # tightening will lead to new zero constraints (of type simple) and new inequality constraints. We should take care of
         # our Gröbner stuff with the new constraints as well.
         if !(gröbner_basis isa EmptyGröbnerBasis)
@@ -615,6 +622,7 @@ end
 
 """
     poly_optimize(method, prob::PolyOptProblem, args...; kwargs...)
+    poly_optimize(prob::PolyOptProblem, args...; kwargs...)
 
 Directly optimize a polynomial optimization problem without using any sparsity analysis.
 This is a shorthand for calling [`sparse_optimize`](@ref) on the [`SparsityNone`](@ref) object of the given problem.
@@ -622,17 +630,10 @@ This is a shorthand for calling [`sparse_optimize`](@ref) on the [`SparsityNone`
 All additional arguments are passed to [`sparse_optimize`](@ref).
 
 See also [`poly_problem`](@ref), [`SparsityNone`](@ref), [`sparse_optimize`](@ref).
-
-
-    poly_optimize(:LANCELOT, prob::PolyOptProblem; verbose, feastol, gradtol)
-
-Construct a local optimizer out of the polynomial problem using LANCELOT. This returns a function which then, given a suitable
-vector with an initial point (which will be mutated), finds a local optimium. The result of the function is given as a tuple
-which contains the optimal value and the vector of the optimal point. Contrary to all other optimization routines, this one
-does not give any global guarantees and no moments can be extracted.
 """
 poly_optimize(method::Union{<:Val,Symbol}, prob::PolyOptProblem, rest...; kwrest...) =
     sparse_optimize(method, SparsityNone(prob), rest...; kwrest...)
+poly_optimize(prob::PolyOptProblem, rest...; kwrest...) = sparse_optimize(SparsityNone(prob), rest...; kwrest...)
 
 """
     last_moments(state::PolyOptProblem)

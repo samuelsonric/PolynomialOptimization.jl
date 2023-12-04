@@ -1,11 +1,12 @@
 module PolynomialOptimizationMPI
 
 using PolynomialOptimization, MultivariatePolynomials, Printf
-import MPI, Random, Mosek
+import MPI, Random
 import PolynomialOptimization: @verbose_info, @capture, FastVec, prepare_push!, unsafe_push!, finish!, haveMPI,
     newton_polytope_preproc, newton_polytope_do_worker, newton_polytope_do_taskfun, monomial_cut, newton_halfpolytope_analyze,
     newton_halfpolytope_tighten, newton_halfpolytope_do_prepare, InitialStateIterator, moniter_state,
-    newton_halfpolytope_restore_status!, toSigned, newton_halfpolytope_do_execute, newton_halfpolytope, makemonovec
+    newton_halfpolytope_restore_status!, toSigned, newton_halfpolytope_do_execute, newton_halfpolytope_alloc,
+    newton_halfpolytope, newton_halfpolytope_clonetask, makemonovec
 
 __init__() = haveMPI[] = true
 
@@ -26,7 +27,7 @@ isroot(::MPIRank) = false
 isroot(::RootRank) = true
 MPIRank(rank::Integer) = iszero(rank) ? RootRank() : OtherRank(rank)
 
-function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses,
+function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses,
     acceptances, allcandidates, verbose, filestuff, rank::MPIRank)
     lastappend = time_ns()
     lastinfo = Ref(lastappend)
@@ -125,7 +126,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
         # be unset
         isnothing(workload) || @inline appendorwrite(powers, workload)
     finally
-        Mosek.deletetask(task)
+        finalize(task)
         if !isnothing(filestuff)
             close(fileout)
             close(fileprogress)
@@ -278,8 +279,8 @@ function newton_halfpolytope_restore_status!(fileprogress, workload::Vector{Int}
     end
 end
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
-    filepath, comm, rank::MPIRank)
+function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath, comm,
+    rank::MPIRank)
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
     isroot(rank) && @verbose_info("Preparing to determine Newton polytope using ", nworkers,
@@ -290,7 +291,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         maxmultideg[1:cutat_worker]), Val(:detailed))
     cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
-    bk = fill(Mosek.MSK_BK_FX.value, nv)
+    bk = newton_halfpolytope_alloc(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -441,7 +442,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         end
         verbose && isroot(rank) && newton_halfpolytope_print_workload(workload)
     finally
-        Mosek.deletetask(task)
+        finalize(task)
         if !isnothing(fileout)
             close(fileout)
             close(fileprogress)
@@ -454,8 +455,8 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     end
 end
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num,
-    nthreads::Integer, task, secondtask, filepath, comm, rank::MPIRank)
+function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads::Integer, task,
+    secondtask, filepath, comm, rank::MPIRank)
     if isone(nthreads)
         @assert(isnothing(secondtask))
         return newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath,
@@ -470,7 +471,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     cutlen_worker = nv - cutat_worker
     cutat_thread = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
     if cutat_thread ≥ cutat_worker # why would > even happen?
-        Mosek.deletetask(secondtask)
+        finalize(secondtask)
         return newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath,
             comm, rank)
     else
@@ -483,7 +484,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         maxmultideg[1:cutat_worker]), Val(:detailed))
     cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
-    bk = fill(Mosek.MSK_BK_FX.value, nv)
+    bk = newton_halfpolytope_alloc(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -602,7 +603,8 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         threads = Vector{Task}(undef, nthreads)
         # We can already start all the tasks; this main task that must still feed the data will continue running until we
         # yield to the scheduler.
-        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(Mosek.Task, Iterators.repeated(task))),
+        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(newton_halfpolytope_clonetask,
+                                                                                         Iterators.repeated(task))),
                                                         ((2, secondtask), (1, task))))
             if isnothing(filepath)
                 filestuff = nothing
@@ -690,7 +692,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     return candidates
 end
 
-function newton_halfpolytope(V::Val{:Mosek}, objective::P, comm, rank::MPIRank; verbose::Bool=false,
+function newton_halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     filepath::Union{<:AbstractString,Nothing}=nothing, kwargs...) where {P<:AbstractPolynomialLike}
     nworkers = MPI.Comm_size(comm) # we don't need a master, everyone can do the same work
     isone(nworkers) && return newton_halfpolytope(V, objective, Val(false); verbose, filepath, kwargs...)
@@ -756,7 +758,7 @@ function newton_halfpolytope(V::Val{:Mosek}, objective::P, comm, rank::MPIRank; 
     end
 end
 
-function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{true}; kwargs...) where {P<:AbstractPolynomialLike}
+function newton_halfpolytope(V, objective::P, ::Val{true}; kwargs...) where {P<:AbstractPolynomialLike}
     if isone(Threads.nthreads())
         MPI.Init(threadlevel=MPI.THREAD_SINGLE)
     elseif MPI.Init(threadlevel=MPI.THREAD_FUNNELED) < MPI.THREAD_FUNNELED

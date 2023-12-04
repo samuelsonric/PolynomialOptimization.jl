@@ -70,152 +70,9 @@ newton_halfpolytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractP
 newton_halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     newton_halfpolytope(Val(:Mosek), objective, Val(haveMPI[]); kwargs...)
 
+function newton_polytope_preproc_quick end
+function newton_polytope_preproc_remove end
 #region Preprocessing for the full Newton polytope convex hull
-function newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, verbose; parameters...)
-    # eliminate all the coefficients that by the Akl-Toussaint heuristic cannot be part of the convex hull anyway
-    nv, nc = size(coeffs)
-    vertexindices = fill(1, 2nv)
-    lowestidx = @view(vertexindices[1:nv])
-    highestidx = @view(vertexindices[nv+1:2nv])
-    # we might also add the points with the smallest/largest sum of all coordinates, or differences (but there are 2^nv ways to
-    # combine, so let's skip it)
-    @inbounds for (j, coeff) in enumerate(eachcol(coeffs))
-        for (i, coeffᵢ) in enumerate(coeff)
-            if coeffs[i, lowestidx[i]] > coeffᵢ
-                lowestidx[i] = j
-            end
-            if coeffs[i, highestidx[i]] < coeffᵢ
-                highestidx[i] = j
-            end
-        end
-    end
-    unique!(sort!(vertexindices))
-    nvertices = length(vertexindices)
-    required_coeffs = Vector{Bool}(undef, nc)
-    # now every point that is not a member of the convex polytope determined by vertices can be dropped immediately
-    lastinfo = time_ns()
-    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
-    try
-        # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
-        for (k, v) in parameters
-            Mosek.putparam(task, string(k), v)
-        end
-        Mosek.appendvars(task, nvertices)
-        Mosek.putvarboundsliceconst(task, 1, nvertices +1, Mosek.MSK_BK_LO, 0., Inf)
-        Mosek.appendcons(task, nv +1)
-        tmp = Vector{Float64}(undef, max(nv, nvertices))
-        let
-            idxs = collect(Int32(0):Int32(max(nv, nvertices) -1))
-            for (i, vert) in zip(Iterators.countfrom(zero(Int32)), vertexindices)
-                @inbounds copyto!(tmp, @view(coeffs[:, vert]))
-                Mosek.@MSK_putacol(task.task, i, nv, idxs, tmp)
-            end
-            @inbounds fill!(@view(tmp[1:nvertices]), 1.)
-            Mosek.@MSK_putarow(task.task, nv, nvertices, idxs, tmp)
-            Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
-        end
-        fx = fill(Mosek.MSK_BK_FX.value, nv)
-        for (i, coeff) in enumerate(eachcol(coeffs))
-            if insorted(i, vertexindices)
-                @inbounds required_coeffs[i] = true
-                continue
-            end
-            @inbounds copyto!(tmp, coeff)
-            Mosek.@MSK_putconboundslice(task.task, 0, nv, fx, tmp, tmp)
-            Mosek.optimize(task)
-            @inbounds required_coeffs[i] = Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) != Mosek.MSK_SOL_STA_OPTIMAL
-            if verbose
-                nextinfo = time_ns()
-                if nextinfo - lastinfo > 1_000_000_000
-                    print("Status update: ", i, " of ", nc, "\r")
-                    flush(stdout)
-                    lastinfo = nextinfo
-                end
-            end
-        end
-    finally
-        Mosek.deletetask(task)
-    end
-    return required_coeffs
-end
-
-function newton_polytope_preproc_remove(::Val{:Mosek}, nv, nc, getvarcon, verbose; parameters...)
-    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
-    # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
-    for (k, v) in parameters
-        Mosek.putparam(task, string(k), v)
-    end
-    # basic initialization: every point will get a variable
-    Mosek.appendvars(task, nc)
-    Mosek.putvarboundsliceconst(task, 1, nc +1, Mosek.MSK_BK_LO, 0., Inf)
-    Mosek.appendcons(task, nv +1)
-    Mosek.putconboundsliceconst(task, 1, nv +2, Mosek.MSK_BK_FX, 0., 0.)
-    # ^ since we always fix the point in question to be -1, the sum of all points must be zero (condition nv +1)
-    let
-        idxs = collect(Int32(0):Int32(max(nv, nc) -1))
-        tmp = Vector{Float64}(undef, max(nv, nc))
-        for i in 1:nc
-            copyto!(tmp, @inline(getvarcon(i)))
-            Mosek.@MSK_putacol(task.task, i -1, nv, idxs, tmp)
-        end
-        @inbounds fill!(@view(tmp[1:nc]), 1.)
-        Mosek.@MSK_putarow(task.task, nv, nc, idxs, tmp)
-    end
-
-    required_coeffs = fill(true, nc)
-    removed = 0
-    lastremoved = 0
-    varupto = nc
-    varnum = nc
-    lastinfo = time_ns()
-    # and then we start to iterate through the points and try to express one in terms of the others
-    for i in nc:-1:1
-        # first enforce this variable to be fixed: all others must add up to this point
-        Mosek.putvarbound(task, i, Mosek.MSK_BK_FX, -1., -1.)
-        # then try to find a solution
-        Mosek.optimize(task)
-        if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
-            # this was indeed possible, so our point is redundant; remove it!
-            Mosek.putvarbound(task, i, Mosek.MSK_BK_FX, 0., 0.)
-            @inbounds required_coeffs[i] = false
-            lastremoved += 1
-        else
-            # it was not possible, we must keep this point
-            Mosek.putvarbound(task, i, Mosek.MSK_BK_LO, 0., Inf)
-        end
-        if verbose
-            nextinfo = time_ns()
-            if nextinfo - lastinfo > 1_000_000_000
-                if verbose
-                    print("\33[2KStatus update: ", nc - i, " of ", nc, " (removed ", 100(removed + lastremoved) ÷ (nc - i +1),
-                        "% so far)\r")
-                    flush(stdout)
-                    lastinfo = nextinfo
-                end
-            end
-        end
-        # Deleting Mosek variables is expensive, but every once in a while, it may be worth the effort
-        if lastremoved > 20 && 10lastremoved ≥ varnum
-            drops = FastVec{Int32}(buffer=lastremoved)
-            for j in i:varupto
-                @inbounds if !required_coeffs[j]
-                    unsafe_push!(drops, j -1)
-                end
-            end
-            @assert(lastremoved == length(drops))
-            let lastremoved=lastremoved # the macro contains a closure which would box lastremoved
-                Mosek.@MSK_removevars(task.task, lastremoved, finish!(drops))
-            end
-            removed += lastremoved
-            varnum -= lastremoved
-            lastremoved = 0
-            varupto = i -1
-        end
-    end
-    Mosek.deletetask(task)
-    return required_coeffs
-end
-
 #region Sampling functions
 # This is an adaptation of StatsBase.sample! with replace=false, however specifically adapted to the case where we are
 # sampling indices from `a` whose value is `true`, we will accumulate them into `x` and set them to `false` in `a`.
@@ -348,12 +205,12 @@ function self_avoid_sample!(a::AbstractVector{Bool}, x::AbstractVector{<:Integer
 end
 #endregion
 
-function newton_polytope_preproc_randomized_taskfun(V::Val{:Mosek}, coeffs, nv, subset_size, required_coeffs, subset, done,
+function newton_polytope_preproc_randomized_taskfun(V, coeffs, nv, subset_size, required_coeffs, subset, done,
     event, stop; parameters...)
     @inbounds while !stop[]
         dropped = 0
         for (cfi, rem) in zip(subset, newton_polytope_preproc_remove(V, nv, subset_size, i -> @view(coeffs[:, subset[i]]),
-                                                                     false; MSK_IPAR_NUM_THREADS="1", parameters...))
+                                                                     false, true; parameters...))
             required_coeffs[cfi] = rem
             if !rem
                 dropped += 1
@@ -365,7 +222,7 @@ function newton_polytope_preproc_randomized_taskfun(V::Val{:Mosek}, coeffs, nv, 
     end
 end
 
-function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, verbose; parameters...)
+function newton_polytope_preproc_randomized(V, coeffs, verbose; parameters...)
     nv, nc = size(coeffs)
     nthreads = Threads.nthreads()
     subset_size = min(1000, nc ÷ 20) # samples too small -> no chance of success; samples too large -> takes too long
@@ -381,7 +238,7 @@ function newton_polytope_preproc_randomized(V::Val{:Mosek}, coeffs, verbose; par
             @inbounds while true
                 totaldrop = 0
                 for (cfi, rem) in zip(_subset, newton_polytope_preproc_remove(V, nv, subset_size,
-                                                                              i -> @view(coeffs[:, _subset[i]]), false);
+                                                                              i -> @view(coeffs[:, _subset[i]]), false, false);
                                                                               parameters...)
                     required_coeffs[cfi] = rem
                     if !rem
@@ -559,7 +416,7 @@ else
     end
 end
 
-function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=false, preprocess_quick::Bool=true,
+function newton_polytope_preproc(V, objective::P; verbose::Bool=false, preprocess_quick::Bool=true,
     preprocess_randomized::Bool=false, preprocess_fine::Bool=false, preprocess::Union{Nothing,Bool}=nothing,
     warn_disable_randomization::Bool=true, parameters...) where {P<:AbstractPolynomialLike}
     if !isnothing(preprocess)
@@ -600,7 +457,7 @@ function newton_polytope_preproc(V::Val{:Mosek}, objective::P; verbose::Bool=fal
         @verbose_info("Removing redundancies from the convex hull - fine, ", nc, " initial candidates")
         preproc_time = @elapsed keepcol!(coeffs,
             @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_remove(V, nv, nc,
-                i -> @inbounds(@view coeffs[:, i]), verbose; parameters...)), nv)
+                i -> @inbounds(@view coeffs[:, i]), verbose, false; parameters...)), nv)
         nc = length(coeffs) ÷ nv
         @verbose_info("Found ", nc, " extremal points of the convex hull in ", preproc_time, " seconds")
     end
@@ -770,25 +627,9 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
 end
 #endregion
 
-@inline function newton_polytope_do_worker(::Val{:Mosek}, task, bk, moniter, tmp, Δprogress, Δacceptance, add_callback,
-    iteration_callback)
-    for powers in moniter
-        # check the previous power in the linear program and add it if possible
-        copyto!(tmp, powers)
-        Mosek.@MSK_putconboundslice(task.task, 0, length(bk), bk, tmp, tmp)
-        Mosek.optimize(task)
-        if Mosek.getsolsta(task, Mosek.MSK_SOL_BAS) == Mosek.MSK_SOL_STA_OPTIMAL
-            # this candidate is part of the Newton polytope
-            @inline add_callback(powers)
-            Δacceptance isa Ref && (Δacceptance[] += 1)
-        end
-        Δprogress isa Ref && (Δprogress[] += 1)
-        isnothing(iteration_callback) || @inline iteration_callback(powers)
-    end
-    return
-end
+function newton_polytope_do_worker end
 
-function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses, acceptances,
+function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses, acceptances,
     allcandidates, notifier, init_time, init_progress, num, filestuff)
     # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
     verbose = notifier[] != 0
@@ -905,7 +746,7 @@ function newton_polytope_do_taskfun(V::Val{:Mosek}, tid, task, ranges, nv, minde
             truncate(fileprogress, position(fileprogress))
         end
     finally
-        Mosek.deletetask(task)
+        finalize(task)
         if !isnothing(filestuff)
             close(fileout)
             close(fileprogress)
@@ -986,65 +827,7 @@ function newton_halfpolytope_tighten(mindeg, maxdeg, minmultideg, maxmultideg)
     return convert(T, mindeg), convert(T, maxdeg), convert(Vector{T}, minmultideg), convert(Vector{T}, maxmultideg)
 end
 
-function newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, mindeg, maxdeg, minmultideg, maxmultideg, verbose;
-    parameters...)
-    nv, nc = size(coeffs)
-    # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
-    # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
-    # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
-    # variables - this is commuting only.
-    num = length(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, true))
-    @verbose_info("Starting point selection among ", num, " possible monomials")
-    # now we rebuild a task with this minimal number of extremal points and try to find every possible part of the Newton
-    # polytope for SOS polynomials
-    task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
-    # verbose && Mosek.putstreamfunc(task, Mosek.MSK_STREAM_LOG, printstream)
-    for (k, v) in parameters
-        Mosek.putparam(task, string(k), v)
-    end
-    Mosek.appendvars(task, nc)
-    Mosek.putvarboundsliceconst(task, 1, nc +1, Mosek.MSK_BK_LO, 0., Inf)
-    Mosek.appendcons(task, nv +1)
-    let
-        idxs = collect(Int32(0):Int32(max(nv, nc) -1))
-        tmp = Vector{Float64}(undef, max(nv, nc))
-        for (i, cf) in zip(Iterators.countfrom(zero(Int32)), eachcol(coeffs))
-            @inbounds @view(tmp[1:nv]) .= 0.5 .* cf
-            Mosek.@MSK_putacol(task.task, i, nv, idxs, tmp)
-        end
-        @inbounds fill!(@view(tmp[1:nc]), 1.)
-        Mosek.@MSK_putarow(task.task, nv, nc, idxs, tmp)
-    end
-    Mosek.putconbound(task, nv +1, Mosek.MSK_BK_FX, 1.0, 1.0)
-    if num < 10_000 || isone(nv)
-        nthreads = 1
-        secondtask = nothing
-    else
-        nthreads = Threads.nthreads()
-        if nthreads > 1
-            # we need to figure out if we have enough memory for all the threads. Unfortunately, Mosek.getmemusage() seems to
-            # always return 1081, "No available information about the space usage." - so we need to fetch the information
-            # ourselves. Let's assume that at least a second task can be created.
-            mem = @allocdiff begin
-                secondtask = Mosek.Task(task)
-                Mosek.optimize(secondtask)
-            end
-            if mem ≤ 0
-                @verbose_info("Memory requirements of a single thread could not be determined, using all available threads")
-            else
-                @verbose_info("Memory requirements of a single thread: ", div(mem, 1024*1024, RoundUp), " MiB")
-                nthreads = min(nthreads, Int(Sys.free_memory() ÷ mem +2))
-            end
-            # Note that this is potentially still an underestimation, as our candidates list will also grow. But this is
-            # something that can potentially be swapped, so if swap space is available beyond the free_memory limit, then we
-            # are still fine.
-        else
-            secondtask = nothing
-        end
-    end
-    isone(nthreads) || Mosek.putintparam(task, Mosek.MSK_IPAR_NUM_THREADS, 1) # single-threaded for Mosek itself
-    return num, nthreads, task, secondtask
-end
+function newton_halfpolytope_do_prepare end
 
 struct InitialStateIterator{I,S,L}
     iter::I
@@ -1119,11 +902,13 @@ toSigned(x::UInt32) = Core.bitcast(Int32, x)
 toSigned(x::UInt64) = Core.bitcast(Int64, x)
 toSigned(x::Signed) = x
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
+function newton_halfpolytope_alloc(V, nv) end
+
+function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
     filepath)
     @verbose_info("Preparing to determine Newton polytope (single-threaded)")
 
-    bk = fill(Mosek.MSK_BK_FX.value, nv)
+    bk = newton_halfpolytope_alloc(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -1203,7 +988,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
             truncate(fileprogress, position(fileprogress))
         end
     finally
-        Mosek.deletetask(task)
+        finalize(task)
         if isnothing(fileout)
             return finish!(candidates)
         else
@@ -1214,7 +999,9 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     end
 end
 
-function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num,
+function newton_halfpolytope_clonetask end
+
+function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num,
     nthreads::Integer, task, secondtask, filepath)
     if isone(nthreads)
         @assert(isnothing(secondtask))
@@ -1227,7 +1014,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
     cutlen = nv - cutat
     cutat += 1 # cutat is now the first entry to be fixed
-    bk = fill(Mosek.MSK_BK_FX.value, nv)
+    bk = newton_halfpolytope_alloc(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
@@ -1303,7 +1090,8 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
         init_time = time_ns()
         init_progress = sum(threadprogress, init=0)
         notifier = Ref(verbose ? 1 : 0)
-        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(Mosek.Task, Iterators.repeated(task))),
+        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(newton_halfpolytope_clonetask,
+                                                                                         Iterators.repeated(task))),
                                                         ((2, secondtask), (1, task))))
             if isnothing(filepath)
                 filestuff = nothing
@@ -1348,7 +1136,7 @@ function newton_halfpolytope_do_execute(V::Val{:Mosek}, nv, mindeg, maxdeg, minm
     end
 end
 
-function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose::Bool=false,
+function newton_halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false,
     filepath::Union{<:AbstractString,Nothing}=nothing, kwargs...) where {P<:AbstractPolynomialLike}
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
     newton_time = @elapsed candidates = let
@@ -1370,6 +1158,13 @@ function newton_halfpolytope(V::Val{:Mosek}, objective::P, ::Val{false}; verbose
             " seconds and stored the results to the given file")
         return true
     end
+end
+
+const newton_methods = Symbol[]
+
+function default_newton_method()
+    isempty(newton_methods) && error("No Newton method is available. Load a solver package that provides such a method (e.g., Mosek)")
+    return first(newton_methods)
 end
 
 """

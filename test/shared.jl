@@ -2,7 +2,7 @@ using Test
 using PolynomialOptimization
 using MultivariatePolynomials
 import DynamicPolynomials
-import Mosek
+import Mosek, COSMO, Hypatia, COPT
 
 if !@isdefined(all_solvers)
     optimize = true

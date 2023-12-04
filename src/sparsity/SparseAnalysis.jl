@@ -143,9 +143,17 @@ end
 merge_cliques(cliques::AbstractVector{<:AbstractVector{T}}) where {T} =
     monomial_vector.(collect.(merge_cliques!(Set.(cliques))))
 
+const solver_methods = Symbol[]
+
+function default_solver_method()
+    isempty(solver_methods) && error("No solver method is available. Load a solver package that provides such a method (e.g., Mosek)")
+    return first(solver_methods)
+end
+
 """
     sparse_optimize(method, state::SparseAnalysisState; verbose=false, clique_merging=true, solutions=false,
         certificate=false, kwargs...)
+    sparse_optimize(state::SparseAnalysisState; kwargs...)
 
 Optimize a polynomial optimization problem that was construced via [`poly_problem`](@ref) and wrapped into a
 [`SparseAnalysisState`](@ref). Return the optimizer state, the best bound, and a list of potential optimal points. The latter
@@ -171,6 +179,8 @@ The following methods are currently supported:
   fast, but can scale to very large sizes.
 - `:HypatiaMoment`: for any kind of problem, requires Hypatia. This is moderately precise and not too fast.
 - `:COPTSOS`: for real-valued problems, requires COPT and uses a SOS approach. This is precise and fast.
+Note that every method requires you to load the associated package beforehand (e.g., `COSMO` for `:COSMOMoment`). If the
+`method` parameter is omitted, the default method is chosen, which is `:MosekSOS` if available, or the first method loaded.
 
 See also [`poly_all_solutions`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`optimality_certificate`](@ref).
@@ -207,6 +217,8 @@ function sparse_optimize(v::V, state::SparseAnalysisState; verbose::Bool=false, 
 end
 
 sparse_optimize(s::Symbol, rest...; kwrest...) = sparse_optimize(Val(s), rest...; kwrest...)
+
+sparse_optimize(args...; kwargs...) = sparse_optimize(Val(default_solver_method()), args...; kwargs...)
 
 last_moments(state::SparseAnalysisState) = last_moments(sparse_problem(state))
 
