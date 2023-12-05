@@ -239,5 +239,3 @@ for fun in (:variables, :nvariables, :degree)
     @eval MultivariatePolynomials.$fun(state::SparseAnalysisState) = $fun(sparse_problem(state))
 end
 Base.isreal(state::SparseAnalysisState) = isreal(sparse_problem(state))
-
-printstream(msg::String) = (print(msg); flush(stdout))

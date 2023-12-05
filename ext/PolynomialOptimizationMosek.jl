@@ -6,6 +6,8 @@ using PolynomialOptimization: FastVec, unsafe_push!, finish!, MonomialComplexCon
     tightening_methods, @verbose_info, @allocdiff, sqrt2
 using Mosek: msk_global_env, Env, deletetask
 
+printstream(msg::String) = (print(msg); flush(stdout))
+
 # Do we have Mosek version at least 10?
 isdefined(Mosek, :appendafes) && include("./Mosek/MosekMoment.jl")
 include("./Mosek/MosekSOS.jl")
