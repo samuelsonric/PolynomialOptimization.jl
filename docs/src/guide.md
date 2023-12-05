@@ -36,7 +36,12 @@ Size of full basis: 10
 
 ### Densely solving the problem
 Since this problem is so small, we can solve it directly without any sparsity consideration.
+Note that `PolynomialOptimization` works with a variety of solvers; however, they are included only as weak dependencies. You
+have to load the appropriate solver Julia package first to make the solvers available. For a list of supported solvers, see the
+documentation for [`sparse_optimize`](@ref) or the [details](@ref) section.
 ```jldoctest walkthrough
+julia> import Mosek
+
 julia> poly_optimize(:MosekSOS, prob)
 (Mosek.MSK_SOL_STA_OPTIMAL, 0.9166666483710708)
 ```
@@ -214,7 +219,7 @@ So again, we get the same optimal result, can extract a solution point with even
 as we now have just a basis of size `4` instead of `5` (at the cost of another quadratic constraint, which is much cheaper than
 larger semidefinite matrices).
 
-### Details on the optimization process
+### [Details on the optimization process](@id details)
 The first parameter for [`sparse_optimize`](@ref) or [`poly_optimize`](@ref) is the solver/method that is used to optimize
 the problem. The following methods are currently supported:
 - `:MosekSOS`: for real-valued problems, requires Mosek 9+ and uses a SOS approach. This is typically both the fastest and a
