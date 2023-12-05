@@ -84,3 +84,5 @@ function sparse_groupings(cs::SparsityCorrelative; chordal_completion::Bool=cs.c
         return cs.cache[2], cs.cache[3]
     end
 end
+
+default_solution_method(::SparsityCorrelative, ::Any) = :mvhankel

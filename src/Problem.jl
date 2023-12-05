@@ -20,24 +20,25 @@ Generate this type using [`poly_problem`](@ref); perform optimizations by constr
 See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`SparsityNone`](@ref), [`SparsityCorrelative`](@ref),
 [`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref).
 """
-struct PolyOptProblem{P,M,V,GB,MV<:AbstractVector{M}}
-    objective::P
-    prefactor::P
-    variables::Vector{V}
-    var_map::Dict{V,Int}
-    degree::Int
-    basis::MV
-    constraints::Vector{PolyOptConstraint{P,M}}
-    gröbner_basis::GB
-    complex::Bool
-    last_moments::Dict{<:Union{MonomialComplexContainer{M},M},Float64}
+mutable struct PolyOptProblem{P,M,V,GB,MV<:AbstractVector{M}}
+    const objective::P
+    const prefactor::P
+    const variables::Vector{V}
+    const var_map::Dict{V,Int}
+    const degree::Int
+    const basis::MV
+    const constraints::Vector{PolyOptConstraint{P,M}}
+    const gröbner_basis::GB
+    const complex::Bool
+    const last_moments::Dict{<:Union{MonomialComplexContainer{M},M},Float64}
+    last_objective::Float64
 
     function PolyOptProblem{P,M,V,GB,B}(objective::P, prefactor::P, variables::AbstractVector{V}, var_map::Dict{V,Int},
         degree::Int, basis::B, constraints::Vector{PolyOptConstraint{P,M}}, gröbner_basis::GB,
         complex::Bool) where {P,M,V,GB,B<:AbstractVector{M}}
         (V <: variable_union_type(P) && M <: monomial_type(P)) || error("Invalid types")
         return new{P,M,V,GB,B}(objective, prefactor, variables, var_map, degree, basis, constraints, gröbner_basis,
-            complex, Dict{complex ? MonomialComplexContainer{M} : M,Float64}())
+            complex, Dict{complex ? MonomialComplexContainer{M} : M,Float64}(), NaN)
     end
 end
 
@@ -644,9 +645,22 @@ Note that the results are associated with a _problem_, not with the sparse state
 convenience function: calling `last_moments` on any sparse state will always give the unique dictionary of the problem.
 This function is not exported; its interface or particular return type may change without notice.
 
-See also [`moment_matrix`](@ref).
+See also [`moment_matrix`](@ref), [`last_objective`](@ref).
 """
 last_moments(prob::PolyOptProblem) = prob.last_moments
+
+"""
+    last_objective(state::PolyOptProblem)
+    last_objective(state::SparseAnalysisState)
+
+Returns the objective value that was the result of the last optimization, which is an underestimator of the actual problem.
+Note that the results are associated with a _problem_, not with the sparse states. Therefore, the second form is merely a
+convenience function: calling `last_objective` on any sparse state will always give the unique underestimator of the problem.
+This function is not exported; its interface or particular return type may change without notice.
+
+See also [`last_moments`](@ref).
+"""
+last_objective(prob::PolyOptProblem) = prob.last_objective
 
 function poly_structure_indices(prob::PolyOptProblem, objective::Bool, zero::Union{Bool,<:AbstractSet{<:Integer}},
     nonneg::Union{Bool,<:AbstractSet{<:Integer}}, psd::Union{Bool,<:AbstractSet{<:Integer}})

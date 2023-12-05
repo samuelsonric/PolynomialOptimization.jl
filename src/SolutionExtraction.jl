@@ -251,20 +251,20 @@ function poly_solutions_scaled(moments::Dict{M,R}, a1, a2, variables, ϵ::R, mis
 end
 
 """
-    poly_solution_badness(problem::Union{PolyOptProblem,SparseAnalysisState}, objective, solution)
+    poly_solution_badness(problem::Union{PolyOptProblem,SparseAnalysisState}, solution)
 
-Determines the badness of a solution by comparing the value of the objective with the value according to the optimization
-(which must be passed as `objective`), and also by checking the violation of the constraints.
+Determines the badness of a solution by comparing the value of the objective with the value according to the last optimization
+that was done on the problem, and also by checking the violation of the constraints.
 The closer the return value is to zero, the better. If the return value is too large, `solution` probably has nothing to do
 with the actual solution.
 
 See also [`poly_optimize`](@ref), [`sparse_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
 """
-function poly_solution_badness(problem::PolyOptProblem, objective::R, solution::Vector) where {R<:Real}
+function poly_solution_badness(problem::PolyOptProblem, solution::Vector)
     # check whether we can certify optimality
     any(isnan, solution) && return Inf
     solution_map = problem.variables => solution
-    violation = abs(problem.objective(solution_map) - objective)
+    violation = abs(problem.objective(solution_map) - last_objective(problem))
     for constr in problem.constraints
         # those are real values, they might just not know it yet
         if constr.type == pctEqualitySimple || constr.type == pctEqualityGröbner || constr.type == pctEqualityNonneg
@@ -282,31 +282,37 @@ function poly_solution_badness(problem::PolyOptProblem, objective::R, solution::
 end
 poly_solution_badness(state::SparseAnalysisState, args...) = poly_solution_badness(sparse_problem(state), args...)
 
+function default_solution_method end
+
 """
-    poly_all_solutions(problem::Union{PolyOptProblem,SparseAnalysisState}, objective, ϵ=1e-6, δ=1e-3; verbose=false,
-        rel_threshold=100, abs_threshold=Inf, heuristic::Bool)
+    poly_all_solutions(problem::Union{PolyOptProblem,SparseAnalysisState}, ϵ=1e-6, δ=1e-3; verbose=false,
+        rel_threshold=100, abs_threshold=Inf, method::Symbol)
 
 Obtains a vector of all the solutions to a previously optimized problem; then iterates over all of them and grades and sorts
 them by their badness. Every solution of the returned vector is a tuple that first contains the optimal point and second the
 badness at this point. Solutions that are `rel_threshold` times worse than the best solution or worse than `abs_threshold` will
 be dropped from the result.
-If `heuristic` is enabled (which is the default for problems with term sparsity), a heuristic method will instead be used to
-determine possible solutions.
+The currently accepted methods are
+- `:mvhankel` to perform a multivariate Hankel decomposition as in [`poly_optimize`](@ref), default for dense problems and
+  those with correlative sparsity only.
+- `:heuristic` to perform a heuristic method as in [`poly_solutions_heuristic`](@ref), default for problems with term sparsity.
 
 See also [`poly_optimize`](@ref), [`sparse_optimize`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`poly_solutions_heuristic`](@ref).
 """
-function poly_all_solutions(state::SparseAnalysisState, objective::R, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
-    rel_threshold::Float64=100., abs_threshold::Float64=Inf, heuristic::Bool=!(state isa SparsityNone || state isa SparsityCorrelative)) where {R<:Real}
-    solutions_fv = FastVec{Tuple{Vector{sparse_problem(state).complex ? ComplexF64 : Float64},Float64}}()
-    if heuristic
+function poly_all_solutions(state::SparseAnalysisState, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
+    rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=default_solution_method(state, missing)) where {R<:Real}
+    if method === :heuristic
         sol_itr = poly_solutions_heuristic(sparse_problem(state); verbose)
-    else
+    elseif method === :heuristic
         sol_itr = poly_solutions(state, ϵ, δ; verbose)
+    else
+        error("Unknown solution extraction method: $method")
     end
+    solutions_fv = FastVec{Tuple{Vector{sparse_problem(state).complex ? ComplexF64 : Float64},Float64}}()
     Base.haslength(sol_itr) && sizehint!(solutions_fv, length(sol_itr))
     for solution in sol_itr
-        push!(solutions_fv, (solution, poly_solution_badness(state, objective, solution)))
+        push!(solutions_fv, (solution, poly_solution_badness(state, solution)))
     end
     solutions = finish!(solutions_fv)
     isempty(solutions) && return solutions

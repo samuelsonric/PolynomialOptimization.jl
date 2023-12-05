@@ -199,3 +199,5 @@ sparse_problem(stl::SparsityTerm) = sparse_problem(stl.logic)
 sparse_groupings(stl::SparsityTerm) = sparse_groupings(stl.logic)
 
 sparse_supports(stl::SparsityTerm) = sparse_supports(stl.logic)
+
+default_solution_method(::SparsityTerm, ::Any) = :heuristic

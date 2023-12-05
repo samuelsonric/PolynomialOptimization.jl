@@ -87,8 +87,9 @@ include("./helpers/Allocations.jl")
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")
 include("./Problem.jl")
-include("./Tightening.jl")
 include("./sparsity/SparseAnalysis.jl")
+include("./Tightening.jl")
+
 include("./SolutionExtraction.jl")
 include("./SolutionExtractionHeuristic.jl")
 include("./sparsity/SparsityNone.jl")
@@ -97,5 +98,6 @@ include("./sparsity/SparsityTerm.jl")
 include("./sparsity/SparsityTermBlock.jl")
 include("./sparsity/SparsityTermCliques.jl")
 include("./sparsity/SparsityCorrelativeTerm.jl")
+const SparsityAny = (SparsityNone,SparsityCorrelative,SparsityTerm,SparsityCorrelativeTerm)
 
 end

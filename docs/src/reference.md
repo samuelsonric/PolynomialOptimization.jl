@@ -35,6 +35,7 @@ poly_solution_badness
 optimality_certificate
 moment_matrix
 last_moments
+last_objective
 ```
 
 ## Sparsity
