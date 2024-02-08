@@ -83,6 +83,8 @@ include("./poly/SimplePolynomials.jl")
 using .SimplePolynomials
 using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial, SimpleComplexMonomial,
     moniter_state
+include("./helpers/StackVector.jl")
+include("./helpers/SortAlong.jl")
 include("./helpers/MatrixMutation.jl")
 include("./helpers/MatrixPolynomials.jl")
 include("./helpers/Allocations.jl")
