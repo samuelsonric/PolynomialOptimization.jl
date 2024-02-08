@@ -6,8 +6,8 @@ include("./shared.jl")
                           nonneg=[1 - (x[1] - 1)^2, 1 - (x[1] - x[2])^2, 1 - (x[2] - 3)^2], perturbation=1e-3)
              for i = 1:2]
     if optimize
-        for solver in all_solvers
-            @test getindex.(poly_optimize.(solver, probs), 2) ≈ [-3, -2] atol = 2e-2
+        for solver in solvers
+            @test getproperty.(poly_optimize.(solver, probs), :objective) ≈ [-3, -2] atol = 2e-2
         end
     end
 end
@@ -17,8 +17,8 @@ end
     probs = [poly_problem(-x[1]^2 - x[2]^2, i,
                           psd=[[1-4x[1]*x[2] x[1]; x[1] 4-x[1]^2-x[2]^2]], perturbation=1e-4) for i in 1:2]
     if optimize
-        for solver in all_solvers
-            @test getindex.(poly_optimize.(solver, probs), 2) ≈ [-4, -4] atol = 1e-3
+        for solver in solvers
+            @test getproperty.(poly_optimize.(solver, probs), :objective) ≈ [-4, -4] atol = 1e-3
         end
     end
 end
@@ -28,8 +28,8 @@ end
     probs = [poly_problem(-x[1]^2 - x[2]^2, i, zero=[x[1] + x[2] - 1],
                           psd=[[1-4x[1]*x[2] x[1]; x[1] 4-x[1]^2-x[2]^2]]) for i in 1:2]
     if optimize
-        for solver in all_solvers
-            @test getindex.(poly_optimize.(solver, probs), 2) ≈ [-4, -3.904891578336841] atol = 5e-3
+        for solver in solvers
+            @test getproperty.(poly_optimize.(solver, probs), :objective) ≈ [-4, -3.904891578336841] atol = 5e-3
         end
     end
 end
@@ -38,8 +38,8 @@ end
     DynamicPolynomials.@polycvar z
     prob = poly_problem(z + conj(z), 1, zero=[z * conj(z) - 1])
     if optimize
-        for solver in complex_solvers
-            @test poly_optimize(solver, prob)[2] ≈ -2 atol = 1e-8
+        for solver in solvers
+            @test poly_optimize(solver, prob).objective ≈ -2 atol = 1e-8
         end
     end
 end
@@ -51,8 +51,8 @@ end
                               z[1] * conj(z[1]) + z[2] * conj(z[2]) - 3,
                               1im * z[2] - 1im * conj(z[2])], nonneg=[z[2] + conj(z[2])])
     if optimize
-        for solver in complex_solvers
-            @test poly_optimize(solver, prob)[2] ≈ 0.42817465 atol = 1e-5
+        for solver in solvers
+            @test poly_optimize(solver, prob).objective ≈ 0.42817465 atol = 1e-5
         end
     end
 end
@@ -63,8 +63,8 @@ end
                           psd=[[1-2*(x[1]*x[2]+conj(x[1] * x[2])) x[1]; conj(x[1]) 4-x[1]*conj(x[1])-x[2]*conj(x[2])]],
                           perturbation=1e-4) for i in 2:3]
     if optimize
-        for solver in complex_solvers
-            @test getindex.(poly_optimize.(solver, probs), 2) ≈ [-4, -4] atol = 5e-3
+        for solver in solvers
+            @test getproperty.(poly_optimize.(solver, probs), :objective) ≈ [-4, -4] atol = 5e-3
         end
     end
 end

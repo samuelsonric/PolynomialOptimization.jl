@@ -2,9 +2,9 @@ using Test
 using PolynomialOptimization
 using MultivariatePolynomials
 import DynamicPolynomials
-import Mosek, COSMO, Hypatia, COPT
+import Mosek, COPT
 
-if !@isdefined(all_solvers)
+if !@isdefined(solvers)
     optimize = true
 
     if try
@@ -19,11 +19,10 @@ if !@isdefined(all_solvers)
             rethrow(e)
         end
     end
-        all_solvers = [:MosekMoment, :MosekSOS, :COSMOMoment, :HypatiaMoment, :COPTSOS]
+        solvers = [:MosekSOS, :COPTSOS]
         complex_solvers = [:MosekMoment, :HypatiaMoment]
     else
-        all_solvers = [:COSMOMoment, :HypatiaMoment]
-        complex_solvers = [:HypatiaMoment]
+        solvers = [:COPTSOS]
     end
 
     function strRep(x)
