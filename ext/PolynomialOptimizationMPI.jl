@@ -1,12 +1,12 @@
 module PolynomialOptimizationMPI
 
-using PolynomialOptimization, MultivariatePolynomials, Printf
+using PolynomialOptimization, MultivariatePolynomials, Printf, PolynomialOptimization.FastVector
 import MPI, Random
-import PolynomialOptimization: @verbose_info, @capture, FastVec, prepare_push!, unsafe_push!, finish!, haveMPI,
-    newton_polytope_preproc, newton_polytope_do_worker, newton_polytope_do_taskfun, monomial_cut, newton_halfpolytope_analyze,
-    newton_halfpolytope_tighten, newton_halfpolytope_do_prepare, InitialStateIterator, moniter_state,
-    newton_halfpolytope_restore_status!, toSigned, newton_halfpolytope_do_execute, newton_halfpolytope_alloc,
-    newton_halfpolytope, newton_halfpolytope_clonetask, makemonovec
+import PolynomialOptimization: @verbose_info, @capture, haveMPI, newton_polytope_preproc, newton_polytope_do_worker,
+    newton_polytope_do_taskfun, monomial_cut, newton_halfpolytope_analyze, newton_halfpolytope_do_prepare,
+    InitialStateIterator, moniter_state, newton_halfpolytope_restore_status!, toSigned, newton_halfpolytope_do_execute,
+    newton_halfpolytope, newton_halfpolytope_clonetask, newton_halfpolytope_alloc_global, newton_halfpolytope_alloc_local,
+    SimpleMonomialVector, isless_degree
 
 __init__() = haveMPI[] = true
 
@@ -27,38 +27,31 @@ isroot(::MPIRank) = false
 isroot(::RootRank) = true
 MPIRank(rank::Integer) = iszero(rank) ? RootRank() : OtherRank(rank)
 
-function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses,
-    acceptances, allcandidates, verbose, filestuff, rank::MPIRank)
+function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, data_global, cond, progresses, acceptances,
+    allcandidates, verbose, filestuff, ::MPIRank)
     lastappend = time_ns()
     lastinfo = Ref(lastappend)
     powers = Vector{typeof(maxdeg)}(undef, nv)
-    tmp = Vector{Float64}(undef, nv)
+    data_local = newton_halfpolytope_alloc_local(V, nv)
     candidates = FastVec{typeof(maxdeg)}()
     progress = Ref(progresses, tid)
     acceptance = Ref(acceptances, tid)
-    workload = nothing # we need it for capturing, but also to be preseved between loops
     if isnothing(filestuff)
+        workload = true # make sure we append the data at least once at the end
         fileprogress = nothing
         fileout = nothing
-        cut = 0
         writefile = (p, workload) -> nothing
         appendorwrite = @capture (p, workload) -> begin
             lock($cond)
             try
-                if isroot($rank)
-                    prepare_push!($allcandidates, length($candidates) ÷ $nv)
-                    for i in 1:nv:length(candidates)
-                        @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
-                    end
-                else
-                    append!(allcandidates, candidates)
-                end
+                append!($allcandidates, $candidates)
             finally
                 unlock(cond)
             end
             empty!(candidates)
         end
     else
+        workload = nothing # we need it for capturing, but also to be preseved between loops
         fileprogress, fileout = filestuff
         lastworkload = Ref{Vector{Int}}()
         writefile = @capture (p, workload) -> begin
@@ -97,7 +90,8 @@ function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk
                 copyto!(powers, restore)
                 iter = InitialStateIterator(iter_, moniter_state(powers))
             end
-            newton_polytope_do_worker(V, task, bk, iter, tmp, progress, acceptance, @capture(p -> append!($candidates, p)),
+            newton_polytope_do_worker(V, task, data_global, data_local, iter, progress, acceptance,
+                @capture(p -> append!($candidates, p)),
                 !verbose && isnothing(filestuff) ? nothing : @capture(p -> let
                     nextinfo = time_ns()
                     if nextinfo - $lastinfo[] > 1_000_000_000
@@ -107,7 +101,7 @@ function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk
                     end
                 end)
             )
-            if verbose || !isnothing(filepath)
+            if verbose || !isnothing(filestuff)
                 nextinfo = time_ns()
                 if nextinfo - lastinfo[] > 1_000_000_000
                     @inline writefile(powers, workload)
@@ -291,20 +285,16 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
         maxmultideg[1:cutat_worker]), Val(:detailed))
     cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
-    bk = newton_halfpolytope_alloc(V, nv)
+    data_global = newton_halfpolytope_alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    if isroot(rank) && isnothing(filepath)
-        candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int}
-    else
-        candidates = FastVec{typeof(maxdeg)}()
-    end
+    candidates = FastVec{typeof(maxdeg)}()
 
     progress = Ref(0)
     acceptance = Ref(0)
     workload = zeros(Int, nworkers)
-    powers = Vector{isroot(rank) && isnothing(filepath) ? Int : typeof(maxdeg)}(undef, nv)
+    powers = Vector{typeof(maxdeg)}(undef, nv)
     initialize = false
     # We don't use the initial state iterator here, as we have to jump into the loop
     rankiter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat_worker:end], maxmultideg[cutat_worker:end],
@@ -348,7 +338,7 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
         # We do not want to do a lot of communication between the tasks as is done in the multithreaded approach. There, we just
         # feed every item into the channel and the first one that is available pops it. Here, we check beforehand how many items
         # we can expect in an individual batch and then decide how many batches will be done by the rank.
-        tmp = Vector{Float64}(undef, nv)
+        data_local = newton_halfpolytope_alloc_local(nv)
         lastinfo = Ref(init_time)
         # unroll "for ranktask in rankiter" so that we can jump into the loop starting with the previous iteration
         if initialize
@@ -389,9 +379,8 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
                     else
                         iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, powers)
                     end
-                    newton_polytope_do_worker(V, task, bk, iter, tmp, progress, acceptance,
-                        isroot(rank) && isnothing(filepath) ? @capture(p -> push!($candidates, copy(p))) :
-                                                              @capture(p -> append!($candidates, p)),
+                    newton_polytope_do_worker(V, task, data_global, data_local, iter, progress, acceptance,
+                        @capture(p -> append!($candidates, p)),
                         !verbose && isnothing(filepath) ? nothing : @capture(p -> let nextinfo=time_ns()
                             if nextinfo - $lastinfo[] > 1_000_000_000
                                 if !isnothing($filepath)
@@ -484,15 +473,11 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
         maxmultideg[1:cutat_worker]), Val(:detailed))
     cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
-    bk = newton_halfpolytope_alloc(V, nv)
+    data_global = newton_halfpolytope_alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    if isroot(rank) && isnothing(filepath)
-        candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int}
-    else
-        candidates = FastVec{typeof(maxdeg)}()
-    end
+    candidates = FastVec{typeof(maxdeg)}()
 
     threadprogress = zeros(Int, nthreads)
     threadacceptance = zeros(Int, nthreads)
@@ -615,7 +600,7 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
             # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
             # parallel, even if we make sure not to modify the base task until all copies are done.
             threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg,
-                $maxdeg, $bk, $cond, $threadprogress, $threadacceptance, $candidates, $verbose, $filestuff, $rank)
+                $maxdeg, $data_global, $cond, $threadprogress, $threadacceptance, $candidates, $verbose, $filestuff, $rank)
         end
         # unroll "for ranktask in rankiter" so that we can jump into the loop starting with the previous iteration
         if initialize
@@ -709,49 +694,42 @@ function newton_halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool
     parameters, coeffs = newton_polytope_preproc(V, objective; verbose=verbose && isroot(rank),
         warn_disable_randomization=isroot(rank), kwargs...)
     nv = size(coeffs, 1)
+    analysis = newton_halfpolytope_analyze(coeffs)
 
     if isroot(rank)
         newton_time = @elapsed allresult = let
-            analysis = newton_halfpolytope_analyze(coeffs)
             num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., verbose;
                 parameters...)
-            tightened = newton_halfpolytope_tighten(analysis...)
-            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1),
-                (isone(nthreads) && isnothing(filepath) ? analysis : tightened)..., verbose, num, nthreads, task, secondtask,
-                filepath, comm, rank)
+            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task,
+                secondtask, filepath, comm, rank)
             if isnothing(filepath)
-                T = typeof(tightened[1])
                 sizes = Vector{Int}(undef, nworkers -1)
                 for _ in 2:nworkers
                     size, status = MPI.Recv(Int, comm, MPI.Status, tag=2)
                     @inbounds sizes[status.source] = size
                 end
-                prepare_push!(candidates, sum(sizes, init=0))
-                buffer = Matrix{T}(undef, nv, maximum(sizes, init=0))
+                i = length(candidates)
+                candidates = resize!(candidates.data, i + sum(sizes, init=0))
                 @inbounds for (rankᵢ, sizeᵢ) in enumerate(sizes)
-                    MPI.Recv!(buffer, comm, source=rankᵢ, tag=3)
-                    for c in eachcol(@view(buffer[:, 1:sizeᵢ]))
-                        unsafe_push!(candidates, convert(Vector{Int}, c))
-                    end
+                    MPI.Recv!(@view(candidates[i+1:i+sizeᵢ]), comm, source=rankᵢ, tag=3)
+                    i += sizeᵢ
                 end
-                sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
+                SimpleMonomialVector(sortslices(reshape(candidates, nv, length(candidates) ÷ nv), dims=2, lt=isless_degree))
             end
         end
 
         @verbose_info("\33[2KFinished construction of all Newton polytope element on the workers in ", newton_time,
             " seconds.")
-        return isnothing(filepath) ? makemonovec(variables(objective), allresult) : true
+        return isnothing(filepath) ? allresult : true
     else
         let
-            analysis = newton_halfpolytope_analyze(coeffs)
             num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., false;
                 parameters...)
-            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1), newton_halfpolytope_tighten(analysis...)...,
-                verbose, num, nthreads, task, secondtask, filepath, comm, rank)
+            candidates = newton_halfpolytope_do_execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task,
+                secondtask, filepath, comm, rank)
             if isnothing(filepath)
-                localresult = reshape(finish!(candidates), nv, length(candidates) ÷ nv)
-                MPI.Send(size(localresult, 2), comm, dest=root, tag=2)
-                MPI.Send(localresult, comm, dest=root, tag=3)
+                MPI.Send(length(candidates), comm, dest=root, tag=2)
+                MPI.Send(finish!(candidates), comm, dest=root, tag=3)
             end
             return
         end

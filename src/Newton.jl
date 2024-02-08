@@ -1,12 +1,14 @@
 export MonomialIterator, newton_halfpolytope, newton_halfpolytope_from_file
 
 """
-    newton_halfpolytope(method, objective; verbose=false, preprocess_quick=true, preprocess_randomized=false,
-        preprocess_fine=false, preprocess=nothing, filepath=nothing, parameters...)
+    newton_halfpolytope(method, poly; verbose=false, preprocess_quick=true,
+        preprocess_randomized=false, preprocess_fine=false, preprocess=nothing,
+        filepath=nothing, parameters...)
 
 Calculates the Newton polytope for the sum of squares optimization of a given objective, which is half the Newton polytope of
-the objective itself. This requires the availability of a linear solver. Currently, `:Mosek` is the only supported method
-(which is also the default).
+the objective itself. This requires the availability of a linear solver. For a list of supported solvers, see
+[the solver reference](@ref solvers_poly_optimize).
+
 There are three preprocessing methods which can be turned on individually or collectively using `preprocess`; depending on the
 problem, they may reduce the amount of time that is required to construct the convex hull of the full Newton polytope:
 - `preprocess_quick` is the Akl-Toussaint heuristic. Every monomial will be checked against a linear program that scales as the
@@ -23,6 +25,7 @@ After preprocessing is done, the monomials in the half Newton polytope are const
 min/max-degree constraint using [`MonomialIterator`](@ref) and taken over into the basis if they are contained in the convex
 polytope whose vertices were determined based on the objective and preprocessing; this is done by performing a linear program
 for each candidate monomial.
+
 The `parameters` will be passed on to the linear solver in every case (preprocessing and construction).
 
 !!! info "Multithreading"
@@ -64,15 +67,123 @@ The `parameters` will be passed on to the linear solver in every case (preproces
 
 See also [`newton_halfpolytope_from_file`](@ref).
 """
-newton_halfpolytope(method::Symbol, objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
-    newton_halfpolytope(Val(method), objective, Val(haveMPI[]); kwargs...)
-
+newton_halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...) =
+    newton_halfpolytope(Val(method), poly, Val(haveMPI[]); kwargs...)
+function newton_halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
+    out = newton_halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)
+    if out isa SimpleMonomialVector
+        conv_time = @elapsed begin
+            real_vars = variable_union_type(poly)[]
+            complex_vars = similar(real_vars)
+            for v in variables(poly)
+                if isreal(v)
+                    push!(real_vars, v)
+                elseif isconj(v)
+                    vo = conj(v)
+                    vo ∈ complex_vars || push!(complex_vars, vo)
+                else
+                    push!(complex_vars, v)
+                end
+            end
+            mv = monomial_vector(FakeMonomialVector(out, real_vars, complex_vars))
+        end
+        @verbose_info("Converted monomials back to a $(typeof(mv)) with length $(length(mv)) in $conv_time seconds")
+        return mv
+    else
+        return out
+    end
+end
 newton_halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
-    newton_halfpolytope(Val(:Mosek), objective, Val(haveMPI[]); kwargs...)
+    newton_halfpolytope(default_newton_method(), objective; kwargs...)
 
-function newton_polytope_preproc_quick end
-function newton_polytope_preproc_remove end
+# We provide some setter functions for SimpleDenseMonomialVector vector mainly due to the need for sorting when the vector is
+# constructed in the parallelized Newton algorithm. This is the only reason - Simplexxx is not supposed to be mutable!
+@inline function Base.setindex!(x::SimplePolynomials.SimpleRealDenseMonomialVectorOrView{Nr,P},
+    val::SimplePolynomials.SimpleRealDenseMonomial{Nr,P}, i::Integer) where {Nr,P}
+    @boundscheck checkbounds(x, i)
+    @inbounds copyto!(@view(x.exponents_real[:, i]), val.exponents_real)
+    return val
+end
+@inline function Base.setindex!(x::SimplePolynomials.SimpleComplexDenseMonomialVectorOrView{Nc,P},
+    val::SimplePolynomials.SimpleComplexDenseMonomial{Nc,P}, i::Integer) where {Nc,P}
+    @boundscheck checkbounds(x, i)
+    @inbounds copyto!(@view(x.exponents_complex[:, i]), val.exponents_complex)
+    @inbounds copyto!(@view(x.exponents_conj[:, i]), val.exponents_conj)
+    return val
+end
+@inline function Base.setindex!(x::SimplePolynomials.SimpleDenseMonomialVectorOrView{Nc,P},
+    val::SimplePolynomials.SimpleDenseMonomial{Nc,P}, i::Integer) where {Nc,P}
+    @boundscheck checkbounds(x, i)
+    @inbounds copyto!(@view(x.exponents_real[:, i]), val.exponents_real)
+    @inbounds copyto!(@view(x.exponents_complex[:, i]), val.exponents_complex)
+    @inbounds copyto!(@view(x.exponents_conj[:, i]), val.exponents_conj)
+    return val
+end
+
+# The same goes for resizing, which is done after the monomial vector was sorted by calling unique!.
+function Base.resize!(x::SimplePolynomials.SimpleRealMonomialVector{Nr,P,M}, len) where {Nr,P<:Unsigned,M<:DenseMatrix}
+    n = length(x) - len
+    n < 0 && error("Cannot increase the size of a monomial vector")
+    iszero(n) && return x
+    return SimpleMonomialVector{Nr,0,P,M}(matrix_delete_end!(x.exponents_real, n))
+end
+function Base.resize!(x::SimplePolynomials.SimpleComplexMonomialVector{Nc,P,M}, len) where {Nc,P<:Unsigned,M<:DenseMatrix}
+    n = length(x) - len
+    n < 0 && error("Cannot increase the size of a monomial vector")
+    iszero(n) && return x
+    return SimpleMonomialVector{0,Nc,P,M}(matrix_delete_end!(x.exponents_complex, n), matrix_delete_end!(x.exponents_conj, n))
+end
+function Base.resize!(x::SimplePolynomials.SimpleMonomialVector{Nr,Nc,P,M}, len) where {Nr,Nc,P<:Unsigned,M<:DenseMatrix}
+    n = length(x) - len
+    n < 0 && error("Cannot increase the size of a monomial vector")
+    iszero(n) && return x
+    return SimpleMonomialVector{Nr,Nc,P,M}(matrix_delete_end!(x.exponents_real, n), matrix_delete_end!(x.exponents_complex, n),
+        matrix_delete_end!(x.exponents_conj, n))
+end
+
 #region Preprocessing for the full Newton polytope convex hull
+"""
+    newton_polytope_preproc_quick(V, coeffs::AbstractMatrix{<:Integer},
+        vertexindices::Vector{Int}, verbose::Bool; parameters...)
+
+Eliminate all the coefficients that by the Akl-Toussaint heuristic cannot be part of the convex hull anyway. The implementation
+has to return a `Vector{Bool}` that for every column in `coeffs` indicates whether this particular column can be obtained as
+the convex combinations of the columns indexed by `vertexindices` (`true` if the answer is yes).
+"""
+function newton_polytope_preproc_quick end
+
+"""
+    newton_polytope_preproc_remove(V, nv::Int, nc::Int, getvarcon::Function, verbose::Bool,
+        singlethread::Bool; parameters...)
+
+Removes all convex dependencies from the list of coefficients. There are `nc` coefficients, each with `nv` entries of Integer
+type. The `AbstractVector` representing the `i`th coefficient (`1 ≤ i ≤ nc`) can be obtained by calling `getvarcon(i)`.
+The implementation has to return a `Vector{Bool}` of length `nc` that for every coefficient contains `false` if and only if the
+convex hull spanned by all coefficients is invariant under removal of this coefficient.
+"""
+function newton_polytope_preproc_remove end
+
+function newton_polytope_preproc_prequick(V, coeffs, verbose; parameters...)
+    nv = size(coeffs, 1)
+    vertexindices = fill(1, 2nv)
+    @inbounds lowestidx = @view(vertexindices[1:nv])
+    @inbounds highestidx = @view(vertexindices[nv+1:2nv])
+    # we might also add the points with the smallest/largest sum of all coordinates, or differences (but there are 2^nv ways to
+    # combine, so let's skip it)
+    @inbounds for (j, coeff) in enumerate(eachcol(coeffs))
+        for (i, coeffᵢ) in enumerate(coeff)
+            if coeffs[i, lowestidx[i]] > coeffᵢ
+                lowestidx[i] = j
+            end
+            if coeffs[i, highestidx[i]] < coeffᵢ
+                highestidx[i] = j
+            end
+        end
+    end
+    unique!(sort!(vertexindices))
+    return newton_polytope_preproc_quick(V, coeffs, vertexindices, verbose; parameters...)
+end
+
 #region Sampling functions
 # This is an adaptation of StatsBase.sample! with replace=false, however specifically adapted to the case where we are
 # sampling indices from `a` whose value is `true`, we will accumulate them into `x` and set them to `false` in `a`.
@@ -313,112 +424,215 @@ function newton_polytope_preproc_randomized(V, coeffs, verbose; parameters...)
     return required_coeffs
 end
 
-# Delete "columns" from a vector that is interpreted as a matrix of height inc
-function keepcol!(A::Vector, m::Vector{Bool}, inc)
-    d = length(A) ÷ inc
-    length(m) == d || throw(BoundsError(A, m))
-    i = 1
-    from = 1
-    @inbounds while from ≤ d && !m[from]
-        from += 1
-    end
-    to = from
-    @inbounds while to ≤ d
-        if m[to]
-            to += 1
-        else
-            len = to - from # [from, to)
-            isone(from) || copyto!(A, (i -1) * inc +1, A, (from -1) * inc +1, len * inc)
-            i += len
-            from = to +1
-            while from ≤ d && !m[from]
-                from += 1
+function newton_polytope_preproc_merge_constraints_postproc(T, nv, mons_idx_set, degree, dense::Bool)
+    mons_idx = sort!(collect(mons_idx_set))
+    next_col = 1
+    max_col = length(mons_idx)
+    iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), T(degree), zeros(T, nv), fill(T(degree), nv), true)
+    if dense
+        coeffs = resizable_array(T, nv, max_col)
+        @inbounds for (idx, powers) in enumerate(iter)
+            if idx == mons_idx[next_col]
+                copyto!(@view(coeffs[:, next_col]), powers)
+                next_col += 1
+                next_col > max_col && break
             end
-            to = from
         end
-    end
-    if from ≤ d
-        len = to - from # [from, to), as now to = d +1
-        isone(from) || copyto!(A, (i -1) * inc +1, A, (from -1) * inc +1, len * inc)
-        i += len
-    end
-    Base._deleteend!(A, (d - i +1) * inc)
-    return A
-end
-
-if VERSION < v"1.11"
-    # mutable struct jl_array_t
-    #     data::Ptr{Cvoid}
-    #     length::UInt
-    #     flags::UInt16 # how:2, ndims:9, pooled:1, ptrarray:1, hasptr:1, isshared:1, isaligned:1
-    #     elsize::UInt16
-    #     offset::UInt32
-    #     nrows::UInt
-    #     maxsize::UInt
-    # end
-
-    unsafe_array_get_flags(a::AbstractArray) = unsafe_load(Ptr{UInt16}(pointer_from_objref(a)) + sizeof(Ptr) + sizeof(UInt))
-    unsafe_array_set_flags!(a::AbstractArray, flags::UInt16) = unsafe_store!(Ptr{UInt16}(pointer_from_objref(a)) +
-        sizeof(Ptr) + sizeof(UInt), flags)
-
-    # Reshape a vector according to the reshaping expression, then execute expr, and make sure that it is unshared again
-    # afterwards
-    # Two forms:
-    # - @reshape_temp(myreshaped = reshape(myvec, dims...), expr that uses myreshaped)
-    # - @reshape_temp(reshape(myarr, dim...), expr that uses myarr as if it were now reshaped)
-    macro reshape_temp(reshaping, expr)
-        if reshaping.head === :call && length(reshaping.args) ≥ 3 && reshaping.args[1] === :reshape &&
-            reshaping.args[2] isa Symbol
-            original = reshaping.args[2]
-            target = original
-            reshaping_expr = reshaping
-        else
-            (reshaping.head === :(=) && length(reshaping.args) === 2 && reshaping.args[1] isa Symbol &&
-                reshaping.args[2] isa Expr && reshaping.args[2].head === :call && length(reshaping.args[2].args) ≥ 3 &&
-                reshaping.args[2].args[1] === :reshape && reshaping.args[2].args[2] isa Symbol) ||
-                error("@reshape_temp expect a reshape or reshape-assignment as first parameter")
-            original = reshaping.args[2].args[2]
-            target = reshaping.args[1]
-            reshaping_expr = reshaping.args[2]
-        end
-        quote
-            iszero(unsafe_array_get_flags($(esc(original))) & 0b0_1_0_0_0_000000000_00) ||
-                error("@reshape_temp requires unshared vector in the beginning")
-            let
-                local result
-                let $(esc(target))=$(esc(reshaping_expr))
-                    result=$(esc(expr))
+        @assert(next_col == max_col +1)
+        return coeffs
+    else
+        colptr = resizable_array(UInt, max_col +1)
+        rowval = FastVec{UInt}()
+        nzval = FastVec{T}()
+        @inbounds for (idx, powers) in enumerate(iter)
+            if idx == mons_idx[next_col]
+                colptr[next_col] = length(rowval) +1
+                for (row, val) in enumerate(powers)
+                    if !iszero(val)
+                        push!(rowval, row)
+                        push!(nzval, val)
+                    end
                 end
-                unsafe_array_set_flags!($(esc(original)), unsafe_array_get_flags($(esc(original))) & 0b1_0_1_1_1_111111111_11)
-                result
+                next_col += 1
+                next_col > max_col && break
             end
         end
-    end
-else
-    macro reshape_temp(reshaping, expr)
-        if reshaping.head === :call && length(reshaping.args) ≥ 3 && reshaping.args[1] === :reshape &&
-            reshaping.args[2] isa Symbol
-            target = reshaping.args[2]
-            reshaping_expr = reshaping
-        else
-            (reshaping.head === :(=) && length(reshaping.args) === 2 && reshaping.args[1] isa Symbol &&
-                reshaping.args[2] isa Expr && reshaping.args[2].head === :call && length(reshaping.args[2].args) ≥ 3 &&
-                reshaping.args[2].args[1] === :reshape && reshaping.args[2].args[2] isa Symbol) ||
-                error("@reshape_temp expect a reshape or reshape-assignment as first parameter")
-            target = reshaping.args[1]
-            reshaping_expr = reshaping.args[2]
-        end
-        quote
-            let $(esc(target))=$(esc(reshaping_expr))
-                esc($expr)
-            end
-        end
+        @assert(next_col == max_col +1)
+        colptr[next_col] = length(rowval) +1
+        return SparseMatrixCSC{T,UInt}(nv, max_col, colptr, finish!(rowval), finish!(nzval))
     end
 end
 
-function newton_polytope_preproc(V, objective::P; verbose::Bool=false, preprocess_quick::Bool=true,
-    preprocess_randomized::Bool=false, preprocess_fine::Bool=false, preprocess::Union{Nothing,Bool}=nothing,
-    warn_disable_randomization::Bool=true, parameters...) where {P<:AbstractPolynomialLike}
+function newton_polytope_preproc_merge_constraints(degree, indextype, objective::SimpleRealPolynomial, zero, nonneg, psd, dense::Bool)
+    nv = nvariables(objective)
+    T = SimplePolynomials.smallest_unsigned(2degree)
+    mons_idx_set = sizehint!(Set{indextype}(), length(objective))
+    # we start by storing the indices of the monomials only, which is the most efficient way for eliminating duplicates
+    # afterwards
+    for mon in monomials(objective)
+        push!(mons_idx_set, monomial_index(mon))
+    end
+    # If there are constraints present, things are not so simple. We assume a Putinar certificate:
+    # f ≥ 0 on {zero == 0, nonneg ≥ 0, psd ⪰ 0} ⇐ f = σ₀ + ∑ᵢ nonnegᵢ σᵢ + ∑ⱼ ⟨psdⱼ, Mⱼ⟩ + ∑ₖ zeroₖ pₖ
+    #                                              where σ₀, σᵢ ∈ SOS, Mⱼ ∈ SOSmatrix, pₖ ∈ poly
+    # This can simply be reformulated into f - ∑ᵢ nonnegᵢ σᵢ - ∑ⱼ ⟨psdⱼ, Mⱼ⟩ - ∑ₖ zeroₖ pₖ ∈ SOS, i.e., we can now apply
+    # Newton methods to the polynomial with subtracted constraint certifiers. The variable degree influences how large
+    # the σᵢ, Mⱼ, and pₖ will maximally be.
+    # Note that since the coefficients of the σᵢ, Mⱼ, and pₖ are unknowns, we don't need to ask ourselves whether some
+    # cancellation may occur - we don't know. So every monomial that is present in any of the constraints, multiplied
+    # by any monomial of allowed degree for the multiplier, will give rise to an additional entry in the coeffs array.
+    # This can quickly become disastrous if `degree` is high but the degree of the constraints is low (as then, the
+    # prefactors have lots of entries), but it is not so harmful in the other regime.
+    minmultideg = zeros(T, nv)
+    maxmultideg = similar(minmultideg)
+    powers₁ = similar(minmultideg)
+    powers₂ = similar(minmultideg)
+    monomial₁ = SimpleMonomial{nv,0,T,typeof(powers₁)}(powers₁, SimplePolynomials.absent, SimplePolynomials.absent)
+    monomial₂ = SimpleMonomial{nv,0,T,typeof(powers₂)}(powers₂, SimplePolynomials.absent, SimplePolynomials.absent)
+
+    # 1. zero constraints
+    for zeroₖ in zero
+        maxdeg = T(2(degree - maxhalfdegree(zeroₖ)))
+        fill!(maxmultideg, maxdeg)
+        iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg, maxmultideg, powers₁)
+        sizehint!(mons_idx_set, length(mons_idx_set) + length(iter) * length(zeroₖ))
+        for t in zeroₖ
+            monₜ = monomial(t)
+            for _ in iter
+                push!(mons_idx_set, monomial_index(monomial₁, monₜ))
+            end
+        end
+    end
+
+    # 2. nonneg constraints
+    # Note that we can still exploit that the σⱼ must be sums of squares: despite being polynomials of degree deg(σⱼ)
+    # with unknown coefficients, _some_ of these must for sure be zero, namely those that cannot be reached by
+    # combining any two of the possible coefficients that are in the valid multidegree range of σⱼ.
+    for nonnegᵢ in nonneg
+        maxdeg = T(degree - maxhalfdegree(nonnegᵢ))
+        fill!(maxmultideg, maxdeg)
+        iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg, maxmultideg, powers₁)
+        len = length(iter)
+        sizehint!(mons_idx_set, length(mons_idx_set) + (len * (len +1) ÷ 2) * length(nonnegᵢ))
+        for t in nonnegᵢ
+            monₜ = monomial(t)
+            for _ in iter
+                # no need to run over duplicates
+                push!(mons_idx_set, monomial_index(monomial₁, conj(monomial₁), monₜ))
+                @inbounds copyto!(powers₂, powers₁)
+                for _ in InitialStateIterator(MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg,
+                                                                                 maxmultideg, powers₂),
+                                              moniter_state(powers₂))
+                    push!(mons_idx_set, monomial_index(monomial₁, monomial₂, monₜ))
+                end
+            end
+        end
+    end
+
+    # 3. psd constraints
+    # Those are modeled in terms of SOS matrices. Given the basis u of `degree`, an m×m-matrix M is a SOS matrix iff
+    # M(x) = (u ⊗ 1ₘ)ᵀ Z (u ⊗ 1ₘ) with Z ⪰ 0. Still, there is no duplication of the Z-coefficients (apart from
+    # symmetry), so there is no way in which these unknown coefficients could potentially cancel: every entry in Z will
+    # appear in exactly one cell in a triangle of M. So basically, all that we have to do is to apply the SOS
+    # decomposition cell-wise.
+    for psdᵢ in psd
+        dim = LinearAlgebra.checksquare(psdᵢ)
+        maxdeg = T(degree - maxhalfdegree(psdᵢ))
+        fill!(maxmultideg, maxdeg)
+        iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg, maxmultideg, powers₁)
+        len = length(iter)
+        sizehint!(mons_idx_set, length(mons_idx_set) + (len * (len +1) ÷ 2) *
+                                sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0))
+        @inbounds for j in 1:dim, i in 1:j
+            for t in psdᵢ[i, j]
+                monₜ = monomial(t)
+                for _ in iter
+                    # no need to run over duplicates
+                    push!(mons_idx_set, monomial_index(monomial₁, conj(monomial₁), monₜ))
+                    @inbounds copyto!(powers₂, powers₁)
+                    for _ in InitialStateIterator(MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg,
+                                                                                     maxmultideg, powers₂),
+                                                  moniter_state(powers₂))
+                        push!(mons_idx_set, monomial_index(monomial₁, monomial₂, monₜ))
+                    end
+                end
+            end
+        end
+    end
+
+    # now we need to re-cast the indices into the exponent-representations
+    return newton_polytope_preproc_merge_constraints_postproc(T, nv, mons_idx_set, 2degree, dense)
+end
+
+_realify(m::SimpleComplexMonomial{Nc,P,V}) where {Nc,P<:Unsigned,V<:AbstractVector{P}} =
+    SimpleMonomial{Nc,0,P,V}(m.exponents_complex, SimplePolynomials.absent, SimplePolynomials.absent)
+
+function newton_polytope_preproc_merge_constraints(degree, indextype, objective::SimpleComplexPolynomial, zero, nonneg, psd, dense::Bool)
+    # Note that in the complex-valued case there's no mixing - i.e., no real variables. And every monomial appears once in its
+    # original form, once in its conjugate. We are only interested in the "original" (whichever it is), so we effectively treat
+    # every monomial as real, discarding the conjugate part. (It would be possible to do it differently, but then in the end
+    # when we reduce everything to the complex part dropping the conjugates, deleting duplicates would be necessary - in this
+    # way, we don't even generate duplicates.)
+
+    nv = nvariables(objective) ÷ 2 # don't double Nc
+    T = SimplePolynomials.smallest_unsigned(2degree)
+    mons_idx_set = sizehint!(Set{indextype}(), length(objective))
+
+    for mon in monomials(objective)
+        push!(mons_idx_set, monomial_index(_realify(mon)))
+    end
+
+    minmultideg = zeros(T, nv)
+    maxmultideg = similar(minmultideg)
+    powers₁ = similar(minmultideg)
+    monomial₁ = SimpleMonomial{nv,0,T,typeof(powers₁)}(powers₁, SimplePolynomials.absent, SimplePolynomials.absent)
+
+    # 1. zero constraints
+    # 2. psd constraints
+    for constraints in (zero, nonneg)
+        for constrₖ in constraints
+            maxdeg = T(degree - maxhalfdegree(constrₖ))
+            fill!(maxmultideg, maxdeg)
+            iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg, maxmultideg, powers₁)
+            sizehint!(mons_idx_set, length(mons_idx_set) + 2length(iter) * length(constrₖ))
+            for t in constrₖ
+                monₜ = monomial(t)
+                for _ in iter
+                    push!(mons_idx_set,
+                        monomial_index(monomial₁, _realify(monₜ)),
+                        monomial_index(monomial₁, _realify(conj(monₜ)))
+                    )
+                end
+            end
+        end
+    end
+
+    # 3. psd constraints
+    for psdᵢ in psd
+        dim = LinearAlgebra.checksquare(psdᵢ)
+        maxdeg = T(degree - maxhalfdegree(psdᵢ))
+        fill!(maxmultideg, maxdeg)
+        iter = MonomialIterator{Graded{LexOrder}}(Base.zero(T), maxdeg, minmultideg, maxmultideg, powers₁)
+        sizehint!(mons_idx_set, length(mons_idx_set) + 2length(iter) * sum(length, psdᵢ, init=0))
+        @inbounds for j in 1:dim, i in 1:j
+            for t in psdᵢ[i, j]
+                monₜ = monomial(t)
+                for _ in iter
+                    push!(mons_idx_set, monomial_index(monomial₁, _realify(monₜ)))
+                    i == j || push!(mons_idx_set, monomial_index(monomial₁, _realify(conj(monₜ))))
+                end
+            end
+        end
+    end
+
+    # now we need to re-cast the indices into the exponent-representations
+    return newton_polytope_preproc_merge_constraints_postproc(T, nv, mons_idx_set, degree, dense)
+end
+
+function newton_polytope_preproc(V, objective::P; verbose::Bool=false, zero::AbstractVector{P}, nonneg::AbstractVector{P},
+    psd::AbstractVector{<:AbstractMatrix{P}}, degree::Int, preprocess::Union{Nothing,Bool}=nothing,
+    preprocess_quick::Bool=true, preprocess_randomized::Bool=false, preprocess_fine::Bool=false,
+    warn_disable_randomization::Bool=true, parameters...) where {P<:SimpleRealPolynomial}
     if !isnothing(preprocess)
         preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
     end
@@ -426,26 +640,49 @@ function newton_polytope_preproc(V, objective::P; verbose::Bool=false, preproces
         preprocess_randomized, ", fine preprocessing: ", preprocess_fine, ")")
     nv = nvariables(objective)
     nc = length(objective)
-    coeffs = Vector{Int}(undef, nv * nc)
-    i = 1
-    for mon in monomials(objective)
-        @inbounds copyto!(coeffs, i, exponents(mon), 1, nv)
-        i += nv
+    if !isempty(zero) || !isempty(nonneg) || !isempty(psd)
+        coeffs = newton_polytope_preproc_merge_constraints(
+            degree, SimplePolynomials.smallest_unsigned(monomial_count(2degree, nv)), objective, zero, nonneg, psd,
+            monomials(objective).exponents_real isa DenseMatrix
+        )
+    else
+        # shortcut, no need to temporarily go to the index-based version. Just copy the coefficient matrix (as preprocessing
+        # will make changes to it)
+        let objexps=monomials(objective).exponents_real
+            if VERSION < v"1.11"
+                # due to preprocessing, we might want to shrink this array. In Julia, shrinking is almost unsupported - a new
+                # buffer of the smaller size is allocated and things are copied over. However, in case we actually wrap a
+                # malloc-allocated buffer into an array, realloc is used properly.
+                if objexps isa DenseMatrix
+                    coeffs = resizable_copy(objexps)
+                else
+                    @assert(objexps isa SparseArrays.AbstractSparseMatrixCSC)
+                    colptr = SparseArrays.getcolptr(objexps)
+                    rowval = rowvals(objexps)
+                    nzval = nonzeros(objexps)
+                    @inbounds coeffs = typeof(objexps)(size(objexps)..., resizable_copy(colptr), resizable_copy(rowval),
+                        resizable_copy(nzval))
+                end
+            else
+                coeffs = copy(objexps)
+            end
+        end
     end
     if preprocess_quick
         @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", nc, " initial candidates")
-        preproc_time = @elapsed keepcol!(coeffs,
-            @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_quick(V, coeffs, verbose; parameters...)), nv)
-        nc = length(coeffs) ÷ nv
+        preproc_time = @elapsed begin
+            coeffs = keepcol!(coeffs, newton_polytope_preproc_prequick(V, coeffs, verbose; parameters...))
+            nc = size(coeffs, 2)
+        end
         @verbose_info("Found ", nc, " potential extremal points of the convex hull in ", preproc_time, " seconds")
     end
     if preprocess_randomized
         if nc ≥ 100
             @verbose_info("Removing redundancies from the convex hull - randomized, ", nc, " initial candidates")
-            preproc_time = @elapsed keepcol!(coeffs,
-                @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_randomized(V, coeffs, verbose; parameters...)),
-                nv)
-            nc = length(coeffs) ÷ nv
+            preproc_time = @elapsed begin
+                coeffs = keepcol!(coeffs, newton_polytope_preproc_randomized(V, coeffs, verbose; parameters...))
+                nc = size(coeffs, 2)
+            end
             @verbose_info("Found ", nc, " extremal points of the convex hull via randomization in ", preproc_time, " seconds")
         else
             warn_disable_randomization &&
@@ -455,188 +692,39 @@ function newton_polytope_preproc(V, objective::P; verbose::Bool=false, preproces
     if preprocess_fine
         # eliminate all the coefficients that are redundant themselves to make the linear system smaller
         @verbose_info("Removing redundancies from the convex hull - fine, ", nc, " initial candidates")
-        preproc_time = @elapsed keepcol!(coeffs,
-            @reshape_temp(reshape(coeffs, nv, nc), newton_polytope_preproc_remove(V, nv, nc,
-                i -> @inbounds(@view coeffs[:, i]), verbose, false; parameters...)), nv)
-        nc = length(coeffs) ÷ nv
+        preproc_time = @elapsed begin
+            coeffs = keepcol!(coeffs, newton_polytope_preproc_remove(V, nv, nc, @capture(i -> @inbounds(@view $coeffs[:, i])),
+                verbose, false; parameters...))
+            nc = size(coeffs, 2)
+        end
         @verbose_info("Found ", nc, " extremal points of the convex hull in ", preproc_time, " seconds")
     end
-    return parameters, reshape(coeffs, nv, nc)
+    return parameters, coeffs
 end
 #endregion
 
-#region Monomial iterator
 """
-    MonomialIterator{O}(mindeg, maxdeg, minmultideg, maxmultideg, ownpowers=false)
+    newton_polytope_do_worker(V, task, data_global, data_local, moniter::MonomialIterator,
+        Δprogress::Ref{Int}, Δacceptance::Ref{Int}, add_callback::Function,
+        iteration_callback::Union{Nothing,Function})
 
-This is an advanced iterator that is able to iterate through all monomials with constraints specified not only by a minimum and
-maximum total degree, but also by individual variable degrees. `ownpowers` can be set to `true` (or be passed a
-`Vector{<:Integer}` of appropriate length), which will make the iterator use the same vector of powers whenever it is used, so
-it must not be used multiple times simultaneously. Additionally, during iteration, no copy is created, so the vector must not
-be modified and accumulation e.g. by `collect` won't work.
-Note that the powers that this iterator returns will be of the common integer type of `mindeg`, `maxdeg`, and the element types
-of `minmultideg`, `maxmultideg` (and potentially `ownpowers`).
+Iterates through `moniter` and for every monomial checks whether this set of exponents can be reached by a convex combination
+of the coefficients as they are set up in `task`. If yes, `add_callback` must be called with the exponents as a parameter, and
+`Δacceptance` should be incremented. In any case, `Δprogress` should be incremented. Additionally, after every check,
+`iteration_callback` should be called with the exponents of the iteration as a parameter, if it is a function.
+The `data` parameters contain the custom data that was previously generated using [`newton_halfpolytope_alloc_global`](@ref)
+and [`newton_halfpolytope_alloc_local`](@ref). Only `data_local` may be mutated.
 """
-struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
-    n::Int
-    mindeg::DI
-    maxdeg::DI
-    minmultideg::Vector{DI}
-    maxmultideg::Vector{DI}
-    powers::P
-    Σminmultideg::DI
-    Σmaxmultideg::DI
-
-    function MonomialIterator{O}(mindeg::DI, maxdeg::DI, minmultideg::Vector{DI}, maxmultideg::Vector{DI},
-        ownpowers::Union{Bool,<:AbstractVector{DI}}=false) where {O,DI<:Integer}
-        (mindeg < 0 || mindeg > maxdeg) && error("Invalid degree specification")
-        n = length(minmultideg)
-        (n != length(maxmultideg) ||
-            any(minmax -> minmax[1] < 0 || minmax[1] > minmax[2], zip(minmultideg, maxmultideg))) &&
-            error("Invalid multidegree specification")
-        Σminmultideg = sum(minmultideg, init=zero(DI))
-        Σmaxmultideg = sum(maxmultideg, init=zero(DI))
-        if ownpowers === true
-            return new{O,Vector{DI},DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, Vector{DI}(undef, n), Σminmultideg,
-                Σmaxmultideg)
-        elseif ownpowers === false
-            return new{O,Nothing,DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, nothing, Σminmultideg, Σmaxmultideg)
-        elseif length(ownpowers) != n
-            error("Invalid length of ownpowers")
-        else
-            return new{O,typeof(ownpowers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, ownpowers, Σminmultideg,
-                Σmaxmultideg)
-        end
-    end
-end
-
-function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}) where {P}
-    minmultideg, Σminmultideg, Σmaxmultideg = iter.minmultideg, iter.Σminmultideg, iter.Σmaxmultideg
-    Σminmultideg > iter.maxdeg && return nothing
-    Σmaxmultideg < iter.mindeg && return nothing
-    powers = P === Nothing ? copy(minmultideg) : copyto!(iter.powers, minmultideg)
-    if iter.mindeg > Σminmultideg
-        powers_increment_right(iter, powers, iter.mindeg - Σminmultideg, 1) || @assert(false)
-        deg = iter.mindeg
-    else
-        deg = Σminmultideg
-    end
-    return P === Nothing ? copy(powers) : powers, (deg, powers)
-end
-
-function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{DI,<:AbstractVector{DI}}) where {P,DI}
-    deg, powers = state
-    deg ≤ iter.maxdeg || return nothing
-    minmultideg, maxmultideg = iter.minmultideg, iter.maxmultideg
-    @inbounds while true
-        # This is not a loop at all, we only go through it once, but we need to be able to leave the block at multiple
-        # positions. If we do it with @goto, as would be proper, Julia begins to box all our arrays.
-
-        # find the next power that can be decreased
-        found = false
-        local i
-        for outer i in iter.n:-1:1
-            if powers[i] > minmultideg[i]
-                found = true
-                break
-            end
-        end
-        found || break
-        # we must increment the powers to the left by 1 in total
-        found = false
-        local j
-        for outer j in i-1:-1:1
-            if powers[j] < maxmultideg[j]
-                found = true
-                break
-            end
-        end
-        found || break
-
-        powers[j] += 1
-        # this implies that we reset everything to the right of the increment to its minimum and then compensate for all
-        # the reductions by increasing the powers again where possible
-        δ = sum(k -> powers[k] - minmultideg[k], j+1:i, init=zero(DI)) -1
-        copyto!(powers, j +1, minmultideg, j +1, i - j)
-        if powers_increment_right(iter, powers, δ, j +1)
-            return P === Nothing ? copy(powers) : powers, (deg, powers)
-        end
-        break
-    end
-    # there's still hope: we can perhaps go to the next degree
-    deg += one(DI)
-    deg > iter.maxdeg && return nothing
-    copyto!(powers, minmultideg)
-    if powers_increment_right(iter, powers, deg - iter.Σminmultideg, 1)
-        return P === Nothing ? copy(powers) : powers, (deg, powers)
-    else
-        return nothing
-    end
-end
-
-Base.IteratorSize(::Type{<:MonomialIterator}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:MonomialIterator}) = Base.HasEltype()
-Base.eltype(::Type{MonomialIterator{O,P,DI}}) where {O,P,DI} = Vector{DI}
-function Base.length(iter::MonomialIterator, ::Val{:detailed})
-    # internal function without checks or quick path
-    # ~ O(n*d^2)
-    maxdeg = iter.maxdeg
-    occurrences = zeros(Int, maxdeg +1)
-    @inbounds for deg₁ in iter.minmultideg[1]:min(iter.maxmultideg[1], maxdeg)
-        occurrences[deg₁+1] = 1
-    end
-    nextround = similar(occurrences)
-    for (minᵢ, maxᵢ) in Iterators.drop(zip(iter.minmultideg, iter.maxmultideg), 1)
-        fill!(nextround, 0)
-        for degᵢ in minᵢ:min(maxᵢ, maxdeg)
-            for (degⱼ, occⱼ) in zip(Iterators.countfrom(0), occurrences)
-                newdeg = degᵢ + degⱼ
-                newdeg > maxdeg && break
-                @inbounds nextround[newdeg+1] += occⱼ
-            end
-        end
-        occurrences, nextround = nextround, occurrences
-    end
-    return occurrences
-end
-Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::MonomialIterator)
-    maxdeg = iter.maxdeg
-    iter.Σminmultideg > maxdeg && return 0
-    iter.Σmaxmultideg < iter.mindeg && return 0
-    @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1])
-    @inbounds return sum(@view(@inline(length(iter, Val(:detailed)))[iter.mindeg+1:end]), init=0)
-end
-moniter_state(powers::AbstractVector{DI}) where {DI} = (DI(sum(powers, init=zero(DI))), powers)
-
-function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers, δ, from)
-    @assert(δ ≥ 0 && from ≥ 0)
-    maxmultideg = iter.maxmultideg
-    i = iter.n
-    @inbounds while δ > 0 && i ≥ from
-        δᵢ = maxmultideg[i] - powers[i]
-        if δᵢ ≥ δ
-            powers[i] += δ
-            return true
-        else
-            powers[i] = maxmultideg[i]
-            δ -= δᵢ
-        end
-        i -= 1
-    end
-    return iszero(δ)
-end
-#endregion
-
 function newton_polytope_do_worker end
 
-function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk, cond, progresses, acceptances,
+function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, data_global, cond, progresses, acceptances,
     allcandidates, notifier, init_time, init_progress, num, filestuff)
     # notifier: 0 - no notification; 1 - the next to get becomes the notifier; 2 - notifier is taken
     verbose = notifier[] != 0
     lastappend = time_ns()
     isnotifier = Ref(false) # necessary due to the capturing/boxing bug
     lastinfo = Ref{Int}(lastappend)
-    tmp = Vector{Float64}(undef, nv)
+    data_local = newton_halfpolytope_alloc_local(V, nv)
     candidates = FastVec{typeof(maxdeg)}()
     @inbounds progress = Ref(progresses, tid)
     @inbounds acceptance = Ref(acceptances, tid)
@@ -670,7 +758,8 @@ function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk
             end
             iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers)
             @label start
-            newton_polytope_do_worker(V, task, bk, iter, tmp, progress, acceptance, @capture(p -> append!($candidates, p)),
+            newton_polytope_do_worker(V, task, data_global, data_local, iter, progress, acceptance,
+                @capture(p -> append!($candidates, p)),
                 !verbose && isnothing(filestuff) ? nothing : @capture(p -> let
                     nextinfo = time_ns()
                     if nextinfo - $lastinfo[] > 1_000_000_000
@@ -708,10 +797,7 @@ function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk
                 if isnothing(filestuff)
                     lock(cond)
                     try
-                        prepare_push!(allcandidates, length(candidates) ÷ nv)
-                        for i in 1:nv:length(candidates)
-                            @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
-                        end
+                        append!(allcandidates, candidates)
                     finally
                         unlock(cond)
                     end
@@ -732,10 +818,7 @@ function newton_polytope_do_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, bk
         if isnothing(filestuff)
             lock(cond)
             try
-                prepare_push!(allcandidates, length(candidates) ÷ nv)
-                for i in 1:nv:length(candidates)
-                    @inbounds unsafe_push!(allcandidates, convert(Vector{Int}, @view(candidates[i:i+nv-1])))
-                end
+                append!(allcandidates, candidates)
             finally
                 unlock(cond)
             end
@@ -788,8 +871,8 @@ function newton_halfpolytope_analyze(coeffs)
     # Newton polytope)
     nv = size(coeffs, 1)
 
-    maxdeg, mindeg = 0, typemax(Int)
-    maxmultideg, minmultideg = fill(0, nv), fill(typemax(Int), nv)
+    maxdeg, mindeg = zero(UInt), typemax(UInt)
+    maxmultideg, minmultideg = fill(zero(UInt), nv), fill(typemax(UInt), nv)
     for coeff in eachcol(coeffs)
         deg = 0
         @inbounds for (i, coeffᵢ) in enumerate(coeff)
@@ -813,12 +896,7 @@ function newton_halfpolytope_analyze(coeffs)
     maxdeg = div(maxdeg, 2, RoundDown)
     mindeg = div(mindeg, 2, RoundUp)
 
-    return mindeg, maxdeg, minmultideg, maxmultideg
-end
-
-function newton_halfpolytope_tighten(mindeg, maxdeg, minmultideg, maxmultideg)
-    # In the multithreading case, we need maintain multiple copies of portions of the powers, which might use more space than
-    # necessary. So instead of using copies, we take alternative smaller representations.
+    # Now that we know the ranges of all the types, we can make them as tight as possible to reduce the memory footprint
     maxval = max(maxdeg, maximum(maxmultideg, init=0))
     local T
     for outer T in (UInt8, UInt16, UInt32, UInt64)
@@ -827,6 +905,22 @@ function newton_halfpolytope_tighten(mindeg, maxdeg, minmultideg, maxmultideg)
     return convert(T, mindeg), convert(T, maxdeg), convert(Vector{T}, minmultideg), convert(Vector{T}, maxmultideg)
 end
 
+"""
+    newton_halfpolytope_do_prepare(V, coeffs::AbstractMatrix{<:Integer}, num::Int)
+
+This function is responsible for creating an optimization task that can be used to check membership in the Newton halfpolytope.
+The vertices of the polytope are given by the column of `coeffs`. The total number of monomials that have to be checked is
+given by `num`.
+The function must return the number of threads that will be used to carry out the optimization (which is not the number of
+threads that the optimizer uses internally, but determines how `PolynomialOptimization` will distribute the jobs), an internal
+optimization task that is passed on to [`newton_polytope_do_worker`](@ref), and a copy of this task for use in a second thread
+if the number of threads is greater than one, else `nothing`. More copies will be created as required by
+[`newton_halfpolytope_clonetask`](@ref); however, assuming that setting up the task will potentially require more resources
+than cloning a task allows the function to estimate the required memory (and therefore a sensible number of threads) better by
+already performing one clone.
+
+See also [`@allocdiff`](@ref).
+"""
 function newton_halfpolytope_do_prepare end
 
 struct InitialStateIterator{I,S,L}
@@ -902,21 +996,32 @@ toSigned(x::UInt32) = Core.bitcast(Int32, x)
 toSigned(x::UInt64) = Core.bitcast(Int64, x)
 toSigned(x::Signed) = x
 
-function newton_halfpolytope_alloc(V, nv) end
+"""
+    newton_halfpolytope_alloc_global(V, nv)
 
-function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task,
-    filepath)
+This function is called once in the main thread before [`newton_polytope_do_worker`](@ref) is executed (which, due to
+multithreading, might occur more than once). It can create some shared data that is used in a read-only manner by all workers
+at the same time.
+The default implementation of this function does nothing.
+"""
+newton_halfpolytope_alloc_global(_, _) = nothing
+"""
+    newton_halfpolytope_alloc_local(V, nv)
+
+This function is called once in every computation thread before [`newton_polytope_do_worker`](@ref) is executed (which, due to
+task splitting, might occur more than once). It can create some shared data that is available for reading and writing by every
+worker.
+The default implementation of this function does nothing.
+"""
+newton_halfpolytope_alloc_local(_, _) = nothing
+
+function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath)
     @verbose_info("Preparing to determine Newton polytope (single-threaded)")
 
-    bk = newton_halfpolytope_alloc(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    if isnothing(filepath)
-        candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int}
-    else
-        candidates = FastVec{typeof(maxdeg)}()
-    end
+    candidates = FastVec{typeof(maxdeg)}()
 
     progress = Ref(0)
     acceptance = Ref(0)
@@ -944,8 +1049,8 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
         init_time = time_ns()
         init_progress = progress[]
         lastinfo = Ref(init_time)
-        newton_polytope_do_worker(V, task, bk, iter, Vector{Float64}(undef, nv), progress, acceptance,
-            isnothing(filepath) ? @capture(p -> push!($candidates, copy(p))) : @capture(p -> append!($candidates, p)),
+        newton_polytope_do_worker(V, task, newton_halfpolytope_alloc_global(V, nv), newton_halfpolytope_alloc_local(V, nv),
+            iter, progress, acceptance, @capture(p -> append!($candidates, p)),
             !verbose && isnothing(filepath) ? nothing : @capture(p -> let
                 nextinfo = time_ns()
                 if nextinfo - $lastinfo[] > 1_000_000_000
@@ -958,7 +1063,7 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
                         empty!(candidates)
                     end
                     if $verbose
-                        Δt = progress[] == $init_progress ? progress[] - init_progress : 1
+                        Δt = progress[] == $init_progress ? 1 : progress[] - init_progress
                         # ^ if a finished job is started, this might happen
                         rem_sec = round(Int, ((nextinfo - $init_time) / 1_000_000_000Δt) * (num - progress[]))
                         @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
@@ -990,7 +1095,7 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
     finally
         finalize(task)
         if isnothing(fileout)
-            return finish!(candidates)
+            return SimpleMonomialVector{nv,0}(reshape(finish!(candidates), nv, length(candidates)÷nv))
         else
             close(fileout)
             close(fileprogress)
@@ -999,6 +1104,11 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
     end
 end
 
+"""
+    newton_halfpolytope_clonetask(t)
+
+This function must create a copy of the optimization task `t` that can run in parallel to `t` in a different thread.
+"""
 function newton_halfpolytope_clonetask end
 
 function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num,
@@ -1009,20 +1119,16 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
     end
 
     threadsize = div(num, nthreads, RoundUp)
-    @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ",
-        threadsize, " candidates")
+    @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ", threadsize,
+        " candidates")
     cutat = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
     cutlen = nv - cutat
     cutat += 1 # cutat is now the first entry to be fixed
-    bk = newton_halfpolytope_alloc(V, nv)
+    data_global = newton_halfpolytope_alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    if isnothing(filepath)
-        candidates = FastVec{Vector{Int}}() # don't try to save on the data type, DynamicPolynomials requires Vector{Int}
-    else
-        candidates = FastVec{typeof(maxdeg)}()
-    end
+    candidates = FastVec{typeof(maxdeg)}()
 
     ranges = Base.Channel{NTuple{2,Vector{typeof(maxdeg)}}}(typemax(Int))
     threadprogress = zeros(Int, nthreads)
@@ -1106,9 +1212,9 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
             # secondtask has a solution, so we just use task (better than deletesolution).
             # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
             # parallel, even if we make sure not to modify the base task until all copies are done.
-            threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg, $maxdeg, $bk,
-                $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress, $num,
-                $filestuff)
+            threads[tid] = Threads.@spawn newton_polytope_do_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg, $maxdeg,
+                $data_global, $cond, $threadprogress, $threadacceptance, $candidates, $notifier, $init_time, $init_progress,
+                $num, $filestuff)
         end
         # All tasks are created and waiting for stuff to do. So let's now feed them with their jobs.
 
@@ -1125,39 +1231,68 @@ function newton_halfpolytope_do_execute(V, nv, mindeg, maxdeg, minmultideg, maxm
         ccall(:jl_exit_threaded_region, Cvoid, ())
     end
     @verbose_info("\33[2KAll tasks have finished, sorting the output")
-    # We need to return the appropriate monomial order, but due to the partitioning and multithreading, our output
+    # We need to return the deglex monomial order, but due to the partitioning and multithreading, our output
     # is unordered (not completely, we have ordered of varying length, but does this help?).
-    # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
     if isnothing(filepath)
-        return sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0)
-        # TODO: This is not appropriate, but as long as we cannot query the actual ordering, let's go for the default.
+        return SimpleMonomialVector{nv,0}(sortslices(reshape(finish!(candidates), nv, length(candidates)÷nv), dims=2,
+            lt=isless_degree))
     else
         return sum(threadprogress, init=0), sum(threadacceptance, init=0)
     end
 end
 
 function newton_halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false,
-    filepath::Union{<:AbstractString,Nothing}=nothing, kwargs...) where {P<:AbstractPolynomialLike}
-    parameters, coeffs = newton_polytope_preproc(V, objective; verbose, kwargs...)
+    filepath::Union{<:AbstractString,Nothing}=nothing,
+    zero::AbstractVector{P}=P[], nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[],
+    degree::Int=maxhalfdegree(objective), kwargs...) where {P<:SimpleRealPolynomial}
+    parameters, coeffs = newton_polytope_preproc(V, objective; verbose, zero, nonneg, psd, degree, kwargs...)
     newton_time = @elapsed candidates = let
         analysis = newton_halfpolytope_analyze(coeffs)
-        num, nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, analysis..., verbose; parameters...)
-        if isone(nthreads) && isnothing(filepath)
-            newton_halfpolytope_do_execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task, secondtask, filepath)
-        else
-            newton_halfpolytope_do_execute(V, size(coeffs, 1), newton_halfpolytope_tighten(analysis...)..., verbose, num,
-                nthreads, task, secondtask, filepath)
-        end
+        # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
+        # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
+        # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
+        # variables - this is commuting only.
+        num = length(MonomialIterator{Graded{LexOrder}}(analysis..., true))
+        @verbose_info("Starting point selection among ", num, " possible monomials")
+        nthreads, task, secondtask = newton_halfpolytope_do_prepare(V, coeffs, num, verbose; parameters...)
+        newton_halfpolytope_do_execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task, secondtask, filepath)
     end
 
     if isnothing(filepath)
-        @verbose_info("Found ", length(candidates), " elements in the Newton polytope in ", newton_time, " seconds")
-        return makemonovec(variables(objective), candidates)
+        @verbose_info("Found ", length(candidates), " elements in the Newton halfpolytope in ", newton_time, " seconds")
+        return candidates
     else
-        @verbose_info("Found ", candidates[2], " elements in the Newton polytope in ", newton_time,
+        @verbose_info("Found ", candidates[2], " elements in the Newton halfpolytope in ", newton_time,
             " seconds and stored the results to the given file")
         return true
     end
+end
+
+function newton_halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false, zero::AbstractVector{P}=P[],
+    nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[],
+    degree::Int=maxhalfdegree(objective)) where {Nc,P<:SimpleComplexPolynomial{<:Any,Nc}}
+    # For complex-valued polynomials, the SDP looks like dot(basis, M, basis); due to the conjugation of the first element,
+    # this is a 1:1 mapping between elements in M and monomials - contrary to the non-unique real case. Given that the
+    # polynomials must be real-valued, any monomial that is present in the objective will also be present with its conjugate.
+    # So we just have to look at the exponents_complex, ignoring exponents_conj, of each monomial, and if it is present, then
+    # this monomial needs to be in the basis. This simple construction is the reason why this method is neither parallelized
+    # nor has a distributed version.
+    nv = Nc
+    newton_time = @elapsed begin
+        if isempty(zero) && isempty(nonneg) && isempty(psd)
+            @verbose_info("Complex-valued Newton polytope without constraints: copying exponents")
+            exps = unique(monomials(objective).exponents_complex, dims=2)
+        else
+            @verbose_info("Complex-valued Newton polytope: merging constraints")
+            exps = newton_polytope_preproc_merge_constraints(
+                degree, SimplePolynomials.smallest_unsigned(monomial_count(2degree, nv)), objective, zero, nonneg, psd,
+                monomials(objective).exponents_real isa DenseMatrix
+            )
+        end
+    end
+    @verbose_info("Found ", size(exps, 2), " elements in the complex-valued \"Newton halfpolytope\" in ", newton_time,
+        " seconds")
+    return SimpleMonomialVector{0,nv}(exps, convert(typeof(exps), spzeros(eltype(exps), size(exps)...)))
 end
 
 const newton_methods = Symbol[]
@@ -1191,31 +1326,51 @@ the objective itself. This function does not do any calculation, but instead loa
 
 See also [`newton_halfpolytope`](@ref).
 """
-function newton_halfpolytope_from_file(filepath::AbstractString, objective::P; estimate::Bool=false,
-    verbose::Bool=false) where {P<:AbstractPolynomialLike}
-    maxval = div(maxdegree(objective), 2, RoundDown)
-    local T
-    for outer T in (UInt8, UInt16, UInt32, UInt64)
-        typemax(T) ≥ maxval && break
-    end
+newton_halfpolytope_from_file(filepath::AbstractString, objective::SimpleRealPolynomial; estimate::Bool=false,
+    verbose::Bool=false) =
     return newton_halfpolytope_from_file(filepath, objective, estimate, verbose, T)
+
+function newton_halfpolytope_from_file(filepath::AbstractString, objective::AbstractPolynomialLike; verbose::Bool=false,
+    kwargs...)
+    out = newton_halfpolytope_from_file(filepath, SimplePolynomial(objective); verbose, kwargs...)
+    if out isa SimpleMonomialVector
+        conv_time = @elapsed begin
+            real_vars = variable_union_type(objective)[]
+            complex_vars = similar(real_vars)
+            for v in variables(objective)
+                if isreal(v)
+                    push!(real_vars, v)
+                elseif isconj(v)
+                    vo = conj(v)
+                    vo ∈ complex_vars || push!(complex_vars, vo)
+                else
+                    push!(complex_vars, v)
+                end
+            end
+            mv = monomial_vector(FakeMonomialVector(out, real_vars, complex_vars))
+        end
+        @verbose_info("Converted monomials back to a $(typeof(mv)) in $conv_time seconds")
+        return mv
+    else
+        return out
+    end
 end
 
 function newton_halfpolytope_from_file(filepath::AbstractString, objective, estimate::Bool, verbose::Bool, ::Type{T}) where {T<:Integer}
     if isfile("$filepath.out")
-        matches = Regex("^$filepath\\.out\$")
+        matches = r"^" * basename(filepath) * r"\.out$"
         dir = dirname(realpath("$filepath.out"))
         @verbose_info("Underlying data comes from single-node, single-thread calculation")
     elseif isfile("$filepath-1.out")
-        matches = Regex("^$filepath-\\d+\\.out\$")
+        matches = r"^" * basename(filepath) * r"-\d+\.out$"
         dir = dirname(realpath("$filepath-1.out"))
         @verbose_info("Underlying data comes from single-node, multi-thread calculation")
     elseif isfile("$filepath-n0.out")
-        matches = Regex("^$filepath-n\\d+\\.out\$")
+        matches = r"^" + basename(filepath) * r"-n\d+\.out$"
         dir = dirname(realpath("$filepath-n0.out"))
         @verbose_info("Underlying data comes from multi-node, single-thread calculation")
     elseif isfile("$filepath-n0-1.out")
-        matches = Regex("^$filepath-n\\d+-\\d+\\.out\$")
+        matches = r"^" * basename(filepath) * r"-n\d+-\d+\.out$"
         dir = dirname(realpath("$filepath-n0-1.out"))
         @verbose_info("Underlying data comes from multi-node, multi-thread calculation")
     else
@@ -1238,10 +1393,9 @@ function newton_halfpolytope_from_file(filepath::AbstractString, objective, esti
     end
     estimate && return len
     @verbose_info("Upper bound to number of monomials: ", len)
-    candidates = FastVec{Vector{Int}}(buffer=len)
-    readbuffer = Vector{T}(undef, nv)
-    readbytebuffer = unsafe_wrap(Array, Ptr{UInt8}(pointer(readbuffer)), nv * sizeof(T))
-    bufferlen = length(readbytebuffer)
+    candidates = resizable_array(T, nv, len)
+    readbytebuffer = unsafe_wrap(Array, Ptr{UInt8}(pointer(candidates)), len * nv * sizeof(T))
+    i = 1
     load_time = @elapsed begin
         for fn in readdir(dir)
             if !isnothing(match(matches, fn))
@@ -1249,7 +1403,7 @@ function newton_halfpolytope_from_file(filepath::AbstractString, objective, esti
                 local fs
                 while true
                     try
-                        fs = Base.Filesystem.open(fn, Base.JL_O_RDONLY | Base.JL_O_EXCL, 0o444)
+                        fs = Base.Filesystem.open("$dir/$fn", Base.JL_O_RDONLY | Base.JL_O_EXCL, 0o444)
                         break
                     catch ex
                         (isa(ex, Base.IOError) && ex.code == Base.UV_EEXIST) || rethrow(ex)
@@ -1258,55 +1412,97 @@ function newton_halfpolytope_from_file(filepath::AbstractString, objective, esti
                 end
                 try
                     stream = BufferedStreams.BufferedInputStream(fs)
-                    while !eof(stream)
-                        readbytes!(stream, readbytebuffer, bufferlen) == bufferlen || error("Unexpected end of file: $fn")
-                        cto = convert(Vector{Int}, readbuffer)
-                        unsafe_push!(candidates, cto)
-                    end
+                    i += BufferedStreams.readbytes!(stream, readbytebuffer, i, length(readbytebuffer))
+                    isone(i % (nv * sizeof(T))) || error("Unexpected end of file: $fn")
                 finally
                     Base.Filesystem.close(fs)
                 end
             end
         end
     end
-    length(candidates) == len || error("Calculated length does not match number of loaded monomials")
+    i ÷ (nv * sizeof(T)) == len || error("Calculated length does not match number of loaded monomials")
     @verbose_info("Loaded $len monomials into memory in $load_time seconds. Now sorting and removing duplicates.")
     sort_time = @elapsed begin
-        finalcandidates = Base._groupedunique!(sort!(finish!(candidates), lt=(a, b) -> compare(a, b, Graded{LexOrder}) < 0))
+        finalcandidates = SimpleMonomialVector{nv,0}(Base.unique(sortslices(candidates, dims=2, lt=isless_degree); dims=2))
     end
     @verbose_info("Sorted all monomials and removed $(len - length(finalcandidates)) duplicates in $sort_time seconds")
-    return makemonovec(variables(objective), finalcandidates)
+    return finalcandidates
 end
 
-makemonovec(vars::Vector{<:DynamicPolynomials.Variable}, exps::Vector{Vector{Int}}) =
-    DynamicPolynomials.MonomialVector(vars, exps)
-# for a relatively effecient construction of monomials from their powers if the backend is not DynamicPolynomials... although
-# we don't actively support anything else.
-makemonovec(vars::Vector, exps::Vector{Vector{Int}}) = monomial_vector(FakeMonomialVector(vars, exps))
-
-struct FakeMonomialVector{V,M} <: AbstractVector{M}
-    vars::Vector{V}
-    exps::Vector{Vector{Int}}
-
-    function FakeMonomialVector(vars::Vector{V}, exps::Vector{Vector{Int}}) where {V}
-        length(vars) == length(exps) || error("Invalid monomial vector construction")
-        new{V,monomial_type(V)}(vars, exps)
+function isless_degree(x::AbstractVector, y::AbstractVector)
+    dx = sum(x)
+    dy = sum(y)
+    if dx == dy
+        return isless(x, y)
+    else
+        return isless(dx, dy)
     end
 end
 
-Base.length(fmv::FakeMonomialVector) = length(fmv.vars)
-function Base.getindex(fmv::FakeMonomialVector{V}, x) where {V}
-    exps = fmv.exps[x]
-    all(iszero, exps) && return constant_monomial(V)
-    i = findfirst(Base.:! ∘ iszero, exps)
-    @inbounds mon = monomial_type(V)(fmv.vars[i])
-    for _ in 2:exps[i]
-        @inbounds mon = MutableArithmetics.mul!!(mon, fmv.vars[i])
+struct FakeMonomialVector{S<:SimpleMonomialVector,V,M} <: AbstractVector{M}
+    data::S
+    real_vars::Vector{V}
+    complex_vars::Vector{V}
+
+    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {S<:SimpleMonomialVector,V<:AbstractVariable}
+        length(real_vars) + length(complex_vars) == nvariables(data) || error("Invalid monomial vector construction")
+        new{S,V,monomial_type(V)}(data, real_vars, complex_vars)
     end
-    for i in i+1:length(exps)
-        for _ in 1:exps[i]
-            MutableArithmetics.mul!!(mon, fmv.vars[i])
+end
+
+Base.length(fmv::FakeMonomialVector) = length(fmv.data)
+Base.size(fmv::FakeMonomialVector) = (length(fmv.data),)
+function Base.getindex(fmv::FakeMonomialVector{S,V,M} where {V,S}, x) where {M}
+    mon = fmv.data[x]
+    isconstant(mon) && return constant_monomial(M)
+    exps = exponents(mon)
+    expit = iterate(exps)
+    i = 1
+    havemon = false
+    while !isnothing(expit)
+        i > length(fmv.real_vars) && break
+        expᵢ, expitdata = expit
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = fmv.real_vars[i] ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= fmv.real_vars[i] ^ expᵢ
+            end
         end
+        i += 1
+        expit = iterate(exps, expitdata)
     end
+    i = 1
+    while !isnothing(expit)
+        i > length(fmv.complex_vars) && break
+        expᵢ, expitdata = expit
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = fmv.complex_vars[i] ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= fmv.complex_vars[i] ^ expᵢ
+            end
+        end
+        i += 1
+        expit = iterate(exps, expitdata)
+    end
+    i = 1
+    while !isnothing(expit)
+        i > length(fmv.complex_vars) && break
+        expᵢ, expitdata = expit
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = conj(fmv.complex_vars[i]) ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= conj(fmv.complex_vars[i]) ^ expᵢ
+            end
+        end
+        i += 1
+        expit = iterate(exps, expitdata)
+    end
+    @assert(isnothing(expit))
     return mon
 end

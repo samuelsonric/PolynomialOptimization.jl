@@ -7,7 +7,7 @@ using LinearAlgebra
     for mindeg in 0x0:0x4, maxdeg in 0x0:0x4, minmultideg in multiit, maxmultideg in multiit
         minm, maxm = collect(minmultideg), collect(maxmultideg)
         if mindeg > maxdeg || any(minmultideg .> maxmultideg)
-            @test_throws ErrorException MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+            @test_throws ArgumentError MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
         else
             mi = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
             exp = exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ exponents(m) .≤ maxm)))
@@ -77,18 +77,20 @@ end
 @testset "Newton polytope (BPT, Example 3.95)" begin
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z, verbose=true) ==
-            PolynomialOptimization.makemonovec([w, x, y, z],
-                collect(PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(0, 8, [0, 0, 0, 0], [2, 2, 2, 2])))
+        @test newton_halfpolytope(
+            PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
+            verbose=true
+        ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 20 initial candidates"
     @test startswith(output[3], "Found 16 potential extremal points of the convex hull in")
 
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z, preprocess_quick=false,
-            preprocess_fine=true, verbose=true) == PolynomialOptimization.makemonovec([w, x, y, z],
-                collect(PolynomialOptimization.MonomialIterator{Graded{LexOrder}}(0, 8, [0, 0, 0, 0], [2, 2, 2, 2])))
+        @test newton_halfpolytope(
+            PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
+            preprocess_quick=false, preprocess_fine=true, verbose=true
+        ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
     end
     @test output[2] == "Removing redundancies from the convex hull - fine, 20 initial candidates"
     @test startswith(output[3], "Found 16 extremal points of the convex hull in")

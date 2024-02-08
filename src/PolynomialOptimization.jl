@@ -5,10 +5,8 @@ using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
 using Printf
-import SemialgebraicSets
 import Graphs
 import Combinatorics
-import DynamicPolynomials
 import MutableArithmetics
 import StatsBase
 import BufferedStreams
@@ -80,24 +78,20 @@ macro capture(firstarg, secondarg=nothing)
 end
 
 include("./helpers/FastVector.jl")
-include("./helpers/ComplexPolynomials.jl")
+using .FastVector
+include("./poly/SimplePolynomials.jl")
+using .SimplePolynomials
+using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial, SimpleComplexMonomial,
+    moniter_state
+include("./helpers/MatrixMutation.jl")
 include("./helpers/MatrixPolynomials.jl")
 include("./helpers/Allocations.jl")
 
 include("./sparsity/Chordal.jl")
 include("./Newton.jl")
 include("./Problem.jl")
-include("./sparsity/SparseAnalysis.jl")
+include("./sparsity/SparseProblem.jl")
+include("./optimization/Optimization.jl")
 include("./Tightening.jl")
-
-include("./SolutionExtraction.jl")
-include("./SolutionExtractionHeuristic.jl")
-include("./sparsity/SparsityNone.jl")
-include("./sparsity/SparsityCorrelative.jl")
-include("./sparsity/SparsityTerm.jl")
-include("./sparsity/SparsityTermBlock.jl")
-include("./sparsity/SparsityTermCliques.jl")
-include("./sparsity/SparsityCorrelativeTerm.jl")
-const SparsityAny = (SparsityNone,SparsityCorrelative,SparsityTerm,SparsityCorrelativeTerm)
 
 end

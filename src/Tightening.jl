@@ -5,10 +5,15 @@ function default_tightening_method()
     return first(tightening_methods)
 end
 
+"""
+    tighten_minimize_l1(V, spmat::SparseMatrixCSC, rhs::Vector)
+
+Computes a solution to the underdetermined linear system `spmat * x = rhs` with minimal ℓ₁-norm.
+"""
 function tighten_minimize_l1 end
 
 function tighten!(method::Val, objective::P, variables::AbstractVector{V}, degree::Int, zero::AbstractVector{P},
-    nonneg::AbstractVector{P}, equality_method::AbstractVector{EqualityMethod}; verbose::Bool) where {P,V}
+    nonneg::AbstractVector{P}; verbose::Bool=false) where {P,V}
     # We apply Nie's method of Lagrange multipliers. This means that we add two additional functions φ and ψ that are made up
     # of particular polynomials. We first need to calculate those polynomials.
     coefficient_type(P) == Float64 || error("Tightening requires Float64 coefficient type")
@@ -160,7 +165,6 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, degre
     # there might be useless constraints which we can immediately drop
     filter!(p -> !isconstant(p), φ) # we could assert on p ≃ 0
     append!(zero, φ)
-    append!(equality_method, Iterators.repeated(emSimple, length(φ)))
     return
 end
 

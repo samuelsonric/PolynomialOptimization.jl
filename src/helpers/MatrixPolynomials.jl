@@ -59,24 +59,6 @@ end
 
 MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(effective_variables.(m)...)
 
-function effective_variables_in_real(m::AbstractMatrix{<:AbstractPolynomialLike}, in)
-    for p in m
-        for v in variables(p)
-            if !iszero(maxdegree(p, v)) && !(v ∈ in)
-                return false
-            end
-        end
-    end
-    return true
-end
+effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) = all(Base.Fix2(effective_variables_in, in), m)
 
-function effective_variables_in_complex(m::AbstractMatrix{<:AbstractPolynomialLike}, in)
-    for p in m
-        for v in variables(p)
-            if !iszero(maxdegree(p, v)) && !(ordinary_variable(v) ∈ in)
-                return false
-            end
-        end
-    end
-    return true
-end
+Base.isreal(m::AbstractMatrix{<:AbstractPolynomialLike}) = all(isreal, m)
