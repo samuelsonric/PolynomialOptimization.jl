@@ -11,13 +11,14 @@ eigenvalues are considered to be negative.
 
 See also [`poly_optimize`](@ref).
 """
-function optimality_certificate(result::POResult{<:RealPOProblem}, ϵ::R=1e-6) where {R<:Real}
-    problem = poly_problem(result)
-    problem.degree < 1 && return :CertificateUnavailable
-    d₀ = maxhalfdegree(problem.objective)
-    d₁ = max(1, maximum(maxhalfdegree, problem.constr_zero, init=0), maximum(maxhalfdegree, problem.constr_nonneg, init=0),
-        maximum(maxhalfdegree, problem.constr_psd, init=0))
-    for t in problem.degree:-1:max(d₀, d₁)
+function optimality_certificate(result::POResult{<:AbstractPORelaxation{<:RealPOProblem}}, ϵ::R=1e-6) where {R<:Real}
+    relaxation = result.relaxation
+    deg = degree(relaxation)
+    deg < 1 && return :CertificateUnavailable
+    d₀ = maxhalfdegree(relaxation.objective)
+    d₁ = max(1, maximum(maxhalfdegree, relaxation.constr_zero, init=0),
+        maximum(maxhalfdegree, relaxation.constr_nonneg, init=0), maximum(maxhalfdegree, relaxation.constr_psd, init=0))
+    for t in deg:-1:max(d₀, d₁)
         rkMₜ = rank(moment_matrix(result, max_deg=t), atol=ϵ)
         if rkMₜ == 1 || rkMₜ == rank(moment_matrix(result, max_deg=t-d₁), atol=ϵ)
             return :Optimal

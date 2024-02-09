@@ -43,13 +43,13 @@ This function returns an iterator.
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
 """
-function poly_solutions(result::POResult{Prob,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000); verbose::Bool=false) where
-    {Nr,Nc,P<:SimplePolynomial{<:Any,Nr,Nc},Prob<:AbstractPOProblem{P},R<:Real,V<:Union{R,Complex{R}}}
+function poly_solutions(result::POResult{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000); verbose::Bool=false) where
+    {Nr,Nc,Rx<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}
     @verbose_info("Preprocessing for decomposition")
-    problem = dense_problem(result)
+    relaxation = result.relaxation
     moments = result.moments
     nvars = Nr + Nc
-    deg = 2problem.degree
+    deg = 2relaxation.degree
     # potentially scale the moment matrix
     λ = maximum(abs, @view(moments[monomial_count(deg -2, nvars)+1:monomial_count(deg -1, nvars)])) /
         maximum(abs, @view(moments[monomial_count(deg -1, nvars)+1:end]))
@@ -59,20 +59,15 @@ function poly_solutions(result::POResult{Prob,V}, ϵ::R=R(1 // 1_000_000), δ::R
         end
     end
     # for each variable clique, we can perform the original decomposition algorithm
-    cliques = sparse_groupings(poly_problem(result)).var_cliques
+    cliques = groupings(result.relaxation).var_cliques
     solutions_cl = FastVec{Union{Matrix{V},Missing}}(buffer=length(cliques))
     @verbose_info("Starting solution extraction per clique")
     extraction_time = @elapsed begin
-        for clique in cliques
+        for (i, clique) in enumerate(cliques)
             @verbose_info("Investigating clique ", clique)
-            if length(clique) == nvariables(problem)
-                a1 = problem.basis
-                a2 = @view(problem.basis[1:monomial_count(problem.degree -1, nvars)])
-            else
-                a1 = filter(Base.Fix2(effective_variables_in, clique), a1)
-                a2 = @view(problem.basis[1:min(searchsortedfirst(a1, problem.degree, by=degree), length(a1))])
-            end
-            if !isreal(problem)
+            a1 = basis(relaxation, i)
+            a2 = @view(a1[1:min(searchsortedfirst(a1, _DummyMonomial(relaxation.degree), by=degree) -1, length(a1))])
+            if !isreal(relaxation)
                 # this is the transpose of what we'd get with moment_matrix, but this is not important. Since the monomials
                 # in the matrix will be multiplied by variables (which are the un-conjugated ones), we must make sure that
                 # the un-conjugated ones are of the smaller degree.
@@ -112,7 +107,6 @@ function poly_solutions(result::POResult{Prob,V}, ϵ::R=R(1 // 1_000_000), δ::R
         verbose
     )
 end
-poly_solutions(problem::POProblem, args...; kwargs...) = poly_solutions(SparsityNone(problem), args...; kwargs...)
 
 function Base.iterate(iter::PolynomialSolutions)
     length(iter.cliques) == 0 && return nothing
@@ -252,7 +246,7 @@ See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions`](@r
 function poly_solution_badness(result::POResult, solution::Vector)
     # check whether we can certify optimality
     any(isnan, solution) && return Inf
-    problem = dense_problem(result)
+    problem = poly_problem(result)
     violation = abs(problem.objective(solution) - result.objective)
     for constr in problem.constr_zero
         new_violation = abs(constr(solution))
@@ -269,7 +263,7 @@ function poly_solution_badness(result::POResult, solution::Vector)
     return violation
 end
 
-default_solution_method(result::POResult) = default_solution_method(poly_problem(result))
+default_solution_method(result::POResult) = default_solution_method(result.relaxation)
 
 """
     poly_all_solutions(result::POResult, ϵ=1e-6, δ=1e-3; verbose=false, rel_threshold=100, abs_threshold=Inf, method::Symbol)

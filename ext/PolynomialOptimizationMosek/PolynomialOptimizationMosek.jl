@@ -1,7 +1,7 @@
 module PolynomialOptimizationMosek
 
 using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.FastVector
-using PolynomialOptimization: POProblem, SparseGroupings, @verbose_info, @allocdiff, monomial_count, sos_solution,
+using PolynomialOptimization: POProblem, RelaxationGroupings, @verbose_info, @allocdiff, monomial_count, sos_solution,
     StackVec, FastKey
 using Mosek: msk_global_env, Env, deletetask
 

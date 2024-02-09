@@ -4,7 +4,7 @@ export SparsityTerm
 # by means of a term sparsity graph and a way to perform the iteration.
 # However, an important part of all iterations is the extension of the graphs itself, which is not implemented in the basic
 # logic class, but must instead be done by its encapulators (which should be subclasses, but Julia doesn't allow this).
-mutable struct SparsityTermLogic{P<:PolyOptProblem,U<:AbstractVector,S<:Vector{<:AbstractVector},B<:Vector{<:AbstractVector}}
+mutable struct SparsityTermLogic{P<:POProblem,U<:AbstractVector,S<:Vector{<:AbstractVector},B<:Vector{<:AbstractVector}}
     problem::P
     union_supports::U
     polynomial_supports::S
@@ -12,7 +12,7 @@ mutable struct SparsityTermLogic{P<:PolyOptProblem,U<:AbstractVector,S<:Vector{<
     graphs::Vector{Graphs.SimpleGraph{Int}}
     cache::Union{Vector{Vector{Vector{Int}}},Nothing}
 
-    function SparsityTermLogic(problem::PolyOptProblem{P,M}, union_supports::AbstractVector{M}, kind::Symbol) where {P,M}
+    function SparsityTermLogic(problem::POProblem{P,M}, union_supports::AbstractVector{M}, kind::Symbol) where {P,M}
         polynomial_supports = [monomials(variables(problem.objective), [0]),
                                monomials.(getfield.(problem.constraints, :constraint))...]
         bases = [problem.basis, getfield.(problem.constraints, :basis)...]
@@ -32,7 +32,7 @@ mutable struct SparsityTermLogic{P<:PolyOptProblem,U<:AbstractVector,S<:Vector{<
     end
 end
 
-function SparsityTermLogic(problem::PolyOptProblem{P,M}, kind::Symbol) where {P,M}
+function SparsityTermLogic(problem::POProblem{P,M}, kind::Symbol) where {P,M}
     if problem.complex
         union_supports = merge_monomial_vectors([monomials(problem.objective),
             monomials.(getfield.(problem.constraints, :constraint))...,
@@ -124,11 +124,11 @@ end
 
 function extend_graphs! end
 
-function sparse_groupings(ts::SparsityTermLogic)
+function groupings(ts::SparsityTermLogic)
     return [[basis[i] for i in clique] for (basis, clique) in zip(ts.bases, ts.cache)], [ts.problem.variables]
 end
 
-function sparse_supports(ts::SparsityTermLogic{P}) where {PP,M,P<:PolyOptProblem{PP,M}}
+function supports(ts::SparsityTermLogic{P}) where {PP,M,P<:POProblem{PP,M}}
     # Note: Our implementation follows takes into account _all_ graphs (including those from constraints). The TSSOS
     # implementation instead takes into account only the support of the objective (which, apart from a typo in the chordal
     # TSSOS paper, does not seem to be well-founded; in particular, their CS-TSSOS implementation also considers all graphs).
@@ -168,11 +168,11 @@ function sparse_supports(ts::SparsityTermLogic{P}) where {PP,M,P<:PolyOptProblem
     end
 end
 
-function sparse_iterate!(ts::SparsityTermLogic, kind::Symbol=:block; objective::Bool=true,
+function iterate!(ts::SparsityTermLogic, kind::Symbol=:block; objective::Bool=true,
     zero::Union{Bool,<:AbstractSet{<:Integer}}=true, nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true,
     psd::Union{Bool,<:AbstractSet{<:Integer}}=true)
     problem = sparse_problem(ts)
-    new_supports = sparse_supports(ts)
+    new_supports = supports(ts)
     # Even if new_supports is the same as ts.union_supports, we might run into the unlikely scenario that the user changed the
     # type of term sparsity, so that now extending with a different type might lead to a different result despite having the
     # same support.
@@ -192,12 +192,12 @@ representation is extended (resp. converted into groupings).
 
 See also [`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref).
 """
-abstract type SparsityTerm <: SparseAnalysisState end
+abstract type SparsityTerm <: AbstractSPOProblem end
 
 sparse_problem(stl::SparsityTerm) = sparse_problem(stl.logic)
 
-sparse_groupings(stl::SparsityTerm) = sparse_groupings(stl.logic)
+groupings(stl::SparsityTerm) = groupings(stl.logic)
 
-sparse_supports(stl::SparsityTerm) = sparse_supports(stl.logic)
+supports(stl::SparsityTerm) = supports(stl.logic)
 
-default_solution_method(::SparsityTerm, ::Any) = :heuristic
+default_solution_method(::SparsityTerm) = :heuristic

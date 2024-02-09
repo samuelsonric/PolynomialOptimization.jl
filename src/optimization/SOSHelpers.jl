@@ -1094,7 +1094,7 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
 end
 
 """
-    sos_setup!(state, problem::POProblem, groupings::NTuple{4,Vector{<:SimpleMonomialVector}})
+    sos_setup!(state, relaxation::AbstractPORelaxation, groupings::RelaxationGroupings)
 
 Sets up all the necessary SOS matrices, free variables, objective, and constraints of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
@@ -1113,7 +1113,8 @@ The following methods must be implemented by a solver to make this function work
 
 See also [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref).
 """
-function sos_setup!(state, problem::POProblem{P,MV}, groupings::SparseGroupings) where {P,MV}
+function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, groupings::RelaxationGroupings) where {P}
+    problem = poly_problem(relaxation)
     # SOS term for objective
     for grouping in groupings.obj
         sos_add_matrix!(state, grouping, SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))

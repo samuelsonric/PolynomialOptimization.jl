@@ -17,26 +17,24 @@ Note that `prefix` has to be a valid `SimpleMonomial` or `SimpleVariable` of app
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref).
 """
-function moment_matrix(result::POResult{Prob}; max_deg=Inf,
-    prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,P<:SimplePolynomial{<:Any,Nr,Nc},Prob<:AbstractPOProblem{P}}
-    problem = dense_problem(result)
+function moment_matrix(result::POResult{R}; max_deg=Inf,
+    prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,R<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}}
+    relaxation = result.relaxation
+    b = basis(relaxation)
     if max_deg < Inf
         upto = monomial_count(max_deg, Nr + Nc)
-        if upto < lastindex(problem.basis)
-            if degree(problem.basis[upto]) == max_deg && degree(problem.basis[upto+1]) == max_deg +1
-                b = @view(problem.basis[1:upto])
+        if upto < lastindex(b)
+            if degree(b[upto]) == max_deg && degree(b[upto+1]) == max_deg +1
+                b = @view(b[1:upto])
             else
                 # this can happen for a custom basis or the Newton polytope
-                b = @view(problem.basis[1:searchsortedlast(problem.basis, max_deg, by=degree)])
+                b = @view(b[1:searchsortedlast(b, max_deg, by=degree)])
             end
         else
-            @assert(degree(problem.basis[end]) ≤ max_deg)
-            b = problem.basis
+            @assert(degree(b[end]) ≤ max_deg)
         end
-    else
-        b = problem.basis
     end
-    return (isreal(problem) ? Symmetric : Hermitian)(
+    return (isreal(relaxation) ? Symmetric : Hermitian)(
         isnothing(prefix) ? moment_matrix(result.moments, Val(:symmetric), b, conj(b)) :
                             moment_matrix(result.moments, Val(:symmetric), b, conj(b), prefix))
 end

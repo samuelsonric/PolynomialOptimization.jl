@@ -6,7 +6,7 @@ using Documenter: doctest;
         doctest(PolynomialOptimization)
     end
     @testset "no sparsity" begin
-        include("./SparsityNone.jl")
+        include("./RelaxationDense.jl")
     end
     @testset "correlative sparsity" begin
         include("./SparsityCorrelative.jl")

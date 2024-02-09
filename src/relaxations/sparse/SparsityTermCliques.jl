@@ -5,7 +5,7 @@ struct SparsityTermCliques <: SparsityTerm
     chordal_completion::Bool
 
     @doc """
-        SparsityTermCliques(problem::PolyOptProblem; chordal_completion=true)
+        SparsityTermCliques(problem::POProblem; chordal_completion=true)
 
     Analyze the term sparsity of the problem using chordal cliques.
     [Chordal term sparsity](https://doi.org/10.1137/20M1323564) is a recent iterative sparsity analysis that groups terms
@@ -14,18 +14,18 @@ struct SparsityTermCliques <: SparsityTerm
     chordal one may be turned off by using the parameter `chordal_completion`, leading to even smaller problem sizes, which may
     however not have a sound theoretical justification (but can still work).
 
-    See also [`poly_problem`](@ref), [`sparse_optimize`](@ref), [`SparsityTermBlock`](@ref),
+    See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`SparsityTermBlock`](@ref),
     [`SparsityCorrelativeTerm`](@ref).
 
         SparsityTermCliques(term_sparsity::SparsityTerm; chordal_completion=true)
 
     Re-interprets a different kind of term sparsity pattern as chordal term sparsity. Note that the data between
-    `term_sparsity` and the resulting object will be shared - `sparse_groupings` will always give back the result of the last
+    `term_sparsity` and the resulting object will be shared - `groupings` will always give back the result of the last
     iteration with the type that the pattern had _at the time of iteration_.
 
     See also [`SparsityTerm`](@ref).
     """
-    function SparsityTermCliques(problem::PolyOptProblem, args...; chordal_completion::Bool=true)
+    function SparsityTermCliques(problem::POProblem, args...; chordal_completion::Bool=true)
         return new(SparsityTermLogic(problem, args..., chordal_completion ? :chordal_cliques : :cliques), chordal_completion)
     end
 
@@ -34,8 +34,8 @@ struct SparsityTermCliques <: SparsityTerm
     end
 end
 
-sparse_iterate!(ts::SparsityTermCliques; chordal_completion::Bool=ts.chordal_completion, kwargs...) =
-   isnothing(sparse_iterate!(ts.logic, chordal_completion ? :chordal_cliques : :cliques; kwargs...)) ? nothing : ts
+iterate!(ts::SparsityTermCliques; chordal_completion::Bool=ts.chordal_completion, kwargs...) =
+   isnothing(iterate!(ts.logic, chordal_completion ? :chordal_cliques : :cliques; kwargs...)) ? nothing : ts
 
 function extend_graphs!(g::Graphs.SimpleGraph{I}, ::Val{:cliques}) where {I<:Integer}
     # cliques can be overlapping

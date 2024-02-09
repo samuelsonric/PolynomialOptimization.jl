@@ -1,64 +1,3 @@
-export sparse_groupings, sparse_iterate!
-
-"""
-    AbstractSPOProblem <: AbstractPOProblem
-
-This is the general abstract type for any kind of sparse analysis of a polynomial optimization problem.
-Its concrete types can be used for analyzing and optimizing the problem.
-
-See also [`poly_problem`](@ref), [`POProblem`](@ref), [`poly_optimize`](@ref).
-"""
-abstract type AbstractSPOProblem{P<:SimplePolynomial,Prob<:POProblem{P}} <: AbstractPOProblem{P} end
-
-"""
-    SparseGroupings
-
-Contains information about how the elements in a certain (sparse) polynomial optimization problem combine.
-Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`.
-The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
-the complex case, only the declared variables are returned, not their conjugates.
-"""
-struct SparseGroupings{MV,V}
-    obj::Vector{MV}
-    zero::Vector{Vector{MV}}
-    nonneg::Vector{Vector{MV}}
-    psd::Vector{Vector{MV}}
-    var_cliques::Vector{V}
-end
-
-"""
-    sparse_groupings(state::AbstractSPOProblem)
-
-Analyze the current state and return the bases and cliques as indicated by its sparsity in a [`SparseGroupings`](@ref) struct.
-"""
-function sparse_groupings end
-
-"""
-    sparse_iterate!(state::AbstractSPOProblem; objective=true, zero=true, nonneg=true, psd=true)
-
-Iterate the sparsity, which will lead to a more dense representation and might give better bounds at the expense of a more
-costly optimization. Return `nothing` if the iterations converged (`state` did not change any more), else return the new state.
-
-The keyword arguments allow to restrict the iteration to certain elements. This does not necessarily mean that the bases
-associated to other elements will not change as well to keep consistency; but their own contribution will not be considered.
-The parameters `nonneg` and `psd` may either be `true` (to iterate all those constraints) or a set of integers that refer to
-the indices of the constraints, as they were originally given to [`poly_problem`](@ref).
-"""
-function sparse_iterate! end
-
-# internal function
-function sparse_supports end
-
-function Base.show(io::IO, m::MIME"text/plain", x::AbstractSPOProblem)
-    groupings = sparse_groupings(x)
-    sort!.(groupings.var_cliques)
-    sort!(groupings.var_cliques)
-    print(io, typeof(x), " with ", length(sparse_problem(x).constraints), " constraint(s)\nVariable cliques:",
-        (s for va in variable_groupings for s in ("\n  ", join(va, ", ")))...,
-        "\nBlock sizes:",
-        (s for bs in basis_groupings for s in ("\n  ", sort!(collect(StatsBase.countmap(length.(bs))), rev=true)))...)
-end
-
 function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     # directly drop cliques of length 1 and 2. They are so efficient (linear vs. quadratic constraints) that we don't even
     # consider them in the merge process
@@ -128,11 +67,11 @@ function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     return [smallcliques; cliques[idx]]
 end
 
-function merge_cliques(problem::AbstractPOProblem, groupings::SparseGroupings{MV}) where {MV}
+function merge_cliques(groupings::RelaxationGroupings{MV}) where {MV}
     max_power = _get_p(MV)
-    representation = problem.basis isa SimpleDenseMonomialVector ? :dense : :sparse
+    representation = MV <: SimpleDenseMonomialVector ? :dense : :sparse
     vars = filter(∘(!, isconj), variables(MV))
-    let cout=merge_cliques(Set.(groupings.obj))
+    let cout=merge_cliques!(Set.(groupings.obj))
         empty!(groupings.obj)
         sizehint!(groupings.obj, length(cout))
         for coutᵢ in cout
@@ -146,20 +85,3 @@ function merge_cliques(problem::AbstractPOProblem, groupings::SparseGroupings{MV
     end
     return constr
 end
-
-struct _DummyMonomial
-    degree::Int
-end
-
-MultivariatePolynomials.degree(d::_DummyMonomial) = d.degree
-
-function truncate_basis(v::SimpleMonomialVector, maxdeg::Integer)
-    idx = searchsortedlast(v, _DummyMonomial(maxdeg), by=degree)
-    if idx < firstindex(v)
-        return @view(v[begin:end])
-    else
-        return @view(v[1:idx])
-    end
-end
-
-include("./SparsityNone.jl")

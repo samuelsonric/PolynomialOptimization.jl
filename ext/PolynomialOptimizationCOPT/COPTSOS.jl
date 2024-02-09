@@ -183,9 +183,9 @@ function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, ind
     return
 end
 
-function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, problem::POProblem{P}, groupings::SparseGroupings;
-    verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
-    max_mons = monomial_count(2degree(problem), nvariables(problem.objective))
+function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
+    max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
     setup_time = @elapsed begin
         task = COPTProb(copt_env)
         _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_LOGTOCONSOLE, Cint(verbose)))
@@ -206,7 +206,7 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, problem::POProble
             sizehint!(Dict{FastKey{Cint},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
                                                Tuple{FastVec{Cint},FastVec{Cint}}}}(), max_mons))
 
-        PolynomialOptimization.sos_setup!(state, problem, groupings)
+        PolynomialOptimization.sos_setup!(state, relaxation, groupings)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
 

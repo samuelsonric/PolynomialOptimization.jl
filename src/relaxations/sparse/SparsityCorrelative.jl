@@ -1,13 +1,13 @@
 export SparsityCorrelative
 
-mutable struct SparsityCorrelative <: SparseAnalysisState
-    problem::PolyOptProblem
+mutable struct SparsityCorrelative{P<:SimplePolynomial,Prob<:POProblem{P}} <: AbstractSPOProblem{P,Prob}
+    problem::Prob
     graph::Graphs.SimpleGraph
     chordal_completion::Bool
     cache
 
     @doc """
-        SparsityCorrelative(problem::PolyOptProblem; chordal_completion=true)
+        SparsityCorrelative(problem::POProblem; chordal_completion=true)
 
     Analyze the correlative sparsity of a problem.
     [Correlative sparsity](https://doi.org/10.1137/050623802) is a rough sparsity analysis that groups the variables into
@@ -17,10 +17,10 @@ mutable struct SparsityCorrelative <: SparseAnalysisState
     the completion.
     Correlative sparsity patterns cannot be iterated.
 
-    See also [`poly_problem`](@ref), [`sparse_optimize`](@ref), [`chordal_cliques!`](@ref),
+    See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`chordal_cliques!`](@ref),
     [`SparsityCorrelativeTerm`](@ref).
     """
-    function SparsityCorrelative(problem::PolyOptProblem; chordal_completion::Bool=true)
+    function SparsityCorrelative(problem::POProblem{P}; chordal_completion::Bool=true) where {P}
         g = Graphs.SimpleGraph(length(problem.variables))
         # objective: check which pairs of exponents appear together in a term
         for term in problem.objective
@@ -36,16 +36,16 @@ mutable struct SparsityCorrelative <: SparseAnalysisState
                 Graphs.add_edge!(g, Graphs.Edge(problem.var_map[var1], problem.var_map[var2]))
             end
         end
-        return new(problem, g, chordal_completion, nothing)
+        return new{P}(problem, g, chordal_completion, nothing)
     end
 end
 
 sparse_problem(cs::SparsityCorrelative) = cs.problem
 
-sparse_iterate!(::SparsityCorrelative; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
+iterate!(::SparsityCorrelative; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
     nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true, psd::Union{Bool,<:AbstractSet{<:Integer}}=true) = nothing
 
-function sparse_groupings(cs::SparsityCorrelative; chordal_completion::Bool=cs.chordal_completion, verbose::Bool=false,
+function groupings(cs::SparsityCorrelative; chordal_completion::Bool=cs.chordal_completion, verbose::Bool=false,
     return_assignments::Bool=false)
     if cs.cache === nothing || cs.cache[1] != chordal_completion
         problem = sparse_problem(cs)
@@ -55,13 +55,8 @@ function sparse_groupings(cs::SparsityCorrelative; chordal_completion::Bool=cs.c
         variable_groupings = getindex.((problem.variables,), cliques)
         sort!(variable_groupings, by=length)
         sort!.(variable_groupings, rev=true)
-        if cs.problem.complex
-            inequality_groups = Int[findfirst(v -> effective_variables_in_complex(constr.constraint, v), variable_groupings)
-                                    for constr in problem.constraints]
-        else
-            inequality_groups = Int[findfirst(v -> effective_variables_in_real(constr.constraint, v), variable_groupings)
-                                    for constr in problem.constraints]
-        end
+        inequality_groups = Int[findfirst(v -> effective_variables_in(constr.constraint, v), variable_groupings)
+                                for constr in problem.constraints]
         data = Vector{Vector{typeof(problem.basis)}}(undef, length(problem.constraints) +1)
         @inbounds data[1] = Vector{typeof(problem.basis)}(undef, length(variable_groupings))
         gentime = @elapsed begin
@@ -85,4 +80,4 @@ function sparse_groupings(cs::SparsityCorrelative; chordal_completion::Bool=cs.c
     end
 end
 
-default_solution_method(::SparsityCorrelative, ::Any) = :mvhankel
+default_solution_method(::SparsityCorrelative) = :mvhankel

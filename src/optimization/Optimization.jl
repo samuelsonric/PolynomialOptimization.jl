@@ -3,13 +3,14 @@ export poly_optimize, optimality_certificate
 include("./Result.jl")
 include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
+include("./CliqueMerging.jl")
 
 """
-    poly_optimize(method, problem::AbstractPOProblem; verbose=false, clique_merging=false, solutions::Bool=false,
+    poly_optimize(method, relaxation::AbstractPORelaxation; verbose=false, clique_merging=false, solutions::Bool=false,
         certificate::Bool=false, kwargs...)
 
-Optimize a polynomial optimization problem that was construced via [`poly_problem`](@ref) and possibly wrapped into a
-[`AbstractSPOProblem`](@ref). Returns a [`POResult`](@ref) object.
+Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into a
+[`AbstractPORelaxation`](@ref). Returns a [`POResult`](@ref) object.
 
 Clique merging is a way to improve the performance of the solver in case a sparse analysis led to cliques with a lot of
 overlap; however, the process itself may be time-consuming and is therefore disabled by default.
@@ -19,22 +20,27 @@ Any additional keyword argument is passed on to the solver.
 For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize).
 
 
-    poly_optimize(problem::POProblem; kwargs...)
+    poly_optimize(relaxation::AbstractPORelaxation; kwargs...)
 
 Uses the default solver. Note that this depends on the loaded solver packages, and possibly also their loading order if no
 preferred solver has been loaded.
+
+
+    poly_optimize([method, ]problem::POProblem[, degree::Int]; kwargs...)
+
+Construct a [`DenseRelaxation`](@ref) by default.
 """
-function poly_optimize(v::Val{S}, problem::AbstractPOProblem; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
+function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
         @verbose_info("Determining groupings...")
         t = @elapsed begin
-            groupings = sparse_groupings(problem)
+            groups = groupings(relaxation)
         end
         @verbose_info("Determined grouping in ", t, " seconds")
         if clique_merging
             clique_merging && @verbose_info("Merging cliques...")
             t = @elapsed begin
-                groupings = merge_cliques(problem, groupings)
+                groups = merge_cliques(relaxation, groups)
             end
             @verbose_info("Cliques merged in ", t, " seconds. Block sizes:")
         else
@@ -42,10 +48,10 @@ function poly_optimize(v::Val{S}, problem::AbstractPOProblem; verbose::Bool=fals
         end
         if verbose
             block_sizes = Dict{Int,Int}()
-            for m in groupings.obj
+            for m in groups.obj
                 block_sizes[length(m)] = get(block_sizes, length(m), 0) +1
             end
-            for constrgroup in (groupings.zero, groupings.nonneg, groupings.psd)
+            for constrgroup in (groups.zero, groups.nonneg, groups.psd)
                 for constr in constrgroup
                     for m in constr
                         block_sizes[length(m)] = get(block_sizes, length(m), 0) +1
@@ -54,10 +60,13 @@ function poly_optimize(v::Val{S}, problem::AbstractPOProblem; verbose::Bool=fals
             end
             println(sort!(collect(block_sizes), rev=true), "\nStarting optimization")
         end
-        result = poly_optimize(v, problem, groupings; verbose, kwargs...)
+        result = poly_optimize(v, relaxation, groups; verbose, kwargs...)
     end
-    return POResult(problem, S, otime, result...)
+    return POResult(relaxation, S, otime, result...)
 end
+
+poly_optimize(v::Val, problem::POProblem, degree=problem.mindegree; kwargs...) =
+    poly_optimize(v, DenseRelaxation(problem, degree); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 

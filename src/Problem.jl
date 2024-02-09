@@ -1,81 +1,60 @@
 export poly_problem, poly_optimize
 
-abstract type AbstractPOProblem{P<:SimplePolynomial} end
-
-const AbstractRealPOProblem = AbstractPOProblem{<:SimpleRealPolynomial}
-const AbstractComplexPOProblem = AbstractPOProblem{<:SimpleComplexPolynomial}
-
 """
-    variables(problem::AbstractPOProblem)
+    POProblem
 
-Returns the original variables (not their internal rewrites) associated to a given polynomial optimization problem. This
-defines the order in which solutions are returned. In the complex case, they do not contain conjugates.
-
-See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
-"""
-MultivariatePolynomials.variables(problem::AbstractPOProblem) = dense_problem(problem).original_variables
-"""
-    nvariables(problem::AbstractPOProblem)
-
-Returns the number of variables associated to a given polynomial optimization problem. This defines the order in which
-solutions are returned. In the complex case, conjugates are not counted.
-
-See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
-"""
-MultivariatePolynomials.nvariables(::AbstractPOProblem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
-"""
-    degree(problem::AbstractPOProblem)
-
-Returns the degree associated with a polynomial optimization problem. This is -1 if the problem was constructed without using
-the default dense basis.
-
-See also [`poly_problem`](@ref).
-"""
-MultivariatePolynomials.degree(problem::AbstractPOProblem) = dense_problem(problem).degree
-"""
-    length(problem::AbstractPOProblem)
-
-Return the length of the full basis associated with a polynomial optimization problem.
-"""
-Base.length(problem::AbstractPOProblem) = length(dense_problem(problem).basis)
-"""
-    isreal(problem::AbstractPOProblem)
-
-Returns whether a given polynomial optimization problem contains only real-valued variables or also complex ones.
-"""
-Base.isreal(::AbstractRealPOProblem) = true
-Base.isreal(::AbstractComplexPOProblem) = false
-
-"""
-    POProblem <: AbstractPOProblem
-
-The basic structure for a polynomial optimization problem.
-
-Generate this type using [`poly_problem`](@ref); perform optimizations using [`poly_optimize`] or wrap it in an appropriate
-[`AbstractSPOProblem`](@ref) first.
+The basic structure that describes a polynomial optimization problem. In order to perform optimizations on this problem,
+construct [`AbstractPORelaxation`](@ref)s from it.
 Note that the variables in a `POProblem` are rewritten to internal data types, i.e., they will probably not display in the same
 way as the original variables (they are simply numbered consecutively).
 
-See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`SparsityCorrelative`](@ref), [`SparsityTermBlock`](@ref),
-[`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref).
+See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`AbstractPORelaxation`](@ref).
 """
-struct POProblem{P<:SimplePolynomial,MV<:SimpleMonomialVector,OV} <: AbstractPOProblem{P}
+struct POProblem{P<:SimplePolynomial,OV}
     objective::P
     prefactor::P
-    degree::Int
-    basis::MV
+    mindegree::Int
     constr_zero::Vector{P}
     constr_nonneg::Vector{P}
     constr_psd::Vector{Matrix{P}}
     original_variables::Vector{OV}
 end
 
+"""
+    variables(problem::Union{POProblem,<:AbstractPORelaxation})
+
+Returns the original variables (not their internal rewrites) associated to a given polynomial optimization problem. This
+defines the order in which solutions are returned. In the complex case, they do not contain conjugates.
+
+See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
+"""
+MultivariatePolynomials.variables(problem::POProblem) = problem.original_variables
+"""
+    nvariables(problem::Union{POProblem,<:AbstractPORelaxation})
+
+Returns the number of variables associated to a given polynomial optimization problem. This defines the order in which
+solutions are returned. In the complex case, conjugates are not counted.
+
+See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
+"""
+MultivariatePolynomials.nvariables(::POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
+
 const RealPOProblem = POProblem{<:SimpleRealPolynomial}
 const ComplexPOProblem = POProblem{<:SimpleComplexPolynomial}
 
+"""
+    isreal(problem::Union{POProblem,<:AbstractPORelaxation})
+
+Returns whether a given polynomial optimization problem contains only real-valued variables or also complex ones.
+"""
+Base.isreal(::RealPOProblem) = true
+Base.isreal(::POProblem) = false
+
+
 function Base.show(io::IO, m::MIME"text/plain", p::POProblem)
     nv = nvariables(p)
-    print(io, isreal(p) ? "Real" : "Complex", "-valued polynomial optimization hierarchy of degree ", p.degree, " in ", nv,
+    type = isreal(p) ? "Real" : (p isa ComplexPOProblem ? "Complex" : "Real- and complex")
+    print(io, type, "-valued polynomial optimization problem in ", nv,
         " variable", isone(nv) ? "" : "s", "\nObjective: ")
     show(io, m, p.objective)
     if !isone(p.prefactor)
@@ -99,32 +78,11 @@ function Base.show(io::IO, m::MIME"text/plain", p::POProblem)
             end
         end
     end
-    print(io, "\nSize of full basis: ", length(p.basis))
-end
-
-function request_degree(mindeg)
-    while true
-        action = readline()
-        if action == "Y" || action == "y"
-            return mindeg
-        elseif action == "N" || action == "n"
-            error("The problem construction failed due to a too small degree.")
-        else
-            degree = tryparse(Int, action)
-            if isnothing(degree)
-                @warn("The specified value was neither Y, N, nor any number. Please retry.")
-            elseif degree < mindeg
-                @warn("The specified degree must be at least $mindeg. Please retry.")
-            else
-                return degree
-            end
-        end
-    end
 end
 
 @doc raw"""
-    poly_problem(objective, degree=0; zero=[], nonneg=[], psd=[], basis=:auto,
-        perturbation=0., factor_coercive=1, perturbation_coefficient=0., perturbation_form=0,
+    poly_problem(objective; zero=[], nonneg=[], psd=[], perturbation=0.,
+        factor_coercive=1, perturbation_coefficient=0., perturbation_form=0,
         noncompact=(0., 0), tighter=false, verbose=false, representation=:auto)
 
 Analyze a polynomial optimization problem and return a [`POProblem`](@ref) that can be used for sparse analysis and
@@ -133,11 +91,6 @@ optimization.
 # Arguments
 ## Problem formulation
 - `objective::AbstractPolynomial`: the objective that is to be minimized
-- `degree::Int`: the degree of the Lasserre relaxation, which must be larger or equal to half of the (complex) degree of all
-  polynomials that are involved. The default value `0` will automatically determine the minimum required degree (this may fail
-  when `tighter` is set to `true`). The value is only relevant when no user-defined `basis` is provided.
-  A nonzero value only makes sense if there are inequality or PSD constraints present, else it needlessly complicates
-  calculations without any benefit.
 - `zero::AbstractVector{<:AbstractPolynomialLike}`: a vector with all polynomials that should be constrained to be zero.
 - `nonneg::AbstractVector{<:AbstractPolynomialLike}`: a vector with all polynomials that should be constrained to be
   nonnegative. The values of the polynomials must always be effectively real-valued (in the sense that their imaginary parts
@@ -145,28 +98,10 @@ optimization.
 - `psd::AbstractVector{<:AbstractMatrix{<:AbstractPolynomialLike}}`: a vector of matrices that should be constrainted to be
   positive semidefinite. The matrices must be symmetric/hermitian.
 ## Problem representation
-- `basis::Union{<:SimpleMonomialVector,<:AbstractVector{<:AbstractMonomialLike},Symbol}`: specifies how the basis of the dense
-  moment matrix is constructed:
-  - `:dense` (default) will construct a dense moment matrix with degrees from zero to `degree`. This is wasteful and never
-    produces better results than `:newton`; however, the latter requires the availability of a suitable Newton solver, and it
-    might not be possible to extract a solution from a Newton basis.
-  - `:newton` will construct a basis based on the Newton halfpolytope; this is a far smaller, but still exact basis choice -
-    while it might not work, it will never introduce a failure when there isn't one with `:dense` also.
-    When constraints are present, the polytope is determined based on the Putinar reformulation, where all constraints and the
-    objective are moved to one side (comprising a new virtual objective). In this case, the specified `degree` is relevant to
-    make clear how large the constraint multipliers are.
-    Note that for the complex-valued hierarchy, there is no "Newton polytope"; as the representation of complex-valued
-    polynomials is unique, the process is much simpler there. Still, this corresponds to a reduction in the size of the basis,
-    and it will be activated using the `:newton` symbol; no solver is required.
-  - if a valid basis is already known for this problem, then it can be passed directly as a degree-ordered monomial vector.
-    Note that this vector has to be converted to a [`SimpleMonomialVector`](@ref) internally, so if you can already create the
-    basis data in this format, it is recommended to do so and pass the `SimpleMonomialVector` instead.
 - `representation::Symbol`: internally, whatever interface of `MultivariatePolynomials` is used, the data is converted to the
   efficient [`SimplePolynomial`](@ref) representation. There is a dense or a sparse version of this representation, and by
   default, a heuristic will choose the optimal one for the objective, which will then be the one taken for all data, also
   including the constraints. Setting this parameter to `:dense` or `:sparse` allows to overwrite the choice.
-  Note that this only affects the _polynomials_ involved in the problem; whether the _monomials_ in the basis use a dense or
-  sparse storage is determined automatically (and can be overwritten by using `basis` appropriately).
 ## Problem modification
 ### For unique solution extraction
 - `perturbation::Union{Float64, <:AbstractVector{Float64}}`: adds a random linear perturbation with an absolute value not
@@ -222,22 +157,12 @@ lead to missing this minimum.
 - `verbose::Bool`: if set to true, information about the current state of the method is printed; this may be useful for large
   and complicated problems whose construction can take some time.
 
-
-    poly_problem(objective; perturbation=0., verbose=false, method=default_newton_method(),
-        kwargs...)
-
-Analyze an unconstrained polynomial optimization problem and return a [`POProblem`](@ref). This differs from using the full
-version of this method in that the Newton polytope is calculated in order to automatically determine a suitable basis.
-The keyword arguments are passed through to [`newton_halfpolytope`](@ref).
-
-See also [`POProblem`](@ref), [`poly_optimize`](@ref), [`SparsityNone`](@ref), [`SparsityCorrelative`](@ref),
-[`SparsityTermBlock`](@ref), [`SparsityTermCliques`](@ref), [`SparsityCorrelativeTerm`](@ref), [`newton_halfpolytope`](@ref).
+See also [`POProblem`](@ref), [`poly_optimize`](@ref), [`AbstractPORelaxation`](@ref).
 """
-function poly_problem(objective::P, degree::Int=0;
+function poly_problem(objective::P;
     zero::AbstractVector{<:AbstractPolynomialLike}=P[],
     nonneg::AbstractVector{<:AbstractPolynomialLike}=P[],
     psd::AbstractVector{<:AbstractMatrix{<:AbstractPolynomialLike}}=AbstractMatrix{P}[],
-    basis::Union{<:SimpleMonomialVector,<:AbstractVector{<:AbstractMonomialLike},Symbol}=:dense,
     perturbation::Union{Float64,<:AbstractVector{Float64}}=0.,
     factor_coercive::AbstractPolynomialLike=one(P), perturbation_coefficient::Float64=0.,
     perturbation_form::AbstractPolynomialLike=Base.zero(P), noncompact::Tuple{Real,Integer}=(0.,0),
@@ -291,9 +216,6 @@ function poly_problem(objective::P, degree::Int=0;
     else
         all(constr -> transpose(constr) == constr, psd) || error("Nonsymmetric PSD constraint")
     end
-    if basis isa Symbol && !(basis in (:dense, :newton))
-        error("If no basis is specified, the value must be one of :dense or :newton")
-    end
     #endregion
 
     #region Preprocessing: perturbation, coercive factor
@@ -339,23 +261,12 @@ function poly_problem(objective::P, degree::Int=0;
     end
     #endregion
 
-    #region Obtaining and setting degree information
+    #region Obtaining information on the minimal degree
     degrees_eqs = maxhalfdegree.(zero)
     degrees_nonnegs = maxhalfdegree.(nonneg)
     degrees_psds = convert.(Int, maxhalfdegree.(psd)) # somehow, this is the only expression that gives Any[] when empty
     mindeg = max(maxhalfdegree(objective), maximum(degrees_eqs, init=0), maximum(degrees_nonnegs, init=0),
             maximum(degrees_psds, init=0))
-    if basis isa Symbol
-        if iszero(degree)
-            degree = mindeg
-            @info("Automatically selecting minimal degree $degree for the relaxation")
-        elseif degree < mindeg
-            @warn("The minimum required degree for the relaxation hierarchy is $mindeg, but $degree was given. Should we use the minimum degree [Y], abort [N], or use different degree altogether [number]?")
-            degree = request_degree(mindeg)
-        end
-    else
-        degree = maxdegree(basis)
-    end
     #endregion
 
     #region Tightening and degree adjustment
@@ -368,20 +279,14 @@ function poly_problem(objective::P, degree::Int=0;
         @verbose_info("Tightening completed")
         @inbounds append!(degrees_eqs, maxhalfdegree.(@view(zero[zero_len+1:end])))
         @inbounds append!(degrees_nonnegs, maxhalfdegree.(@view(nonneg[nonneg_len+1:end])))
-        if basis === :dense
-            mindeg = max(mindeg, maximum(@view(degrees_eqs[zero_len+1:end]), init=0),
-                maximum(@view(degrees_nonnegs[nonneg_len+1:end]), init=0))
-            if degree < mindeg
-                @warn("The mimimum required degree for the relaxation hierarchy has increased due to tightening and is now $mindeg, but $degree was given. Should we use the minimum degree [Y], abort [N], or use different degree altogether [number]?")
-                degree = request_degree(mindeg)
-            end
-        end
+        mindeg = max(mindeg, maximum(@view(degrees_eqs[zero_len+1:end]), init=0),
+            maximum(@view(degrees_nonnegs[nonneg_len+1:end]), init=0))
     end
     #endregion
 
     #region SimplePolynomial conversion
     @verbose_info("Converting data to simple polynomials")
-    max_power = 2degree
+    max_power = 2mindeg
     sobj = SimplePolynomial(objective, T; max_power, vars, representation)
     if sobj isa SimplePolynomials.SimpleDensePolynomial
         representation = :dense
@@ -407,62 +312,11 @@ function poly_problem(objective::P, degree::Int=0;
     end
     #endregion
 
-    #region Basis
-    @verbose_info("Constructing basis")
-    local sbasis
-    if basis === :dense
-        maxpower_T = SimplePolynomials.smallest_unsigned(max_power)
-        sbasis = monomials(nreal, ncomplex, Base.zero(maxpower_T):maxpower_T(degree);
-                           maxmultideg=[fill(maxpower_T(degree), nreal + ncomplex); zeros(maxpower_T, ncomplex)])
-    elseif basis === :newton
-        if degree > mindeg && isempty(snonneg) && isempty(spsd)
-            @info("Requested degree $degree is ignored, as no constraints are present.")
-        end
-        if !iszero(ncomplex) && !iszero(nreal)
-            # Well, we could do this. For a polynomial ∑ᵢⱼₖ αᵢⱼₖ xⁱ zʲ z̄ᵏ, we could factor the complex valued part and then
-            # apply the Newton polytope to the real factor: ∑ⱼₖ NP(∑ᵢ αᵢⱼₖ xⁱ) zʲ z̄ᵏ; and then simplify the complex valued part.
-            # Not implemented at the moment.
-            error("Mixing real- and complex-valued variables prevents Newton polytope methods")
-        end
-        let
-            if !iszero(ncomplex)
-                newton_method = :complex
-            elseif isempty(newton_args)
-                newton_method = default_newton_method()
-            else
-                newton_method = newton_args[1]
-            end
-            if length(newton_args) > 1
-                newton_kwargs = newton_args[2]
-            else
-                newton_kwargs = ()
-            end
-            sbasis = newton_halfpolytope(newton_method, sobj; zero=szero, nonneg=snonneg, psd=spsd, degree, verbose,
-                newton_kwargs...)
-            sbasis isa SimpleMonomialVector ||
-                error("Newton polytope calculation did not give results. Were the results written to a file?")
-        end
-    else
-        issorted(basis, by=degree) || error("Any custom basis must be sorted by degree")
-        if !(basis isa SimpleMonomialVector)
-            # If we already have a custom basis, then the largest exponent in this basis will be doubled in the moment matrix -
-            # this defines the data type.
-            max_power = 0
-            for m in basis
-                max_power = max(max_power, maximum(exponents(m), init=0))
-            end
-            max_power *= 2
-            sbasis = SimpleMonomialVector(basis; max_power, vars)
-            all(iszero, sbasis.exponents_conj) || error("Any custom basis must not contain explicit conjugates")
-        end
-    end
-    #endregion
-
-    return POProblem{typeof(sobj),typeof(sbasis),eltype(vars)}(sobj, sprefactor, degree, sbasis, finish!(szero),
-        finish!(snonneg), finish!(spsd), vars)
+    return POProblem{typeof(sobj),eltype(vars)}(sobj, sprefactor, mindeg, finish!(szero), finish!(snonneg), finish!(spsd),
+        vars)
 end
 
-dense_problem(problem::POProblem) = problem
+poly_problem(problem::POProblem) = problem
 
 function poly_structure_indices(problem::POProblem, objective::Bool, zero::Union{Bool,<:AbstractSet{<:Integer}},
     nonneg::Union{Bool,<:AbstractSet{<:Integer}}, psd::Union{Bool,<:AbstractSet{<:Integer}})

@@ -205,8 +205,8 @@ function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, ind
     return
 end
 
-function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, problem::POProblem{P}, groupings::SparseGroupings;
-    verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
+function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
     task = Mosek.Task(msk_global_env::Env)
     try
         setup_time = @elapsed begin
@@ -229,13 +229,13 @@ function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, problem::POProbl
             # However, we know a clear upper bound on the number of monomials: It is given by the monomial space of twice the
             # degree. Every monomial corresponds to a constraint, and it is extremely cheap to allocate a huge number of
             # constraints in Mosek, so we just create it.
-            concount = monomial_count(2degree(problem), nvariables(problem.objective))
+            concount = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
             appendcons(task, concount)
             putconboundsliceconst(task, 1, concount +1, MSK_BK_FX, 0., 0.)
 
             state = StateSOS(task, zero(Int32), zero(Int32))
 
-            PolynomialOptimization.sos_setup!(state, problem, groupings)
+            PolynomialOptimization.sos_setup!(state, relaxation, groupings)
         end
         @verbose_info("Setup complete in ", setup_time, " seconds")
 

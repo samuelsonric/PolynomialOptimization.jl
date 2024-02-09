@@ -12,14 +12,14 @@ Valid values are `tm_none` ([`SparsityNone`](@ref)), `tm_block` ([`SparsityTermB
 `chordal_completion = false`).
 " TermMode
 
-struct SparsityCorrelativeTerm <: SparseAnalysisState
-    problem::PolyOptProblem
-    cliques::Vector{SparseAnalysisState}
+struct SparsityCorrelativeTerm <: AbstractSPOProblem
+    problem::POProblem
+    cliques::Vector{AbstractSPOProblem}
     constraint_locations::Vector{Pair{Int,Int}}
     index_maps::Vector{Base.ImmutableDict{Int,Int}}
 
     @doc """
-        SparsityCorrelativeTerm(problem::PolyOptProblem; clique_chordal_completion=true, term_mode=tm_block)
+        SparsityCorrelativeTerm(problem::POProblem; clique_chordal_completion=true, term_mode=tm_block)
 
     Analyze both the [correlative as well as the term sparsity](http://arxiv.org/abs/2005.02828v2) of the problem.
     This is the most versatile kind of sparsity analysis, combining the effects of correlative sparsity with term analysis per
@@ -29,7 +29,7 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
     not permitted to use `tm_none` here, as this would completely disable the term sparsity; use `SparsityCorrelative` for
     this purpose.
 
-    See also [`poly_problem`](@ref), [`sparse_optimize`](@ref), [`SparsityCorrelative`](@ref), [`SparsityTermBlock`](@ref),
+    See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`SparsityCorrelative`](@ref), [`SparsityTermBlock`](@ref),
     [`SparsityTermCliques`](@ref), [`TermMode`](@ref).
 
         SparsityCorrelativeTerm(correlative_sparsity::SparsityCorrelative, term_modes::AbstractVector{TermMode})
@@ -50,10 +50,10 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
         # This method is relatively slow. To counter the effects, we expand a lot of more idiomatic Julia broadcasts into
         # explicit loops, as we don't need to allocate all these temporaries...
         # ef_vars = problem.complex ? ordinary_variable ∘ effective_variables : effective_variables
-        # This is essentially SparsityCorrelative.sparse_groupings, but without partitioning the full basis, only the
+        # This is essentially SparsityCorrelative.groupings, but without partitioning the full basis, only the
         # constraint bases.
         @verbose_info("Obtaining cliques according to correlative sparsity pattern")
-        correlative_groupings, cliques, (variable_groupings, constraint_groups) = sparse_groupings(correlative_sparsity;
+        correlative_groupings, cliques, (variable_groupings, constraint_groups) = groupings(correlative_sparsity;
             verbose, return_assignments=true)
         if term_modes isa TermMode
             term_modes = fill(term_modes, length(cliques))
@@ -69,7 +69,7 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
         end
 
         index_maps = Vector{Base.ImmutableDict{Int,Int}}(undef, length(cliques))
-        sparse_cliques = Vector{SparseAnalysisState}(undef, length(cliques))
+        sparse_cliques = Vector{AbstractSPOProblem}(undef, length(cliques))
         problems = Vector{typeof(problem)}(undef, length(cliques))
         @verbose_info("Generating subproblems and subbases")
         gentime = @elapsed begin
@@ -149,7 +149,7 @@ struct SparsityCorrelativeTerm <: SparseAnalysisState
     end
 end
 
-function SparsityCorrelativeTerm(problem::PolyOptProblem; clique_chordal_completion::Bool=true,
+function SparsityCorrelativeTerm(problem::POProblem; clique_chordal_completion::Bool=true,
     term_mode::TermMode=tm_block, verbose::Bool=false)
     term_mode != tm_none || error("Term mode cannot be none; use SparsityCorrelative instead")
     return SparsityCorrelativeTerm(SparsityCorrelative(problem, chordal_completion=clique_chordal_completion);
@@ -166,14 +166,29 @@ function Base.show(io::IO, m::MIME"text/plain", x::SparsityCorrelativeTerm)
     end
 end
 
-function sparse_groupings(cts::SparsityCorrelativeTerm)
-    clique_groupings = first.(sparse_groupings.(cts.cliques))
+function groupings(cts::SparsityCorrelativeTerm)
+    clique_groupings = first.(groupings.(cts.cliques))
     @inbounds return ([union(map(x -> x[1], clique_groupings)...),
                        (clique_groupings[loc[1]][loc[2]] for loc in cts.constraint_locations)...],
                       map(x -> sparse_problem(x).variables, cts.cliques))
 end
 
-function sparse_iterate!(cts::SparsityCorrelativeTerm;
+"""
+    iterate!(cts::SparsityCorrelativeTerm; term_modes=default, cliques=true, kwargs...)
+
+Allows to overwrite the `term_modes` setting specified while constructing the object for each iteration. This may either be a
+`TermMode`, or a vector of `TermMode`s with the same length as there are cliques, or a vector of pairs that maps clique indices
+to term modes (unspecified ones will be default, and also a single pair without a vector is valid), or a dictionary.
+Note that the choice of the mode will be permanent unless changed again, and this will reflect in the internal storage. In
+particular, setting a mode to `tm_none` will remove all term iteration information for this particular clique. If such a mode
+is reset to a term sparsity later on, it will again start from scratch.
+
+The keyword arguments `cliques` allow to further restrict the iteration to certain cliques. This does not necessarily mean that
+the bases associated to other cliques will not change as well to keep consistency; but their own contribution will not be
+considered. If `cliques` is `true`, all cliques are considered; else, it should be a set of the indices of all relevant
+cliques (as can be observed by printing the sparsity pattern).
+"""
+function iterate!(cts::SparsityCorrelativeTerm;
     @nospecialize(term_modes::Union{Missing,TermMode,<:AbstractVector{<:Union{Missing,TermMode}},Pair{<:Integer,TermMode},<:AbstractVector{Pair{<:Integer,TermMode}},AbstractDict{<:Integer,TermMode}}=missing),
     objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true, nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true,
     psd::Union{Bool,<:AbstractSet{<:Integer}}=true, cliques::Union{Bool,<:AbstractSet{<:Integer}}=true, verbose::Bool=false)
@@ -248,7 +263,7 @@ function sparse_iterate!(cts::SparsityCorrelativeTerm;
     end
     @verbose_info("Generating new union supports")
     gentime = @elapsed begin
-        new_union_supports = sparse_supports(cts)
+        new_union_supports = supports(cts)
     end
     @verbose_info("Generation finished in ", gentime, " seconds. Iterating individual cliques.")
     indices = poly_structure_indices(problem, objective, zero, nonneg, psd)
@@ -273,13 +288,13 @@ function sparse_iterate!(cts::SparsityCorrelativeTerm;
     return finished ? nothing : cts
 end
 
-function sparse_supports(cts::SparsityCorrelativeTerm)
-    # basically just a threaded merge_monomial_vectors(sparse_supports.(cts.cliques))
+function supports(cts::SparsityCorrelativeTerm)
+    # basically just a threaded merge_monomial_vectors(supports.(cts.cliques))
     supports = Vector{typeof(cts.problem.basis)}(undef, length(cts.cliques))
     Threads.@threads for i in 1:length(cts.cliques) # enumerate doesn't work with threads
-        @inbounds supports[i] = sparse_supports(cts.cliques[i])
+        @inbounds supports[i] = supports(cts.cliques[i])
     end
     return merge_monomial_vectors(supports)
 end
 
-default_solution_method(::SparsityCorrelativeTerm, ::Any) = :mvhankel
+default_solution_method(::SparsityCorrelativeTerm) = :heuristic

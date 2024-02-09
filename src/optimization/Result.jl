@@ -31,8 +31,9 @@ Base.iterate(d::FullMonomialVector, args...) = iterate(d.values, args...)
 """
     POResult
 
-Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractPOProblem`](@ref).
+Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractPORelaxation`](@ref).
 A `POResult` struct `r` contains information about
+- the relaxation employed for the optimization (`r.relaxation`)
 - the optimized problem (available via [`poly_problem`](@ref))
 - the used method (`r.method`)
 - the time required for the optimization in seconds (`r.time`)
@@ -42,8 +43,8 @@ A `POResult` struct `r` contains information about
 - the moment information which allows to construct a [moment matrix](@ref moment_matrix), extract solutions
   ([`poly_all_solutions`](@ref) or [`poly_solutions`](@ref)), and an [optimality certificate](@ref optimality_certificate).
 """
-struct POResult{P<:AbstractPOProblem,V,M<:FullMonomialVector{V}}
-    problem::P
+struct POResult{R<:AbstractPORelaxation,V,M<:FullMonomialVector{V}}
+    relaxation::R
     method::Symbol
     time::Float64
     status
@@ -53,6 +54,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", x::POResult)
     println(io, "Polynomial optimization result")
+    println(io, "Relaxation method: ", typeof(x.relaxation).name.name)
     println(io, "Used optimization method: ", x.method)
     println(io, "Status of the solver: ", x.status)
     println(io, "Lower bound to optimum (in case of good status): ", x.objective)
@@ -62,12 +64,11 @@ function Base.show(io::IO, ::MIME"text/plain", x::POResult)
     )
 end
 
-Base.eltype(::Type{<:(POResult{<:AbstractPOProblem,V})}) where {V} = V
+Base.eltype(::Type{<:(POResult{<:AbstractPORelaxation,V})}) where {V} = V
 
 """
     poly_problem(r::POResult)
 
 Returns the problem that was associated with the optimization result.
 """
-poly_problem(r::POResult) = r.problem
-dense_problem(r::POResult) = dense_problem(r.problem)
+poly_problem(r::POResult) = poly_problem(r.relaxation)
