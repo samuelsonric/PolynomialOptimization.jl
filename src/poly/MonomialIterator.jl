@@ -20,8 +20,8 @@ struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
     minmultideg::Vector{DI}
     maxmultideg::Vector{DI}
     powers::P
-    Σminmultideg::DI
-    Σmaxmultideg::DI
+    Σminmultideg::UInt
+    Σmaxmultideg::UInt
 
     function MonomialIterator{O}(mindeg::DI, maxdeg::DI, minmultideg::Vector{DI}, maxmultideg::Vector{DI},
         ownpowers::Union{Bool,<:AbstractVector{DI}}=false) where {O,DI<:Integer}
@@ -55,7 +55,7 @@ function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}) where {P}
         powers_increment_right(iter, powers, iter.mindeg - Σminmultideg, 1) || @assert(false)
         deg = iter.mindeg
     else
-        deg = Σminmultideg
+        deg = typeof(iter.mindeg)(Σminmultideg)
     end
     return P === Nothing ? copy(powers) : powers, (deg, powers)
 end
