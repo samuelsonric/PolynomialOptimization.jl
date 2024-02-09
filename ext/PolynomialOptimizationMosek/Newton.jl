@@ -1,4 +1,4 @@
-function PolynomialOptimization.newton_polytope_preproc_quick(::Val{:Mosek}, coeffs, vertexindices, verbose; parameters...)
+function Newton.preproc_quick(::Val{:Mosek}, coeffs, vertexindices, verbose; parameters...)
     nv, nc = size(coeffs)
     nvertices = length(vertexindices)
     required_coeffs = Vector{Bool}(undef, nc)
@@ -49,8 +49,7 @@ function PolynomialOptimization.newton_polytope_preproc_quick(::Val{:Mosek}, coe
     return required_coeffs
 end
 
-function PolynomialOptimization.newton_polytope_preproc_remove(::Val{:Mosek}, nv, nc, getvarcon, verbose, singlethread;
-    parameters...)
+function Newton.preproc_remove(::Val{:Mosek}, nv, nc, getvarcon, verbose, singlethread; parameters...)
     task = Mosek.Task(msk_global_env::Env)
     singlethread && putintparam(task, MSK_IPAR_NUM_THREADS, 1)
     # verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
@@ -128,12 +127,11 @@ function PolynomialOptimization.newton_polytope_preproc_remove(::Val{:Mosek}, nv
     return required_coeffs
 end
 
-PolynomialOptimization.newton_halfpolytope_alloc_global(::Val{:Mosek}, nv) = fill(MSK_BK_FX.value, nv)
-PolynomialOptimization.newton_halfpolytope_alloc_local(::Val{:Mosek}, nv) = Vector{Float64}(undef, nv)
-PolynomialOptimization.newton_halfpolytope_clonetask(t::Mosek.Task) = Mosek.Task(t)
+Newton.alloc_global(::Val{:Mosek}, nv) = fill(MSK_BK_FX.value, nv)
+Newton.alloc_local(::Val{:Mosek}, nv) = Vector{Float64}(undef, nv)
+Newton.clonetask(t::Mosek.Task) = Mosek.Task(t)
 
-@inline function PolynomialOptimization.newton_polytope_do_worker(::Val{:Mosek}, task, bk, tmp, moniter, Δprogress,
-    Δacceptance, add_callback, iteration_callback)
+@inline function Newton.work(::Val{:Mosek}, task, bk, tmp, moniter, Δprogress, Δacceptance, add_callback, iteration_callback)
     for powers in moniter
         # check the previous power in the linear program and add it if possible
         copyto!(tmp, powers)
@@ -150,7 +148,7 @@ PolynomialOptimization.newton_halfpolytope_clonetask(t::Mosek.Task) = Mosek.Task
     return
 end
 
-function PolynomialOptimization.newton_halfpolytope_do_prepare(::Val{:Mosek}, coeffs, num, verbose; parameters...)
+function Newton.prepare(::Val{:Mosek}, coeffs, num, verbose; parameters...)
     nv, nc = size(coeffs)
     # now we build a task with the minimal number of extremal points and try to find every possible part of the Newton polytope
     # for SOS polynomials

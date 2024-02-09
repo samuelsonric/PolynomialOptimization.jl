@@ -21,8 +21,7 @@ mutable struct FastVec{V} <: AbstractVector{V}
 
     function FastVec{V}(::UndefInitializer, n::Integer; buffer::Integer=n) where {V}
         buffer ≥ n || error("The buffer must not be smaller than the number of elements")
-        # this is a duplication of PolynomialOptimization.resizable_array, but the submodule should not depend on the larger
-        # one...
+        # this is a duplication of Newton.resizable_array, but the submodule should not depend on the larger one...
         if VERSION < v"1.11" && isbitstype(V)
             v = unsafe_wrap(Array, Ptr{V}(Libc.malloc(buffer * sizeof(V))), (buffer,), own=true)
             # by default, a is shared already, which is clearly not correct here

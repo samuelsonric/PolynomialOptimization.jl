@@ -11,6 +11,8 @@ import MutableArithmetics
 import StatsBase
 import BufferedStreams
 
+export Newton
+
 const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
 
@@ -81,19 +83,17 @@ include("./helpers/FastVector.jl")
 using .FastVector
 include("./poly/SimplePolynomials.jl")
 using .SimplePolynomials
-using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial, SimpleComplexMonomial,
-    moniter_state
+using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial
 include("./helpers/StackVector.jl")
 include("./helpers/FastKey.jl")
 include("./helpers/SortAlong.jl")
-include("./helpers/MatrixMutation.jl")
 include("./helpers/MatrixPolynomials.jl")
 include("./helpers/Allocations.jl")
 
-include("./sparsity/Chordal.jl")
-include("./Newton.jl")
 include("./Problem.jl")
-include("./sparsity/SparseProblem.jl")
+include("./newton/Newton.jl")
+import .Newton
+include("./relaxations/Relaxation.jl")
 include("./optimization/Optimization.jl")
 include("./Tightening.jl")
 

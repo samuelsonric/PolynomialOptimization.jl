@@ -1,5 +1,7 @@
 include("./shared.jl")
 using LinearAlgebra
+using PolynomialOptimization.Newton: halfpolytope
+using PolynomialOptimization.SimplePolynomials: MonomialIterator
 
 @testset "Monomial iterator" begin
     DynamicPolynomials.@polyvar x[1:3]
@@ -42,7 +44,7 @@ end
     # First check the quick algo
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, verbose=true) ==
+        @test halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, verbose=true) ==
             monomial_vector([1, y, x, x*y, x^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 5 initial candidates"
@@ -50,8 +52,8 @@ end
     # Then the same for the fine algo
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, preprocess_quick=false, preprocess_fine=true,
-            verbose=true) == monomial_vector([1, y, x, x*y, x^2])
+        @test halfpolytope(5 - x*y - x^2*y^2 + 3y^2 + x^4, preprocess_quick=false, preprocess_fine=true, verbose=true) ==
+            monomial_vector([1, y, x, x*y, x^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - fine, 5 initial candidates"
     @test startswith(output[3], "Found 4 extremal points of the convex hull in")
@@ -60,14 +62,14 @@ end
 @testset "Newton polytope (BPT Example 3.93)" begin
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, verbose=true) == monomial_vector([1, y, x, y^2])
+        @test halfpolytope(1 - x^2 + x*y + 4y^4, verbose=true) == monomial_vector([1, y, x, y^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 4 initial candidates"
     @test startswith(output[3], "Found 3 potential extremal points of the convex hull")
 
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar x y
-        @test newton_halfpolytope(1 - x^2 + x*y + 4y^4, preprocess_quick=false, preprocess_fine=true, verbose=true) ==
+        @test halfpolytope(1 - x^2 + x*y + 4y^4, preprocess_quick=false, preprocess_fine=true, verbose=true) ==
             monomial_vector([1, y, x, y^2])
     end
     @test output[2] == "Removing redundancies from the convex hull - fine, 4 initial candidates"
@@ -77,7 +79,7 @@ end
 @testset "Newton polytope (BPT, Example 3.95)" begin
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope(
+        @test halfpolytope(
             PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
             verbose=true
         ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
@@ -87,7 +89,7 @@ end
 
     _, output = capture_stdout() do
         DynamicPolynomials.@polyvar w x y z
-        @test newton_halfpolytope(
+        @test halfpolytope(
             PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
             preprocess_quick=false, preprocess_fine=true, verbose=true
         ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
@@ -100,7 +102,7 @@ end
 
 @testset "Newton polytope (BPT Exercise 4.5)" begin
     DynamicPolynomials.@polyvar x[1:3]
-    @test newton_halfpolytope(x[1]*x[2]^2 + x[2]^2 + prod(x)) == monomial_vector([x[2]])
+    @test halfpolytope(x[1]*x[2]^2 + x[2]^2 + prod(x)) == monomial_vector([x[2]])
 end
 
 @testset "Newton polytope (mutually unbiased bases)" begin
@@ -122,7 +124,7 @@ end
 
     _, output = capture_stdout() do
         obj = findmubs(2, 3)
-        @test length(newton_halfpolytope(obj, preprocess=true, verbose=true)) == 1453
+        @test length(halfpolytope(obj, preprocess=true, verbose=true)) == 1453
     end
     @test output[2] == "Removing redundancies from the convex hull - quick heuristic, 689 initial candidates"
     @test startswith(output[3], "Found 517 potential extremal points of the convex hull in")
