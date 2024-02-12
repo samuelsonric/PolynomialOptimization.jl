@@ -1,4 +1,5 @@
-function notify(num, progress, acceptance, init_time, comm, ::RootRank, threadprogress=missing, threadacceptance=missing)
+function verbose_worker(num, progress, acceptance, init_time, comm, ::RootRank, threadprogress=missing,
+    threadacceptance=missing)
     init_progress = progress[]
     ismissing(threadprogress) || (init_progress += sum(threadprogress, init=0))
     self_running = Ref(true)
@@ -45,19 +46,18 @@ function notify(num, progress, acceptance, init_time, comm, ::RootRank, threadpr
             100prog / num, 100acc / prog, rem_sec ÷ 60, rem_sec % 60)
         flush(stdout)
     end)
-    notifier = Task(@capture(() -> begin
+    Threads.@spawn(:interactive, begin
         while !iszero($workers[]) || $self_running[]
             $check()
             sleep(1)
         end
-        check() # make sure to have a final report
-    end))
-    notifier.sticky = true
-    ccall(:jl_set_task_tid, Cint, (Any, Cint), notifier, 0)
-    return schedule(notifier), self_running
+        $check() # make sure to have a final report
+    end)
+    return self_running
 end
 
-function notify(num, progress, acceptance, init_time, comm, ::OtherRank, threadprogress=missing, threadacceptance=missing)
+function verbose_worker(num, progress, acceptance, init_time, comm, ::OtherRank, threadprogress=missing,
+    threadacceptance=missing)
     self_running = Ref(true)
     Δprogress_acceptance = Vector{Int}(undef, 2)
     Δbuffer = MPI.Buffer(Δprogress_acceptance)
@@ -81,183 +81,47 @@ function notify(num, progress, acceptance, init_time, comm, ::OtherRank, threadp
         end
         MPI.Send($Δbuffer, $comm, dest=root, tag=1)
     end)
-    notifier = Task(@capture(() -> begin
+    Threads.@spawn(:interactive, begin
         while $self_running[]
             $check()
             sleep(1)
         end
         $check() # make sure to have a final report
         # and then signal that we are done
-        Δprogress_acceptance[1] = -1
+        $Δprogress_acceptance[1] = -1
         MPI.Send($Δbuffer, $comm, dest=root, tag=1)
-    end))
-    notifier.sticky = true
-    ccall(:jl_set_task_tid, Cint, (Any, Cint), notifier, 0)
-    return schedule(notifier), self_running
+    end)
+    return self_running
 end
 
-function print_workload(workload)
-    nworkers = length(workload)
-    if nworkers ≤ 20
-        println("\33[2KExact workload distribution: $workload")
-    else
-        let minv=typemax(Int), maxv=0, meanv=0., stdv=0.
-            @simd for workloadᵢ in workload
-                if workloadᵢ < minv
-                    minv = workloadᵢ
-                end
-                if workloadᵢ > maxv
-                    maxv = workloadᵢ
-                end
-                meanv += workloadᵢ
-            end
-            meanv /= nworkers
-            @simd for workloadᵢ in workload
-                stdv += (workloadᵢ - meanv)^2
-            end
-            stdv = sqrt(stdv / (nworkers -1))
-            println("\33[2KExact workload distribution: range [$minv, $maxv], mean $meanv, standard deviation $stdv")
-        end
-    end
-    flush(stdout)
-end
-
-function execute_taskfun(V, tid, task, ranges, nv, mindeg, maxdeg, data_global, cond, progresses, acceptances, allcandidates,
-    verbose, filestuff, ::MPIRank)
-    lastappend = time_ns()
-    lastinfo = Ref(lastappend)
-    powers = Vector{typeof(maxdeg)}(undef, nv)
-    data_local = alloc_local(V, nv)
-    candidates = FastVec{typeof(maxdeg)}()
-    progress = Ref(progresses, tid)
-    acceptance = Ref(acceptances, tid)
-    if isnothing(filestuff)
-        workload = true # make sure we append the data at least once at the end
-        fileprogress = nothing
-        fileout = nothing
-        writefile = (p, workload) -> nothing
-        appendorwrite = @capture (p, workload) -> begin
-            lock($cond)
-            try
-                append!($allcandidates, $candidates)
-            finally
-                unlock(cond)
-            end
-            empty!(candidates)
-        end
-    else
-        workload = nothing # we need it for capturing, but also to be preseved between loops
-        fileprogress, fileout = filestuff
-        lastworkload = Ref{Vector{Int}}()
-        writefile = @capture (p, workload) -> begin
-            write($fileout, $candidates)
-            flush(fileout)
-            seekstart($fileprogress)
-            # we always write the last completed iteration, which is maxmultideg
-            write(fileprogress, $progress[], $acceptance[], p)
-            if !isassigned($lastworkload) || lastworkload[] !== workload
-                write(fileprogress, workload)
-                lastworkload[] = workload
-            end
-            flush(fileprogress)
-            empty!(candidates)
-        end
-        appendorwrite = writefile
-    end
-    try
-        while true
-            local curminrange, curmaxrange, restore
-            restore = nothing
-            try
-                if isnothing(filestuff)
-                    curminrange, curmaxrange = take!(ranges)
-                else
-                    workload, curminrange, curmaxrange, restore = take!(ranges)
-                end
-            catch e
-                e isa InvalidStateException && break
-                rethrow(e)
-            end
-            iter_ = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, curminrange, curmaxrange, powers)
-            if isnothing(restore)
-                iter = iter_
-            else
-                copyto!(powers, restore)
-                iter = InitialStateIterator(iter_, moniter_state(powers))
-            end
-            work(V, task, data_global, data_local, iter, progress, acceptance,
-                @capture(p -> append!($candidates, p)),
-                !verbose && isnothing(filestuff) ? nothing : @capture(p -> let
-                    nextinfo = time_ns()
-                    if nextinfo - $lastinfo[] > 1_000_000_000
-                        @inline $writefile(p, $workload)
-                        $verbose && yield()
-                        lastinfo[] = nextinfo
-                    end
-                end)
-            )
-            if verbose || !isnothing(filestuff)
-                nextinfo = time_ns()
-                if nextinfo - lastinfo[] > 1_000_000_000
-                    @inline writefile(powers, workload)
-                    verbose && yield()
-                    lastinfo[] = nextinfo
-                end
-            end
-            # make sure that we update the main list regularly, but not ridiculously often
-            nextappend = time_ns()
-            if nextappend - lastappend > 10_000_000_000
-                @inline appendorwrite(powers, workload)
-                lastappend = nextappend
-            end
-        end
-        # at the end, exit gracefully. It may happen that this thread did not even participate once, so workload could still
-        # be unset
-        isnothing(workload) || @inline appendorwrite(powers, workload)
-    finally
-        finalize(task)
-        if !isnothing(filestuff)
-            close(fileout)
-            close(fileprogress)
-        end
-    end
-end
-
-function execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath, comm, rank::MPIRank)
+function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
     isroot(rank) && @verbose_info("Preparing to determine Newton polytope using ", nworkers,
         " single-threaded workers, each checking about ", workersize, " candidates")
-    cutat_worker = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, workersize)
-    cutlen_worker = nv - cutat_worker
-    occurrences_before = length(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[1:cutat_worker],
-        maxmultideg[1:cutat_worker]), Val(:detailed))
-    cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
-    data_global = alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{typeof(maxdeg)}()
+    candidates = FastVec{eltype(eltype(iter))}()
+    iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)
 
     progress = Ref(0)
     acceptance = Ref(0)
-    workload = zeros(Int, nworkers)
-    powers = Vector{typeof(maxdeg)}(undef, nv)
-    initialize = false
-    # We don't use the initial state iterator here, as we have to jump into the loop
-    rankiter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat_worker:end], maxmultideg[cutat_worker:end],
-        @view(maxmultideg[cutat_worker:end])) # we iterate on maxmultideg, so that this one is always current
     if isnothing(filepath)
-        fileprogress = nothing
-        fileout = nothing
+        filestuff = nothing
     else
         prefix = "$filepath-n$(convert(Int, rank))"
         fileprogress = open("$prefix.prog", read=true, write=true, create=true, lock=false)
         success = fill(false, nworkers)
-        local restore
         try
-            restore = restore_status!(fileprogress, workload, powers)
+            fs = filesize(fileprogress)
+            if fs == 2sizeof(Int)
+                progress[] = read(fileprogress, Int)
+                acceptance[] = read(fileprogress, Int)
+            elseif !iszero(fs)
+                error()
+            end
         catch
             close(fileprogress)
             MPI.Allgather!(MPI.UBuffer(success, 1), comm)
@@ -271,218 +135,86 @@ function execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, 
             isroot(rank) && error("Unknown progress file format - please delete existing files.")
             return
         end
-        if !isnothing(restore)
-            progress[] = restore[1]
-            acceptance[] = restore[2]
-            copyto!(rankiter.powers, 1, powers, cutat_worker, cutlen_worker)
-            initialize = true
-        end
+        iter = Iterators.drop(iter, progress[], copy=false)
         fileout = open("$prefix.out", append=true, lock=false)
+        filestuff = (fileprogress, fileout)
     end
-    init_time = time_ns()
     if verbose
-        notifier, self_running = notify(num, progress, acceptance, init_time, comm, rank)
+        self_running = verbose_worker(num, progress, acceptance, time_ns(), comm, rank)
     end
+    lastinfo = Ref(time_ns())
+    cb = step_callback(verbose, filestuff, lastinfo, candidates, progress, acceptance)
     try
-        # We do not want to do a lot of communication between the tasks as is done in the multithreaded approach. There, we just
-        # feed every item into the channel and the first one that is available pops it. Here, we check beforehand how many items
-        # we can expect in an individual batch and then decide how many batches will be done by the rank.
-        data_local = alloc_local(V, nv)
-        lastinfo = Ref(init_time)
-        # unroll "for ranktask in rankiter" so that we can jump into the loop starting with the previous iteration
-        if initialize
-            ranktask = rankiter.powers
-            rankiter_state = moniter_state(ranktask)
-            @goto start
-        end
-        rankiter_next = iterate(rankiter)
-        @inbounds while !isnothing(rankiter_next)
-            ranktask, rankiter_state = rankiter_next
-            @label start
-
-            fixdeg = typeof(maxdeg)(sum(ranktask, init=zero(maxdeg)))
-            # The index i in occurrences_before that would have corresponded to the degree i-1 now corresponds to i-1+fixdeg.
-            # Consequently, we only take those degrees into account that are at least mindeg, which now has start index
-            # mindeg+1-fixdeg, and we need to introduce a new maxdegree cutoff.
-            tasklen = sum(@view(occurrences_before[max(1, mindeg + 1 - fixdeg):maxdeg + 1 - fixdeg]), init=0)
-            # if we don't put this assignment of minworkloadᵢ here (instead of the if), we will get internal runtime errors
-            # upon compilation if we later on add access workload[minworkloadᵢ], even if we protect it in the same if.
-            # Unfortunately, the case is so complex that it's hard to come up with a minimal example. Can you?
-            minworkloadᵢ = 1
-            if !iszero(tasklen)
-                # The lowest-rank worker with the least workload will get the job.
-                minworkload = workload[1]
-                for i in 2:nworkers
-                    if workload[i] < minworkload
-                        minworkloadᵢ = i
-                        minworkload = workload[i]
-                    end
-                end
-                if rank == minworkloadᵢ -1
-                    # it's our job!
-                    lastworkload = Ref{typeof(workload)}()
-                    copyto!(minmultideg, cutat_worker, ranktask, 1, cutlen_worker)
-                    if initialize
-                        iter = InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg,
-                            maxmultideg, powers), moniter_state(powers))
-                    else
-                        iter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, powers)
-                    end
-                    work(V, task, data_global, data_local, iter, progress, acceptance,
-                        @capture(p -> append!($candidates, p)),
-                        !verbose && isnothing(filepath) ? nothing : @capture(p -> let nextinfo=time_ns()
-                            if nextinfo - $lastinfo[] > 1_000_000_000
-                                if !isnothing($filepath)
-                                    write($fileout, $candidates)
-                                    flush(fileout)
-                                    seekstart($fileprogress)
-                                    write(fileprogress, $progress[], $acceptance[], p)
-                                    if !isassigned($lastworkload) || lastworkload[] !== $workload
-                                        write(fileprogress, workload)
-                                        lastworkload[] = workload
-                                    end
-                                    flush(fileprogress)
-                                    empty!(candidates)
-                                end
-                                $verbose && yield()
-                                lastinfo[] = nextinfo
-                            end
-                        end)
-                    )
-                end
-            end
-            if verbose || !isnothing(filepath)
-                nextinfo = time_ns()
-                if nextinfo - lastinfo[] > 1_000_000_000
-                    if !isnothing(filepath)
-                        write(fileout, candidates)
-                        flush(fileout)
-                        seekstart(fileprogress)
-                        # we always write the last completed iteration, which is maxmultideg
-                        write(fileprogress, progress[], acceptance[], maxmultideg, workload)
-                        flush(fileprogress)
-                        empty!(candidates)
-                    end
-                    verbose && yield()
-                    lastinfo[] = nextinfo
-                end
-            end
-            workload[minworkloadᵢ] += tasklen
-            initialize = false
-            rankiter_next = iterate(rankiter, rankiter_state)
-        end
-        if !isnothing(filepath)
+        work(V, task, alloc_global(V, nv), alloc_local(V, nv), iter, progress, acceptance,
+            @capture(p -> append!($candidates, p)), cb)
+        if !isnothing(filestuff)
             write(fileout, candidates)
             seekstart(fileprogress)
-            # Even here, we don't signal completion - all the notifications must still run between the workers, so let's just
-            # store the last element.
-            write(fileprogress, progress[], acceptance[], workload, maxmultideg)
+            write(fileprogress, progress[], acceptance[])
         end
-        verbose && isroot(rank) && print_workload(workload)
     finally
+        if verbose
+            self_running[] = false
+        end
         finalize(task)
-        if !isnothing(fileout)
+        if !isnothing(filestuff)
             close(fileout)
             close(fileprogress)
         end
-        if verbose
-            self_running[] = false
-            wait(notifier)
-        end
     end
-    return isnothing(fileout) ? candidates : nothing
+    return isnothing(filestuff) ? candidates : nothing
 end
 
-function execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, nthreads::Integer, task, secondtask, filepath,
-    comm, rank::MPIRank)
+function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask, filepath, comm, rank::MPIRank)
     if isone(nthreads)
         @assert(isnothing(secondtask))
-        return execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath, comm, rank)
+        return execute(V, nv, verbose, iter, num, task, filepath, comm, rank)
     end
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
     threadsize = div(workersize, nthreads, RoundUp)
+    if threadsize == workersize
+        finalize(secondtask)
+        return execute(V, nv, verbose, iter, num, task, filepath, comm, rank)
+    end
     isroot(rank) && @verbose_info("Preparing to determine Newton polytope using ", nworkers, " workers, each with ", nthreads,
         " threads checking about ", threadsize, " candidates")
-    cutat_worker = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, workersize)
-    cutlen_worker = nv - cutat_worker
-    cutat_thread = monomial_cut(mindeg, maxdeg, minmultideg, maxmultideg, threadsize)
-    if cutat_thread ≥ cutat_worker # why would > even happen?
-        finalize(secondtask)
-        return execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, task, filepath, comm, rank)
-    else
-        cutlen_thread = cutat_worker - cutat_thread
-        cutat_thread += 1 # cutat_thread is now the first entry to be fixed for a thread in the worker
-        minmultideg_thread = minmultideg[cutat_thread:cutat_worker]
-        maxmultideg_thread = maxmultideg[cutat_thread:cutat_worker]
-    end
-    occurrences_before = length(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[1:cutat_worker],
-        maxmultideg[1:cutat_worker]), Val(:detailed))
-    cutat_worker += 1 # cutat is now the first entry to be fixed for the worker
 
     data_global = alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{typeof(maxdeg)}()
+    candidates = FastVec{eltype(eltype(iter))}()
+    iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)
+    iterators = Vector{typeof(iter)}(undef, nthreads)
+    let start=1
+        for i in 1:nthreads
+            @inbounds iterators[i] = RangedMonomialIterator(iter, start, threadsize, copy=true)
+            start += threadsize
+        end
+    end
 
     threadprogress = zeros(Int, nthreads)
     threadacceptance = zeros(Int, nthreads)
     workerprogress = Ref(0)
     workeracceptance = Ref(0)
-    workload = zeros(Int, nworkers)
-    workloadcopy = nothing # we need this to avoid a compile error when we later access workloadcopy, although it is only in
-                           # cases in which it is defined
-    initialize = false
-    # We don't use the initial state iterator here, as we have to jump into the loop
-    rankiter = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg[cutat_worker:end], maxmultideg[cutat_worker:end],
-        @view(maxmultideg[cutat_worker:end])) # we iterate on maxmultideg, so that this one is always current
-    if isnothing(filepath)
-        ranges = Base.Channel{NTuple{2,typeof(maxmultideg)}}(typemax(Int))
-    else
-        # ranges must now cover much more than in the single-worker case:
-        # - workload, we have to restore the workload vector as it was before the worker decided to take the task upon itself
-        # - minmultideg and maxmultideg for this thread
-        # - potentially a position within minmultideg/maxmultideg that was already processed
-        ranges = Base.Channel{Tuple{Vector{Int},typeof(maxmultideg),typeof(maxmultideg),
-                                    Union{Nothing,typeof(maxmultideg)}}}(typemax(Int))
+    if !isnothing(filepath)
         prefix = "$filepath-n$(convert(Int, rank))"
         fileprogresses = Vector{IOStream}(undef, nthreads)
         fileouts = Vector{IOStream}(undef, nthreads)
-        maxrankitr = missing
-        maxitr = missing
         success = fill(false, nworkers)
         @inbounds try
-            curworkload = similar(workload)
             for i in 1:nthreads
                 fileprogresses[i] = fileprogress = open("$prefix-$i.prog", read=true, write=true, create=true, lock=false)
                 fileouts[i] = open("$prefix-$i.out", append=true, lock=false)
-                curpower = Vector{typeof(maxdeg)}(undef, nv)
-                currestore = restore_status!(fileprogress, curworkload, curpower)
-                if !isnothing(currestore)
-                    threadprogress[i], threadacceptance[i] = currestore
-                    restartmin = copy(minmultideg)
-                    restartmax = copy(maxmultideg)
-                    copyto!(restartmin, cutat_thread, curpower, cutat_thread, cutlen_thread + cutlen_worker)
-                    copyto!(restartmax, cutat_thread, curpower, cutat_thread, cutlen_thread + cutlen_worker)
-                    put!(ranges, (curworkload, restartmin, restartmax, curpower))
-                    currankitr = @view(curpower[cutat_worker:end])
-                    if ismissing(maxrankitr) || curworkload > workload
-                        @assert(
-                            ismissing(maxrankitr) ||
-                            toSigned(compare(maxrankitr, currankitr, Graded{LexOrder})) < 0
-                        )
-                        workload, curworkload = curworkload, workload
-                        maxrankitr = currankitr
-                        maxitr = @view(curpower[cutat_thread:end])
-                    elseif currankitr == maxrankitr
-                        curitr = @view(curpower[cutat_thread:end])
-                        if toSigned(compare(@view(maxitr[1:cutlen_thread]), @view(curitr[1:cutlen_thread]),
-                                Graded{LexOrder})) < 0
-                            maxitr = curitr
-                        end
-                    end
+                fs = filesize(fileprogress)
+                if fs == 2sizeof(Int)
+                    threadprogress[i] = read(fileprogress, Int)
+                    threadacceptance[i] = read(fileprogress, Int)
+                elseif !iszero(fs)
+                    error()
                 end
+                iterators[i] = Iterators.drop(iterators[i], threadprogress[i], copy=false)
             end
         catch
             for i in 1:nthreads
@@ -494,8 +226,7 @@ function execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, 
             isroot(rank) && error("Unknown progress file format - please delete existing files.")
             return
         end
-        rankidx = convert(Int, rank) +1
-        @inbounds success[rankidx] = true
+        @inbounds success[convert(Int, rank)+1] = true
         MPI.Allgather!(MPI.UBuffer(success, 1), comm)
         if !all(success)
             for (fp, fo) in zip(fileprogresses, fileouts)
@@ -515,110 +246,46 @@ function execute(V, nv, mindeg, maxdeg, minmultideg, maxmultideg, verbose, num, 
             workeracceptance[] = sum(threadacceptance, init=0)
             MPI.Gather!([workerprogress[], workeracceptance[]], nothing, comm; root)
         end
-
-        if !ismissing(maxitr)
-            copyto!(maxmultideg, cutat_thread, maxitr, 1, cutlen_thread + cutlen_worker)
-            initialize = true
-        end
     end
     cond = Threads.SpinLock()
 
-    init_time = time_ns()
-    local notifier, self_running
     if verbose
-        notifier, self_running = notify(num, workerprogress, workeracceptance, init_time, comm, rank, threadprogress,
+        self_running = verbose_worker(num, workerprogress, workeracceptance, time_ns(), comm, rank, threadprogress,
             threadacceptance)
     end
     ccall(:jl_enter_threaded_region, Cvoid, ())
     try
         # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
-        threads = Vector{Task}(undef, nthreads)
+        threads = Vector{Union{Task,Nothing}}(undef, nthreads)
         # We can already start all the tasks; this main task that must still feed the data will continue running until we
         # yield to the scheduler.
         @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(clonetask, Iterators.repeated(task))),
                                                         ((2, secondtask), (1, task))))
+            iter = iterators[tid]
             if isnothing(filepath)
                 filestuff = nothing
+            elseif isempty(iter)
+                threads[tid] = nothing
+                close(fileouts[tid])
+                close(fileprogresses[tid])
+                continue
             else
                 filestuff = (fileprogresses[tid], fileouts[tid])
             end
             # secondtask has a solution, so we just use task (better than deletesolution).
             # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
             # parallel, even if we make sure not to modify the base task until all copies are done.
-            threads[tid] = Threads.@spawn execute_taskfun($V, $tid, $taskₜ, $ranges, $nv, $mindeg,
-                $maxdeg, $data_global, $cond, $threadprogress, $threadacceptance, $candidates, $verbose, $filestuff, $rank)
+            threads[tid] = Threads.@spawn execute_taskfun($V, $tid, $taskₜ, $iter, $nv, $data_global, $cond, $threadprogress,
+                $threadacceptance, $candidates, $verbose, $filestuff)
         end
-        # unroll "for ranktask in rankiter" so that we can jump into the loop starting with the previous iteration
-        if initialize
-            ranktask = rankiter.powers
-            rankiter_state = moniter_state(ranktask)
-            @goto start_rank
-        end
-        rankiter_next = iterate(rankiter)
-        @inbounds while !isnothing(rankiter_next)
-            ranktask, rankiter_state = rankiter_next
-            @label start_rank
-
-            fixdeg = typeof(maxdeg)(sum(ranktask, init=zero(maxdeg)))
-            # The index i in occurrences_before that would have corresponded to the degree i-1 now corresponds to i-1+fixdeg.
-            # Consequently, we only take those degrees into account that are at least mindeg, which now has start index
-            # mindeg+1-fixdeg, and we need to introduce a new maxdegree cutoff.
-            tasklen = sum(@view(occurrences_before[max(1, mindeg + 1 - fixdeg):maxdeg + 1 - fixdeg]), init=0)
-            if !iszero(tasklen)
-                # The lowest-rank worker with the least workload will get the job.
-                minworkloadᵢ = 1
-                minworkload = workload[1]
-                for i in 2:nworkers
-                    if workload[i] < minworkload
-                        minworkloadᵢ = i
-                        minworkload = workload[i]
-                    end
-                end
-                if rank == minworkloadᵢ -1
-                    # it's our job!
-                    copyto!(minmultideg, cutat_worker, ranktask, 1, cutlen_worker)
-                    if !isnothing(filepath)
-                        workloadcopy = copy(workload) # the threads write down their workload
-                    end
-                    # All threads are running and waiting for stuff to do. So let's now feed them with their jobs.
-                    # [entries iterated on thread][entries fixed on thread, iterated on task][entries fixed on task]
-                    # 1                           cutat_thread                               cutat
-                    iter_ = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg_thread, maxmultideg_thread,
-                                                               @view(maxmultideg[cutat_thread:cutat_worker-1]))
-                    if initialize
-                        iter = InitialStateIterator(iter_, moniter_state(iter_.powers))
-                        initialize = false
-                        # we can indeed start with the item succeeding iter_.powers. While this particular item might not be
-                        # finished yet, we already added it to ranges when reading the files.
-                    else
-                        iter = iter_
-                    end
-                    for threadtask in iter
-                        copyto!(minmultideg, cutat_thread, threadtask, 1, cutlen_thread)
-                        if isnothing(filepath)
-                            put!(ranges, (copy(minmultideg), copy(maxmultideg)))
-                        else
-                            put!(ranges, (workloadcopy, copy(minmultideg), copy(maxmultideg), nothing))
-                        end
-                    end
-                    # We won't get a progress report while we're pushing stuff into the channel, but if we yield here, we
-                    # potentially delay the filling of the channel by allowing the worker task in the main thread to take over.
-                end
-                workload[minworkloadᵢ] += tasklen
-            end
-            rankiter_next = iterate(rankiter, rankiter_state)
-        end
-        verbose && isroot(rank) && print_workload(workload)
-        close(ranges)
         for thread in threads
-            wait(thread)
+            isnothing(thread) || wait(thread)
         end
     finally
+        if verbose
+            self_running[] = false
+        end
         ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    if verbose
-        self_running[] = false
-        wait(notifier)
-    end
-    return candidates
+    return isnothing(filestuff) ? candidates : nothing
 end

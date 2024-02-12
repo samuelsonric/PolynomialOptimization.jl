@@ -44,6 +44,14 @@ struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
                 Σmaxmultideg)
         end
     end
+
+    function MonomialIterator(iter::MonomialIterator{O,P,DI}) where {O<:AbstractMonomialOrdering,P<:AbstractVector,DI<:Integer}
+        simp = similar(iter.powers)
+        new{O,typeof(simp),DI}(iter.n, iter.mindeg, iter.maxdeg, iter.minmultideg, iter.maxmultideg, simp, iter.Σminmultideg,
+            iter.Σmaxmultideg)
+    end
+
+    MonomialIterator(iter::MonomialIterator{O,Nothing,DI}) where {O<:AbstractMonomialOrdering,DI<:Integer} = iter
 end
 
 function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}) where {P}
@@ -112,17 +120,14 @@ end
 
 Base.IteratorSize(::Type{<:MonomialIterator}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:MonomialIterator}) = Base.HasEltype()
-Base.eltype(::Type{MonomialIterator{<:AbstractMonomialOrdering,<:Any,DI}}) where {DI<:Integer} = Vector{DI}
-function Base.length(iter::MonomialIterator, ::Val{:detailed})
+Base.eltype(::Type{<:MonomialIterator{<:AbstractMonomialOrdering,<:Any,DI}}) where {DI<:Integer} = Vector{DI}
+function _moniter_length(maxdeg, minmultideg, maxmultideg)
     # internal function without checks or quick path
     # ~ O(n*d^2)
-    maxdeg = iter.maxdeg
     occurrences = zeros(Int, maxdeg +1)
-    @inbounds for deg₁ in iter.minmultideg[1]:min(iter.maxmultideg[1], maxdeg)
-        occurrences[deg₁+1] = 1
-    end
+    @inbounds fill!(@view(occurrences[minmultideg[1]+1:min(maxmultideg[1], maxdeg)+1]), 1)
     nextround = similar(occurrences)
-    for (minᵢ, maxᵢ) in Iterators.drop(zip(iter.minmultideg, iter.maxmultideg), 1)
+    for (minᵢ, maxᵢ) in Iterators.drop(zip(minmultideg, maxmultideg), 1)
         fill!(nextround, 0)
         for degᵢ in minᵢ:min(maxᵢ, maxdeg)
             for (degⱼ, occⱼ) in zip(Iterators.countfrom(0), occurrences)
@@ -140,7 +145,7 @@ Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::
     iter.Σminmultideg > maxdeg && return 0
     iter.Σmaxmultideg < iter.mindeg && return 0
     @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1]) +1
-    @inbounds return sum(@view(@inline(length(iter, Val(:detailed)))[iter.mindeg+1:end]), init=0)
+    @inbounds return sum(@view(@inline(_moniter_length(maxdeg, iter.minmultideg, iter.maxmultideg))[iter.mindeg+1:end]), init=0)
 end
 moniter_state(powers::AbstractVector{DI}) where {DI<:Integer} = (DI(sum(powers, init=zero(DI))), powers)
 
@@ -160,4 +165,75 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
         i -= 1
     end
     return iszero(δ)
+end
+
+"""
+    exponents_from_index!(powers::AbstractVector{<:Integer}, iter::MonomialIterator, index::Integer)
+
+Constructs the vector of powers that is associated with the monomial index `index` in the given iterator `iter` and stores it
+in `powers`. The method will return `false` if the index was out of bounds (with undefined state of `powers`), else it will
+return `true`.
+"""
+function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI}, index::Integer) where {DI}
+    length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
+    index < 1 && return false
+    maxdeg = iter.maxdeg
+    iter.Σminmultideg > maxdeg && return false
+    iter.Σmaxmultideg < iter.mindeg && return false
+    minmultideg = iter.minmultideg
+    maxmultideg = iter.maxmultideg
+    @inbounds if isone(iter.n)
+        powers[1] = max(iter.mindeg, iter.minmultideg[1]) + index -1
+        powres[1] > min(maxdeg, iter.maxmultideg[1]) && return false
+        return powers
+    end
+    j = iter.n
+    occurrences = zeros(Int, maxdeg +1, j)
+    # This is similar to _moniter_length, however, we will need to store all intermediate results and we'll need to iterate
+    # backwards through the variables.
+    @inbounds fill!(@view(occurrences[minmultideg[j]+1:min(maxmultideg[j], maxdeg)+1, j]), 1)
+    for j in iter.n-1:-1:1
+        lastround = @view(occurrences[:, j+1])
+        nextround = @view(occurrences[:, j])
+        for degᵢ in minmultideg[j]:min(maxmultideg[j], maxdeg)
+            for (degₖ, occₖ) in zip(Iterators.countfrom(0), lastround)
+                newdeg = degᵢ + degₖ
+                newdeg > maxdeg && break
+                @inbounds nextround[newdeg+1] += occₖ
+            end
+        end
+    end
+    # Now our occurrences matrix will fill the role of the binomial coefficient: it contains in each column j the number of
+    # monomials if there were only the j right variables, while the row specifies the total degree.
+    degree = iter.mindeg
+    while true
+        @inbounds next = occurrences[degree+1, 1]
+        if next ≥ index
+            break
+        else
+            index -= next
+            degree += 1
+            degree > maxdeg && return false
+        end
+    end
+    for i in 1:iter.n-1
+        total = 0
+        for degᵢ in minmultideg[i]:min(maxmultideg[i], maxdeg)
+            @inbounds next = occurrences[degree-degᵢ+1, i+1]
+            if total + next ≥ index
+                degree -= degᵢ
+                index -= total
+                @inbounds powers[i] = degᵢ
+                break
+            else
+                total += next
+            end
+        end
+    end
+    if 1 ≥ index && minmultideg[iter.n] ≤ degree ≤ maxmultideg[iter.n]
+        @inbounds powers[iter.n] = degree
+        return true
+    else
+        return false
+    end
 end

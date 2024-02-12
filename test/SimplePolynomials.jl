@@ -1,7 +1,7 @@
 # This testsuite uses some of MP's tests (and some more), but does so explicitly, since SimplePolynomials on purpose does not
 # support a lot of the things that you would want to do with polynomials.
 using Test
-using LinearAlgebra
+using LinearAlgebra, SparseArrays
 
 using MultivariatePolynomials
 const MP = MultivariatePolynomials
@@ -368,7 +368,7 @@ end
     @test effective_nvariables(monomials(2, 3, 0:1), monomials(2, 3, 0:2, representation=:sparse)) == 8
     @test effective_nvariables(monomials(2, 3, 0:0)) == 0
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0])) == 1
-    @test effective_nvariables(SimpleMonomialVector{2,0}([1 1; 0 0])) == 1
+    @test effective_nvariables(SimpleMonomialVector{2,0}([1 2; 0 0])) == 1
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 1 0])) == 2
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0]), SimpleMonomialVector{2,0}([1 0; 0 0])) == 1
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0]), SimpleMonomialVector{2,0}([1 0; 1 0])) == 2
@@ -451,7 +451,7 @@ end
     # none of the rest
 end
 # maybe promotion?
-@testset "Monomial index" begin
+@testset "Monomial index and iterator" begin
     @test SimplePolynomials.monomial_count(5, 4) == 126
     mons = monomials(3, 2, 0:4)
     @test length(mons) == 330
@@ -476,4 +476,36 @@ end
     @test monomial_index(mons[35], SimpleComplexVariable{3,2}(2)) == 110
     # mons[108] = x₁x₂z̄₂
     @test monomial_index(mons[35], SimpleComplexVariable{3,2}(2, true)) == 108
+
+    @testset failfast=true "Monomial iterator and index consistency with DynamicPolynomials" begin
+        DynamicPolynomials.@polyvar x[1:3]
+        multiit = Iterators.product(0x0:0x4, 0x0:0x4, 0x0:0x4)
+        for mindeg in 0x0:0x4, maxdeg in 0x0:0x4, minmultideg in multiit, maxmultideg in multiit
+            minm, maxm = collect(minmultideg), collect(maxmultideg)
+            if mindeg > maxdeg || any(minmultideg .> maxmultideg)
+                @test_throws ArgumentError MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+            else
+                mi = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+                exp = exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ exponents(m) .≤ maxm)))
+                @test collect(mi) == exp
+                @test length(mi) == length(exp)
+                powers = Vector{UInt8}(undef, 3)
+                for (i, mipow) in enumerate(mi)
+                    @test exponents_from_index!(powers, mi, i)
+                    if powers != mipow
+                        println(mindeg, " - ", maxdeg, " - ", minmultideg, " - ", maxmultideg, ": ", i)
+                    end
+                    @test powers == mipow
+                end
+                @test !exponents_from_index!(powers, mi, length(mi) +1)
+            end
+        end
+        mi = MonomialIterator{Graded{LexOrder}}(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], true)
+        @test_throws ArgumentError exponents_from_index!(Vector{UInt8}(undef, 4), mi, 1)
+        powers = Vector{UInt8}(undef, 3)
+        for (i, mipow) in enumerate(mi)
+            exponents_from_index!(powers, i)
+            @test powers == mipow
+        end
+    end
 end

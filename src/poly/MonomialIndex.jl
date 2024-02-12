@@ -1,4 +1,4 @@
-export monomial_count, monomial_index
+export monomial_count, monomial_index, exponents_from_index!
 
 # everything here is marked as consistent - as we demand that our monomials be immutable (regardless of whether they are so in
 # their strictest sense), this allows speedups in the real-valued case when the monomial index of both the monomials and their
@@ -61,6 +61,45 @@ Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:S
         end
         return mindex
     end
+end
+
+"""
+    exponents_from_index!(powers::AbstractVector{<:Integer}, index::Integer)
+
+Constructs the vector of powers that is associated with the monomial index `index` and stores it in `powers`. This can be
+thought of as an inverse function of [`monomial_index`](@ref), although for non-allocating purposes it works on a vector of
+powers instead of a monomial.
+"""
+Base.@assume_effects :consistent function exponents_from_index!(powers::AbstractVector{<:Integer}, index::Integer)
+    n = length(powers)
+    degree = 0
+    while true
+        next = binomial(n + degree -1, n -1)
+        if next ≥ index
+            break
+        else
+            index -= next
+            degree += 1
+        end
+    end
+    for i in 1:n-1
+        total = 0
+        for degᵢ in 0:degree
+            next = binomial(n - i -1 + degree - degᵢ, n - i -1)
+            if total + next ≥ index
+                degree -= degᵢ
+                index -= total
+                @inbounds powers[i] = degᵢ
+                break
+            else
+                total += next
+            end
+        end
+    end
+    # special case i = n, as binomial(-1, -1) = 0 instead of 1
+    @assert(1 ≥ index)
+    @inbounds powers[n] = degree
+    return powers
 end
 
 # apart from this, also define a function for the multiplication of monomials, which gives a lazy iterator

@@ -1,53 +1,3 @@
-function restore_status!(fileprogress, mindeg::I, maxdeg::I, minmultideg::AbstractVector{I},
-    maxmultideg::AbstractVector{I}, powers=true) where {I<:Integer}
-    lastprogress = UInt8[]
-    seekstart(fileprogress)
-    nb = readbytes!(fileprogress, lastprogress, 2sizeof(Int) + sizeof(minmultideg))
-    GC.@preserve lastprogress begin
-        lpp = Ptr{Int}(pointer(lastprogress))
-        if iszero(nb)
-            return 0, 0, MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minmultideg, maxmultideg, powers)
-        elseif nb == 2sizeof(Int)
-            return unsafe_load(lpp), unsafe_load(lpp, 2), nothing
-        elseif nb == 2sizeof(Int) + sizeof(minmultideg)
-            progress = unsafe_load(lpp)
-            if powers === true
-                powers = similar(minmultideg)
-            end
-            unsafe_copyto!(pointer(powers), Ptr{eltype(powers)}(lpp + 2sizeof(Int)), length(minmultideg))
-            return progress, unsafe_load(lpp, 2), InitialStateIterator(MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg,
-                minmultideg, maxmultideg, powers), moniter_state(powers), progress)
-        else
-            error("Unknown progress file format - please delete existing files.")
-        end
-    end
-end
-
-function restore_status!(fileprogress, powers::Vector{<:Integer}, fixedsize::Integer)
-    lastprogress = UInt8[]
-    seekstart(fileprogress)
-    T, len = eltype(powers), length(powers)
-    s = 2sizeof(Int) + sizeof(powers)
-    nb = readbytes!(fileprogress, lastprogress, s)
-    GC.@preserve lastprogress begin
-        lpp = Ptr{Int}(pointer(lastprogress))
-        if iszero(nb)
-            return nothing
-        elseif nb == 2sizeof(Int)
-            return unsafe_load(lpp), unsafe_load(lpp, 2), nothing, nothing
-        elseif nb == 2sizeof(Int) + sizeof(T) * fixedsize
-            fixed = similar(powers, fixedsize)
-            unsafe_copyto!(pointer(fixed), Ptr{T}(lpp + 2sizeof(Int)), fixedsize)
-            return unsafe_load(lpp), unsafe_load(lpp, 2), fixed, nothing
-        elseif nb == s
-            unsafe_copyto!(pointer(powers), Ptr{T}(lpp + 2sizeof(Int)), len)
-            return unsafe_load(lpp), unsafe_load(lpp, 2), powers[end-fixedsize+1:end], powers
-        else
-            error("Unknown progress file format - please delete existing files.")
-        end
-    end
-end
-
 """
     halfpolytope_from_file(filepath, objective; estimate=false, verbose=false)
 
@@ -72,9 +22,9 @@ the objective itself. This function does not do any calculation, but instead loa
 
 See also [`halfpolytope`](@ref).
 """
-halfpolytope_from_file(filepath::AbstractString, objective::SimpleRealPolynomial; estimate::Bool=false,
-    verbose::Bool=false) =
-    return halfpolytope_from_file(filepath, objective, estimate, verbose, T)
+halfpolytope_from_file(filepath::AbstractString, objective::SimpleRealPolynomial{<:Any,<:Any,P}; estimate::Bool=false,
+    verbose::Bool=false) where {P<:Unsigned} =
+    return halfpolytope_from_file(filepath, objective, estimate, verbose, P)
 
 function halfpolytope_from_file(filepath::AbstractString, objective::AbstractPolynomialLike; verbose::Bool=false,
     kwargs...)
@@ -112,7 +62,7 @@ function halfpolytope_from_file(filepath::AbstractString, objective, estimate::B
         dir = dirname(realpath("$filepath-1.out"))
         @verbose_info("Underlying data comes from single-node, multi-thread calculation")
     elseif isfile("$filepath-n0.out")
-        matches = r"^" + basename(filepath) * r"-n\d+\.out$"
+        matches = r"^" * basename(filepath) * r"-n\d+\.out$"
         dir = dirname(realpath("$filepath-n0.out"))
         @verbose_info("Underlying data comes from multi-node, single-thread calculation")
     elseif isfile("$filepath-n0-1.out")

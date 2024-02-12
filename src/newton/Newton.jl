@@ -1,6 +1,7 @@
 module Newton
 
 using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
+import BufferedStreams
 using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, moniter_state
 using PolynomialOptimization: @verbose_info, @capture, haveMPI, FastKey
 
@@ -112,10 +113,11 @@ function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepa
         # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
         # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
         # variables - this is commuting only.
-        num = length(MonomialIterator{Graded{LexOrder}}(analysis..., true))
+        iter = MonomialIterator{Graded{LexOrder}}(analysis..., true)
+        num = length(iter)
         @verbose_info("Starting point selection among ", num, " possible monomials")
         nthreads, task, secondtask = prepare(V, coeffs, num, verbose; parameters...)
-        execute(V, size(coeffs, 1), analysis..., verbose, num, nthreads, task, secondtask, filepath)
+        execute(V, size(coeffs, 1), verbose, iter, num, nthreads, task, secondtask, filepath)
     end
 
     if isnothing(filepath)
@@ -166,6 +168,7 @@ end
 include("./helpers/Utils.jl")
 include("./helpers/Mutation.jl")
 include("./helpers/Sampling.jl")
+include("./helpers/RangedMonomialIterator.jl")
 include("./helpers/InitialStateIterator.jl")
 include("./helpers/FakeMonomialVector.jl")
 include("./Interface.jl")

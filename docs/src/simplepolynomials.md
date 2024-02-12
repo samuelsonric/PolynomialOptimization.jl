@@ -40,4 +40,5 @@ monomial_index
 MonomialIterator
 MultivariatePolynomials.monomials
 effective_nvariables
+exponents_from_index!
 ```
