@@ -508,4 +508,12 @@ end
             @test powers == mipow
         end
     end
+
+    @testset "Ranged monomial iterator, LazyMonomials" begin
+        mons = monomials(3, 0, 2:5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3])
+        lm = LazyMonomials(3, 0, 2:5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3])
+        @test mons == lm
+        @test mons[3:7] == lm[3:7]
+        @test mons[3:7] == @view(lm[3:7])
+    end
 end

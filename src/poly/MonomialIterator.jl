@@ -1,4 +1,6 @@
-export MonomialIterator
+export AbstractMonomialIterator, MonomialIterator, RangedMonomialIterator
+
+abstract type AbstractMonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer} end
 
 """
     MonomialIterator{O}(mindeg, maxdeg, minmultideg, maxmultideg, ownpowers=false)
@@ -13,7 +15,7 @@ of `minmultideg`, `maxmultideg` (and potentially `ownpowers`).
 
 Currently, the only supported monomial ordering `O` is `Graded{LexOrder}`.
 """
-struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer}
+struct MonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer} <: AbstractMonomialIterator{O,P,DI}
     n::Int
     mindeg::DI
     maxdeg::DI
@@ -168,7 +170,7 @@ function powers_increment_right(iter::MonomialIterator{Graded{LexOrder}}, powers
 end
 
 """
-    exponents_from_index!(powers::AbstractVector{<:Integer}, iter::MonomialIterator, index::Integer)
+    exponents_from_index!(powers::AbstractVector{<:Integer}, iter::AbstractMonomialIterator, index::Integer)
 
 Constructs the vector of powers that is associated with the monomial index `index` in the given iterator `iter` and stores it
 in `powers`. The method will return `false` if the index was out of bounds (with undefined state of `powers`), else it will
@@ -237,3 +239,76 @@ function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterato
         return false
     end
 end
+
+"""
+    RangedMonomialIterator(iter, start, length; copy)
+
+Represents a subrange of a full [`MonomialIterator`](@ref), starting from index `start` and with maximal length `length`. The
+iterator alternatively constructed by taking an index range from a monomial iterator - this will set `copy` to `true` - or a
+view of an index range - this will set `copy` to `false`.
+`copy` determines whether the underlying MonomialIterator is copied or not (which only plays a role if the iterator is set to
+use the same vector of powers for each iteration).
+"""
+struct RangedMonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer,M<:MonomialIterator{O,P,DI}} <: AbstractMonomialIterator{O,P,DI}
+    iter::M
+    start::Int
+    length::Int
+
+    function RangedMonomialIterator(iter::M, start::Integer, length::Integer; copy::Bool) where
+        {O<:AbstractMonomialOrdering,P,DI<:Integer,M<:MonomialIterator{O,P,DI}}
+        start ≤ 0 && throw(ArgumentError("Nonnegative start positions are not allowed"))
+        length < 0 && throw(ArgumentError("Negative lengths are not allowed"))
+        new{O,P,DI,M}(copy ? MonomialIterator(iter) : iter, start, min(length, max(0, Base.length(iter) - start +1)))
+    end
+
+    function RangedMonomialIterator(iter::R, start::Integer, length::Integer; copy::Bool) where
+        {O<:AbstractMonomialOrdering,P,DI<:Integer,R<:RangedMonomialIterator{O,P,DI}}
+        # also an inner constructor, we don't need to calculate length(iter) again
+        start ≤ 0 && throw(ArgumentError("Nonnegative start positions are not allowed"))
+        length < 0 && throw(ArgumentError("Negative lengths are not allowed"))
+        len = min(length, max(0, iter.length - start +1))
+        start = iter.start + start -1
+        new{O,P,DI,R}(copy ? MonomialIterator(iter.iter) : iter.iter, start, len)
+    end
+end
+
+function Base.iterate(iter::RangedMonomialIterator{<:Graded})
+    iszero(iter.length) && return nothing
+    if isnothing(iter.iter.powers)
+        powers = similar(iter.iter.minmultideg)
+    else
+        powers = iter.iter.powers
+    end
+    exponents_from_index!(powers, iter.iter, iter.start) || @assert(false)
+    return isnothing(iter.iter.powers) ? copy(powers) : powers, (typeof(iter.iter.mindeg)(sum(powers)), powers, 1)
+end
+
+function Base.iterate(iter::RangedMonomialIterator{<:AbstractMonomialOrdering,<:Any,DI},
+    state::Tuple{DI,<:AbstractVector{DI},Int}) where {DI}
+    state[3] ≥ iter.length && return nothing
+    result = iterate(iter.iter, state[1:2])
+    @assert(!isnothing(result)) # we calculated length appropriately
+    return result[1], (result[2]..., state[3] + 1)
+end
+
+Base.IteratorSize(::Type{<:RangedMonomialIterator}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:RangedMonomialIterator}) = Base.HasEltype()
+Base.eltype(::Type{RangedMonomialIterator{<:AbstractMonomialOrdering,<:Any,<:Integer,M}}) where {M<:MonomialIterator} =
+    eltype(M)
+Base.length(iter::RangedMonomialIterator) = iter.length
+function Iterators.drop(iter::RangedMonomialIterator, n::Integer; copy::Bool)
+    n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+    return RangedMonomialIterator(iter, n +1, max(0, iter.length - n); copy)
+end
+function Iterators.drop(iter::MonomialIterator, n::Integer; copy::Bool)
+    n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+    return RangedMonomialIterator(iter, n +1, typemax(Int); copy)
+end
+
+Base.getindex(iter::AbstractMonomialIterator, range::AbstractUnitRange) =
+    RangedMonomialIterator(iter, first(range), length(range), copy=true)
+Base.view(iter::AbstractMonomialIterator, range::AbstractUnitRange) =
+    RangedMonomialIterator(iter, first(range), length(range), copy=false)
+
+exponents_from_index!(powers::AbstractVector{DI}, iter::RangedMonomialIterator{Graded{LexOrder},<:Any,DI}, index::Integer) where {DI} =
+    1 ≤ index ≤ iter.length && exponents_from_index!(powers, iter.iter, index + iter.start -1)

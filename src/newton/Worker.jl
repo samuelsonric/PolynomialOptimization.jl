@@ -155,7 +155,8 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
     # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{eltype(eltype(iter))}()
-    iterators = Vector{Base.promote_op(RangedMonomialIterator, typeof(iter), Int, Int)}(undef, nthreads)
+    iterators = Vector{Base.promote_op(Core.kwcall, @NamedTuple{copy::Bool}, Type{RangedMonomialIterator}, typeof(iter), Int,
+                                       Int)}(undef, nthreads)
     let start=1
         for i in 1:nthreads
             @inbounds iterators[i] = RangedMonomialIterator(iter, start, threadsize, copy=true)

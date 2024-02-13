@@ -1,4 +1,4 @@
-export SimpleMonomialVector, effective_nvariables
+export SimpleMonomialVector, effective_nvariables, LazyMonomials
 
 # in the matrix, the rows correspond to the exponents and the cols to the monomials
 struct SimpleMonomialVector{Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P},Mr<:XorA{M},Mc<:XorA{M}} <: AbstractVector{SimpleMonomial{Nr,Nc,P}}
@@ -672,4 +672,84 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
             )
         end
     end
+end
+
+const _LazyMonomialsView{P} = SubArray{P,1,Vector{P},Tuple{UnitRange{Int}},true}
+struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P}} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
+    iter::MI
+
+    @doc """
+        LazyMonomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI},
+            order=Graded{LexOrder}; minmultideg=nothing, maxmultideg=nothing, copy=true)
+
+Constructs a memory-efficient vector of monomials that contains the same data as given by [`monomials`](@ref) (with dense
+representation and no filter allowed). The monomials will be constructed on-demand. They can be accessed via indexing or
+iteration (which is much more efficient if multiple monomials in a row are required).
+If the monomials are only accessed one-at-a-time and never referenced when another one is requested, `copy` may be set to
+`false`. Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the monomial is
+changed.
+    """
+    function LazyMonomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI}, order=Graded{LexOrder};
+        minmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
+        maxmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing, copy::Bool=true) where {DI<:Integer}
+        P = smallest_unsigned(last(degree))
+        mindeg = P(first(degree))
+        maxdeg = P(last(degree))
+        n = nreal + 2ncomplex
+        if isnothing(minmultideg)
+            minmultideg = fill(zero(P), n)
+        elseif length(minmultideg) != n
+            throw(DimensionMismatch("minmultideg has length $(length(minmultideg)), expected $n"))
+        elseif !(minmultideg isa Vector{P})
+            minmultideg = P.(min.(collect(minmultideg), maxdeg))
+        end
+        if isnothing(maxmultideg)
+            maxmultideg = fill(maxdeg, n)
+        elseif length(maxmultideg) != n
+            throw(DimensionMismatch("maxmultideg has length $(length(maxmultideg)), expected $n"))
+        elseif !(maxmultideg isa Vector{P})
+            maxmultideg = P.(min.(collect(maxmultideg), maxdeg))
+        end
+        iter = MonomialIterator{order}(mindeg, maxdeg, minmultideg, maxmultideg, !copy)
+        new{nreal,ncomplex,P,typeof(iter)}(iter)
+    end
+
+    LazyMonomials{Nr,Nc,P,MI}(iter::MI) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P}} =
+        new{Nr,Nc,P,MI}(iter)
+end
+
+Base.length(lm::LazyMonomials) = length(lm.iter)
+Base.size(lm::LazyMonomials) = (length(lm.iter),)
+@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{<:Any,V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
+    @boundscheck checkbounds(lm, i)
+    powers = V === Nothing ? Vector{P}(undef, Nr + 2Nc) : lm.iter.powers
+    result = exponents_from_index!(powers, lm.iter, i)
+    @boundscheck @assert(result)
+    return SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}(
+        iszero(Nr) ? absent : @view(powers[1:Nr]),
+        iszero(Nc) ? absent : @view(powers[Nr+1:Nr+Nc]),
+        iszero(Nc) ? absent : @view(powers[Nr+Nc+1:end])
+    )
+end
+Base.IteratorSize(::Type{<:LazyMonomials}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:LazyMonomials}) = Base.HasEltype()
+Base.eltype(::Type{<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}
+function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsigned}
+    result = iterate(lm.iter, args...)
+    isnothing(result) && return nothing
+    return SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}(
+        iszero(Nr) ? absent : @view(result[1][1:Nr]),
+        iszero(Nc) ? absent : @view(result[1][Nr+1:Nr+Nc]),
+        iszero(Nc) ? absent : @view(result[1][Nr+Nc+1:end])
+    ), result[2]
+end
+@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P}}
+    @boundscheck checkbounds(lm, range)
+    iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=true)
+    return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter)
+end
+@inline function Base.view(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P}}
+    @boundscheck checkbounds(lm, range)
+    iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=false)
+    return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter)
 end

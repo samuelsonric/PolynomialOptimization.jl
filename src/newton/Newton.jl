@@ -168,7 +168,6 @@ end
 
 include("./helpers/Utils.jl")
 include("./helpers/Sampling.jl")
-include("./helpers/RangedMonomialIterator.jl")
 include("./helpers/InitialStateIterator.jl")
 include("./helpers/FakeMonomialVector.jl")
 include("./Interface.jl")

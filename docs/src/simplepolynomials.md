@@ -38,7 +38,9 @@ SimplePolynomial
 monomial_count
 monomial_index
 MonomialIterator
+RangedMonomialIterator
 MultivariatePolynomials.monomials
+LazyMonomials
 effective_nvariables
 exponents_from_index!
 ```
