@@ -1109,12 +1109,11 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
     for grouping in groupings.obj
         sos_add_matrix!(state, grouping, SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))
     end
-    # localizing matrices
-    for (groupingsᵢ, constrᵢ) in zip(groupings.zero, problem.constr_zero)
-        for grouping in groupingsᵢ
+    # free items
+    for (grouping, constrᵢ) in zip(groupings.zero, problem.constr_zero)
             sos_add_equality!(state, grouping, constrᵢ)
         end
-    end
+    # localizing matrices
     for (groupingsᵢ, constrᵢ) in zip(groupings.nonneg, problem.constr_nonneg)
         for grouping in groupingsᵢ
             sos_add_matrix!(state, grouping, constrᵢ)

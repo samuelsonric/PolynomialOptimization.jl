@@ -16,8 +16,8 @@ abstract type AbstractPORelaxation{Prob<:POProblem} end
 Contains information about how the elements in a certain (sparse) polynomial optimization problem combine.
 Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 - `∑ᵢ transpose(objᵢ) * σᵢ * conj(objᵢ)` is the SOS representation of the objective with `σᵢ` PSD
-- `∑ᵢ transpose(zeroₖᵢ) * fₖᵢ` is the prefactor for the kᵗʰ equality constraint with `fₖᵢ` a free vector. Every entry in zeroₖᵢ
-  must be a canonical monomial; the presence of its conjugate is implicit.
+- `transpose(zeroₖ) * fₖ` is the prefactor for the kᵗʰ equality constraint with `fₖ` a free vector. Every entry in zeroₖ must
+  be a canonical monomial; the presence of its conjugate is implicit.
 - `∑ᵢ transpose(nonnegₖᵢ) * σₖᵢ * conj(nonnegₖᵢ)` is the SOS representation of the prefactor of the kᵗʰ nonnegative constraint
   with `σₖᵢ` PSD
 - `∑ᵢ (transpose(psdₖᵢ) ⊗ 𝟙) * Zₖᵢ * (conj(psdₖᵢ) ⊗ 𝟙)` is the SOS matrix representation of the prefactor of the kᵗʰ PSD
@@ -27,7 +27,7 @@ the complex case, only the declared variables are returned, not their conjugates
 """
 struct RelaxationGroupings{MV,V}
     obj::Vector{MV}
-    zero::Vector{Vector{MV}}
+    zero::Vector{MV}
     nonneg::Vector{Vector{MV}}
     psd::Vector{Vector{MV}}
     var_cliques::Vector{V}
@@ -83,12 +83,13 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
         print(io, "\n  ", join(va, ", "))
     end
     bs = StatsBase.countmap(length.(groups.obj))
-    for constrs in (groups.zero, groups.nonneg, groups.psd)
+    for constrs in (groups.nonneg, groups.psd)
         for constr in constrs
             mergewith!(+, bs, StatsBase.countmap(length.(constr)))
         end
     end
     print(io, "\nBlock sizes:\n  ", sort!(collect(bs), rev=true))
+    isempty(groups.zero) || print(io, "\nEquality constraints:\n  ", sum(length, groups.zero, init=0))
 end
 
 Base.show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation) = _show(io, m, x)

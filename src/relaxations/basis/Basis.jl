@@ -17,7 +17,7 @@ function groupings(relaxation::AbstractBasisRelaxation)
     T = typeof(full)
     return RelaxationGroupings(
         [full],
-        Vector{T}[[truncate_basis(zb, 2d - maxdegree(x))] for x in p.constr_zero],
+        T[truncate_basis(zb, 2d - maxdegree(x)) for x in p.constr_zero],
         Vector{T}[[truncate_basis(b, d - maxhalfdegree(x))] for x in p.constr_nonneg],
         Vector{T}[[truncate_basis(b, d - maxhalfdegree(x))] for x in p.constr_psd],
         [filter(∘(!, isconj), variables(p.objective))]
