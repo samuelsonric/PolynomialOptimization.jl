@@ -515,5 +515,6 @@ end
         @test mons == lm
         @test mons[3:7] == lm[3:7]
         @test mons[3:7] == @view(lm[3:7])
+        @test mons[6] == lm[6]
     end
 end

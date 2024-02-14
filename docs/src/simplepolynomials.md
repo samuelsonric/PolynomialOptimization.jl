@@ -43,4 +43,5 @@ MultivariatePolynomials.monomials
 LazyMonomials
 effective_nvariables
 exponents_from_index!
+expoennts_from_indeX_prepare
 ```

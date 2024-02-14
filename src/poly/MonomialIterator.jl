@@ -1,4 +1,4 @@
-export AbstractMonomialIterator, MonomialIterator, RangedMonomialIterator
+export AbstractMonomialIterator, MonomialIterator, RangedMonomialIterator, exponents_from_index_prepare
 
 abstract type AbstractMonomialIterator{O<:AbstractMonomialOrdering,P,DI<:Integer} end
 
@@ -102,7 +102,7 @@ function Base.iterate(iter::MonomialIterator{Graded{LexOrder},P}, state::Tuple{D
         powers[j] += 1
         # this implies that we reset everything to the right of the increment to its minimum and then compensate for all
         # the reductions by increasing the powers again where possible
-        δ = sum(k -> powers[k] - minmultideg[k], j+1:i, init=zero(DI)) -1
+        δ = sum(k -> powers[k] - minmultideg[k], j+1:i, init=0) -1
         copyto!(powers, j +1, minmultideg, j +1, i - j)
         if powers_increment_right(iter, powers, δ, j +1)
             return P === Nothing ? copy(powers) : powers, (deg, powers)
@@ -175,39 +175,40 @@ end
 Constructs the vector of powers that is associated with the monomial index `index` in the given iterator `iter` and stores it
 in `powers`. The method will return `false` if the index was out of bounds (with undefined state of `powers`), else it will
 return `true`.
+
+
+    exponents_from_index!(powers::AbstractVector{<:Integer}, iter::AbstractMonomialIterator, prepared, index::Integer)
+
+A faster version of [`exponents_from_index!`](@ref) that is suitable if it has to be called often with the same iterator.
+The `prepared` data must be constructed with [`exponents_from_index_prepare`](@ref)
 """
-function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI}, index::Integer) where {DI}
+function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI},
+    index::Integer) where {DI}
     length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
-    index < 1 && return false
-    maxdeg = iter.maxdeg
-    iter.Σminmultideg > maxdeg && return false
-    iter.Σmaxmultideg < iter.mindeg && return false
-    minmultideg = iter.minmultideg
-    maxmultideg = iter.maxmultideg
-    @inbounds if isone(iter.n)
-        powers[1] = max(iter.mindeg, iter.minmultideg[1]) + index -1
-        powres[1] > min(maxdeg, iter.maxmultideg[1]) && return false
-        return powers
-    end
-    j = iter.n
-    occurrences = zeros(Int, maxdeg +1, j)
-    # This is similar to _moniter_length, however, we will need to store all intermediate results and we'll need to iterate
-    # backwards through the variables.
-    @inbounds fill!(@view(occurrences[minmultideg[j]+1:min(maxmultideg[j], maxdeg)+1, j]), 1)
-    for j in iter.n-1:-1:1
-        lastround = @view(occurrences[:, j+1])
-        nextround = @view(occurrences[:, j])
-        for degᵢ in minmultideg[j]:min(maxmultideg[j], maxdeg)
-            for (degₖ, occₖ) in zip(Iterators.countfrom(0), lastround)
-                newdeg = degᵢ + degₖ
-                newdeg > maxdeg && break
-                @inbounds nextround[newdeg+1] += occₖ
-            end
-        end
-    end
+    @inbounds return exponents_from_index!(powers, iter, exponents_from_index_prepare(iter), index)
+end
+
+@inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI},
+    ::Nothing, ::Integer) where {DI}
+    @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
+    return false
+end
+
+@inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI}, ::Val{1},
+    index::Integer) where {DI}
+    @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
+    powers[1] = max(iter.mindeg, iter.minmultideg[1]) + index -1
+    powers[1] > min(iter.maxdeg, iter.maxmultideg[1]) && return false
+    return powers
+end
+
+@inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{Graded{LexOrder},<:Any,DI},
+    occurrences::Matrix{Int}, index::Integer) where {DI}
+    # While this is a rather long function, given that this form is used for speed, inlining should probably be done
+    @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
     # Now our occurrences matrix will fill the role of the binomial coefficient: it contains in each column j the number of
     # monomials if there were only the j right variables, while the row specifies the total degree.
-    degree = iter.mindeg
+    degree, maxdeg, minmultideg, maxmultideg = iter.mindeg, iter.maxdeg, iter.minmultideg, iter.maxmultideg
     while true
         @inbounds next = occurrences[degree+1, 1]
         if next ≥ index
@@ -238,6 +239,37 @@ function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterato
     else
         return false
     end
+end
+
+"""
+    exponents_from_index_prepare(iter::AbstractMonomialIterator)
+
+Prepares all the data necessary to quickly perform multiple calls to [`exponents_from_index!`](@ref) in a row.
+"""
+function exponents_from_index_prepare(iter::MonomialIterator{Graded{LexOrder},<:Any,DI}) where {DI}
+    maxdeg = iter.maxdeg
+    iter.Σminmultideg > maxdeg && return nothing
+    iter.Σmaxmultideg < iter.mindeg && return nothing
+    isone(iter.n) && return Val(1)
+    minmultideg = iter.minmultideg
+    maxmultideg = iter.maxmultideg
+    j = iter.n
+    occurrences = zeros(Int, maxdeg +1, j)
+    # This is similar to _moniter_length, however, we will need to store all intermediate results and we'll need to iterate
+    # backwards through the variables.
+    @inbounds fill!(@view(occurrences[minmultideg[j]+1:min(maxmultideg[j], maxdeg)+1, j]), 1)
+    for j in iter.n-1:-1:1
+        lastround = @view(occurrences[:, j+1])
+        nextround = @view(occurrences[:, j])
+        for degᵢ in minmultideg[j]:min(maxmultideg[j], maxdeg)
+            for (degₖ, occₖ) in zip(Iterators.countfrom(0), lastround)
+                newdeg = degᵢ + degₖ
+                newdeg > maxdeg && break
+                @inbounds nextround[newdeg+1] += occₖ
+            end
+        end
+    end
+    return occurrences
 end
 
 """
@@ -310,5 +342,10 @@ Base.getindex(iter::AbstractMonomialIterator, range::AbstractUnitRange) =
 Base.view(iter::AbstractMonomialIterator, range::AbstractUnitRange) =
     RangedMonomialIterator(iter, first(range), length(range), copy=false)
 
-exponents_from_index!(powers::AbstractVector{DI}, iter::RangedMonomialIterator{Graded{LexOrder},<:Any,DI}, index::Integer) where {DI} =
+Base.@propagate_inbounds exponents_from_index!(powers::AbstractVector{DI},
+    iter::RangedMonomialIterator{Graded{LexOrder},<:Any,DI}, index::Integer) where {DI} =
     1 ≤ index ≤ iter.length && exponents_from_index!(powers, iter.iter, index + iter.start -1)
+Base.@propagate_inbounds exponents_from_index!(powers::AbstractVector{DI},
+    iter::RangedMonomialIterator{Graded{LexOrder},<:Any,DI}, prepared, index::Integer) where {DI} =
+    1 ≤ index ≤ iter.length && exponents_from_index!(powers, iter.iter, prepared, index + iter.start -1)
+exponents_from_index_prepare(iter::RangedMonomialIterator) = exponents_from_index_prepare(iter.iter)
