@@ -4,7 +4,6 @@ struct DenseRelaxation{P<:POProblem,MV<:SimpleMonomialVector} <: AbstractBasisRe
     problem::P
     degree::Int
     basis::MV
-    zero_basis::MV
 
     @doc """
         DenseRelaxation(problem[, degree])
@@ -22,11 +21,7 @@ struct DenseRelaxation{P<:POProblem,MV<:SimpleMonomialVector} <: AbstractBasisRe
         maxpower_T = SimplePolynomials.smallest_unsigned(2degree)
         basis = monomials(Nr, Nc, Base.zero(maxpower_T):maxpower_T(degree);
                           maxmultideg=[fill(maxpower_T(degree), Nr + Nc); zeros(maxpower_T, Nc)])
-        maxzerodeg, maxmultizerodeg = zero_maxdegs(problem.constr_zero, degree)
-        zero_basis = monomials(Nr, Nc, Base.zero(maxpower_T):maxpower_T(maxzerodeg); maxmultideg=maxmultizerodeg,
-            representation=basis isa SimplePolynomials.SimpleDenseMonomialVector ? :dense : :sparse,
-            filter=powers -> @inbounds(@view(powers[Nr+1:Nr+Nc]) ≤ @view(powers[Nr+Nc+1:end])))
-        new{P,typeof(basis)}(problem, Int(degree), basis, zero_basis)
+        new{P,typeof(basis)}(problem, Int(degree), basis)
     end
 end
 

@@ -348,24 +348,13 @@ end
 
 
 @maketype MultivariatePolynomials.variable_union_type(::XorTX{V}) where {V<:SimpleVariable} = V
-@maketype MultivariatePolynomials.variable_union_type(::XorTX{MTP}) where {Nr,MTP<:Union{<:SimpleRealMonomial{Nr},<:Term{<:Any,<:SimpleRealMonomial{Nr}},<:SimpleRealPolynomial{<:Any,Nr}}} =
-    SimpleRealVariable{Nr,0,$(smallest_unsigned(Nr))}
-@maketype(
-    Nr=_get_nr(MTP), I=smallest_unsigned(Nr),
-    MultivariatePolynomials.variable_union_type(MTP::Type{<:Union{<:SimpleRealMonomial,<:Term{<:Any,<:SimpleRealMonomial},<:SimpleRealPolynomial}}) =
-        SimpleRealVariable{Nr,0,I}
-)
-@maketype MultivariatePolynomials.variable_union_type(::XorTX{MTP}) where {Nc,MTP<:Union{<:SimpleComplexMonomial{Nc},<:Term{<:Any,<:SimpleComplexMonomial{Nc}},<:SimpleComplexPolynomial{<:Any,Nc}}} =
-    SimpleComplexVariable{0,Nc,$(smallest_unsigned(Nc))}
-@maketype(
-    Nc=_get_nc(MTP), I=smallest_unsigned(Nc),
-    MultivariatePolynomials.variable_union_type(MTP::Type{<:Union{<:SimpleComplexMonomial,<:Term{<:Any,<:SimpleComplexMonomial},<:SimpleComplexPolynomial}}) =
-        SimpleComplexVariable{Nc,0,I}
-)
 @maketype MultivariatePolynomials.variable_union_type(::XorTX{MTP}) where {Nr,Nc,MTP<:Union{<:SimpleMonomial{Nr,Nc},<:Term{<:Any,<:SimpleMonomial{Nr,Nc}},<:SimplePolynomial{<:Any,Nr,Nc}}} =
-    SimpleVariable{Nr,Nc}
-@maketype MultivariatePolynomials.variable_union_type(MTP::Type{<:Union{<:SimpleMonomial,<:Term{<:Any,<:SimpleMonomial},<:SimplePolynomial}}) =
-    SimpleVariable{$(_get_nr(MTP)),$(_get_nc(MTP))}
+    SimpleVariable{Nr,Nc,$(smallest_unsigned(Nr + 2Nc))}
+@maketype(
+    Nr=_get_nr(MTP), Nc=_get_nc(MTP), I=smallest_unsigned(Nr isa Integer && Nc isa Integer ? Nr + 2Nc : Val(Any)),
+    MultivariatePolynomials.variable_union_type(MTP::Type{<:Union{<:SimpleMonomial,<:Term{<:Any,<:SimpleMonomial},<:SimplePolynomial}}) =
+        SimpleVariable{Nr,Nc,I}
+)
 
 @maketype MultivariatePolynomials.monomial_type(::XorTX{V}) where {V<:SimpleVariable} =
     SimpleMonomial{$(_get_nr(V)),$(_get_nc(V))}

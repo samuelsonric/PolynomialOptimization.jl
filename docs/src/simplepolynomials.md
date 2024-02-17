@@ -26,8 +26,6 @@ just the restricted subset that `SimplePolynomials` provides.
 ## Types for the MultivariatePolynomials interface
 ```@docs
 SimpleVariable
-SimpleRealVariable
-SimpleComplexVariable
 SimpleMonomial
 SimpleMonomialVector
 SimplePolynomial

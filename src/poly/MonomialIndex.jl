@@ -44,8 +44,7 @@ Base.@assume_effects :consistent function monomial_index(m::SimpleMonomial)
 end
 monomial_index(::Number) = 1 # just a lazy way to avoid constant_monomial constructs, but for type stability, probably don't
                              # use this function
-monomial_index(m::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} = 2 + Nr + 2Nc - m.index # constant has index 1
-monomial_index(m::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} = 2 + (m.isconj ? Nc : 2Nc) - m.index
+monomial_index(m::SimpleVariable{Nr,Nc}) where {Nr,Nc} = 2 + Nr + 2Nc - m.index # constant has index 1
 
 Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc}
     items = length(m)
@@ -109,12 +108,8 @@ end
 
 Base.IteratorSize(::Type{<:SimpleMonomialProduct}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:SimpleMonomialProduct}) = Base.HasEltype()
-Base.eltype(::Type{<:SimpleMonomialProduct{Nr,0,P}}) where {Nr,P<:Unsigned} =
-    Tuple{SimpleRealVariable{Nr,0,smallest_unsigned(Nr)},P}
-Base.eltype(::Type{<:SimpleMonomialProduct{Nc,P}}) where {Nc,P<:Unsigned} =
-    Tuple{SimpleComplexVariable{0,Nc,smallest_unsigned(Nc)},P}
 Base.eltype(::Type{<:SimpleMonomialProduct{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} =
-    Tuple{Union{SimpleRealVariable{Nr,Nc,smallest_unsigned(Nr)},SimpleComplexVariable{Nr,Nc,smallest_unsigned(Nc)}},P}
+    Tuple{SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)},P}
 Base.@assume_effects :consistent @generated function Base.iterate(p::SimpleMonomialProduct{Nr,Nc,P,Ms},
     state=ntuple(i -> 1, Val(items))) where {Nr,Nc,P<:Unsigned,items,Ms<:NTuple{items,SimpleMonomial{Nr,Nc,P}}}
     states = Expr(:local)
@@ -124,7 +119,7 @@ Base.@assume_effects :consistent @generated function Base.iterate(p::SimpleMonom
     result = Expr(:block, :(pow = zero(P)), :(minidx = typemax(Int)), states)
     for (fᵢ, field) in enumerate((:exponents_real, :exponents_complex, :exponents_conj))
         fᵢ === 1 && iszero(Nr) && continue
-        fᵢ > 1 && iszero(Nc) && continue
+        fᵢ > 1 && iszero(Nc) && break
         iffoundbody = Expr(:block)
         iffound = Expr(:if, :(minidx < typemax(Int)), iffoundbody)
         δ = Vector{Any}(undef, fieldcount(Ms))
@@ -192,11 +187,11 @@ Base.@assume_effects :consistent @generated function Base.iterate(p::SimpleMonom
             push!(newstate.args, :($(Symbol(:state, i)) + $(δ[i])))
         end
         if fᵢ === 1
-            push!(iffoundbody.args, :(return (SimpleRealVariable{Nr,Nc}(minidx), pow), $newstate))
+            push!(iffoundbody.args, :(return (SimpleVariable{Nr,Nc}(minidx), pow), $newstate))
         elseif fᵢ === 2
-            push!(iffoundbody.args, :(return (SimpleComplexVariable{Nr,Nc}(minidx), pow), $newstate))
+            push!(iffoundbody.args, :(return (SimpleVariable{Nr,Nc}(minidx + Nr), pow), $newstate))
         else
-            push!(iffoundbody.args, :(return (SimpleComplexVariable{Nr,Nc}(minidx, true), pow), $newstate))
+            push!(iffoundbody.args, :(return (SimpleVariable{Nr,Nc}(minidx + Nr + Nc), pow), $newstate))
         end
         push!(result.args, iffound)
     end

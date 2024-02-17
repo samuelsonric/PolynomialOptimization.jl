@@ -108,18 +108,17 @@ end
 # We must convert degree to Ints. MP will do subtractions in the comparisons, so an Unsigned will fail.
 MultivariatePolynomials.degree(m::SimpleMonomial) =
     Int(sum(m.exponents_real, init=0) + sum(m.exponents_complex, init=0) + sum(m.exponents_conj, init=0))
-MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} =
-    @inbounds m.exponents_real[v.index]
-MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} =
-    @inbounds v.isconj ? m.exponents_conj[v.index] : m.exponents_complex[v.index]
+MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
+    @inbounds v.index ≤ Nr ? m.exponents_real[v.index] : (v.index ≤ Nr + Nc ? m.exponents_complex[v.index-Nr] :
+                                                          m.exponents_conj[v.index-Nr-Nc])
 
 # These do not correspond to how they are defined in MP. But this definition makes more sense (and is what is needed).
 MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial) =
     Int(sum(m.exponents_real, init=0) + max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
-MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} =
-    degree(m, v)
-MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} =
-    @inbounds max(m.exponents_complex[v.index], m.exponents_conj[v.index])
+MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
+    @inbounds v.index ≤ Nr ? m.exponents_real[v.index] :
+        (v.index ≤ Nr + Nc ? max(m.exponents_complex[v.index-Nr], m.exponents_conj[v.index-Nr]) :
+                             max(m.exponents_complex[v.index-Nr-Nc], m.exponents_conj[v.index-Nr-Nc]))
 
 MultivariatePolynomials.halfdegree(m::SimpleDenseMonomial) = Int(div(sum(m.exponents_real, init=0), 2, RoundUp) +
     max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
@@ -183,21 +182,17 @@ MultivariatePolynomials.exponents(m::SimpleMonomial) = SimpleMonomialExponents(m
 # skips over zero powers
 Base.IteratorSize(::Type{<:SimpleMonomial}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:SimpleMonomial}) = Base.HasEltype()
-Base.eltype(::Type{<:SimpleRealMonomial{Nr,P}}) where {Nr,P<:Unsigned} =
-    Tuple{SimpleRealVariable{Nr,0,smallest_unsigned(Nr)},P}
-Base.eltype(::Type{<:SimpleComplexMonomial{Nc,P}}) where {Nc,P<:Unsigned} =
-    Tuple{SimpleComplexVariable{0,Nc,smallest_unsigned(Nc)},P}
 Base.eltype(::Type{<:SimpleMonomial{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} =
-    Tuple{Union{SimpleRealVariable{Nr,Nc,smallest_unsigned(Nr)},SimpleComplexVariable{Nr,Nc,smallest_unsigned(Nc)}},P}
+    Tuple{SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)},P}
 function Base.iterate(m::SimpleMonomial{Nr,Nc}, state::Int=0) where {Nr,Nc}
     @inbounds for i in state+1:Nr
-        iszero(m.exponents_real[i]) || return (SimpleRealVariable{Nr,Nc}(i), m.exponents_real[i]), i
+        iszero(m.exponents_real[i]) || return (SimpleVariable{Nr,Nc}(i), m.exponents_real[i]), i
     end
     @inbounds for i in max(1, state - Nr +1):Nc
-        iszero(m.exponents_complex[i]) || return (SimpleComplexVariable{Nr,Nc}(i), m.exponents_complex[i]), i + Nr
+        iszero(m.exponents_complex[i]) || return (SimpleVariable{Nr,Nc}(i + Nr), m.exponents_complex[i]), i + Nr
     end
-    @inbounds for i in max(1, state -Nr - Nc +1):Nc
-        iszero(m.exponents_conj[i]) || return (SimpleComplexVariable{Nr,Nc}(i, true), m.exponents_conj[i]), i + Nr + Nc
+    @inbounds for i in max(1, state - Nr - Nc +1):Nc
+        iszero(m.exponents_conj[i]) || return (SimpleVariable{Nr,Nc}(i + Nr + Nc), m.exponents_conj[i]), i + Nr + Nc
     end
     return nothing
 end
@@ -206,18 +201,18 @@ function Base.iterate(m::SimpleSparseMonomial{Nr,Nc}, state::Int=0) where {Nr,Nc
     let idxs=rowvals(m.exponents_real), vals=nonzeros(m.exponents_real)
         δ = length(idxs)
         @inbounds for i in state+1:δ
-            iszero(vals[i]) || return (SimpleRealVariable{Nr,Nc}(idxs[i]), vals[i]), i
+            iszero(vals[i]) || return (SimpleVariable{Nr,Nc}(idxs[i]), vals[i]), i
         end
     end
     let idxs=rowvals(m.exponents_complex), vals=nonzeros(m.exponents_complex)
         δ₂ = δ + length(idxs)
         @inbounds for i in state-δ+1:length(idxs)
-            iszero(vals[i]) || return (SimpleComplexVariable{Nr,Nc}(idxs[i]), vals[i]), i + δ
+            iszero(vals[i]) || return (SimpleVariable{Nr,Nc}(idxs[i] + Nr), vals[i]), i + δ
         end
     end
     let idxs=rowvals(m.exponents_conj), vals=nonzeros(m.exponents_conj)
         @inbounds for i in state-δ₂+1:length(idxs)
-            iszero(idxs[i]) || return (SimpleComplexVariable{Nr,Nc}(idxs[i], true), vals[i]), i + δ₂
+            iszero(idxs[i]) || return (SimpleVariable{Nr,Nc}(idxs[i] + Nr + Nc), vals[i]), i + δ₂
         end
     end
     return nothing

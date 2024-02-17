@@ -371,41 +371,20 @@ Base.conj(x::SimpleMonomialVector{Nr,Nc,P,M}) where {Nr,Nc,P<:Unsigned,M<:Abstra
 
 # zero-allocation variable vector
 struct SimpleMonomialVariables{Nr,Nc,V<:SimpleVariable{Nr,Nc}} <: AbstractVector{V}
-     SimpleMonomialVariables{Nr,0}() where {Nr} = new{Nr,0,SimpleRealVariable{Nr,0,smallest_unsigned(Nr)}}()
-     SimpleMonomialVariables{0,Nc}() where {Nc} = new{0,Nc,SimpleComplexVariable{0,Nc,smallest_unsigned(Nc)}}()
-     SimpleMonomialVariables{Nr,Nc}() where {Nr,Nc} = new{Nr,Nc,SimpleVariable{Nr,Nc}}()
+    SimpleMonomialVariables{Nr,Nc}() where {Nr,Nc} = new{Nr,Nc,SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}}()
 end
 
 Base.IteratorSize(::Type{<:SimpleMonomialVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasLength()
-Base.IteratorEltype(::Type{<:SimpleMonomialVariables{Nr,Nc,V}}) where {Nr,Nc,V<:SimpleVariable{Nr,Nc}} = Base.HasEltype()
-Base.eltype(::Type{SimpleMonomialVariables{Nr,Nc,V}}) where {Nr,Nc,V<:SimpleVariable{Nr,Nc}} = V
+Base.IteratorEltype(::Type{<:SimpleMonomialVariables{<:Any,<:Any,V}}) where {V} = Base.HasEltype()
 Base.length(::SimpleMonomialVariables{Nr,Nc}) where {Nr,Nc} = Nr + 2Nc
 Base.size(::SimpleMonomialVariables{Nr,Nc}) where {Nr,Nc} = (Nr + 2Nc,)
 
 @inline function Base.getindex(smv::SimpleMonomialVariables{Nr,Nc}, idx::Integer) where {Nr,Nc}
     @boundscheck checkbounds(smv, idx)
-    idx ≤ Nr && return SimpleRealVariable{Nr,Nc}(idx)
-    idx -= Nr
-    idx ≤ Nc && return SimpleComplexVariable{Nr,Nc}(idx)
-    idx -= Nc
-    @boundscheck @assert(idx ≤ Nc)
-    return SimpleComplexVariable{Nr,Nc}(idx, true)
+    return SimpleVariable{Nr,Nc}(idx)
 end
 
-Base.collect(::SimpleMonomialVariables{Nr,0}) where {Nr} = map(SimpleRealVariable{Nr,0}, 1:Nr)
-function Base.collect(::SimpleMonomialVariables{Nr,Nc,V}) where {Nr,Nc,V<:SimpleVariable{Nr,Nc}}
-    result = Vector{V}(undef, Nr + 2Nc)
-    for i in 1:Nr
-        @inbounds result[i] = SimpleRealVariable{Nr,Nc}(i)
-    end
-    for i in 1:Nc
-        @inbounds result[i+Nr] = SimpleComplexVariable{Nr,Nc}(i)
-    end
-    for i in 1:Nc
-        @inbounds result[i+Nr+Nc] = SimpleComplexVariable{Nr,Nc}(i, true)
-    end
-    return result
-end
+Base.collect(::SimpleMonomialVariables{Nr,Nc}) where {Nr,Nc} = map(SimpleVariable{Nr,Nc}, 1:Nr+2Nc)
 
 function Base.iterate(smv::SimpleMonomialVariables{Nr,Nc}, state::Int=1) where {Nr,Nc}
     state > Nr + 2Nc && return nothing
@@ -417,6 +396,69 @@ MultivariatePolynomials.variables(::XorTX{Union{<:SimpleVariable{Nr,Nc},<:Simple
     SimpleMonomialVariables{Nr,Nc}()
 
 MultivariatePolynomials.nvariables(::XorTX{AbstractVector{<:SimpleMonomial{Nr,Nc}}}) where {Nr,Nc} = Nr + 2Nc
+
+struct SimpleMonomialVectorEffectiveVariables{Nr,Nc,MV<:SimpleMonomialVector{Nr,Nc}}
+    mv::MV
+end
+
+Base.IteratorSize(::Type{<:SimpleMonomialVectorEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.SizeUnknown()
+Base.IteratorEltype(::Type{<:SimpleMonomialVectorEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasEltype()
+Base.eltype(::Type{<:SimpleMonomialVectorEffectiveVariables{Nr,Nc}}) where {Nr,Nc} =
+    SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}
+function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{Nr,Nc,<:SimpleMonomialVector}, state=(1, 1)) where {Nr,Nc}
+    type, idx = state
+    if type ≤ 1
+        @inbounds while idx ≤ Nr
+            all(iszero, @view(smvev.mv.exponents_real[idx, :])) || return SimpleVariable{Nr,Nc}(idx), (1, idx +1)
+            idx += 1
+        end
+        idx = 1
+    end
+    if type ≤ 2
+        @inbounds while idx ≤ Nc
+            all(iszero, @view(smvev.mv.exponents_copmlex[idx, :])) || return SimpleVariable{Nr,Nc}(idx + Nr), (2, idx +1)
+            idx += 1
+        end
+        idx = 1
+    end
+    @inbounds while idx ≤ Nc
+        all(iszero, @view(smvev.mv.exponents_conj[idx, :])) || return SimpleVariable{Nr,Nc}(idx + Nr + Nc), (3, idx +1)
+    end
+    return nothing
+end
+function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{Nr,Nc,<:SimpleSparseMonomialVectorOrView}, state=(1, 1)) where {Nr,Nc}
+    type, idx = state
+    if type ≤ 1
+        @inbounds while idx ≤ Nr
+            for (j, r) in enumerate(rowvals(smvev.mv.exponents_real))
+                # assume that explicit zeros happen so rarely that it is better not to iterate through both vectors at the same
+                # time - we'll only need the nonzeros once except in rare circumstances.
+                r == idx && !iszero(nonzeros(smvev.mv.exponents_real)[j]) && return SimpleVariable{Nr,Nc}(idx), (1, idx +1)
+            end
+            idx += 1
+        end
+        idx = 1
+    end
+    if type ≤ 2
+        while idx ≤ Nc
+            for (j, r) in enumerate(rowvals(smvev.mv.exponents_complex))
+                r == idx && !iszero(nonzeros(smvev.mv.exponents_complex)[j]) &&
+                    return SimpleVariable{Nr,Nc}(idx + Nr), (2, idx +1)
+            end
+            idx += 1
+        end
+        idx = 1
+    end
+    while idx ≤ Nc
+        for (j, r) in enumerate(rowvals(smvev.mv.exponents_conj))
+            r == idx && !iszero(nonzeros(smvev.mv.exponents_conj)[j]) &&
+                return SimpleVariable{Nr,Nc}(idx + Nr + Nc), (3, idx +1)
+        end
+    end
+    return nothing
+    end
+
+MultivariatePolynomials.effective_variables(x::SimpleMonomialVector) = SimpleMonomialVectorEffectiveVariables(x)
 
 _effective_nvariables_has(name, field, k, ::Type{<:SimpleDenseMonomialVectorOrView}) = quote
     !all(iszero, view($name.$field, $k, :))

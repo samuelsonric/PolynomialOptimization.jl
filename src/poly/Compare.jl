@@ -1,14 +1,4 @@
-# comparison of variable: first real, then complex, then conjugate, tied by index
-Base.isless(x::V, y::V) where {V<:SimpleRealVariable} = isless(x.index, y.index)
-Base.isless(::SimpleRealVariable{Nr,Nc}, ::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} = true
-Base.isless(::SimpleComplexVariable{Nr,Nc}, ::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} = false
-function Base.isless(x::V, y::V) where {V<:SimpleComplexVariable}
-    if x.isconj == y.isconj
-        return isless(x.index, y.index)
-    else
-        return isless(x.isconj, y.isconj)
-    end
-end
+Base.isless(x::V, y::V) where {V<:SimpleVariable} = isless(x.index, y.index)
 
 # comparison of monomial
 function MultivariatePolynomials.compare(x::SimpleMonomial{Nr,Nc,P}, y::SimpleMonomial{Nr,Nc,P}, ::Type{LexOrder}) where {Nr,Nc,P<:Unsigned}

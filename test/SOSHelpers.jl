@@ -63,15 +63,15 @@ using PolynomialOptimization: sos_add_matrix!, SOSPSDIterable, FastKey, sos_add_
 # 28: grouping = [x₁x₄², x₂²x₃³], constraint = 7im(z₁z̄₂² - z̄₁z₂²) - quadratic vector one rhs
 # 29: grouping = [x₁x₄², x₂²x₃³], constraint = 5im(z₁z̄₂² + z₁z̄₁)  - assertion failure (z₁z̄₁ is detectable)
 # 30: grouping = [x₁x₄², x₂²x₃³], constraint = 3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁ - quadratic vector two rhs
-# 31: grouping = [x₁x₄², x₂²z₁],  constraint = 17x₁x₃²            - quadratic scalar two rhs, fallback to vector
-# 33: grouping = [x₁x₄², x₂²z₁],  constraint = 24x₂z₁z̄₁           - quadratic scalar two rhs, fallback to vector
-# 34: grouping = [x₁x₄², x₂²z₁],  constraint = (17+8im)x₁x₃²      - assertion failure
-# 35: grouping = [x₁x₄², x₂²z₁],  constraint = 3im*z₁z̄₁           - assertion failure
-# 36: grouping = [x₁x₄², x₂²z₁],  constraint = 2x₁ + 8x₂x₄²       - quadratic vector two rhs
-# 37: grouping = [x₁x₄², x₂²z₁],  constraint = 3(z₁ + z̄₁)         - quadratic vector two rhs
-# 38: grouping = [x₁x₄², x₂²z₁],  constraint = 7im(z₁z̄₂² - z̄₁z₂²) - quadratic vector two rhs
-# 39: grouping = [x₁x₄², x₂²z₁],  constraint = 5im(z₁z̄₂² + z₁z̄₁)  - assertion failure (z₁z̄₁ is detectable)
-# 40: grouping = [x₁x₄², x₂²z₁],  constraint = 3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁ - quadratic vector two rhs
+# 31: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 17x₁x₃²            - quadratic scalar two rhs, fallback to vector
+# 33: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 24x₂z₁z̄₁           - quadratic scalar two rhs, fallback to vector
+# 34: grouping = [x₂²z̄₁, x₁x₄²],  constraint = (17+8im)x₁x₃²      - assertion failure
+# 35: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 3im*z₁z̄₁           - assertion failure
+# 36: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 2x₁ + 8x₂x₄²       - quadratic vector two rhs
+# 37: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 3(z₁ + z̄₁)         - quadratic vector two rhs
+# 38: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 7im(z₁z̄₂² - z̄₁z₂²) - quadratic vector two rhs
+# 39: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 5im(z₁z̄₂² + z₁z̄₁)  - assertion failure (z₁z̄₁ is detectable)
+# 40: grouping = [x₂²z̄₁, x₁x₄²],  constraint = 3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁ - quadratic vector two rhs
 # 41: grouping = [x₂²z₂], constraint = [17x₃²z₁z̄₁  8x₂²
 #                                       8x₂²       6x₂x₄²]        - quadratic scalar one rhs, fallback to vector
 # 42: grouping = [x₂²z₂], constraint = [0 0; 0 0]                 - nothing
@@ -167,7 +167,7 @@ sos_get_tri(::SolverSetupPSD{Triangle}) where {Triangle} = Triangle
 PolynomialOptimization.sos_solver_supports_quadratic(::Union{<:SolverSetupQuadratic,<:SolverSetupQuadraticSimplified,<:SolverSetupScalar}) = true
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDDictLinear{I,T}) where {I,T} = (I, T, sospsd_offset)
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDDictExplicit{I1,I2,T}) where {I1,I2,T} =
-    (Tuple{I1,I2}, T, sospsd_offset)
+    Tuple{I1,I2}, T, sospsd_offset
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDLinear{T}) where {T} = T
 PolynomialOptimization.sos_solver_supports_complex_psd(::SolverSetupPSD{<:Any,C}) where {C} = C
 
@@ -255,14 +255,14 @@ function PolynomialOptimization.sos_solver_add_scalar!(state::SolverSetupScalar{
         gi(:im, index[1], value[1], (0, 4, 2, 0, 1, 0, 0, 2), Int16(-14))
     elseif state.instance == 10
         @test length(index) == 6
-        # x₂²x₃ * (3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁) * x₂²x₃
-        # = 3x₁x₂⁴x₃² + 5x₂⁵x₃²x₄² + 4x₂⁴x₃²z₂z̄₂ + 7x₂⁴x₃²z₁²z̄₂ + 7x₂⁴x₃²z̄₁²z₂ + (4+8im)*x₂⁴x₃²z₁ + (4-8im)*x₂⁴x₃²z̄₁
-        gi(index[1], value[1], (1, 4, 2, 0), Int16(3))
-        gi(index[2], value[2], (0, 5, 2, 2), Int16(5))
-        gi(:re, index[3], value[3], (0, 4, 2, 0, 0, 1, 0, 1), Int16(4))
-        gi(:re, index[4], value[4], (0, 4, 2, 0, 2, 0, 0, 1), Int16(14))
-        gi(:re, index[5], value[5], (0, 4, 2, 0, 1, 0, 0, 0), Int16(8))
-        gi(:im, index[6], value[6], (0, 4, 2, 0, 1, 0, 0, 0), Int16(-16))
+        # x₂²x₃ * ((4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²) * x₂²x₃
+        # = (4-8im)*x₂⁴x₃²z̄₁ + (4+8im)*x₂⁴x₃²z₁ + 3x₁x₂⁴x₃² + 4x₂⁴x₃²z₂z̄₂ + 7x₂⁴x₃²z̄₁²z₂ + 7x₂⁴x₃²z₁²z̄₂ + 5x₂⁵x₃²x₄²
+        gi(:re, index[1], value[1], (0, 4, 2, 0, 1, 0, 0, 0), Int16(8))
+        gi(:im, index[2], value[2], (0, 4, 2, 0, 1, 0, 0, 0), Int16(-16))
+        gi(index[3], value[3], (1, 4, 2, 0), Int16(3))
+        gi(:re, index[4], value[4], (0, 4, 2, 0, 0, 1, 0, 1), Int16(4))
+        gi(:re, index[5], value[5], (0, 4, 2, 0, 2, 0, 0, 1), Int16(14))
+        gi(index[6], value[6], (0, 5, 2, 2), Int16(5))
     elseif state.instance == 11
         @test length(index) == 1
         # x₂²z₁ * 17x₁x₃² * x₂²z̄₁ = 17x₁x₂⁴x₃²z₁z̄₁
@@ -286,15 +286,14 @@ function PolynomialOptimization.sos_solver_add_scalar!(state::SolverSetupScalar{
         gi(:im, index[1], value[1], (0, 4, 0, 0, 2, 0, 1, 2), Int16(-14))
     elseif state.instance == 20
         @test length(index) == 6
-        # x₂²z₁ * (3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁) * x₂²z̄₁
-        # = 3x₁x₂⁴z₁z̄₁ + 5x₂⁵x₄²z₁z̄₁ + 4x₂⁴z₁z₂z̄₁z̄₂ + 7x₂⁴z₁³z̄₁z̄₂ + 7x₂⁴z₁z₂z̄₁³ + (4+8im)*x₂⁴z₁²z̄₁ + (4-8im)*x₂⁴z₁z̄₁²
-        #   5623         32171         9249           17443         17461         4648               4653
-        gi(:re, index[1], value[1], (1, 4, 0, 0, 1, 0, 1, 0), Int16(3))
-        gi(:re, index[2], value[2], (0, 5, 0, 2, 1, 0, 1, 0), Int16(5))
-        gi(:re, index[3], value[3], (0, 4, 0, 0, 1, 1, 1, 1), Int16(4))
-        gi(:re, index[4], value[4], (0, 4, 0, 0, 3, 0, 1, 1), Int16(14))
-        gi(:re, index[5], value[5], (0, 4, 0, 0, 2, 0, 1, 0), Int16(8))
-        gi(:im, index[6], value[6], (0, 4, 0, 0, 2, 0, 1, 0), Int16(-16))
+        # x₂²z₁ * ((4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²) * x₂²z̄₁
+        # = (4-8im)*x₂⁴z₁z̄₁² + (4+8im)*x₂⁴z₁²z̄₁ + 3x₁x₂⁴z₁z̄₁ + 4x₂⁴z₁z₂z̄₁z̄₂ + 7x₂⁴z₁z₂z̄₁³ + 7x₂⁴z₁³z̄₁z̄₂ + 5x₂⁵x₄²z₁z̄₁
+        gi(:re, index[1], value[1], (0, 4, 0, 0, 2, 0, 1, 0), Int16(8))
+        gi(:im, index[2], value[2], (0, 4, 0, 0, 2, 0, 1, 0), Int16(-16))
+        gi(:re, index[3], value[3], (1, 4, 0, 0, 1, 0, 1, 0), Int16(3))
+        gi(:re, index[4], value[4], (0, 4, 0, 0, 1, 1, 1, 1), Int16(4))
+        gi(:re, index[5], value[5], (0, 4, 0, 0, 3, 0, 1, 1), Int16(14))
+        gi(:re, index[6], value[6], (0, 5, 0, 2, 1, 0, 1, 0), Int16(5))
     elseif state.instance == 43
         @test length(index) == 1
         # x₂²z₂ * [17x₃²z₁z̄₁  0     ] * x₂²z̄₂ = [17x₂⁴x₃²z₁z₂z₁z̄₁  0          ]
@@ -362,19 +361,19 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
     @test state.lastcall === :none
     state.lastcall = :add_quadratic
     if state.instance == 31
-        # [x₁x₄²; x₂²z₁] * 17x₁x₃² * [x₁x₄² x₂²z̄₁] = 17 [x₁³x₃²x₄⁴        x₁²x₂²x₃²x₄²z̄₁
-        #                                                x₁²x₂²x₃²x₄²z₁   x₁x₂⁴x₃²z₁z̄₁]
+        # [x₂²z̄₁; x₁x₄²] * 17x₁x₃² * [x₂²z₁ x₁x₄²] = 17 [x₁x₂⁴x₃²z₁z̄₁     x₁²x₂²x₃²x₄²z̄₁
+        #                                                x₁²x₂²x₃²x₄²z₁   x₁³x₃²x₄⁴]
         # ↪ (17x₁³x₃²x₄⁴) * (17x₁x₂⁴x₃²z₁z̄₁) ≥ (17Re(x₁²x₂²x₃²x₄²z̄₁))² + (17Im(x₁²x₂²x₃²x₄²z̄₁))²
-        gi(index₁, value₁, (3, 0, 2, 4), Int16(17))
-        gi(:re, index₂, value₂, (1, 4, 2, 0, 1, 0, 1, 0), Int16(17))
+        gi(:re, index₁, value₁, (1, 4, 2, 0, 1, 0, 1, 0), Int16(17))
+        gi(index₂, value₂, (3, 0, 2, 4), Int16(17))
         gi(:re, index₃, value₃, (2, 2, 2, 2, 0, 0, 1, 0), Int16(17))
         gi(:im, index₄, value₄, (2, 2, 2, 2, 0, 0, 1, 0), Int16(17))
     elseif state.instance == 33
-        # [x₁x₄²; x₂²z₁] * 24x₂z₁z̄₁ * [x₁x₄² x₂²z̄₁] = 24 [x₁²x₂x₄⁴z₁z̄₁    x₁x₂³x₄²z₁z̄₁²
-        #                                                 x₁x₂³x₄²z₁²z̄₁   x₂⁵z₁²z̄₁²]
+        # [x₂²z̄₁; x₁x₄²] * 24x₂z₁z̄₁ * [x₂²z₁ x₁x₄²] = 24 [x₂⁵z₁²z̄₁²       x₁x₂³x₄²z₁z̄₁²
+        #                                                 x₁x₂³x₄²z₁²z̄₁   x₁²x₂x₄⁴z₁z̄₁]
         # ↪ (24x₁²x₂x₄⁴z₁z̄₁) * (24x₂⁵z₁²z̄₁²) ≥ (24Re(x₁x₂³x₄²z₁z̄₁²))² + (24Im(x₁x₂³x₄²z₁z̄₁²))²
-        gi(:re, index₁, value₁, (2, 1, 0, 4, 1, 0, 1, 0), Int16(24))
-        gi(:re, index₂, value₂, (0, 5, 0, 0, 2, 0, 2, 0), Int16(24))
+        gi(:re, index₁, value₁, (0, 5, 0, 0, 2, 0, 2, 0), Int16(24))
+        gi(:re, index₂, value₂, (2, 1, 0, 4, 1, 0, 1, 0), Int16(24))
         gi(:re, index₃, value₃, (1, 3, 0, 2, 1, 0, 2, 0), Int16(24))
         gi(:im, index₄, value₄, (1, 3, 0, 2, 1, 0, 2, 0), Int16(24))
     elseif state.instance == 51
@@ -447,30 +446,30 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
         gi(:im, index₃[1], value₃[1], (1, 2, 3, 2, 1, 0, 0, 2), Int16(-14))
     elseif state.instance == 30
         @test length(index₁) == length(index₂) == length(index₃) == 6
-        # [x₁x₄²; x₂²x₃³] * (3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁) * [x₁x₄² x₂²x₃³]
-        # ↪ (3x₁³x₄⁴ + 5x₁²x₂x₄⁶ + 4x₁²x₄⁴z₂z̄₂ + 14Re(x₁²x₄⁴z₁²z̄₂) + 8Re(x₁²x₄⁴z₁) - 16Im(x₁²x₄⁴z₁))
-        #  * (3x₁x₂⁴x₃⁶ + 5x₂⁵x₃⁶x₄² + 4x₂⁴x₃⁶z₂z̄₂ + 14Re(x₂⁴x₃⁶z₁²z̄₂) + 8Re(x₂⁴x₃⁶z₁) - 16Im(x₂⁴x₃⁶z₁))
-        #  ≥ (3x₁²x₂²x₃³x₄² + 5x₁x₂³x₃³x₄⁴ + 4x₁x₂²x₃³x₄²z₂z̄₂ + 14Re(x₁x₂²x₃³x₄²z₁²z̄₂) + 8Re(x₁x₂²x₃³x₄²z₁) - 16Im(x₁x₂²x₃³x₄²z₁))²
-        gi(index₁[1], value₁[1], (3, 0, 0, 4), Int16(3))
-        gi(index₁[2], value₁[2], (2, 1, 0, 6), Int16(5))
-        gi(:re, index₁[3], value₁[3], (2, 0, 0, 4, 0, 1, 0, 1), Int16(4))
-        gi(:re, index₁[4], value₁[4], (2, 0, 0, 4, 2, 0, 0, 1), Int16(14))
-        gi(:re, index₁[5], value₁[5], (2, 0, 0, 4, 1, 0, 0, 0), Int16(8))
-        gi(:im, index₁[6], value₁[6], (2, 0, 0, 4, 1, 0, 0, 0), Int16(-16))
+        # [x₁x₄²; x₂²x₃³] * ((4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²) * [x₁x₄² x₂²x₃³]
+        # ↪ (8Re(x₁²x₄⁴z₁) - 16Im(x₁²x₄⁴z₁) + 3x₁³x₄⁴ + 4x₁²x₄⁴z₂z̄₂ + 14Re(x₁²x₄⁴z₁²z̄₂) + 5x₁²x₂x₄⁶)
+        #  * (8Re(x₂⁴x₃⁶z₁) - 16Im(x₂⁴x₃⁶z₁) + 3x₁x₂⁴x₃⁶ + 4x₂⁴x₃⁶z₂z̄₂ + 14Re(x₂⁴x₃⁶z₁²z̄₂) + 5x₂⁵x₃⁶x₄²)
+        #  ≥ (8Re(x₁x₂²x₃³x₄²z₁) - 16Im(x₁x₂²x₃³x₄²z₁) + 3x₁²x₂²x₃³x₄² + 4x₁x₂²x₃³x₄²z₂z̄₂ + 14Re(x₁x₂²x₃³x₄²z₁²z̄₂) + 5x₁x₂³x₃³x₄⁴)²
+        gi(:re, index₁[1], value₁[1], (2, 0, 0, 4, 1, 0, 0, 0), Int16(8))
+        gi(:im, index₁[2], value₁[2], (2, 0, 0, 4, 1, 0, 0, 0), Int16(-16))
+        gi(index₁[3], value₁[3], (3, 0, 0, 4), Int16(3))
+        gi(:re, index₁[4], value₁[4], (2, 0, 0, 4, 0, 1, 0, 1), Int16(4))
+        gi(:re, index₁[5], value₁[5], (2, 0, 0, 4, 2, 0, 0, 1), Int16(14))
+        gi(index₁[6], value₁[6], (2, 1, 0, 6), Int16(5))
 
-        gi(index₂[1], value₂[1], (1, 4, 6, 0), Int16(3))
-        gi(index₂[2], value₂[2], (0, 5, 6, 2), Int16(5))
-        gi(:re, index₂[3], value₂[3], (0, 4, 6, 0, 0, 1, 0, 1), Int16(4))
-        gi(:re, index₂[4], value₂[4], (0, 4, 6, 0, 2, 0, 0, 1), Int16(14))
-        gi(:re, index₂[5], value₂[5], (0, 4, 6, 0, 1, 0, 0, 0), Int16(8))
-        gi(:im, index₂[6], value₂[6], (0, 4, 6, 0, 1, 0, 0, 0), Int16(-16))
+        gi(:re, index₂[1], value₂[1], (0, 4, 6, 0, 1, 0, 0, 0), Int16(8))
+        gi(:im, index₂[2], value₂[2], (0, 4, 6, 0, 1, 0, 0, 0), Int16(-16))
+        gi(index₂[3], value₂[3], (1, 4, 6, 0), Int16(3))
+        gi(:re, index₂[4], value₂[4], (0, 4, 6, 0, 0, 1, 0, 1), Int16(4))
+        gi(:re, index₂[5], value₂[5], (0, 4, 6, 0, 2, 0, 0, 1), Int16(14))
+        gi(index₂[6], value₂[6], (0, 5, 6, 2), Int16(5))
 
-        gi(index₃[1], value₃[1], (2, 2, 3, 2), Int16(3))
-        gi(index₃[2], value₃[2], (1, 3, 3, 4), Int16(5))
-        gi(:re, index₃[3], value₃[3], (1, 2, 3, 2, 0, 1, 0, 1), Int16(4))
-        gi(:re, index₃[4], value₃[4], (1, 2, 3, 2, 2, 0, 0, 1), Int16(14))
-        gi(:re, index₃[5], value₃[5], (1, 2, 3, 2, 1, 0, 0, 0), Int16(8))
-        gi(:im, index₃[6], value₃[6], (1, 2, 3, 2, 1, 0, 0, 0), Int16(-16))
+        gi(:re, index₃[1], value₃[1], (1, 2, 3, 2, 1, 0, 0, 0), Int16(8))
+        gi(:im, index₃[2], value₃[2], (1, 2, 3, 2, 1, 0, 0, 0), Int16(-16))
+        gi(index₃[3], value₃[3], (2, 2, 3, 2), Int16(3))
+        gi(:re, index₃[4], value₃[4], (1, 2, 3, 2, 0, 1, 0, 1), Int16(4))
+        gi(:re, index₃[5], value₃[5], (1, 2, 3, 2, 2, 0, 0, 1), Int16(14))
+        gi(index₃[6], value₃[6], (1, 3, 3, 4), Int16(5))
     elseif state.instance == 41
         @test length(index₁) == length(index₂) == length(index₃) == 1
         # x₂²z₂ [17x₃²z₁z̄₁  8x₂²  ] x₂²z̄₂ = [17x₂⁴x₃²z₁z₂z̄₁z̄₂   8x₂⁶z₂z̄₂
@@ -522,102 +521,104 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
     state.lastcall = :add_quadratic
     if state.instance == 31
         @test length(index₁) == length(index₂) == length(index₃) == length(index₄) == 1
-        # [x₁x₄²; x₂²z₁] * 17x₁x₃² * [x₁x₄² x₂²z̄₁] = 17 [x₁³x₃²x₄⁴  x₁²x₂²x₃²x₄²z̄₁
-        #                                                *          x₁x₂⁴x₃²z₁z̄₁]
+        # [x₂²z̄₁; x₁x₄²] * 17x₁x₃² * [x₂²z₁ x₁x₄²] = 17 [x₁x₂⁴x₃²z₁z̄₁  x₁²x₂²x₃²x₄²z̄₁
+        #                                               [*             x₁³x₃²x₄⁴]
         # ↪ (17x₁³x₃²x₄⁴) * (17x₁x₂⁴x₃²z₁z̄₁) ≥ (17Re(x₁²x₂²x₃²x₄²z̄₁))² + (17Im(x₁²x₂²x₃²x₄²z̄₁))²
-        gi(index₁[1], value₁[1], (3, 0, 2, 4), Int16(17))
-        gi(:re, index₂[1], value₂[1], (1, 4, 2, 0, 1, 0, 1, 0), Int16(17))
+        gi(:re, index₁[1], value₁[1], (1, 4, 2, 0, 1, 0, 1, 0), Int16(17))
+        gi(index₂[1], value₂[1], (3, 0, 2, 4), Int16(17))
         gi(:re, index₃[1], value₃[1], (2, 2, 2, 2, 0, 0, 1, 0), Int16(17))
         gi(:im, index₄[1], value₄[1], (2, 2, 2, 2, 0, 0, 1, 0), Int16(17))
     elseif state.instance == 33
         @test length(index₁) == length(index₂) == length(index₃) == length(index₄) == 1
-        # [x₁x₄²; x₂²z₁] * 24x₂z₁z̄₁ * [x₁x₄² x₂²z̄₁] = 24 [x₁²x₂x₄⁴z₁z̄₁  x₁x₂³x₄²z₁z̄₁²
-        #                                                 *             x₂⁵z₁²z̄₁²]
+        # [x₂²z̄₁; x₁x₄²] * 24x₂z₁z̄₁ * [x₂²z₁ x₁x₄²] = 24 [x₂⁵z₁²z̄₁²  x₁x₂³x₄²z₁z̄₁²
+        #                                                [*          x₁²x₂x₄⁴z₁z̄₁]
         # ↪ (24x₁²x₂x₄⁴z₁z̄₁) * (24x₂⁵z₁²z̄₁²) ≥ (24Re(x₁x₂³x₄²z₁z̄₁²))² + (24Im(x₁x₂³x₄²z₁z̄₁²))²
-        gi(:re, index₁[1], value₁[1], (2, 1, 0, 4, 1, 0, 1, 0), Int16(24))
-        gi(:re, index₂[1], value₂[1], (0, 5, 0, 0, 2, 0, 2, 0), Int16(24))
+        gi(:re, index₁[1], value₁[1], (0, 5, 0, 0, 2, 0, 2, 0), Int16(24))
+        gi(:re, index₂[1], value₂[1], (2, 1, 0, 4, 1, 0, 1, 0), Int16(24))
         gi(:re, index₃[1], value₃[1], (1, 3, 0, 2, 1, 0, 2, 0), Int16(24))
         gi(:im, index₄[1], value₄[1], (1, 3, 0, 2, 1, 0, 2, 0), Int16(24))
     elseif state.instance == 36
         @test length(index₁) == length(index₂) == length(index₃) == length(index₄) == 2
-        # [x₁x₄²; x₂²z₁] * (2x₁ + 8x₂x₄²) * [x₁x₄² x₂²z̄₁] = [2x₁³x₄⁴+8x₁²x₂x₄⁶  2x₁²x₂²x₄²z̄₁+8x₁x₂³x₄⁴z̄₁
-        #                                                    *                  2x₁x₂⁴z₁z̄₁+8x₂⁵x₄²z₁z̄₁]
+        # [x₂²z̄₁; x₁x₄²] * (2x₁ + 8x₂x₄²) * [x₂²z₁ x₁x₄²] = [2x₁x₂⁴z₁z̄₁+8x₂⁵x₄²z₁z̄₁  2x₁²x₂²x₄²z̄₁+8x₁x₂³x₄⁴z̄₁
+        #                                                   [*                       2x₁³x₄⁴+8x₁²x₂x₄⁶]
         # ↪ (2x₁³x₄⁴+8x₁²x₂x₄⁶) * (2x₁x₂⁴z₁z̄₁+8x₂⁵x₄²z₁z̄₁)
         #  ≥ (Re(2x₁²x₂²x₄²z̄₁+8x₁x₂³x₄⁴z̄₁))² + (Im(2x₁²x₂²x₄²z̄₁+8x₁x₂³x₄⁴z̄₁))²
-        gi(index₁[1], value₁[1], (3, 0, 0, 4), Int16(2))
-        gi(index₁[2], value₁[2], (2, 1, 0, 6), Int16(8))
-        gi(:re, index₂[1], value₂[1], (1, 4, 0, 0, 1, 0, 1, 0), Int16(2))
-        gi(:re, index₂[2], value₂[2], (0, 5, 0, 2, 1, 0, 1, 0), Int16(8))
+        gi(:re, index₁[1], value₁[1], (1, 4, 0, 0, 1, 0, 1, 0), Int16(2))
+        gi(:re, index₁[2], value₁[2], (0, 5, 0, 2, 1, 0, 1, 0), Int16(8))
+        gi(index₂[1], value₂[1], (3, 0, 0, 4), Int16(2))
+        gi(index₂[2], value₂[2], (2, 1, 0, 6), Int16(8))
         gi(:re, index₃[1], value₃[1], (2, 2, 0, 2, 0, 0, 1, 0), Int16(2))
         gi(:re, index₃[2], value₃[2], (1, 3, 0, 4, 0, 0, 1, 0), Int16(8))
         gi(:im, index₄[1], value₄[1], (2, 2, 0, 2, 0, 0, 1, 0), Int16(2))
         gi(:im, index₄[2], value₄[2], (1, 3, 0, 4, 0, 0, 1, 0), Int16(8))
     elseif state.instance == 37
         @test length(index₁) == length(index₂) == length(index₄) == 1 && length(index₃) == 2
-        # [x₁x₄²; x₂²z₁] * 3(z₁ + z̄₁) * [x₁x₄² x₂²z̄₁] = 3[x₁²x₄⁴z₁+x₁²x₄⁴z̄₁  x₁x₂²x₄²z₁z̄₁+x₁x₂²x₄²z̄₁²
-        #                                                 *                  x₂⁴z₁²z̄₁+x₂⁴z₁z̄₁²]
+        # [x₂²z̄₁; x₁x₄²] * 3(z₁ + z̄₁) * [x₂²z₁ x₁x₄²] = 3[x₂⁴z₁²z̄₁+x₂⁴z₁z̄₁²  x₁x₂²x₄²z₁z̄₁+x₁x₂²x₄²z̄₁²
+        #                                                [*                  x₁²x₄⁴z₁+x₁²x₄⁴z̄₁]
         # ↪ (6Re(x₁²x₄⁴z₁)) * (6Re(x₂⁴z₁²z̄₁)) ≥ (6Re(x₁x₂²x₄²z₁z̄₁+x₁x₂²x₄²z̄₁²))² + (6Im(x₁x₂²x₄²z₁z̄₁+x₁x₂²x₄²z̄₁²))²
-        gi(:re, index₁[1], value₁[1], (2, 0, 0, 4, 1, 0, 0, 0), Int16(6))
-        gi(:re, index₂[1], value₂[1], (0, 4, 0, 0, 2, 0, 1, 0), Int16(6))
+        gi(:re, index₁[1], value₁[1], (0, 4, 0, 0, 2, 0, 1, 0), Int16(6))
+        gi(:re, index₂[1], value₂[1], (2, 0, 0, 4, 1, 0, 0, 0), Int16(6))
         gi(:re, index₃[1], value₃[1], (1, 2, 0, 2, 0, 0, 2, 0), Int16(3)) # z̄₁ is the canonical version
         gi(:re, index₃[2], value₃[2], (1, 2, 0, 2, 1, 0, 1, 0), Int16(3))
         gi(:im, index₄[1], value₄[1], (1, 2, 0, 2, 0, 0, 2, 0), Int16(3))
     elseif state.instance == 38
         @test length(index₁) == length(index₂) == 1 && length(index₃) == length(index₄) == 2
-        # [x₁x₄²; x₂²z₁] * 7im(z₁z̄₂² - z̄₁z₂²) * [x₁x₄² x₂²z̄₁] = 7im[x₁²x₄⁴z₁z̄₂²-x₁²x₄⁴z₂²z̄₁  x₁x₂²x₄²z₁z̄₁z̄₂²-x₁x₂²x₄²z₂²z̄₁²
-        #                                                           *                        x₂⁴z₁²z̄₁z̄₂²-x₂⁴z₁z₂²z̄₁²]
+        # [x₂²z̄₁; x₁x₄²] * 7im(z₁z̄₂² - z̄₁z₂²) * [x₂²z₁ x₁x₄²] = 7im[x₂⁴z₁²z̄₁z̄₂²-x₂⁴z₁z₂²z̄₁²  x₁x₂²x₄²z₁z̄₁z̄₂²-x₁x₂²x₄²z₂²z̄₁²
+        #                                                          [*                        x₁²x₄⁴z₁z̄₂²-x₁²x₄⁴z₂²z̄₁]
         # ↪ (-14Im(x₁²x₄⁴z₁z̄₂²)) * (-14Im(x₂⁴z₁²z̄₁z̄₂²))
         #  ≥ (-7Im(x₁x₂²x₄²z₁z̄₁z̄₂²-x₁x₂²x₄²z₂²z̄₁²))² + (7Re(x₁x₂²x₄²z₁z̄₁z̄₂²-x₁x₂²x₄²z₂²z̄₁²))^2
-        gi(:im, index₁[1], value₁[1], (2, 0, 0, 4, 1, 0, 0, 2), Int16(-14))
-        gi(:im, index₂[1], value₂[1], (0, 4, 0, 0, 2, 0, 1, 2), Int16(-14))
+        gi(:im, index₁[1], value₁[1], (0, 4, 0, 0, 2, 0, 1, 2), Int16(-14))
+        gi(:im, index₂[1], value₂[1], (2, 0, 0, 4, 1, 0, 0, 2), Int16(-14))
         gi(:im, index₃[1], value₃[1], (1, 2, 0, 2, 0, 2, 2, 0), Int16(7))
         gi(:im, index₃[2], value₃[2], (1, 2, 0, 2, 1, 0, 1, 2), Int16(-7))
         gi(:re, index₄[1], value₄[1], (1, 2, 0, 2, 0, 2, 2, 0), Int16(-7))
         gi(:re, index₄[2], value₄[2], (1, 2, 0, 2, 1, 0, 1, 2), Int16(7))
     elseif state.instance == 40
         @test length(index₁) == length(index₂) == 6 && length(index₃) == length(index₄) == 8
-        # [x₁x₄²; x₂²z₁] * (3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁) * [x₁x₄² x₂²z̄₁]
-        # ↪ (3x₁³x₄⁴ + 5x₁²x₂x₄⁶ + 4x₁²x₄⁴z₂z̄₂ + 14Re(x₁²x₄⁴z₁²z̄₂) + 8Re(x₁²x₄⁴z₁) - 16Im(x₁²x₄⁴z₁))
-        #  * (3x₁x₂⁴z₁z̄₁ + 5x₂⁵x₄²z₁z̄₁ + 4x₂⁴z₁z₂z̄₁z̄₂ + 14Re(x₂⁴z₁³z̄₁z̄₂) + 8Re(x₂⁴z₁²z̄₁) - 16Im(x₂⁴z₁²z̄₁))
-        #  ≥ (3Re(x₁²x₂²x₄²z̄₁) + 5Re(x₁x₂³x₄⁴z̄₁) + 4Re(x₁x₂²x₄²z₂z̄₁z̄₂) + 7Re(x₁x₂²x₄²z₁²z̄₁z̄₂) + 7Re(x₁x₂²x₄²z₂z̄₁³) +
-        #     4Re(x₁x₂²x₄²z₁z̄₁) + 4Re(x₁x₂²x₄²z̄₁²) + 8Im(x₁x₂²x₄²z̄₁²))²
-        #  + (3Im(x₁²x₂²x₄²z̄₁) + 5Im(x₁x₂³x₄⁴z̄₁) + 4Im(x₁x₂²x₄²z₂z̄₁z̄₂) + 7Im(x₁x₂²x₄²z₁²z̄₁z̄₂) + 7Im(x₁x₂²x₄²z₂z̄₁³) +
-        #     8Re(x₁x₂²x₄²z₁z̄₁) + 4Im(x₁x₂²x₄²z̄₁²) - 8Re(x₁x₂²x₄²z̄₁²))²
-        gi(index₁[1], value₁[1], (3, 0, 0, 4), Int16(3))
-        gi(index₁[2], value₁[2], (2, 1, 0, 6), Int16(5))
-        gi(:re, index₁[3], value₁[3], (2, 0, 0, 4, 0, 1, 0, 1), Int16(4))
-        gi(:re, index₁[4], value₁[4], (2, 0, 0, 4, 2, 0, 0, 1), Int16(14))
-        gi(:re, index₁[5], value₁[5], (2, 0, 0, 4, 1, 0, 0, 0), Int16(8))
-        gi(:im, index₁[6], value₁[6], (2, 0, 0, 4, 1, 0, 0, 0), Int16(-16))
+        # [x₂²z̄₁; x₁x₄²] * ((4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²) * [x₂²z₁ x₁x₄²]
+        # = [(4-8im)x₂⁴z̄₁²z₁ + (4+8im)x₂⁴z̄₁z₁² + 3x₂⁴z₁z̄₁x₁ + 4x₂⁴z₁z̄₁z₂z̄₂ + 7x₂⁴z₁z̄₁³z₂ + 7x₂⁴z₁³z̄₁z̄₂ + 5x₂⁵x₄²z₁z̄₁    (4-8im)x₁x₂²x₄²z̄₁² + (4+8im)x₁x₂²x₄²z₁z̄₁ + 3x₁²x₂²x₄²z̄₁ + 4x₁x₂²x₄²z₂z̄₁z̄₂ + 7x₁x₂²x₄²z̄₁³z₂ + 7x₁x₂²x₄²z₁²z̄₁z̄₂ + 5x₁x₂³x₄⁴z̄₁
+        #   [*                                                                                                          (4-8im)x₁²x₄⁴z̄₁ + (4+8im)x₁²x₄⁴z₁ + 3x₁³x₄⁴ + 4x₁²x₄⁴z₂z̄₂ + 7x₁²x₄⁴z̄₁²z₂ + 7x₁²x₄⁴z₁²z̄₂ + 5x₁²x₂x₄⁶
+        # ↪ (8Re(x₂⁴z₁z̄₁²) + 16Im(x₂⁴z₁z̄₁²) + 3x₁x₂⁴z₁z̄₁ + 4x₂⁴z₁z₂z̄₁z̄₂ + 14Re(x₂⁴z₁z₂z̄₁³) + 5x₂⁵x₄²z₁z̄₁) *
+        #    (8Re(x₁²x₄⁴z̄₁) + 16Im(x₁²x₄⁴z̄₁) + 3x₁³x₄⁴ + 4x₁²x₄⁴z₂z̄₂ + 14Re(x₁²x₄⁴z₂z̄₁²) + 5x₁²x₂x₄⁶)
+        #  ≥ (4Re(x₁x₂²x₄²z̄₁²) + 8Im(x₁x₂²x₄²z̄₁²) + 4Re(x₁x₂²x₄²z₁z̄₁) + 3Re(x₁²x₂²x₄²z̄₁) + 4Re(x₁x₂²x₄²z₂z̄₁z̄₂) +
+        #     7Re(x₁x₂²x₄²z₂z̄₁³) + 7Re(x₁x₂²x₄²z₁²z̄₁z̄₂) + 5Re(x₁x₂³x₄⁴z̄₁))² +
+        #    (4Im(x₁x₂²x₄²z̄₁²) - 8Re(x₁x₂²x₄²z̄₁²) + 8Re(x₁x₂²x₄²z₁z̄₁) + 3Im(x₁²x₂²x₄²z̄₁) + 4Im(x₁x₂²x₄²z₂z̄₁z̄₂) +
+        #     7Im(x₁x₂²x₄²z₂z̄₁³) + 7Im(x₁x₂²x₄²z₁²z̄₁z̄₂) + 5Re(x₁x₂³x₄⁴z̄₁))²
+        gi(:re, index₁[1], value₁[1], (0, 4, 0, 0, 1, 0, 2, 0), Int16(8))
+        gi(:im, index₁[2], value₁[2], (0, 4, 0, 0, 1, 0, 2, 0), Int16(16))
+        gi(:re, index₁[3], value₁[3], (1, 4, 0, 0, 1, 0, 1, 0), Int16(3))
+        gi(:re, index₁[4], value₁[4], (0, 4, 0, 0, 1, 1, 1, 1), Int16(4))
+        gi(:re, index₁[5], value₁[5], (0, 4, 0, 0, 1, 1, 3, 0), Int16(14))
+        gi(:re, index₁[6], value₁[6], (0, 5, 0, 2, 1, 0, 1, 0), Int16(5))
 
-        gi(:re, index₂[1], value₂[1], (1, 4, 0, 0, 1, 0, 1, 0), Int16(3))
-        gi(:re, index₂[2], value₂[2], (0, 5, 0, 2, 1, 0, 1, 0), Int16(5))
-        gi(:re, index₂[3], value₂[3], (0, 4, 0, 0, 1, 1, 1, 1), Int16(4))
-        gi(:re, index₂[4], value₂[4], (0, 4, 0, 0, 3, 0, 1, 1), Int16(14))
-        gi(:re, index₂[5], value₂[5], (0, 4, 0, 0, 2, 0, 1, 0), Int16(8))
-        gi(:im, index₂[6], value₂[6], (0, 4, 0, 0, 2, 0, 1, 0), Int16(-16))
+        gi(:re, index₂[1], value₂[1], (2, 0, 0, 4, 0, 0, 1, 0), Int16(8))
+        gi(:im, index₂[2], value₂[2], (2, 0, 0, 4, 0, 0, 1, 0), Int16(16))
+        gi(index₂[3], value₂[3], (3, 0, 0, 4), Int16(3))
+        gi(:re, index₂[4], value₂[4], (2, 0, 0, 4, 0, 1, 0, 1), Int16(4))
+        gi(:re, index₂[5], value₂[5], (2, 0, 0, 4, 0, 1, 2, 0), Int16(14))
+        gi(index₂[6], value₂[6], (2, 1, 0, 6), Int16(5))
 
-        gi(:re, index₃[1], value₃[1], (2, 2, 0, 2, 0, 0, 1, 0), Int16(3))
-        gi(:re, index₃[2], value₃[2], (1, 3, 0, 4, 0, 0, 1, 0), Int16(5))
-        gi(:re, index₃[3], value₃[3], (1, 2, 0, 2, 0, 1, 1, 1), Int16(4))
-        gi(:re, index₃[4], value₃[4], (1, 2, 0, 2, 0, 1, 3, 0), Int16(7)) # flip as the second is the canonical one
-        gi(:re, index₃[5], value₃[5], (1, 2, 0, 2, 2, 0, 1, 1), Int16(7))
-        gi(:re, index₃[6], value₃[6], (1, 2, 0, 2, 0, 0, 2, 0), Int16(4))
-        gi(:re, index₃[7], value₃[7], (1, 2, 0, 2, 1, 0, 1, 0), Int16(4)) # also flip
-        gi(:im, index₃[8], value₃[8], (1, 2, 0, 2, 0, 0, 2, 0), Int16(8))
+        gi(:re, index₃[1], value₃[1], (1, 2, 0, 2, 0, 0, 2, 0), Int16(4))
+        gi(:re, index₃[2], value₃[2], (1, 2, 0, 2, 1, 0, 1, 0), Int16(4))
+        gi(:im, index₃[3], value₃[3], (1, 2, 0, 2, 0, 0, 2, 0), Int16(8))
+        gi(:re, index₃[4], value₃[4], (2, 2, 0, 2, 0, 0, 1, 0), Int16(3))
+        gi(:re, index₃[5], value₃[5], (1, 2, 0, 2, 0, 1, 1, 1), Int16(4))
+        gi(:re, index₃[6], value₃[6], (1, 2, 0, 2, 0, 1, 3, 0), Int16(7))
+        gi(:re, index₃[7], value₃[7], (1, 2, 0, 2, 2, 0, 1, 1), Int16(7))
+        gi(:re, index₃[8], value₃[8], (1, 3, 0, 4, 0, 0, 1, 0), Int16(5))
 
-        gi(:im, index₄[1], value₄[1], (2, 2, 0, 2, 0, 0, 1, 0), Int16(3))
-        gi(:im, index₄[2], value₄[2], (1, 3, 0, 4, 0, 0, 1, 0), Int16(5))
-        gi(:im, index₄[3], value₄[3], (1, 2, 0, 2, 0, 1, 1, 1), Int16(4))
-        gi(:im, index₄[4], value₄[4], (1, 2, 0, 2, 0, 1, 3, 0), Int16(7)) # flip as the second is the canonical one
-        gi(:im, index₄[5], value₄[5], (1, 2, 0, 2, 2, 0, 1, 1), Int16(7))
-        gi(:im, index₄[6], value₄[6], (1, 2, 0, 2, 0, 0, 2, 0), Int16(4))
-        gi(:re, index₄[7], value₄[7], (1, 2, 0, 2, 0, 0, 2, 0), Int16(-8)) # also flip
-        gi(:re, index₄[8], value₄[8], (1, 2, 0, 2, 1, 0, 1, 0), Int16(8))
+        gi(:im, index₄[1], value₄[1], (1, 2, 0, 2, 0, 0, 2, 0), Int16(4))
+        gi(:re, index₄[2], value₄[2], (1, 2, 0, 2, 0, 0, 2, 0), Int16(-8))
+        gi(:re, index₄[3], value₄[3], (1, 2, 0, 2, 1, 0, 1, 0), Int16(8))
+        gi(:im, index₄[4], value₄[4], (2, 2, 0, 2, 0, 0, 1, 0), Int16(3))
+        gi(:im, index₄[5], value₄[5], (1, 2, 0, 2, 0, 1, 1, 1), Int16(4))
+        gi(:im, index₄[6], value₄[6], (1, 2, 0, 2, 0, 1, 3, 0), Int16(7))
+        gi(:im, index₄[7], value₄[7], (1, 2, 0, 2, 2, 0, 1, 1), Int16(7))
+        gi(:im, index₄[8], value₄[8], (1, 3, 0, 4, 0, 0, 1, 0), Int16(5))
     elseif state.instance == 51
         @test length(index₁) == length(index₂) == length(index₃) == length(index₄) == 1
         # x₂²z₂ [17x₃²z₁z̄₁  8z₂²  ] x₂²z̄₂ = [17x₂⁴x₃²z₁z₂z̄₁z̄₂   8x₂⁴z₂³z̄₂
-        #       [*          6x₂x₄²]          *                  6x₂⁵x₄²z₂z̄₂]
+        #       [*          6x₂x₄²]         [*                  6x₂⁵x₄²z₂z̄₂]
         gi(:re, index₁[1], value₁[1], (0, 4, 2, 0, 1, 1, 1, 1), Int16(17))
         gi(:re, index₂[1], value₂[1], (0, 5, 0, 2, 0, 1, 0, 1), Int16(6))
         gi(:re, index₃[1], value₃[1], (0, 4, 0, 0, 0, 3, 0, 1), Int16(8))
@@ -625,7 +626,7 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
     elseif state.instance == 52
         @test length(index₁) == length(index₂) == length(index₃) == length(index₄) == 1
         # x₂²z₂ [17x₃²z₁z̄₁  8im*z₂²] x₂²z̄₂ = [17x₂⁴x₃²z₁z₂z̄₁z̄₂  8im*x₂⁴z₂³z̄₂
-        #       [*          6x₂x₄² ]          *                 6x₂⁵x₄²z₂z̄₂]
+        #       [*          6x₂x₄² ]         [*                 6x₂⁵x₄²z₂z̄₂]
         gi(:re, index₁[1], value₁[1], (0, 4, 2, 0, 1, 1, 1, 1), Int16(17))
         gi(:re, index₂[1], value₂[1], (0, 5, 0, 2, 0, 1, 0, 1), Int16(6))
         gi(:im, index₃[1], value₃[1], (0, 4, 0, 0, 0, 3, 0, 1), Int16(-8))
@@ -633,7 +634,7 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
     elseif state.instance == 53
         @test length(index₁) == length(index₂) == 1 && length(index₃) == length(index₄) == 2
         # x₂²z₂ [17x₃²z₁z̄₁  (8+2im)*z₂²] x₂²z̄₂ = [17x₂⁴x₃²z₁z₂z̄₁z̄₂  (8+2im)*x₂⁴z₂³z̄₂
-        #       [*          6x₂x₄²     ]          *                 6x₂⁵x₄²z₂z̄₂]
+        #       [*          6x₂x₄²     ]         [*                 6x₂⁵x₄²z₂z̄₂]
         gi(:re, index₁[1], value₁[1], (0, 4, 2, 0, 1, 1, 1, 1), Int16(17))
         gi(:re, index₂[1], value₂[1], (0, 5, 0, 2, 0, 1, 0, 1), Int16(6))
         gi(:re, index₃[1], value₃[1], (0, 4, 0, 0, 0, 3, 0, 1), Int16(8))
@@ -642,17 +643,17 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::SolverSetupQuad
         gi(:im, index₄[2], value₄[2], (0, 4, 0, 0, 0, 3, 0, 1), Int16(8))
     elseif state.instance == 54
         @test length(index₁) == 2 && length(index₂) == 1 && length(index₃) == length(index₄) == 3
-        # x₂²z₂ [5x₂²+17x₃²z₁z̄₁  (8-2im)*z̄₂²-8z₂²-3im*x₁+z₁z̄₁] x₂²z̄₂ = [5x₂⁶z₂z̄₂+17x₂⁴x₃²z₁z₂z̄₁z̄₂  (8-2im)*x₂⁴z₂z̄₂³-8x₂⁴z₂³̄z₂²-3im*x₁x₂⁴z₂z̄₂+x₂⁴z₁z₂z̄₁z̄₂
-        #       [*               6x₂x₄²                      ]                                     6x₂⁵x₄²z₂z̄₂]
+        # x₂²z₂ [5x₂²+17x₃²z₁z̄₁  -3im*x₁+(8-2im)*z̄₂²-8z₂²+z₁z̄₁] x₂²z̄₂ = [5x₂⁶z₂z̄₂+17x₂⁴x₃²z₁z₂z̄₁z̄₂  -3im*x₁x₂⁴z₂z̄₂+(8-2im)*x₂⁴z₂z̄₂³-8x₂⁴z₂³̄z₂²+x₂⁴z₁z₂z̄₁z̄₂
+        #       [*               6x₂x₄²                       ]         [*                          6x₂⁵x₄²z₂z̄₂]
         gi(:re, index₁[1], value₁[1], (0, 6, 0, 0, 0, 1, 0, 1), Int16(5))
         gi(:re, index₁[2], value₁[2], (0, 4, 2, 0, 1, 1, 1, 1), Int16(17))
         gi(:re, index₂[1], value₂[1], (0, 5, 0, 2, 0, 1, 0, 1), Int16(6))
         gi(:re, index₃[1], value₃[1], (0, 4, 0, 0, 0, 1, 0, 3), Int16(0)) # 8z̄₂² - 8z₂²; but we don't delete zeros
         gi(:im, index₃[2], value₃[2], (0, 4, 0, 0, 0, 1, 0, 3), Int16(2))
         gi(:re, index₃[3], value₃[3], (0, 4, 0, 0, 1, 1, 1, 1), Int16(1))
-        gi(:im, index₄[1], value₄[1], (0, 4, 0, 0, 0, 1, 0, 3), Int16(16)) # must be accumulated
-        gi(:re, index₄[2], value₄[2], (0, 4, 0, 0, 0, 1, 0, 3), Int16(-2))
-        gi(:re, index₄[3], value₄[3], (1, 4, 0, 0, 0, 1, 0, 1), Int16(-3))
+        gi(:re, index₄[1], value₄[1], (1, 4, 0, 0, 0, 1, 0, 1), Int16(-3))
+        gi(:im, index₄[2], value₄[2], (0, 4, 0, 0, 0, 1, 0, 3), Int16(16)) # must be accumulated
+        gi(:re, index₄[3], value₄[3], (0, 4, 0, 0, 0, 1, 0, 3), Int16(-2))
     else
         @test false
     end
@@ -2146,7 +2147,7 @@ function PolynomialOptimization.sos_solver_add_free_finalize!(state::SolverSetup
     @test num === state.lastnum
 end
 
-@testset "Grouping of length 1 ($text)" for (grouping, text, offset) in (
+@testset failfast=true "Grouping of length 1 ($text)" for (grouping, text, offset) in (
     (SimpleMonomialVector{4,2}(UInt8[0; 2; 1; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]), "real", 0),
     (SimpleMonomialVector{4,2}(UInt8[0; 2; 0; 0;;], UInt8[0; 0;;], UInt8[1; 0;;]), "complex", 10)
 )
@@ -2178,33 +2179,40 @@ end
         constraint = SimplePolynomial(Int16[2, 8], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 1; 0; 2],
             UInt8[0; 0;; 0; 0], UInt8[0; 0;; 0; 0]))
         sostest(6 + offset, SolverSetupScalar{false}, :add_scalar, sos_add_matrix!, grouping, constraint)
-        # 7 - the constraint is 3(z₁ + z̄₁)
+        # 7 - the constraint is 3(z̄₁ + z₁)
         constraint = SimplePolynomial(Int16[3, 3], SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0],
-            UInt8[1; 0;; 0; 0], UInt8[0; 0;; 1; 0]))
+            UInt8[0; 0;; 1; 0], UInt8[1; 0;; 0; 0]))
         sostest(7 + offset, SolverSetupScalar{false}, :add_scalar, sos_add_matrix!, grouping, constraint)
-        # 8 - the constraint is 7im(z₁z̄₂² - z̄₁z₂²)
-        constraint = SimplePolynomial(Complex{Int16}[7im, -7im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
-            UInt8[1; 0;; 0; 2], UInt8[0; 2;; 1; 0]))
+        # 8 - the constraint is 7im(-z̄₁z₂² + z₁z̄₂²)
+        constraint = SimplePolynomial(Complex{Int16}[-7im, 7im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
+            UInt8[0; 2;; 1; 0], UInt8[1; 0;; 0; 2]))
         sostest(8 + offset, SolverSetupScalar{false}, :add_scalar, sos_add_matrix!, grouping, constraint)
-        # 9 - the constraint is 5im(z₁z̄₂² + z₁z̄₁)
+        # 9 - the constraint is 5im(z₁z̄₁ + z₁z̄₂²)
         constraint = SimplePolynomial(Complex{Int16}[5im, 5im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
-            UInt8[1; 0;; 1; 0], UInt8[0; 2;; 1; 0]))
+            UInt8[1; 0;; 1; 0], UInt8[1; 0;; 0; 2]))
         sostest_error(AssertionError, SolverSetupScalar{Any}, sos_add_matrix!, grouping, constraint)
-        # 10 - the constraint is 3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁
-        constraint = SimplePolynomial(Complex{Int16}[3, 5, 4, 7, 7, 4+8im, 4-8im],
+        # 10 - the constraint is (4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²
+        constraint = SimplePolynomial(Complex{Int16}[4-8im, 4+8im, 3, 4, 7, 7, 5],
             SimpleMonomialVector{4,2}(
-                UInt8[1; 0; 0; 0;; 0; 1; 0; 2;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
-                UInt8[0; 0      ;; 0; 0      ;; 0; 1      ;; 2; 0      ;; 0; 1      ;; 1; 0      ;; 0; 0],
-                UInt8[0; 0      ;; 0; 0      ;; 0; 1      ;; 0; 1      ;; 2; 0      ;; 0; 0      ;; 1; 0]))
+                UInt8[0 0 1 0 0 0 0
+                      0 0 0 0 0 0 1
+                      0 0 0 0 0 0 0
+                      0 0 0 0 0 0 2],
+                UInt8[0 1 0 0 0 2 0
+                      0 0 0 1 1 0 0],
+                UInt8[1 0 0 0 2 0 0
+                      0 0 0 1 0 1 0]
+            )
+        )
         sostest(10 + offset, SolverSetupScalar{false}, :add_scalar, sos_add_matrix!, grouping, constraint)
     end
 end
 
-@testset "Grouping of length 2 ($text)" for (grouping, text, offset) in (
+@testset failfast=true "Grouping of length 2 ($text)" for (grouping, text, offset) in (
     (SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 2;; 0; 2; 3; 0], UInt8[0; 0;; 0; 0], UInt8[0; 0;; 0; 0]), "real", 20),
-    (SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 2;; 0; 2; 0; 0], UInt8[0; 0;; 1; 0], UInt8[0; 0;; 0; 0]), "complex", 30)
+    (SimpleMonomialVector{4,2}(UInt8[0; 2; 0; 0;; 1; 0; 0; 2], UInt8[0; 0;; 0; 0], UInt8[1; 0;; 0; 0]), "complex", 30)
 )
-    # the grouping is [x₁x₄², x₂²x₃³] or [x₁x₄², x₂²z₁]
+    # the grouping is [x₁x₄², x₂²x₃³] or [x₂²z̄₁, x₁x₄²]
     @testset "Single term constraint" begin
         # 1 - the constraint is 17x₁x₃²
         constraint = SimplePolynomial(Int16[17], SimpleMonomialVector{4,2}(UInt8[1; 0; 2; 0;;], UInt8[0; 0;;],
@@ -2232,29 +2240,36 @@ end
         constraint = SimplePolynomial(Int16[2, 8], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 1; 0; 2],
             UInt8[0; 0;; 0; 0], UInt8[0; 0;; 0; 0]))
         sostest(6 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
-        # 7 - the constraint is 3(z₁ + z̄₁)
+        # 7 - the constraint is 3(z̄₁ + z₁)
         constraint = SimplePolynomial(Int16[3, 3], SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0],
-            UInt8[1; 0;; 0; 0], UInt8[0; 0;; 1; 0]))
+            UInt8[0; 0;; 1; 0], UInt8[1; 0;; 0; 0]))
         sostest(7 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
-        # 8 - the constraint is 7im(z₁z̄₂² - z̄₁z₂²)
-        constraint = SimplePolynomial(Complex{Int16}[7im, -7im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
-            UInt8[1; 0;; 0; 2], UInt8[0; 2;; 1; 0]))
+        # 8 - the constraint is 7im(-z̄₁z₂² + z₁z̄₂²)
+        constraint = SimplePolynomial(Complex{Int16}[-7im, 7im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
+            UInt8[0; 2;; 1; 0], UInt8[1; 0;; 0; 2]))
         sostest(8 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
-        # 9 - the constraint is 5im(z₁z̄₂² + z₁z̄₁)
+        # 9 - the constraint is 5im(z₁z̄₁ + z₁z̄₂²)
         constraint = SimplePolynomial(Complex{Int16}[5im, 5im], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 2),
-            UInt8[1; 0;; 1; 0], UInt8[0; 2;; 1; 0]))
+            UInt8[1; 0;; 1; 0], UInt8[1; 0;; 0; 2]))
         sostest_error(AssertionError, SolverSetupQuadratic{Any}, sos_add_matrix!, grouping, constraint)
-        # 10 - the constraint is 3x₁ + 5x₂x₄² + 4z₂z̄₂ + 7(z₁²z̄₂ + z̄₁²z₂) + (4 + 8im)z₁ + (4 - 8im)z̄₁
-        constraint = SimplePolynomial(Complex{Int16}[3, 5, 4, 7, 7, 4+8im, 4-8im],
+        # 10 - the constraint is (4 - 8im)z̄₁ + (4 + 8im)z₁ + 3x₁ + 4z₂z̄₂ + 7(z̄₁²z₂ + z₁²z̄₂) + 5x₂x₄²
+        constraint = SimplePolynomial(Complex{Int16}[4-8im, 4+8im, 3, 4, 7, 7, 5],
             SimpleMonomialVector{4,2}(
-                UInt8[1; 0; 0; 0;; 0; 1; 0; 2;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
-                UInt8[0; 0      ;; 0; 0      ;; 0; 1      ;; 2; 0      ;; 0; 1      ;; 1; 0      ;; 0; 0],
-                UInt8[0; 0      ;; 0; 0      ;; 0; 1      ;; 0; 1      ;; 2; 0      ;; 0; 0      ;; 1; 0]))
+                UInt8[0 0 1 0 0 0 0
+                      0 0 0 0 0 0 1
+                      0 0 0 0 0 0 0
+                      0 0 0 0 0 0 2],
+                UInt8[0 1 0 0 0 2 0
+                      0 0 0 1 1 0 0],
+                UInt8[1 0 0 0 2 0 0
+                      0 0 0 1 0 1 0]
+            )
+        )
         sostest(10 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
     end
 end
 
-@testset "Grouping of length 1, matrix constraint" begin
+@testset failfast=true "Grouping of length 1, matrix constraint" begin
     offset = 40
     grouping = SimpleMonomialVector{4,2}(UInt8[0; 2; 0; 0;;], UInt8[0; 1;;], UInt8[0; 0;;])
     # the grouping is x₂²z₂
@@ -2340,23 +2355,23 @@ end
         [c₁₁c c₁₂; conj(c₁₂) c₂₂c]
     end
     sostest(13 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
-    # 14 - the constraint is [5x₂²+17x₃²z₁z̄₁                (8-2im)*z̄₂²-8z₂²-3im*x₁+z₁z̄₁
-    #                         (8+2im)*z₂²-8z̄₂²+3im*x₁+z₁z̄₁  6x₂x₄²]
+    # 14 - the constraint is [5x₂²+17x₃²z₁z̄₁                -3im*x₁+(8-2im)*z̄₂²-8z₂²+z₁z̄₁
+    #                         3im*x₁+(8+2im)*z₂²-8z̄₂²+z₁z̄₁  6x₂x₄²]
     c₁₁c = SimplePolynomial(Complex{Int16}[5, 17], SimpleMonomialVector{4,2}(UInt8[0; 2; 0; 0;; 0; 0; 2; 0],
                                                                              UInt8[0; 0;; 1; 0], UInt8[0; 0;; 1; 0]))
-    constraint = let c₁₂=SimplePolynomial(Complex{Int16}[8-2im, -8, -3im, 1],
-                                          SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0],
-                                                                    UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0],
-                                                                    UInt8[0; 2;; 0; 0;; 0; 0;; 1; 0]))
+    constraint = let c₁₂=SimplePolynomial(Complex{Int16}[-3im, 8-2im, -8, 1],
+                                          SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
+                                                                    UInt8[0; 0;; 0; 0;; 0; 2;; 1; 0],
+                                                                    UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0]))
         [c₁₁c c₁₂; conj(c₁₂) c₂₂c]
     end
     sostest(14 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
-    # 15 - the constraint is [5x₂²z₁+17im*x₃²z̄₁+5x₂²z̄₁-17im*x₃²z₁ (8-2im)*z̄₂²+(8+2im)z₂²
+    # 15 - the constraint is [17im*x₃²z̄₁-17im*x₃²z₁+5x₂²z̄₁+5x₂²z₁ (8-2im)*z̄₂²+(8+2im)z₂²
     #                         (8-2im)*z̄₂²+(8+2im)z₂²              6x₂x₄²]
-    c₁₁c = SimplePolynomial(Complex{Int16}[5, 17im, 5, -17im], SimpleMonomialVector{4,2}(UInt8[0; 2; 0; 0;; 0; 0; 2; 0;;
-                                                                                               0; 2; 0; 0;; 0; 0; 2; 0],
-                                                                                         UInt8[1; 0;; 0; 0;; 0; 0;; 1; 0],
-                                                                                         UInt8[0; 0;; 1; 0;; 1; 0;; 0; 0]))
+    c₁₁c = SimplePolynomial(Complex{Int16}[17im, -17im, 5, 5], SimpleMonomialVector{4,2}(UInt8[0; 0; 2; 0;; 0; 0; 2; 0;;
+                                                                                               0; 2; 0; 0;; 0; 2; 0; 0],
+                                                                                         UInt8[0; 0;; 1; 0;; 0; 0;; 1; 0],
+                                                                                         UInt8[1; 0;; 0; 0;; 1; 0;; 0; 0]))
     constraint = let c₁₂=SimplePolynomial(Complex{Int16}[8-2im, 8+2im],
                                           SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0],
                                                                     UInt8[0; 0;; 0; 2], UInt8[0; 2;; 0; 0]))
@@ -2365,18 +2380,16 @@ end
     sostest(15 + offset, SolverSetupQuadratic{false}, :add_quadratic, sos_add_matrix!, grouping, constraint)
 end
 
-# TODO: fallback quadratic -> SOS
-
-@testset "Real grouping of length 4" begin
+@testset failfast=true "Real grouping of length 4" begin
     offset = 60
     grouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 1; 0; 0;; 1; 0; 0; 2;; 0; 2; 3; 0],
                                          zeros(UInt8, 2, 4), zeros(UInt8, 2, 4))
     # the grouping is [1, x₂, x₁x₄², x₂²x₃³]
-    c₁₁ = SimplePolynomial(Complex{Int16}[3, 5, -(2+3im), -(2-3im)],
-                           SimpleMonomialVector{4,2}(UInt8[0; 1; 1; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
-                                                     UInt8[0; 0;; 1; 0;; 0; 1;; 0; 0],
-                                                     UInt8[0; 0;; 1; 0;; 0; 0;; 0; 1]))
-    # 61 - the constraint is 3x₂x₃+5z₁z̄₁-(2+3im)*z₂-(2-3im)*z̄₂
+    c₁₁ = SimplePolynomial(Complex{Int16}[-(2-3im), -(2+3im), 5, 3],
+                           SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 1; 1; 0],
+                                                     UInt8[0; 0;; 0; 1;; 1; 0;; 0; 0],
+                                                     UInt8[0; 1;; 0; 0;; 1; 0;; 0; 0]))
+    # 61 - the constraint is -(2-3im)*z̄₂-(2+3im)*z₂+5z₁z̄₁+3x₂x₃
     sostest_psd(1 + offset, false, sos_add_matrix!, grouping, c₁₁)
 
     # 62 - the constraint is [3x₂x₃+5z₁z̄₁-(2+3im)*z₂-(2-3im)*z̄₂  17x₄                     10x₁+8z₂z̄₂
@@ -2387,36 +2400,36 @@ end
                            SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 1], UInt8[0; 0;; 0; 1]))
     c₂₂ = SimplePolynomial(Complex{Int16}[], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 0), zeros(UInt8, 2, 0),
                                                                        zeros(UInt8, 2, 0)))
-    c₂₃ = SimplePolynomial(Complex{Int16}[24im, -24im],
-                           SimpleMonomialVector{4,2}(UInt8[0; 0; 1; 0;; 0; 0; 1; 0], UInt8[0; 1;; 0; 0], UInt8[0; 0;; 0; 1]))
+    c₂₃ = SimplePolynomial(Complex{Int16}[-24im, 24im],
+                           SimpleMonomialVector{4,2}(UInt8[0; 0; 1; 0;; 0; 0; 1; 0], UInt8[0; 0;; 0; 1], UInt8[0; 1;; 0; 0]))
     c₃₃ = SimplePolynomial(Complex{Int16}[6], SimpleMonomialVector{4,2}(UInt8[0; 1; 0; 1;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest_psd(2 + offset, false, sos_add_matrix!, grouping, [c₁₁ c₁₂ c₁₃; conj(c₁₂) c₂₂ c₂₃; conj(c₁₃) conj(c₂₃) c₃₃])
 
-    # 64 - the constraint is [3x₂x₃+5z₁z̄₁-(2+3im)*z₂-(2-3im)*z̄₂  (8-2im)*z̄₂²-8z₂²-6im*x₁+2z₁z̄₁  10x₁+8z₂z̄₂
-    #                         (8+2im)*z₂²-8z̄₂²+6im*x₁+2z₁z̄₁       0                             24im*x₃z₂-24im*x₃z̄₂
+    # 64 - the constraint is [3x₂x₃+5z₁z̄₁-(2+3im)*z₂-(2-3im)*z̄₂  -6im*x₁+(8-2im)*z̄₂²-8z₂²+2z₁z̄₁  10x₁+8z₂z̄₂
+    #                         6im*x₁+(8+2im)*z₂²-8z̄₂²+2z₁z̄₁       0                             24im*x₃z₂-24im*x₃z̄₂
     #                         10x₁+8z₂z̄₂                          -24im*x₃z̄₂+24im*x₃z₂           6x₂x₄]
     # Note the careful design of the constraint matrix. We use an integer value data type for our testing in order to make all
     # comparisons exact. But since the solver is expected to automatically double off-diagonals, our framework has to halve the
     # values. While this won't be an issue in the final result if all off-diagonals are themselves real-valued polynomials in
     # total, even then the intermediate calculation will require a floating point data type. However, conversion to the integer
     # will be automatically done if we choose all coefficient of monomials in off-diagonal entries to be even.
-    c₁₂ = SimplePolynomial(Complex{Int16}[8-2im, -8, -6im, 2],
-                           SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0],
-                                                     UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0],
-                                                     UInt8[0; 2;; 0; 0;; 0; 0;; 1; 0]))
+    c₁₂ = SimplePolynomial(Complex{Int16}[-6im, 8-2im, -8, 2],
+                           SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
+                                                     UInt8[0; 0;; 0; 0;; 0; 2;; 1; 0],
+                                                     UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0]))
     sostest_psd(3 + offset, true, sos_add_matrix!, grouping, [c₁₁ c₁₂ c₁₃; conj(c₁₂) c₂₂ c₂₃; conj(c₁₃) conj(c₂₃) c₃₃])
 end
 
-@testset "Complex grouping of length 4" begin
+@testset failfast=true "Complex grouping of length 4" begin
     offset = 70
     grouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 1; 0; 0;; 0; 0; 0; 2;; 0; 0; 3; 0],
                                          UInt8[0; 0;; 0; 0;; 1; 0;; 0; 2], zeros(UInt8, 2, 4))
     # the grouping is [1, x₂, z₁x₄², z₂²x₃³]
-    c₁₁ = SimplePolynomial(Complex{Int16}[4, 8, -(2+6im), -(2-6im)],
-                           SimpleMonomialVector{4,2}(UInt8[0; 1; 1; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
-                                                     UInt8[0; 0;; 1; 0;; 0; 1;; 0; 0],
-                                                     UInt8[0; 0;; 1; 0;; 0; 0;; 0; 1]))
-    # 71 - the constraint is 4x₂x₃+8z₁z̄₁-(2+6im)*z₂-(2-6im)*z̄₂
+    c₁₁ = SimplePolynomial(Complex{Int16}[-(2-6im), -(2+6im), 8, 4],
+                           SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 1; 1; 0],
+                                                     UInt8[0; 0;; 0; 1;; 1; 0;; 0; 0],
+                                                     UInt8[0; 1;; 0; 0;; 1; 0;; 0; 0]))
+    # 71 - the constraint is -(2-6im)*z̄₂-(2+6im)*z₂+8z₁z̄₁+4x₂x₃
     sostest_psd(1 + offset, true, sos_add_matrix!, grouping, c₁₁)
 
     # 72 - the constraint is [4x₂x₃+8z₁z̄₁-(2+6im)*z₂-(2-6im)*z̄₂  18x₄                     10x₁+8z₂z̄₂
@@ -2427,30 +2440,27 @@ end
                            SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 1], UInt8[0; 0;; 0; 1]))
     c₂₂ = SimplePolynomial(Complex{Int16}[], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 0), zeros(UInt8, 2, 0),
                                                                        zeros(UInt8, 2, 0)))
-    c₂₃ = SimplePolynomial(Complex{Int16}[24im, -24im],
-                           SimpleMonomialVector{4,2}(UInt8[0; 0; 1; 0;; 0; 0; 1; 0], UInt8[0; 1;; 0; 0], UInt8[0; 0;; 0; 1]))
+    c₂₃ = SimplePolynomial(Complex{Int16}[-24im, 24im],
+                           SimpleMonomialVector{4,2}(UInt8[0; 0; 1; 0;; 0; 0; 1; 0], UInt8[0; 0;; 0; 1], UInt8[0; 1;; 0; 0]))
     c₃₃ = SimplePolynomial(Complex{Int16}[6], SimpleMonomialVector{4,2}(UInt8[0; 1; 0; 1;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest_psd(2 + offset, true, sos_add_matrix!, grouping, [c₁₁ c₁₂ c₁₃; conj(c₁₂) c₂₂ c₂₃; conj(c₁₃) conj(c₂₃) c₃₃])
 
-    # 73 - the constraint is [4x₂x₃+8z₁z̄₁-(2+6im)*z₂-(2-6im)*z̄₂  (8-2im)*z̄₂²-8z₂²-6im*x₁+2z₁z̄₁  10x₁+8z₂z̄₂
-    #                         (8+2im)*z₂²-8z̄₂²+6im*x₁+2z₁z̄₁       0                             24im*x₃z₂-24im*x₃z̄₂
+    # 73 - the constraint is [4x₂x₃+8z₁z̄₁-(2+6im)*z₂-(2-6im)*z̄₂  -6im*x₁+(8-2im)*z̄₂²-8z₂²+2z₁z̄₁  10x₁+8z₂z̄₂
+    #                         6im*x₁+(8+2im)*z₂²-8z̄₂²+2z₁z̄₁       0                              24im*x₃z₂-24im*x₃z̄₂
     #                         10x₁+8z₂z̄₂                          -24im*x₃z̄₂+24im*x₃z₂           6x₂x₄]
-    c₁₂ = SimplePolynomial(Complex{Int16}[8-2im, -8, -6im, 2],
-                           SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0],
-                                                     UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0],
-                                                     UInt8[0; 2;; 0; 0;; 0; 0;; 1; 0]))
+    c₁₂ = SimplePolynomial(Complex{Int16}[-6im, 8-2im, -8, 2],
+                           SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0],
+                                                     UInt8[0; 0;; 0; 0;; 0; 2;; 1; 0],
+                                                     UInt8[0; 0;; 0; 2;; 0; 0;; 1; 0]))
     sostest_psd(3 + offset, true, sos_add_matrix!, grouping, [c₁₁ c₁₂ c₁₃; conj(c₁₂) c₂₂ c₂₃; conj(c₁₃) conj(c₂₃) c₃₃])
 end
 
-@testset "Equality constraints (elementary)" begin
+@testset failfast=true "Equality constraints (elementary)" begin
     # these are basic tests, we don't check special cases
     offset = 80
-    realgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 2; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 0],
-        UInt8[0; 0;; 0; 0;; 0; 0])
-    mixedgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 1; 0],
-        UInt8[0; 0;; 1; 0;; 1; 0])
-    altgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 1],
-        UInt8[0; 0;; 0; 1;; 0; 1])
+    realgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0], UInt8[0; 0;; 0; 0], UInt8[0; 0;; 0; 0])
+    mixedgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 1; 0], UInt8[0; 0;; 0; 0])
+    altgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 1], UInt8[0; 0;; 0; 0])
 
     constraint = SimplePolynomial(Int16[5], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest(1 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, realgrouping, constraint)
@@ -2471,26 +2481,25 @@ end
 
 @testset failfast=true "Equality constraints ($text)" for (grouping, text, offset) in (
     (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]), "1-basis", 90),
-    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 2; 0; 0;; 2; 0; 0; 0;; 1; 2; 0; 0;; 0; 4; 0; 0],
-        zeros(UInt8, 2, 6), zeros(UInt8, 2, 6)), "real basis", 100),
-    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 2; 0; 0; 0;; 0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0],
-        UInt8[0; 0;; 0; 0;; 0; 0;; 0; 0;; 0; 0;; 0; 2],
-        UInt8[0; 0;; 0; 0;; 0; 0;; 0; 2;; 0; 2;; 0; 2]), "complex basis", 110)
+    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 2; 0; 0], UInt8[0; 0;; 0; 0;; 0; 0],
+        UInt8[0; 0;; 0; 0;; 0; 0]), "real basis", 100),
+    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 2],
+        UInt8[0; 0;; 0; 0;; 0; 0]), "complex basis", 110)
 )
     constraint = SimplePolynomial(Int16[6], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest(1 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, grouping, constraint)
 
-    constraint = SimplePolynomial(Complex{Int16}[6+4im, 6-4im], SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0],
-        UInt8[1; 0;; 0; 0], UInt8[0; 0;; 1; 0]))
+    constraint = SimplePolynomial(Complex{Int16}[6-4im, 6+4im], SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0],
+        UInt8[0; 0;; 1; 0], UInt8[1; 0;; 0; 0]))
     sostest(2 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, grouping, constraint)
 
     constraint = SimplePolynomial(Complex{Int16}[6+4im], SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;;], UInt8[1; 0;;],
         UInt8[0; 0;;]))
     sostest(3 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, grouping, constraint)
 
-    constraint = SimplePolynomial(Complex{Int16}[6+4im, 8, 2im],
-        SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 1; 0], UInt8[1; 0;; 0; 0;; 0; 0],
-            UInt8[0; 0;; 1; 0;; 0; 0]))
+    constraint = SimplePolynomial(Complex{Int16}[8, 6+4im, 2im],
+        SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 1; 0], UInt8[0; 0;; 1; 0;; 0; 0],
+            UInt8[1; 0;; 0; 0;; 0; 0]))
     sostest(4 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, grouping, constraint)
 
     constraint = SimplePolynomial(Int16[-10, -2, 8, -2], SimpleMonomialVector{4,2}(zeros(UInt8, 4, 4),

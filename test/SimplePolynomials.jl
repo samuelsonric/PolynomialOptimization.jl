@@ -30,7 +30,7 @@ include("$testdir/utils.jl")
         alloc_test(() -> convert(typeof(x), x), 0)
         @test convert(variable_union_type(x), x) === x
         alloc_test(() -> convert(variable_union_type(x), x), 0)
-        z = SimpleComplexVariable{0,typemax(t)}(i)
+        z = SimpleComplexVariable{0,typemax(t)>>1}(i)
         @test z.index === t(i)
         @test convert(typeof(z), z) === z
         alloc_test(() -> convert(typeof(z), z), 0)
