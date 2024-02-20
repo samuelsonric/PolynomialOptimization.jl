@@ -126,7 +126,7 @@ function preproc_randomized(V, coeffs, verbose; parameters...)
 end
 
 function preproc(V, objective::P; verbose::Bool=false, zero::AbstractVector{P}, nonneg::AbstractVector{P},
-    psd::AbstractVector{<:AbstractMatrix{P}}, degree::Int, preprocess::Union{Nothing,Bool}=nothing,
+    psd::AbstractVector{<:AbstractMatrix{P}}, groupings::RelaxationGroupings, preprocess::Union{Nothing,Bool}=nothing,
     preprocess_quick::Bool=true, preprocess_randomized::Bool=false, preprocess_fine::Bool=false,
     warn_disable_randomization::Bool=true, parameters...) where {P<:SimpleRealPolynomial}
     if !isnothing(preprocess)
@@ -138,8 +138,7 @@ function preproc(V, objective::P; verbose::Bool=false, zero::AbstractVector{P}, 
     nc = length(objective)
     if !isempty(zero) || !isempty(nonneg) || !isempty(psd)
         coeffs = merge_constraints(
-            degree, SimplePolynomials.smallest_unsigned(monomial_count(2degree, nv)), objective, zero, nonneg, psd,
-            monomials(objective).exponents_real isa DenseMatrix, verbose
+            objective, zero, nonneg, psd, groupings, Val(monomials(objective).exponents_real isa DenseMatrix), verbose
         )
     else
         # shortcut, no need to temporarily go to the index-based version. Just copy the coefficient matrix (as preprocessing

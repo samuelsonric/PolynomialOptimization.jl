@@ -223,7 +223,7 @@ end
     @test_throws ArgumentError SimpleMonomial{1,2}([1], [1, 2], [0])
     @test_throws ArgumentError SimpleMonomial{1,2}([1], [0], [1, 2])
 
-    @test nvariables(SimpleMonomialVector{3,4}([2 0; 0 0; 1 1], [2 0; 0 1; 0 0; 0 1], [0 0; 0 0; 0 1; 0 0])) == 11
+    @test nvariables(SimpleMonomialVector{3,4}([0 2; 0 0; 1 1], [0 2; 1 0; 0 0; 1 0], [0 0; 0 0; 1 0; 0 0])) == 11
 
     @test nterms(SimpleMonomial{1,1}([3], [2], [0])) == 1
 
@@ -367,11 +367,11 @@ end
     @test effective_nvariables(monomials(2, 3, 0:2)) == 8
     @test effective_nvariables(monomials(2, 3, 0:1), monomials(2, 3, 0:2, representation=:sparse)) == 8
     @test effective_nvariables(monomials(2, 3, 0:0)) == 0
-    @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0])) == 1
+    @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 0 0])) == 1
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 2; 0 0])) == 1
-    @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 1 0])) == 2
-    @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0]), SimpleMonomialVector{2,0}([1 0; 0 0])) == 1
-    @test effective_nvariables(SimpleMonomialVector{2,0}([1 0; 0 0]), SimpleMonomialVector{2,0}([1 0; 1 0])) == 2
+    @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 1 0])) == 2
+    @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 0 0]), SimpleMonomialVector{2,0}([0 1; 0 0])) == 1
+    @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 0 0]), SimpleMonomialVector{2,0}([0 1; 0 1])) == 2
 end
 @testset "Polynomial" begin
     # polynomial is just a very thin wrapper, and its main importance is in converting other MP polynomials to SimplePolynomial
@@ -483,9 +483,9 @@ end
         for mindeg in 0x0:0x4, maxdeg in 0x0:0x4, minmultideg in multiit, maxmultideg in multiit
             minm, maxm = collect(minmultideg), collect(maxmultideg)
             if mindeg > maxdeg || any(minmultideg .> maxmultideg)
-                @test_throws ArgumentError MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+                @test_throws ArgumentError MonomialIterator(mindeg, maxdeg, minm, maxm)
             else
-                mi = MonomialIterator{Graded{LexOrder}}(mindeg, maxdeg, minm, maxm)
+                mi = MonomialIterator(mindeg, maxdeg, minm, maxm)
                 exp = exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ exponents(m) .≤ maxm)))
                 @test collect(mi) == exp
                 @test length(mi) == length(exp)
@@ -500,7 +500,7 @@ end
                 @test !exponents_from_index!(powers, mi, length(mi) +1)
             end
         end
-        mi = MonomialIterator{Graded{LexOrder}}(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], true)
+        mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], true)
         @test_throws ArgumentError exponents_from_index!(Vector{UInt8}(undef, 4), mi, 1)
         powers = Vector{UInt8}(undef, 3)
         for (i, mipow) in enumerate(mi)
@@ -511,7 +511,7 @@ end
 
     @testset "Ranged monomial iterator, LazyMonomials" begin
         mons = monomials(3, 0, 2:5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3])
-        lm = LazyMonomials(3, 0, 2:5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3])
+        lm = LazyMonomials{3,0}(0x2:0x5, minmultideg=UInt8[1, 0, 2], maxmultideg=UInt8[7, 4, 3])
         @test mons == lm
         @test mons[3:7] == lm[3:7]
         @test mons[3:7] == @view(lm[3:7])

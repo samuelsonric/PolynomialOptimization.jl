@@ -541,14 +541,13 @@ function nzlength(iter, nreal::Integer, ncomplex::Integer, quick_exit::Union{Not
 end
 
 """
-    monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI},
-        order=Graded{LexOrder}; minmultideg=nothing, maxmultideg=nothing,
-        representation=:auto, filter=powers -> true) where {DI}
+    monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI};
+        minmultideg=nothing, maxmultideg=nothing, representation=:auto,
+        filter=powers -> true) where {DI}
 
 Returns a [`SimpleMonomialVector`](@ref) with `nreal` real and `ncomplex` complex variables, total degrees contained in
-`degree`, ordered by `order` (which currently is a dummy argument, as only `Graded{LexOrder}` is supported) and individual
-variable degrees varying between `minmultideg` and `maxmultideg` (where real variables come first, then complex variables, then
-their conjugates).
+`degree`, ordered according to `Graded{LexOrder}` and individual variable degrees varying between `minmultideg` and
+`maxmultideg` (where real variables come first, then complex variables, then their conjugates).
 The representation is either `:dense` or `:sparse`; if `:auto` is selected, the method will estimate (rather accurately) which
 representation requires more memory and choose an appropriate one.
 The maximal exponent of the return type is chosen as the smallest unsigned integer that can still hold the largest degree
@@ -559,8 +558,7 @@ filter into account.
 This method internally relies on [`MonomialIterator`](@ref). The `minmultideg` and `maxmultideg` parameters will automatically
 be converted to `Vector{DI}` instances.
 """
-function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
-    degree::AbstractUnitRange{DI}, order=Graded{LexOrder};
+function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI};
     minmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
     maxmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
     representation::Symbol=:auto, filter=powers -> true) where {DI<:Integer}
@@ -581,7 +579,7 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
     elseif !(maxmultideg isa Vector{DI})
         maxmultideg = DI.(collect(maxmultideg))
     end
-    iter = MonomialIterator{order}(first(degree), last(degree), minmultideg, maxmultideg, true)
+    iter = MonomialIterator(first(degree), last(degree), minmultideg, maxmultideg, true)
     len = length(iter)
     # How to decide whether dense or sparse representation is better?
     # We take the laborious approach of counting the nonzeros in every monomial beforehand. This is costly - we need to iterate
@@ -717,13 +715,13 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
 end
 
 const _LazyMonomialsView{P} = SubArray{P,1,Vector{P},Tuple{UnitRange{Int}},true}
-struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P},E} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
+struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
     iter::MI
     index_data::E
 
     @doc """
-        LazyMonomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI},
-            order=Graded{LexOrder}; minmultideg=nothing, maxmultideg=nothing, copy=true)
+        LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P}; minmultideg=nothing,
+            maxmultideg=nothing, copy=true)
 
 Constructs a memory-efficient vector of monomials that contains the same data as given by [`monomials`](@ref) (with dense
 representation and no filter allowed). The monomials will be constructed on-demand and only a small precomputation is done to
@@ -732,47 +730,47 @@ If the monomials are only accessed one-at-a-time and never referenced when anoth
 `false`. Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the monomial is
 changed.
     """
-    function LazyMonomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI}, order=Graded{LexOrder};
-        minmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
-        maxmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing, copy::Bool=true) where {DI<:Integer}
-        P = smallest_unsigned(last(degree))
-        mindeg = P(first(degree))
-        maxdeg = P(last(degree))
-        n = nreal + 2ncomplex
+    function LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P};
+        minmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing,
+        maxmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing, copy::Bool=true) where {Nr,Nc,P<:Integer}
+        Pu = Unsigned(P)
+        mindeg = Pu(first(degree))
+        maxdeg = Pu(last(degree))
+        n = Nr + 2Nc
         if isnothing(minmultideg)
-            minmultideg = fill(zero(P), n)
+            minmultideg = fill(zero(Pu), n)
         elseif length(minmultideg) != n
             throw(DimensionMismatch("minmultideg has length $(length(minmultideg)), expected $n"))
-        elseif !(minmultideg isa Vector{P})
-            minmultideg = P.(min.(collect(minmultideg), maxdeg))
+        elseif !(minmultideg isa Vector{Pu})
+            minmultideg = Pu.(min.(collect(minmultideg), maxdeg))
         end
         if isnothing(maxmultideg)
             maxmultideg = fill(maxdeg, n)
         elseif length(maxmultideg) != n
             throw(DimensionMismatch("maxmultideg has length $(length(maxmultideg)), expected $n"))
-        elseif !(maxmultideg isa Vector{P})
-            maxmultideg = P.(min.(collect(maxmultideg), maxdeg))
+        elseif !(maxmultideg isa Vector{Pu})
+            maxmultideg = Pu.(min.(collect(maxmultideg), maxdeg))
         end
-        iter = MonomialIterator{order}(mindeg, maxdeg, minmultideg, maxmultideg, !copy)
+        iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, !copy)
         index_data = exponents_from_index_prepare(iter)
-        new{nreal,ncomplex,P,typeof(iter),typeof(index_data)}(iter, index_data)
+        new{Nr,Nc,Pu,typeof(iter),typeof(index_data)}(iter, index_data)
     end
 
-    LazyMonomials{Nr,Nc,P,MI,E}(iter::MI, index_data::E) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P},E} =
+    LazyMonomials{Nr,Nc,P,MI,E}(iter::MI, index_data::E) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E} =
         new{Nr,Nc,P,MI,E}(iter, index_data)
 end
 
 # while we could always call length(lm.iter), index_data already contains our relevant pre-calculations
-Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:AbstractMonomialIterator{<:Any,<:Any,P},Nothing} where {P<:Unsigned}) = 0
-function Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,<:Any,P},Val{1}} where {P<:Unsigned})
+Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:AbstractMonomialIterator{<:Any,P},Nothing} where {P<:Unsigned}) = 0
+function Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P},Val{1}} where {P<:Unsigned})
     iter = lm.iter
     @inbounds return min(iter.maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1]) +1
 end
-Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,<:Any,P},Matrix{Int}}) where {P<:Unsigned} =
+Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P},Matrix{Int}}) where {P<:Unsigned} =
     @inbounds sum(@view(lm.index_data[lm.iter.mindeg+1:end, 1]), init=0)
 Base.length(lm::LazyMonomials) = length(lm.iter) # fallback for RangedMonomialIterator, which already has it precomputed
 Base.size(lm::LazyMonomials) = (length(lm),)
-@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{<:Any,V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
+@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
     @boundscheck checkbounds(lm, i)
     powers = V === Nothing ? Vector{P}(undef, Nr + 2Nc) : lm.iter.powers
     result = @inbounds exponents_from_index!(powers, lm.iter, lm.index_data, i)
@@ -796,14 +794,17 @@ function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsig
     ), result[2]
 end
 @inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,MI,E}, range::AbstractUnitRange) where
-    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P},E}
+    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=true)
     return LazyMonomials{Nr,Nc,P,typeof(iter),E}(iter, lm.index_data)
 end
 @inline function Base.view(lm::LazyMonomials{Nr,Nc,P,MI,E}, range::AbstractUnitRange) where
-    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,<:Any,P},E}
+    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=false)
     return LazyMonomials{Nr,Nc,P,typeof(iter),E}(iter, lm.index_data)
 end
+MultivariatePolynomials.mindegree(lm::LazyMonomials) = mindegree(lm.iter)
+MultivariatePolynomials.maxdegree(lm::LazyMonomials) = maxdegree(lm.iter)
+MultivariatePolynomials.extdegree(lm::LazyMonomials) = extdegree(lm.iter)

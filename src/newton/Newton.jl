@@ -2,11 +2,15 @@ module Newton
 
 using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
 import BufferedStreams
-using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, moniter_state
-using PolynomialOptimization:  @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy, keepcol!,
-    FastKey
+using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, smallest_unsigned
+using PolynomialOptimization: @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy,
+    keepcol!, FastKey, RelaxationGroupings
 
 export halfpolytope, halfpolytope_from_file
+
+_effective_nvars(::SimplePolynomial{<:Any,Nr,0}) where {Nr} = Nr
+_effective_nvars(::SimplePolynomial{<:Any,0,Nc}) where {Nc} = Nc
+_effective_nvars(::SimplePolynomial) = error("Mixing real- and complex-valued variables prevents Newton polytope methods")
 
 """
     halfpolytope(method, poly; verbose=false, preprocess_quick=true,
@@ -78,7 +82,14 @@ See also [`halfpolytope_from_file`](@ref).
 halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...) =
     halfpolytope(Val(method), poly, Val(haveMPI[]); kwargs...)
 function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
-    out = halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)
+    obj = SimplePolynomial(poly)
+    P = typeof(obj)
+    mhd = maxhalfdegree(obj)
+    T = smallest_unsigned(2mhd)
+    mons = LazyMonomials{_effective_nvars(obj),0}(zero(T):T(mhd))
+    MV = typeof(mons)
+    out = halfpolytope(method, obj; verbose, zero=P[], nonneg=P[], psd=Matrix{P}[],
+        groupings=RelaxationGroupings([mons], MV[], Vector{MV}[], Vector{MV}[], []), kwargs...)
     if out isa SimpleMonomialVector
         conv_time = @elapsed begin
             real_vars = variable_union_type(poly)[]
@@ -105,16 +116,16 @@ halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     halfpolytope(default_newton_method(), objective; kwargs...)
 
 function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepath::Union{<:AbstractString,Nothing}=nothing,
-    zero::AbstractVector{P}=P[], nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[],
-    degree::Int=maxhalfdegree(objective), kwargs...) where {P<:SimpleRealPolynomial}
-    parameters, coeffs = preproc(V, objective; verbose, zero, nonneg, psd, degree, kwargs...)
+    zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}},
+    groupings::RelaxationGroupings, kwargs...) where {P<:SimpleRealPolynomial}
+    parameters, coeffs = preproc(V, objective; verbose, zero, nonneg, psd, groupings, kwargs...)
     newton_time = @elapsed candidates = let
         analysis = analyze(coeffs)
         # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
         # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
         # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
         # variables - this is commuting only.
-        iter = MonomialIterator{Graded{LexOrder}}(analysis..., true)
+        iter = MonomialIterator(analysis..., true)
         num = length(iter)
         @verbose_info("Starting point selection among ", num, " possible monomials")
         nthreads, task, secondtask = prepare(V, coeffs, num, verbose; parameters...)
@@ -149,7 +160,7 @@ function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false,
             @verbose_info("Complex-valued Newton polytope: merging constraints")
             exps = merge_constraints(
                 degree, SimplePolynomials.smallest_unsigned(monomial_count(2degree, nv)), objective, zero, nonneg, psd,
-                monomials(objective).exponents_real isa DenseMatrix, verbose
+                Val(monomials(objective).exponents_real isa DenseMatrix), verbose
             )
         end
     end

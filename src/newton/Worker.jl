@@ -108,17 +108,6 @@ function execute(V, nv, verbose, iter, num, task, filepath)
         work(V, task, alloc_global(V, nv), alloc_local(V, nv), iter, progress, acceptance,
             @capture(p -> append!($candidates, p)), cb)
         verbose && print("\33[2K")
-        # How about the order of monomials? Currently, the monomial order can be defined to be arbitrary, but monomials
-        # in DynamicPolynomials always outputs Graded{LexOrder}. Therefore, it is currently not possible to use
-        # different ordering in DP, and this translates to PolynomialOptimization, unless the user chooses to generate
-        # the monomials manually.
-        # Here, we can relatively easily make the basis compliant with the specified monomial ordering just by doing a
-        # sorting as a postprocessing. Of course, this is not efficient and it would be much better to create functions
-        # that directly generate the appropriate order, but let's defer this at least until #138 in DP is solved, for
-        # other monomial orderings won't be in widespread use before this anyway.
-
-        # sort!(candidates, lt=(a, b) -> compare(a, b, monomial_ordering(P)) < 0)
-        # TODO: There is no monomial_ordering, so we cannot even do this
         if !isnothing(filestuff)
             write(fileout, candidates)
             seekstart(fileprogress)
@@ -201,8 +190,8 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
     try
         # To avoid naming confusion with Mosek's Task, we call the parallel Julia tasks threads.
         threads = Vector{Union{Task,Nothing}}(undef, nthreads)
-        # We can already start all the tasks; this main task that must still feed the data will continue running until we
-        # yield to the scheduler.
+        # We can already start all the tasks; this main task that must still feed the data will continue running until we yield
+        # to the scheduler.
         @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(clonetask, Iterators.repeated(task))),
                                                         ((2, secondtask), (1, task))))
             iter = iterators[tid]
@@ -217,8 +206,8 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
                 filestuff = (fileprogresses[tid], fileouts[tid])
             end
             # secondtask has a solution, so we just use task (better than deletesolution).
-            # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in
-            # parallel, even if we make sure not to modify the base task until all copies are done.
+            # We must create the copy in the main thread; Mosek will crash occasionally if the copies are created in parallel,
+            # even if we make sure not to modify the base task until all copies are done.
             threads[tid] = Threads.@spawn execute_taskfun($V, $tid, $taskₜ, $iter, $nv, $data_global, $cond, $threadprogress,
                 $threadacceptance, $candidates, $verbose, $filestuff)
         end
@@ -232,8 +221,9 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
         ccall(:jl_exit_threaded_region, Cvoid, ())
     end
     @verbose_info("\33[2KAll tasks have finished, sorting the output")
-    # We need to return the deglex monomial order, but due to the partitioning and multithreading, our output
-    # is unordered (not completely, we have ordered of varying length, but does this help?).
+    # We need to return the deglex monomial order, but due to the partitioning and multithreading, our output is unordered (not
+    # completely, we have ordered slices of varying length, but does this help?).
+    # TODO: Maybe defer appending to the main thread, then we can already do it in the correct order...
     if isnothing(filepath)
         return SimpleMonomialVector{nv,0}(sortslices(reshape(finish!(candidates), nv, length(candidates)÷nv), dims=2,
             lt=isless_degree))
