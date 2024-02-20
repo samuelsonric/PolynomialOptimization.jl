@@ -113,14 +113,14 @@ MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc
                                                           m.exponents_conj[v.index-Nr-Nc])
 
 # These do not correspond to how they are defined in MP. But this definition makes more sense (and is what is needed).
-MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial) =
+MultivariatePolynomials.degree_complex(m::SimpleMonomial) =
     Int(sum(m.exponents_real, init=0) + max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
-MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
+MultivariatePolynomials.degree_complex(m::SimpleMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
     @inbounds v.index ≤ Nr ? m.exponents_real[v.index] :
         (v.index ≤ Nr + Nc ? max(m.exponents_complex[v.index-Nr], m.exponents_conj[v.index-Nr]) :
                              max(m.exponents_complex[v.index-Nr-Nc], m.exponents_conj[v.index-Nr-Nc]))
 
-MultivariatePolynomials.halfdegree(m::SimpleDenseMonomial) = Int(div(sum(m.exponents_real, init=0), 2, RoundUp) +
+MultivariatePolynomials.halfdegree(m::SimpleMonomial) = Int(div(sum(m.exponents_real, init=0), 2, RoundUp) +
     max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
 
 #region exponents iterator

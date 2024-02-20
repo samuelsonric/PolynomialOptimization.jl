@@ -349,14 +349,14 @@ for (fun, call, def, realfn) in [
         function MultivariatePolynomials.$fun(x::SimpleComplexMonomialVector)
             isempty(x) && return $def
             return $call(
-                args -> max(sum(args[1], init=0), sum(args[2], init=0)),
+                args -> Int(max(sum(args[1], init=0), sum(args[2], init=0))),
                 zip(eachcol(x.exponents_complex), eachcol(x.exponents_conj))
             )
         end
         function MultivariatePolynomials.$fun(x::SimpleMonomialVector)
             isempty(x) && return $def
             return $call(
-                args -> $(realfn(:(sum(args[1], init=0)))) + max(sum(args[2], init=0), sum(args[3], init=0)),
+                args -> Int($(realfn(:(sum(args[1], init=0)))) + max(sum(args[2], init=0), sum(args[3], init=0))),
                 zip(eachcol(x.exponents_real), eachcol(x.exponents_complex), eachcol(x.exponents_conj))
             )
         end
