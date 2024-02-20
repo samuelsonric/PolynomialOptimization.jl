@@ -14,6 +14,16 @@ export Newton
 
 const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
+const debugging = true
+
+if debugging
+    macro assert(args...)
+        :(Base.@assert($(esc.(args)...)))
+    end
+else
+    macro assert(args...)
+    end
+end
 
 macro myinbounds(expr)
     esc(expr)

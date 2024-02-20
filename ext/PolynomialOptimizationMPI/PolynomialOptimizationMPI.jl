@@ -2,7 +2,7 @@ module PolynomialOptimizationMPI
 
 using MultivariatePolynomials, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.FastVector, Printf
 import MPI, Random
-import PolynomialOptimization: @verbose_info, @capture, haveMPI
+import PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI
 import PolynomialOptimization.Newton: execute_taskfun, execute, verbose_worker, halfpolytope
 using PolynomialOptimization.Newton: preproc, analyze, prepare, alloc_global, alloc_local, clonetask, work, step_callback,
     isless_degree
