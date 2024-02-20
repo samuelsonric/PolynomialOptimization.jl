@@ -595,7 +595,7 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, de
             representation = :sparse
             nz_real, nz_complex, nz_conj = nzl
         end
-    else
+    elseif representation === :sparse
         nz_real, nz_complex, nz_conj = nzlength(iter, nreal, ncomplex, nothing)
     end
     P = smallest_unsigned(last(degree))
