@@ -24,13 +24,66 @@ Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
-struct RelaxationGroupings{MV,V}
+struct RelaxationGroupings{Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc},
+                           MV<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}),MVZ,MVN,MVP}
+    # all MV, MVZ, MVN, MVP are (AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}); but due to Julia issue #53371, we don't
+    # make this explicit
     obj::Vector{MV}
-    zero::Vector{Vector{MV}}
-    nonneg::Vector{Vector{MV}}
-    psd::Vector{Vector{MV}}
-    var_cliques::Vector{V}
+    zeros::Vector{Vector{MVZ}}
+    nonnegs::Vector{Vector{MVN}}
+    psds::Vector{Vector{MVP}}
+    var_cliques::Vector{Vector{V}}
 end
+
+SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:Any,P}}) where {P<:Unsigned} = P
+function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGroupings{Nr,Nc,P,V}) where
+    {Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc}}
+    (length(a.zeros) == length(b.zeros) && length(a.nonnegs) == length(b.nonnegs) && length(a.psds) == length(b.psds)) ||
+        error("Cannot intersect two relaxation groupings for different optimization problems")
+    # TODO: move from Iterators.product to something that is indexable, so that every loop can be parallelized
+    newobj = Vector{Base.promote_op(intersect, eltype(a.obj), eltype(b.obj))}(undef, length(a.obj) * length(b.obj))
+    for (i, (obj_a, obj_b)) in enumerate(Iterators.product(a.obj, b.obj))
+        @inbounds newobj[i] = intersect(obj_a, obj_b)
+    end
+    newobj = unique!(sort!(newobj))
+
+    newzeros = Vector{Base.promote_op(intersect, eltype(a.zeros), eltype(b.zeros))}(undef, length(a.zeros))
+    for (i, (zero_a, zero_b)) in enumerate(zip(a.zeros, b.zeros))
+        @inbounds newzeros[i] = intersect(zero_a, zero_b)
+    end
+
+    newnonnegs = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.nonnegs)), eltype(eltype(b.nonnegs)))}}(
+        undef, length(a.nonnegs)
+    )
+    Threads.@threads for k in 1:length(a.nonnegs)
+        @inbounds nonnegs_a, nonnegs_b = a.nonnegs[k], b.nonnegs[k]
+        newnonneg = Vector{MV}(undef, length(nonnegs_a) * length(nonnegs_b))
+        for (i, (nonneg_a, nonneg_b)) in enumerate(Iterators.product(nonnegs_a, nonnegs_b))
+            @inbounds newnonneg[i] = intersect(nonneg_a, nonneg_b)
+        end
+        @inbounds newnonnegs[k] = unique!(sort!(newnonneg))
+    end
+
+    newpsds = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.psds)), eltype(eltype(b.psds)))}}(undef, length(a.psds))
+    Threads.@threads for k in 1:length(a.psds)
+        @inbounds psds_a, psds_b = a.psds[k], b.psds[k]
+        newpsd = FastVec{MV}(buffer=length(psds_a) * length(psds_b))
+        for (i, (psd_a, psd_b)) in enumerate(Iterators.product(psds_a, psds_b))
+            @inbounds newpsd[i] = intersect(psd_a, psd_b)
+        end
+        @inbounds newpsds[k] = unique!(sort!(newpsd))
+    end
+
+    newcliques = Vector{Vector{V}}(undef, length(a.var_cliques) * length(b.var_cliques))
+    for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
+        @inbounds newcliques[i] = intersect(clique_a, clique_b)
+    end
+    newcliques = unique!(sort!(newcliques))
+
+    return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, newcliques)
+end
+Base.intersect(a::RelaxationGroupings, ::Nothing) = a
+Base.intersect(::Nothing, b::RelaxationGroupings) = b
 
 """
     poly_problem(relaxation::AbstractPORelaxation)
@@ -48,12 +101,13 @@ relevant for the given clique must be returned.
 function basis end
 
 """
-    groupings(state::AbstractPORelaxation) -> RelaxationGroupings
+    groupings(relaxation::AbstractPORelaxation) -> RelaxationGroupings
 
 Analyze the current state and return the bases and cliques as indicated by its relaxation in a [`RelaxationGroupings`](@ref)
 struct.
 """
-function groupings end
+groupings(relaxation::AbstractPORelaxation) = relaxation.groupings
+groupings(::Nothing) = nothing
 
 """
     iterate!(state::AbstractPORelaxation; objective=true, zero=true, nonneg=true, psd=true)
@@ -67,10 +121,22 @@ associated to other elements will not change as well to keep consistency; but th
 The parameters `nonneg` and `psd` may either be `true` (to iterate all those constraints) or a set of integers that refer to
 the indices of the constraints, as they were originally given to [`poly_problem`](@ref).
 """
-function iterate! end
+iterate!(::AbstractPORelaxation; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
+    nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true, psd::Union{Bool,<:AbstractSet{<:Integer}}=true) = nothing
 
-# internal function
-function supports end
+"""
+    RelaxationXXX(problem::POProblem[, degree]; kwargs...)
+
+This is a convenience wrapper for `RelaxationXXX(RelaxationDense(problem, degree))` that works for any
+[`AbstractPORelaxation`](@ref) `RelaxationXXX`.
+`degree` is the degree of the Lasserre relaxation, which must be larger or equal to the halfdegree of all polynomials that are
+involved. If `degree` is omitted, the minimum required degree will be used.
+Specifying a degree larger than the minimal only makes sense if there are inequality or PSD constraints present, else it
+needlessly complicates calculations without any benefit.
+
+The keyword arguments will be passed on to the constructor of `RelaxationXXX`.
+"""
+(r::Type{<:AbstractPORelaxation})(problem::POProblem, args...; kwargs...) = r(RelaxationDense(problem, args...); kwargs...)
 
 function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
     groups = groupings(x)
@@ -82,15 +148,15 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
         print(io, "\n  ", join(va, ", "))
     end
     bs = StatsBase.countmap(length.(groups.obj))
-    for constrs in (groups.nonneg, groups.psd)
+    for constrs in (groups.nonnegs, groups.psds)
         for constr in constrs
             mergewith!(+, bs, StatsBase.countmap(length.(constr)))
         end
     end
     print(io, "\nPSD block sizes:\n  ", sort!(collect(bs), rev=true))
-    if !isempty(groups.zero)
+    if !isempty(groups.zeros)
         empty!(bs)
-        for constr in groups.zero
+        for constr in groups.zeros
             mergewith!(+, bs, StatsBase.countmap(length.(constr)))
         end
         print(io, "\nFree block sizes:\n  ", sort!(collect(bs), rev=true))
@@ -113,9 +179,16 @@ Returns the degree associated with a polynomial optimization problem.
 
 See also [`poly_problem`](@ref).
 """
-MultivariatePolynomials.degree(relaxation::AbstractPORelaxation) = maxdegree_complex(basis(relaxation))
+function MultivariatePolynomials.degree(relaxation::AbstractPORelaxation)
+    gr = groupings(relaxation)
+    subdegree = v -> maximum(maxdegree_complex, v)
+    return max(
+        maximum(maxdegree_complex, gr.obj),
+        maximum(maxhalfdegree, gr.zeros, init=0),
+        maximum(subdegree, gr.nonnegs, init=0),
+        maximum(subdegree, gr.psds, init=0)
+    )
+end
 Base.isreal(relaxation::AbstractPORelaxation) = isreal(relaxation.problem)
 
-include("./basis/Basis.jl")
-include("./basis/Dense.jl")
-include("./basis/Custom.jl")
+include("./degree/Degree.jl")

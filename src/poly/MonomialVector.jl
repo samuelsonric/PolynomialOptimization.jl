@@ -1,4 +1,4 @@
-export SimpleMonomialVector, effective_nvariables, LazyMonomials
+export SimpleMonomialVector, effective_nvariables, LazyMonomials, lazy_unalias
 
 # in the matrix, the rows correspond to the exponents and the cols to the monomials
 struct SimpleMonomialVector{Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P},Mr<:XorA{M},Mc<:XorA{M}} <: AbstractVector{SimpleMonomial{Nr,Nc,P}}
@@ -808,3 +808,320 @@ end
 MultivariatePolynomials.mindegree(lm::LazyMonomials) = mindegree(lm.iter)
 MultivariatePolynomials.maxdegree(lm::LazyMonomials) = maxdegree(lm.iter)
 MultivariatePolynomials.extdegree(lm::LazyMonomials) = extdegree(lm.iter)
+
+"""
+    lazy_unalias(lm::AbstractVector)
+
+Makes sure that for a vector of SimpleMonomials, the results of lm[i] and unalias(lm)[j] are distinct whenever the elements
+are. This is intended to be used for [`LazyMonomials`](@ref), where by setting `copy=true` extracting any monomial will always
+write to the same memory location. `unalias` will then produce a second iterator, identical in all respects except for the
+memory location. For all other types of vectors, `unalias` is an identity.
+"""
+lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:MonomialIterator{<:Any,P},E} =
+    LazyMonomials{Nr,Nc,P,MI,E}(MonomialIterator(lm.iter), lm.index_data)
+lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:RangedMonomialIterator{<:Any,P},E} =
+    LazyMonomials{Nr,Nc,P,MI,E}(RangedMonomialIterator(lm.iter), lm.index_data)
+lazy_unalias(v::AbstractVector) = v
+
+function Base.intersect(a::MV, b::MV) where {Nr,Nc,P<:Unsigned,MV<:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}
+    minlen = min(length(a), length(b))
+    exponents_real = iszero(Nr) ? absent : resizable_array(P, Nr, minlen)
+    exponents_complex = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    exponents_conj = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    iszero(minlen) && return SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(exponents_real, exponents_complex, exponents_conj)
+    i = 1
+    rem_i = length(a)
+    j = 1
+    rem_j = length(b)
+    k = 1
+    @inbounds while true
+        if a[i] == b[j]
+            iszero(Nr) || copyto!(@view(exponents_real[:, k]), @view(a.exponents_real[:, i]))
+            if !iszero(Nc)
+                copyto!(@view(exponents_complex[:, k]), @view(a.exponents_complex[:, i]))
+                copyto!(@view(exponents_conj[:, k]), @view(a.exponents_conj[:, i]))
+            end
+            i += 1
+            iszero(rem_i -= 1) && break
+            j += 1
+            iszero(rem_j -= 1) && break
+            k += 1
+        elseif a[i] < b[j]
+            i += 1
+            iszero(rem_i -= 1) && break
+        else
+            j += 1
+            iszero(rem_j -= 1) && break
+        end
+    end
+    del = minlen - k +1
+    return SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(
+        matrix_delete_end!(exponents_real, del),
+        matrix_delete_end!(exponents_complex, del),
+        matrix_delete_end!(exponents_conj, del)
+    )
+end
+
+function Base.intersect(a::MV, b::MV) where {Nr,Nc,P<:Unsigned,MV<:SimpleSparseMonomialVectorOrView{Nr,Nc,P}}
+    minlen = min(length(a), length(b))
+    if !iszero(Nr)
+        Ti = SparseArrays.indtype(a.exponents_real)
+        nz_real = min(length(rowvals(a.exponents_real)), length(rowvals(b.exponents_real)))
+        colptr_real = FastVec{Ti}(buffer=minlen +1)
+        rowval_real = FastVec{Ti}(buffer=nz_real)
+        nzval_real = FastVec{P}(buffer=nz_real)
+    end
+    if !iszero(Nc)
+        Ti = SparseArrays.indtype(a.exponents_complex) # won't change anything if !iszero(nreal)
+        nz_complex = min(length(rowvals(a.exponents_complex)), length(rowvals(b.exponents_complex)))
+        nz_conj = min(length(rowvals(a.exponents_conj)), length(rowvals(b.exponents_conj)))
+        colptr_complex = FastVec{Ti}(buffer=minlen +1)
+        rowval_complex = FastVec{Ti}(buffer=nz_complex)
+        nzval_complex = FastVec{P}(buffer=nz_complex)
+        colptr_conj = FastVec{Ti}(buffer=len +1)
+        rowval_conj = FastVec{Ti}(buffer=nz_conj)
+        nzval_conj = FastVec{P}(buffer=nz_conj)
+    end
+    i = 1
+    rem_i = length(a)
+    j = 1
+    rem_j = length(b)
+    iszero(rem_i) || iszero(rem_j) || @inbounds while true
+        if a[i] == b[i]
+            if !iszero(Nr)
+                unsafe_push!(colptr_real, length(rowval_real) +1)
+                unsafe_append!(rowval_real, rowvals(@view(a.exponents_real[:, i])))
+                unsafe_append!(nzval_real, nonzeros(@view(a.exponents_real[:, i])))
+            end
+            if !iszero(Nc)
+                unsafe_push!(colptr_complex, length(rowval_complex) +1)
+                unsafe_append!(rowval_complex, rowvals(@view(a.exponents_complex[:, i])))
+                unsafe_append!(nzval_complex, nonzeros(@view(a.exponents_complex[:, i])))
+                unsafe_push!(colptr_conj, length(rowval_conj) +1)
+                unsafe_append!(rowval_conj, rowvals(@view(a.exponents_conj[:, i])))
+                unsafe_append!(nzval_conj, nonzeros(@view(a.exponents_conj[:, i])))
+            end
+            i += 1
+            iszero(rem_i -= 1) && break
+            j += 1
+            iszero(rem_j -= 1) && break
+        elseif a[i] < b[j]
+            i += 1
+            iszero(rem_i -= 1) && break
+        else
+            j += 1
+            iszero(rem_j -= 1) && break
+        end
+    end
+    iszero(Nr) || unsafe_push!(colptr_real, length(rowval_real) +1)
+    if !iszero(Nc)
+        unsafe_push!(colptr_complex, length(rowval_complex) +1)
+        unsafe_push!(colptr_conj, length(rowval_conj) +1)
+        @assert(length(colptr_complex) == length(colptr_conj))
+    end
+    iszero(Nr) || iszero(Nc) || @assert(length(colptr_real) == length(colptr_complex))
+    return SimpleMonomialVector{Nr,Nc,P,SparseMatrixCSC{P,Ti}}(
+        iszero(Nr) ? absent : SparseMatrixCSC{P,Ti}(Nr, length(colptr_real) -1, finish!(colptr_real), finish!(rowval_real),
+                                                    finish!(nzval_real)),
+        iszero(Nc) ? absent : SparseMatrixCSC{P,Ti}(Nc, length(colptr_complex) -1, finish!(colptr_complex),
+                                                    finish!(rowval_complex), finish!(nzval_complex)),
+        iszero(Nc) ? absent : SparseMatrixCSC{P,Ti}(Nc, length(colptr_conj) -1, finish!(colptr_conj), finish!(rowval_conj),
+                                                    finish!(nzval_conj))
+    )
+end
+
+mutable struct SortedIteratorIntersection{I1,I2,X}
+    const a::I1
+    const b::I2
+    data::Union{Missing,X}
+
+    SortedIteratorIntersection{X}(a::I1, b::I2) where {I1,I2,X} = new{I1,I2,X}(a, b, missing)
+end
+
+Base.IteratorSize(::Type{<:SortedIteratorIntersection}) = Base.HasLength()
+function Base.IteratorEltype(::Type{SortedIteratorIntersection{I1,I2}}) where {I1,I2}
+    e1 = Base.IteratorEltype(I1)
+    e2 = Base.IteratorEltype(I2)
+    e1 === e2 && return e1
+    error("Iterators are incompatible")
+end
+function Base.eltype(::Type{SortedIteratorIntersection{I1,I2}}) where {I1,I2}
+    t1 = eltype(I1)
+    t2 = eltype(I2)
+    t1 === t2 && return t1
+    error("Iterators are incompatible")
+end
+function Base.iterate(iter::SortedIteratorIntersection, state=nothing)
+    i1 = isnothing(state) ? iterate(iter.a) : iterate(iter.a, state[1])
+    isnothing(i1) && return nothing
+    i2 = isnothing(state) ? iterate(iter.b) : iterate(iter.b, state[2])
+    isnothing(i2) && return nothing
+    while true
+        if i1[1] == i2[1]
+            return i1[1], (i1[2], i2[2])
+        elseif i1[1] < i2[1]
+            i1 = iterate(iter.a, i1[2])
+            isnothing(i1) && return nothing
+        else
+            i2 = iterate(iter.b, i2[2])
+            isnothing(i2) && return nothing
+        end
+    end
+end
+Base.length(iter::SortedIteratorIntersection) = length(collect(iter))
+function Base.collect(iter::SortedIteratorIntersection)
+    if ismissing(iter.data)
+        iter.data = @invoke collect(iter::Any)
+    end
+    return iter.data
+end
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+    ismissing(iter.data) || return iter.data
+    a, b = iter.a, iter.b
+    astate = iterate(a)
+    minlen = isnothing(astate) ? 0 : min(length(a), length(b))
+    exponents_real = iszero(Nr) ? absent : resizable_array(P, Nr, minlen)
+    exponents_complex = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    exponents_conj = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    if iszero(minlen)
+        iter.data = SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(exponents_real, exponents_complex, exponents_conj)
+        return iter.data
+    end
+    k = 1
+    @inbounds for mon in b
+        while astate[1] < mon
+            astate = iterate(a, astate[2])
+            isnothing(astate) && @goto done
+        end
+        if astate[1] == mon
+            copyto!(@view(exponents_real[:, k]), mon.exponents_real)
+            copyto!(@view(exponents_complex[:, k]), mon.exponents_complex)
+            copyto!(@view(exponents_conj[:, k]), mon.exponents_conj)
+            k += 1
+        end
+    end
+    @label done
+    del = minlen - k +1
+    iter.data = SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(
+        matrix_delete_end!(exponents_real, del),
+        matrix_delete_end!(exponents_complex, del),
+        matrix_delete_end!(exponents_conj, del)
+    )
+    return iter.data
+end
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:SimpleSparseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+    ismissing(iter.data) || return iter.data
+    a, b = iter.a, iter.b
+    astate = iterate(a)
+    minlen = isnothing(astate) ? 0 : min(length(a), length(b))
+    if !iszero(Nr)
+        Ti = SparseArrays.indtype(b.exponents_real)
+        nz_real = length(rowvals(b.exponents_real))
+        colptr_real = FastVec{Ti}(buffer=minlen +1)
+        rowval_real = FastVec{Ti}(buffer=nz_real)
+        nzval_real = FastVec{P}(buffer=nz_real)
+    end
+    if !iszero(Nc)
+        Ti = SparseArrays.indtype(b.exponents_complex) # won't change anything if !iszero(nreal)
+        nz_complex = length(rowvals(b.exponents_complex))
+        nz_conj = length(rowvals(b.exponents_conj))
+        colptr_complex = FastVec{Ti}(buffer=minlen +1)
+        rowval_complex = FastVec{Ti}(buffer=nz_complex)
+        nzval_complex = FastVec{P}(buffer=nz_complex)
+        colptr_conj = FastVec{Ti}(buffer=len +1)
+        rowval_conj = FastVec{Ti}(buffer=nz_conj)
+        nzval_conj = FastVec{P}(buffer=nz_conj)
+    end
+    iszero(minlen) || @inbounds for mon in b
+        while astate[1] < mon
+            astate = iterate(a, astate[2])
+            isnothing(astate) && @goto done
+        end
+        astate[1] == mon || continue
+        if !iszero(Nr)
+            unsafe_push!(colptr_real, length(rowval_real) +1)
+            unsafe_append!(rowval_real, rowvals(mon.exponents_real))
+            unsafe_append!(nzval_real, nonzeros(mon.exponents_real))
+        end
+        if !iszero(Nc)
+            unsafe_push!(colptr_complex, length(rowval_complex) +1)
+            unsafe_append!(rowval_complex, rowvals(mon.exponents_complex))
+            unsafe_append!(nzval_complex, nonzeros(mon.exponents_complex))
+            unsafe_push!(colptr_conj, length(rowval_conj) +1)
+            unsafe_append!(rowval_conj, rowvals(mon.exponents_conj))
+            unsafe_append!(nzval_conj, nonzeros(mon.exponents_conj))
+        end
+    end
+    @label done
+    iszero(Nr) || unsafe_push!(colptr_real, length(rowval_real) +1)
+    if !iszero(Nc)
+        unsafe_push!(colptr_complex, length(rowval_complex) +1)
+        unsafe_push!(colptr_conj, length(rowval_conj) +1)
+        @assert(length(colptr_complex) == length(colptr_conj))
+    end
+    iszero(Nr) || iszero(Nc) || @assert(length(colptr_real) == length(colptr_complex))
+    iter.data = SimpleMonomialVector{Nr,Nc,P,SparseMatrixCSC{P,Ti}}(
+        iszero(Nr) ? absent : SparseMatrixCSC{P,Ti}(Nr, length(colptr_real) -1, finish!(colptr_real), finish!(rowval_real),
+                                                    finish!(nzval_real)),
+        iszero(Nc) ? absent : SparseMatrixCSC{P,Ti}(Nc, length(colptr_complex) -1, finish!(colptr_complex),
+                                                    finish!(rowval_complex), finish!(nzval_complex)),
+        iszero(Nc) ? absent : SparseMatrixCSC{P,Ti}(Nc, length(colptr_conj) -1, finish!(colptr_conj), finish!(rowval_conj),
+                                                    finish!(nzval_conj))
+    )
+    return iter.data
+end
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+    ismissing(iter.data) || return iter.data
+    a, b = iter.a, iter.b
+    astate = iterate(a)
+    bstate = iterate(b)
+    minlen = isnothing(astate) || isnothing(bstate) ? 0 : min(length(a), length(b))
+    exponents_real = iszero(Nr) ? absent : resizable_array(P, Nr, minlen)
+    exponents_complex = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    exponents_conj = iszero(Nc) ? absent : resizable_array(P, Nc, minlen)
+    if iszero(minlen)
+        iter.data = SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(exponents_real, exponents_complex, exponents_conj)
+        return iter.data
+    end
+    k = 1
+    @inbounds while true
+        while astate[1] < bstate[1]
+            astate = iterate(a, astate[2])
+            isnothing(astate) && @goto done
+        end
+        while bstate[1] < astate[1]
+            bstate = iterate(b, bstate[2])
+            isnothing(bstate) && @goto done
+        end
+        if astate[1] == bstate[1]
+            copyto!(@view(exponents_real[:, k]), astate[1].exponents_real)
+            copyto!(@view(exponents_complex[:, k]), astate[1].exponents_complex)
+            copyto!(@view(exponents_conj[:, k]), astate[1].exponents_conj)
+            k += 1
+        end
+    end
+    @label done
+    del = minlen - k +1
+    iter.data = SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(
+        matrix_delete_end!(exponents_real, del),
+        matrix_delete_end!(exponents_complex, del),
+        matrix_delete_end!(exponents_conj, del)
+    )
+    return iter.data
+end
+
+Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleDenseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P}}}(a, b)
+Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleSparseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,
+        SparseMatrixCSC{P,SparseArrays.indtype(iszero(Nr) ? b.exponents_complex : b.exponents_real)}
+    }}(a, b)
+Base.intersect(a::SimpleMonomialVector{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+    intersect(b, a) # just so that less compilation is necessary
+Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P1}},
+    b::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P2}}) where {Nr,Nc,P<:Unsigned,P1,P2} =
+    LazyMonomials{Nr,Nc}(max(a.iter.mindeg, b.iter.mindeg):min(a.iter.maxdeg, b.iter.maxdeg),
+        minmultideg=max.(a.iter.minmultideg, b.iter.minmultideg), maxmultideg=min.(a.iter.maxmultideg, b.iter.maxmultideg),
+        copy=P1 !== Nothing || P2 !== Nothing)
+Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P}}}(a, b)

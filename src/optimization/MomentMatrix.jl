@@ -22,17 +22,7 @@ function moment_matrix(result::POResult{R}; max_deg=Inf,
     relaxation = result.relaxation
     b = basis(relaxation)
     if max_deg < Inf
-        upto = monomial_count(max_deg, Nr + Nc)
-        if upto < lastindex(b)
-            if degree(b[upto]) == max_deg && degree(b[upto+1]) == max_deg +1
-                b = @view(b[1:upto])
-            else
-                # this can happen for a custom basis or the Newton polytope
-                b = @view(b[1:searchsortedlast(b, max_deg, by=degree)])
-            end
-        else
-            @assert(degree(b[end]) ≤ max_deg)
-        end
+        b = truncate_basis(b, max_deg)
     end
     return (isreal(relaxation) ? Symmetric : Hermitian)(
         isnothing(prefix) ? moment_matrix(result.moments, Val(:symmetric), b, conj(b)) :

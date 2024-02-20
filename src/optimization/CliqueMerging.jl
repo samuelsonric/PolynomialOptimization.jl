@@ -78,7 +78,7 @@ function merge_cliques(groupings::RelaxationGroupings{MV}) where {MV}
             push!(groupings.obj, SimpleMonomialVector(coutᵢ, max_power, representation, vars))
         end
     end
-    for constr in (groupings.zero, groupings.nonneg, groupings.psd)
+    for constr in (groupings.zeros, groupings.nonnegs, groupings.psds)
         for (i, cin) in enumerate(constr)
             @inbounds constr[i] = SimpleMonomialVector.(merge_cliques!(Set.(cin)), max_power, representation, (vars,))
         end

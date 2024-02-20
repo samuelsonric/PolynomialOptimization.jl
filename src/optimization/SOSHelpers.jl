@@ -437,8 +437,8 @@ Base.iterate(::ScalarMatrix, ::Nothing) = nothing
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
 # Interface for getting values from a PSD variable (e.g., Mosek barvar, COPT PSDVar; none for the complex case).
-function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, constraint::AbstractMatrix{<:SimplePolynomial},
-    (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer},
+function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
+    constraint::AbstractMatrix{<:SimplePolynomial}, (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer},
     type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}})
     @assert(Tidx <: Integer || Tidx <: Tuple{Integer,Integer})
     @assert(tri ∈ (:L, :U))
@@ -471,7 +471,7 @@ function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, con
     # real and complex variables, we need to double the real ones only. This makes the guesstimate ever larger than it has to
     # be.
     data = let nvars=effective_nvariables(grouping, monomials.(constraint)), constrex=extdegree(constraint),
-        groupingex=(degree(first(grouping)), degree(last(grouping)))
+        groupingex=extdegree(grouping)
         sizehint!(
             Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tl},FastVec{Vtype}} :
                                               Tuple{FastVec{T1},FastVec{T2},FastVec{Vtype}}}(),
@@ -487,14 +487,14 @@ function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, con
         col = T2(offset)
         gen_new = @capture(() -> (FastVec{$T1}(), FastVec{$T2}(), FastVec{$Vtype}()))
     end
-    @inbounds for exp2 in 1:lg
-        g₂ = grouping[exp2]
+    grouping₂ = lazy_unalias(grouping)
+    @inbounds for (exp2, g₂) in enumerate(grouping)
         for block_j in 1:block_size
             if !linear_indexing
                 row = tri === :U ? T1(offset) : col
             end
-            for exp1 in (tri === :U ? (1:exp2) : (exp2:lg))
-                g₁ = grouping[exp1]
+            exp1_range = (tri === :U ? (1:exp2) : (exp2:lg))
+            for (exp1, g₁) in zip(exp1_range, @view(grouping₂[exp1_range]))
                 for block_i in (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
                                              ((exp1 == exp2 ? block_j : 1):block_size))
                     for term_constr in constraint[block_i, block_j]
@@ -590,8 +590,9 @@ end
 # generic SOS constraint with complex-valued monomials involved in the grouping; the solver does not support complex-valued PSD
 # cones, so we'll have to rewrite everything in terms of a real PSD cone
 # Interface for getting values from a PSD variable (e.g., Mosek barvar, COPT PSDVar).
-function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, constraint::AbstractMatrix{<:SimplePolynomial},
-    (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer}, ::Tuple{Val{false},Val{false}})
+function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
+    constraint::AbstractMatrix{<:SimplePolynomial}, (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer},
+    ::Tuple{Val{false},Val{false}})
     @assert(Tidx <: Integer || Tidx <: Tuple{Integer,Integer})
     @assert(tri ∈ (:L, :U))
     lg = length(grouping)
@@ -607,7 +608,7 @@ function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, con
     end
     # TODO: see previous methods
     data = let nvars=effective_nvariables(grouping, monomials.(constraint)), constrex=extdegree(constraint),
-        groupingex=(degree(first(grouping)), degree(last(grouping)))
+        groupingex=extdegree(grouping)
         sizehint!(
             Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tl},FastVec{V}} : Tuple{FastVec{T1},FastVec{T2},FastVec{V}}}(),
             2min(monomial_count(2groupingex[2] + constrex[2], nvars) - monomial_count(2groupingex[1] + constrex[1], nvars),
@@ -650,14 +651,14 @@ function sos_add_matrix_helper!(state, T, V, grouping::SimpleMonomialVector, con
     end
     δ = offset -1
     col = 1
+    grouping₂ = lazy_unalias(grouping)
     # There's a lot of constant folding going on here; in particular, conditioning on linear_indexing or tri will be done at
     # compile time.
-    @inbounds for exp2 in 1:lg
-        g₂ = grouping[exp2]
+    @inbounds for (exp2, g₂) in enumerate(grouping)
         for block_j in 1:block_size
             row = tri === :U ? 1 : col
-            for exp1 in (tri === :U ? (1:exp2) : (exp2:lg))
-                g₁ = grouping[exp1]
+            exp1_range = (tri === :U ? (1:exp2) : (exp2:lg))
+            for (exp1, g₁) in zip(exp1_range, @view(grouping₂[exp1_range]))
                 for block_i in (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
                                              ((exp1 == exp2 ? block_j : 1):block_size))
                     if linear_indexing
@@ -816,14 +817,14 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_equality!`](@ref).
 """
-function sos_add_matrix!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+function sos_add_matrix!(state, grouping::AbstractVector{M} where M<:SimpleMonomial, constraint::SimplePolynomial)
     lg = length(grouping)
     T = Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(constraint))
     V = realtype(coefficient_type(constraint))
     if lg == 1
         @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], constraint)
     elseif lg == 2 && sos_solver_supports_quadratic(state)
-        @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], grouping[2], constraint)
+        @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], lazy_unalias(grouping)[2], constraint)
     else
         sos_add_matrix_helper!(state, T, V, grouping, ScalarMatrix(constraint), sos_solver_psd_indextype(state),
             (Val(isreal(grouping) && isreal(constraint)), Val(sos_solver_supports_complex_psd(state))))
@@ -831,7 +832,8 @@ function sos_add_matrix!(state, grouping::SimpleMonomialVector, constraint::Simp
     return
 end
 
-function sos_add_matrix!(state, grouping::SimpleMonomialVector, constraint::AbstractMatrix{<:SimplePolynomial})
+function sos_add_matrix!(state, grouping::AbstractVector{M} where M<:SimpleMonomial,
+    constraint::AbstractMatrix{<:SimplePolynomial})
     block_size = LinearAlgebra.checksquare(constraint)
     isone(block_size) && @inbounds return sos_add_matrix!(state, grouping, constraint[1, 1])
     lg = length(grouping)
@@ -861,7 +863,7 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_matrix!`](@ref).
 """
-function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+function sos_add_equality!(state, grouping::AbstractVector{M} where M<:SimpleMonomial, constraint::SimplePolynomial)
     lg = length(grouping)
     real_constr = isreal(constraint)
     real_basis = true
@@ -902,10 +904,11 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
                 values₄ = similar(values)
             end
         end
+        grouping₂ = lazy_unalias(grouping)
         for exp2 in 1:lg
             g₂ = grouping[exp2]
             for exp1 in (isreal(g₂) ? exp2 : 1):lg
-                g₁ = grouping[exp1]
+                g₁ = grouping₂[exp1]
                 real_grouping = real_basis || g₁.exponents_complex == g₂.exponents_complex
                 # only canonical products g₁ * conj(g₂)
                 real_grouping || g₁.exponents_complex < g₂.exponents_complex || continue
@@ -1120,18 +1123,18 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
         sos_add_matrix!(state, grouping, SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))
     end
     # free items
-    for (groupingsᵢ, constrᵢ) in zip(groupings.zero, problem.constr_zero)
+    for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
         for grouping in groupingsᵢ
             sos_add_equality!(state, grouping, constrᵢ)
         end
     end
     # localizing matrices
-    for (groupingsᵢ, constrᵢ) in zip(groupings.nonneg, problem.constr_nonneg)
+    for (groupingsᵢ, constrᵢ) in zip(groupings.nonnegs, problem.constr_nonneg)
         for grouping in groupingsᵢ
             sos_add_matrix!(state, grouping, constrᵢ)
         end
     end
-    for (groupingsᵢ, constrᵢ) in zip(groupings.psd, problem.constr_psd)
+    for (groupingsᵢ, constrᵢ) in zip(groupings.psds, problem.constr_psd)
         for grouping in groupingsᵢ
             sos_add_matrix!(state, grouping, constrᵢ)
         end

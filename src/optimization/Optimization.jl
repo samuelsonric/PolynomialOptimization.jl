@@ -28,7 +28,7 @@ preferred solver has been loaded.
 
     poly_optimize([method, ]problem::POProblem[, degree::Int]; kwargs...)
 
-Construct a [`DenseRelaxation`](@ref) by default.
+Construct a [`RelaxationDense`](@ref) by default.
 """
 function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
@@ -51,7 +51,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Boo
             for m in groups.obj
                 block_sizes[length(m)] = get(block_sizes, length(m), 0) +1
             end
-            for constrgroup in (groups.zero, groups.nonneg, groups.psd)
+            for constrgroup in (groups.zeros, groups.nonnegs, groups.psds)
                 for constr in constrgroup
                     for m in constr
                         block_sizes[length(m)] = get(block_sizes, length(m), 0) +1
@@ -66,7 +66,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Boo
 end
 
 poly_optimize(v::Val, problem::POProblem, degree=problem.mindegree; kwargs...) =
-    poly_optimize(v, DenseRelaxation(problem, degree); kwargs...)
+    poly_optimize(v, RelaxationDense(problem, degree); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 

@@ -27,11 +27,11 @@ end
 
 @testset "Some real-valued examples (matrix and equality)" begin
     DynamicPolynomials.@polyvar x[1:2]
-    probs = poly_problem(-x[1]^2 - x[2]^2, zero=[x[1] + x[2] - 1], psd=[[1-4x[1]*x[2] x[1]; x[1] 4-x[1]^2-x[2]^2]])
+    prob = poly_problem(-x[1]^2 - x[2]^2, zero=[x[1] + x[2] - 1], psd=[[1-4x[1]*x[2] x[1]; x[1] 4-x[1]^2-x[2]^2]])
     if optimize
         for solver in solvers
             for (i, sol) in ((1, -4.), (2, -3.904891578336841))
-                @test poly_optimize(solver, probs, i).objective ≈ sol atol = 5e-3
+                @test poly_optimize(solver, prob, i).objective ≈ sol atol = 5e-3
             end
         end
     end
@@ -62,13 +62,13 @@ end
 
 @testset "Some complex-valued examples (matrix)" begin
     DynamicPolynomials.@polycvar x[1:2]
-    probs = poly_problem(-x[1] * conj(x[1]) - x[2] * conj(x[2]),
-                         psd=[[1-2*(x[1]*x[2]+conj(x[1] * x[2])) x[1]; conj(x[1]) 4-x[1]*conj(x[1])-x[2]*conj(x[2])]],
-                         perturbation=1e-4)
+    prob = poly_problem(-x[1] * conj(x[1]) - x[2] * conj(x[2]),
+                        psd=[[1-2*(x[1]*x[2]+conj(x[1] * x[2])) x[1]; conj(x[1]) 4-x[1]*conj(x[1])-x[2]*conj(x[2])]],
+                        perturbation=1e-4)
     if optimize
         for solver in solvers
             for i in 2:3
-                @test poly_optimize(solver, probs).objective ≈ -4. atol = 5e-3
+                @test poly_optimize(solver, prob, i).objective ≈ -4. atol = 5e-3
             end
         end
     end

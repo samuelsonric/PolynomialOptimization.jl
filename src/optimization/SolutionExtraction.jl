@@ -36,9 +36,9 @@ random sampling, hence negligible deviations are expected from run to run.
 The parameter `ϵ` controls the bound below which singular values are regarded as zero.
 The parameter `δ` controls up to which threshold supposedly identical numerical values for the same variables from different
 cliques must match.
-Note that for sparsity patterns different from no sparsity and [`SparsityCorrelative`](@ref), this method not be able to
-deliver results, although it might give partial results for [`SparsityCorrelativeTerm`](@ref) if some of the cliques did not
-have a term sparsity pattern. Consider using [`poly_solutions_heuristic`](@ref) in such a case.
+Note that for sparsity patterns different from no sparsity and [`RelaxationSparsityCorrelative`](@ref), this method not be able
+to deliver results, although it might give partial results for [`RelaxationSparsityCorrelativeTerm`](@ref) if some of the
+cliques did not have a term sparsity pattern. Consider using [`poly_solutions_heuristic`](@ref) in such a case.
 This function returns an iterator.
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
@@ -66,7 +66,7 @@ function poly_solutions(result::POResult{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R
         for (i, clique) in enumerate(cliques)
             @verbose_info("Investigating clique ", clique)
             a1 = basis(relaxation, i)
-            a2 = @view(a1[1:min(searchsortedfirst(a1, _DummyMonomial(relaxation.degree), by=degree) -1, length(a1))])
+            a2 = truncate_basis(a1, relaxation.degree -1)
             if !isreal(relaxation)
                 # this is the transpose of what we'd get with moment_matrix, but this is not important. Since the monomials
                 # in the matrix will be multiplied by variables (which are the un-conjugated ones), we must make sure that
@@ -98,9 +98,8 @@ function poly_solutions(result::POResult{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R
     # now we combine all the solutions. In principle, this is Iterators.product, but we only look for compatible entries (as
     # variables in the cliques can overlap).
     @verbose_info("Found all potential individual solutions in ", extraction_time, " seconds. Building iterator.")
-    return PolynomialSolutions{R,V,Nr,Nc,iszero(Nc) ? SimpleRealVariable{Nr,Nc} :
-                                        (iszero(Nr) ? SimpleComplexVariable{Nr,Nc} : <:SimpleVariable{Nr,Nc}),
-                               isone(length(cliques))}(
+    return PolynomialSolutions{R,V,Nr,Nc,
+                               SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr + 2Nc)},isone(length(cliques))}(
         cliques,
         finish!(solutions_cl),
         δ,
@@ -174,7 +173,7 @@ function Base.length(iter::PolynomialSolutions{R,V,Nr,Nc,<:SimpleVariable{Nr,Nc}
     end
 end
 
-function poly_solutions_scaled(moments::FullMonomialVector{V}, a1, a2, variables, ϵ::R) where {R<:Real,V<:Union{R,Complex{R}}}
+function poly_solutions_scaled(moments::MomentVector{R,V}, a1, a2, variables, ϵ::R) where {R<:Real,V<:Union{R,Complex{R}}}
     Hd1d2 = moment_matrix(moments, Val(:throw), a1, a2)
     UrSrVrbar = svd!(Hd1d2)
     ϵ *= UrSrVrbar.S[1]
