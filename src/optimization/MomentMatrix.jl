@@ -1,11 +1,11 @@
 export moment_matrix
 
-moment_matrix(moments::FullMonomialVector{R,Nr,Nc}, ::Val{:symmetric}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,R} =
-    R[i ≤ j ? get(moments, let n=R(NaN); () -> n end, rows[i], cols[j], prefix...) : R(NaN)
+moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:symmetric}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+    V[i ≤ j ? get(moments, let n=V(NaN); () -> n end, rows[i], cols[j], prefix...) : V(NaN)
       for i in 1:length(rows), j in 1:length(cols)]
 
-moment_matrix(moments::FullMonomialVector{R,Nr,Nc}, ::Val{:throw}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,R} =
-    R[get(moments, () -> throw(MonomialMissing()), rows[i], cols[j], prefix...)
+moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:throw}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+    V[get(moments, () -> throw(MonomialMissing()), rows[i], cols[j], prefix...)
       for i in 1:length(rows), j in 1:length(cols)]
 
 """

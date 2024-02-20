@@ -1,7 +1,43 @@
 mutable struct StateSOS
-    task::Mosek.Task
+    const task::Mosek.Task
     num_vars::Int32
     num_bar_vars::Int32
+    num_constrs::Int32
+    const constr_map::Dict{FastKey{Int},Int32}
+end
+
+function append_constrs!(state, monidx, conjmonidx)
+    # We assign new indices contiguously, but we always create conjugate pairs at the same time, so that we can maintain the
+    # canonical order as required.
+    solveridx₁ = Int32(length(state.constr_map))::Int32
+    solveridx₂ = conjmonidx == monidx ? solveridx₁ : solveridx₁ + one(Int32)
+    if solveridx₂ ≥ state.num_constrs
+        # unused constraints are quite cheap (though not entirely for free), so we'll liberally overestimate to reduce the
+        # number of calls
+        new_num = FastVector.overallocation(solveridx₂ +1)
+        Mosek.@MSK_appendcons(state.task.task, new_num - state.num_constrs)
+        state.num_constrs = new_num
+    end
+    if conjmonidx == monidx
+        state.constr_map[FastKey(monidx)] = solveridx₁
+        return solveridx₁
+    else
+        reidx, imidx = minmax(monidx, conjmonidx)
+        state.constr_map[FastKey(reidx)] = solveridx₁
+        state.constr_map[FastKey(imidx)] = solveridx₂
+        return monidx < conjmonidx ? solveridx₁ : solveridx₂
+    end
+end
+
+@inline function PolynomialOptimization.sos_solver_mindex(state::StateSOS, monomials::SimpleMonomial...)
+    idx = monomial_index(monomials...)
+    dictidx = Base.ht_keyindex(state.constr_map, FastKey(idx))
+    if dictidx < 0
+        # split this into its own function so that we can inline the good part and call the more complicated appending
+        return append_constrs!(state, idx, monomial_index(conj.(reverse(monomials))...))
+    else
+        @inbounds return state.constr_map.vals[dictidx]
+    end
 end
 
 function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices::AbstractVector{Int32},
@@ -201,6 +237,7 @@ end
 function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int32}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))
+    Mosek.@MSK_putconboundsliceconst(state.task.task, 0, length(state.constr_map), MSK_BK_FX, 0., 0.)
     Mosek.@MSK_putconboundlist(state.task.task, len, indices, fill(MSK_BK_FX.value, len), values, values)
     return
 end
@@ -224,16 +261,9 @@ function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::Abst
             end
 
             putobjsense(task, MSK_OBJECTIVE_SENSE_MAXIMIZE)
-            # We don't know which monomials will be required in the end due to sparsity. We could keep accumulating all the
-            # potential monomials, increasing the task as we go.
-            # However, we know a clear upper bound on the number of monomials: It is given by the monomial space of twice the
-            # degree. Every monomial corresponds to a constraint, and it is extremely cheap to allocate a huge number of
-            # constraints in Mosek, so we just create it.
-            concount = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
-            appendcons(task, concount)
-            putconboundsliceconst(task, 1, concount +1, MSK_BK_FX, 0., 0.)
 
-            state = StateSOS(task, zero(Int32), zero(Int32))
+
+            state = StateSOS(task, zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{Int32},Int32}())
 
             PolynomialOptimization.sos_setup!(state, relaxation, groupings)
         end
@@ -243,9 +273,21 @@ function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::Abst
 
         optimize(task) # TODO: maybe we want to delete the empty constraints before the optimization starts? Benchmark, as this
                        # would make solution extraction much harder.
-        @verbose_info("Optimization complete")
-        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR),
-            sos_solution(monomial_type(P), gety(task, MSK_SOL_ITR))
+        @verbose_info("Optimization complete, extracting solution")
+
+        max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
+        mon_pos = convert.(Int, keys(state.constr_map))
+        mon_val = resize!(gety(task, MSK_SOL_ITR), length(mon_pos))
+        sort_along!(mon_pos, mon_val) # we also sort in the dense case; this improves cache times in the assignment
+        if 3length(mon_pos) < max_mons
+            solution = SparseVector(max_mons, mon_pos, mon_val)
+        elseif length(mon_pos) == max_mons # dense case
+            solution = mon_val
+        else
+            solution = fill(NaN, max_mons)
+            copy!(@view(solution[mon_pos]), mon_val)
+        end
+        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, solution)
     finally
         deletetask(task)
     end

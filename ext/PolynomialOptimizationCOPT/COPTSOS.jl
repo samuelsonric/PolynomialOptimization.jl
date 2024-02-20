@@ -27,16 +27,16 @@ mutable struct StateSOS
     num_psd_vars::Cint
     num_symmat::Cint
     linstart::Cint
-    constrs::Dict{FastKey{Cint},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
-                                      Tuple{FastVec{Cint},FastVec{Cint}}}}
+    constrs::Dict{FastKey{Int},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
+                                     Tuple{FastVec{Cint},FastVec{Cint}}}}
 end
 
-get_constr(state::StateSOS, constr::Cint) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
-                                                        (FastVec{Cint}(), FastVec{Cint}())), state.constrs, FastKey(constr))
-get_constr(state::StateSOS, constr::FastKey{Cint}) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
-                                                                 (FastVec{Cint}(), FastVec{Cint}())), state.constrs, constr)
+get_constr(state::StateSOS, constr::Int) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
+                                                       (FastVec{Cint}(), FastVec{Cint}())), state.constrs, FastKey(constr))
+get_constr(state::StateSOS, constr::FastKey{Int}) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
+                                                                (FastVec{Cint}(), FastVec{Cint}())), state.constrs, constr)
 
-function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices::AbstractVector{Cint},
+function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices::AbstractVector{Int},
     values::AbstractVector{Float64})
     @assert(length(indices) == length(values))
     @inbounds for (i, v) in zip(indices, values)
@@ -49,8 +49,8 @@ function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices:
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₊::AbstractVector{Cint},
-    values₊::AbstractVector{Float64}, rest_free::Tuple{AbstractVector{Cint},AbstractVector{Float64}}...)
+function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₊::AbstractVector{Int},
+    values₊::AbstractVector{Float64}, rest_free::Tuple{AbstractVector{Int},AbstractVector{Float64}}...)
     for (indices_free, values_free) in ((indices₊, values₊), rest_free...)
         for (i, v) in zip(indices_free, values_free)
             (idx, val), _ = get_constr(state, i)
@@ -64,9 +64,9 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indic
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₁::AbstractVector{Cint},
-    values₁::AbstractVector{Float64}, indices₂::AbstractVector{Cint}, values₂::AbstractVector{Float64},
-    rest::Tuple{AbstractVector{Cint},AbstractVector{Float64}}...)
+function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₁::AbstractVector{Int},
+    values₁::AbstractVector{Float64}, indices₂::AbstractVector{Int}, values₂::AbstractVector{Float64},
+    rest::Tuple{AbstractVector{Int},AbstractVector{Float64}}...)
     @assert(length(indices₁) == length(values₁) && length(indices₂) == length(values₂) &&
         all(x -> length(x[1]) == length(x[2]), rest))
     @inbounds for (k, (indices, values)) in enumerate(((indices₁, values₁), (indices₂, values₂), rest...))
@@ -110,7 +110,7 @@ end
 PolynomialOptimization.sos_solver_supports_quadratic(::StateSOS) = true
 
 function PolynomialOptimization.sos_solver_add_psd!(state::StateSOS, dim::Int,
-    data::Dict{FastKey{Cint},<:Tuple{AbstractVector{Cint},AbstractVector{Cint},AbstractVector{Float64}}})
+    data::Dict{FastKey{Int},<:Tuple{AbstractVector{Cint},AbstractVector{Cint},AbstractVector{Float64}}})
     @inbounds for (i, matrixᵢ) in data
         _check_ret(copt_env, COPT_AddSymMat(state.problem, dim, length(matrixᵢ[1]), matrixᵢ[1], matrixᵢ[2], matrixᵢ[3]))
         _, (idx, val) = get_constr(state, i)
@@ -133,7 +133,7 @@ function PolynomialOptimization.sos_solver_add_free_prepare!(state::StateSOS, nu
     return prev
 end
 
-function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::Cint, indices::AbstractVector{Cint},
+function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::Cint, indices::AbstractVector{Int},
     values::AbstractVector{Float64}, obj::Bool)
     @inbounds for (i, v) in zip(indices, values)
         (idx, val), _ = get_constr(state, i)
@@ -144,14 +144,14 @@ function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::C
     return eqstate + one(Cint)
 end
 
-function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Cint}, values::Vector{Float64})
+function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))
     # this is almost the end - we can now add all our PSD constraints
     sort_along!(indices, values)
     COPT_GetIntAttr(state.problem, COPT_INTATTR_ROWS, pointer_from_objref(state) + fieldoffset(typeof(state), 5))
     for (i, ((linidx, linval), (psdidx, psdval))) in state.constrs
-        constr_idx = searchsorted(indices, convert(Cint, i))
+        constr_idx = searchsorted(indices, convert(Int, i))
         if isempty(constr_idx)
             constr_val = 0.
         else
@@ -185,7 +185,6 @@ end
 
 function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
-    max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
     setup_time = @elapsed begin
         task = COPTProb(copt_env)
         _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_LOGTOCONSOLE, Cint(verbose)))
@@ -203,8 +202,8 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
 
         # Let's put some overestimate on the number of monomials
         state = StateSOS(task, zero(Cint), zero(Cint), zero(Cint), zero(Cint),
-            sizehint!(Dict{FastKey{Cint},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
-                                               Tuple{FastVec{Cint},FastVec{Cint}}}}(), max_mons))
+            Dict{FastKey{Int},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
+                                    Tuple{FastVec{Cint},FastVec{Cint}}}}())
 
         PolynomialOptimization.sos_setup!(state, relaxation, groupings)
     end
@@ -217,7 +216,7 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
     _check_ret(copt_env, COPT_GetIntAttr(task, COPT_INTATTR_LPSTATUS, status))
     value = Ref{Cdouble}()
     _check_ret(copt_env, COPT_GetDblAttr(task, COPT_DBLATTR_LPOBJVAL, value))
-    @verbose_info("Optimization complete")
+    @verbose_info("Optimization complete, extracting solution")
 
     if status[] ∈ (COPT_LPSTATUS_OPTIMAL, COPT_LPSTATUS_IMPRECISE)
         linconstrs = Ref{Cint}()
@@ -250,9 +249,9 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
                 )::Cint
             )
         end
-        # disable sparse return for the moment, sos_solution doesn't support it
-        if false && 3((linconstrs[] - state.linstart) + psdconstrs[]) < max_mons
-            inds = convert.(Cint, keys(state.constrs)) .+ one(Cint)
+        max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
+        if 3((linconstrs[] - state.linstart) + psdconstrs[]) < max_mons
+            inds = convert.(Int, keys(state.constrs))
             vals = FastVec{Float64}(buffer=(linconstrs[] - state.linstart + psdconstrs[]))
             psdi = 1
             lini = state.linstart +1
@@ -268,21 +267,23 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
             sort_along!(inds, vals)
             solution = SparseVector(max_mons, inds, finish!(vals))
         else
-            solution = zeros(max_mons)
+            solution = fill(NaN, max_mons)
             psdi = 1
             lini = state.linstart +1
             for (i, (_, (havepsd, _))) in state.constrs
                 if isempty(havepsd)
-                    @inbounds solution[convert(Int, i)+1] = lin_duals[lini]
+                    @inbounds solution[convert(Int, i)] = lin_duals[lini]
                     lini += 1
                 else
-                    @inbounds solution[convert(Int, i)+1] = psd_duals[psdi]
+                    @inbounds solution[convert(Int, i)] = psd_duals[psdi]
                     psdi += 1
                 end
             end
         end
-        return status[], value[], sos_solution(monomial_type(P), solution)
+        @verbose_info("Solution data extraction complete")
+        return status[], value[], MomentVector(relaxation, solution)
     else
-        return status[], value[], sos_solution(monomial_type(P), Cdouble[])
+        @verbose_info("Solution data extraction complete")
+        return status[], value[], MomentVector(relaxation, Cdouble[])
     end
 end

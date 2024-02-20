@@ -2,11 +2,12 @@
     sos_solver_mindex(state, monomials::SimpleMonomial...)
 
 Calculates the index that the product of all monomials will have in the SDP represented by `state`.
-The default implementation calculates a zero-indexed monomial index according to a dense deglex order and returns an Int32,
-which is a standard choice among many solvers.
+The default implementation calculates one-based monomial index according to a dense deglex order and returns an Int.
 Make sure that the return value of this function can always be inferred using promote_op.
+The returned index is arbitrary as long as it satisfies the following condition: If `iscanonical(m)`, then
+`sos_solver_mindex(m) ≤ sos_solver_mindex(conj(m))`.
 """
-@inline sos_solver_mindex(_, monomials::SimpleMonomial...) = Int32(monomial_index(monomials...) -1)::Int32
+@inline sos_solver_mindex(_, monomials::SimpleMonomial...) = monomial_index(monomials...)
 
 """
     sos_solver_add_scalar!(state, index, value::Real)

@@ -1114,6 +1114,11 @@ The following methods must be implemented by a solver to make this function work
 - [`sos_solver_add_free_finalize!`](@ref) (optional)
 - [`sos_solver_fix_constraints!`](@ref)
 
+!!! warning "Indices"
+    The constraint indices used in all solver functions directly correspond to the indices given back by
+    [`sos_solver_mindex`](@ref). However, in a sparse problem there may be far fewer indices present; therefore, when the
+    problem is finally given to the solver, care must be taken to eliminate all unused indices.
+
 See also [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref).
 """
 function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, groupings::RelaxationGroupings) where {P}
@@ -1217,42 +1222,4 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
     end
 
     return
-end
-
-"""
-    sos_solution(M::Type{<:SimpleMonomial}, duals::AbstractVector)
-
-Given a dual solution vector (that contains the duals of the constraints in the order in which they were created by
-[`sos_setup!`](@ref)), extracts the associated vector of moments. Returns a [`FullMonomialVector`](@ref).
-"""
-function sos_solution(M::Type{<:SimpleMonomial{Nr,Nc}}, duals::AbstractVector) where {Nr,Nc}
-    Base.require_one_based_indexing(duals)
-    if iszero(Nc)
-        # we assume that sos_solver_mindex keeps the same order as monomial_index
-        return FullMonomialVector{M}(duals)
-    else
-        values = Vector{Complex{eltype(duals)}}(undef, length(duals))
-        powers = Vector{UInt}(undef, Nr + 2Nc)
-        real_view = @view(powers[1:Nr])
-        complex_view = @view(powers[Nr+1:Nr+Nc])
-        conj_view = @view(powers[Nr+Nc+1:end])
-        mon = SimpleMonomial{Nr,Nc,UInt,typeof(complex_view)}(iszero(Nr) ? SimplePolynomials.absent : real_view, complex_view,
-            conj_view)
-        @inbounds for (i, _) in zip(eachindex(duals, values),
-                                    MonomialIterator{Graded{LexOrder}}(zero(UInt), typemax(UInt),
-                                                                       zeros(UInt, Nr + 2Nc),
-                                                                       fill(typemax(UInt), Nr + 2Nc), powers))
-            if isreal(mon)
-                values[i] = duals[i]
-            else
-                conj_idx = monomial_index(conj(mon))
-                if i < conj_idx
-                    values[i] = Complex(duals[i], duals[conj_idx]) * 1//2
-                else
-                    values[i] = Complex(duals[conj_idx], -duals[i]) * 1//2
-                end
-            end
-        end
-        return FullMonomialVector{M}(values)
-    end
 end
