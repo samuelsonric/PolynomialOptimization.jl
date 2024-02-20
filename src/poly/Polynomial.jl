@@ -174,10 +174,8 @@ function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr
 end
 
 function effective_variables_in(p::SimplePolynomial, in)
-    for v in variables(p)
-        if !iszero(maxdegree(p, v)) && !(ordinary_variable(v) ∈ in)
-            return false
-        end
+    for t in p
+        iszero(coefficient(t)) || effective_variables_in(monomial(t), in) || return false
     end
     return true
 end
