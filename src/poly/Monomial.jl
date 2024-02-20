@@ -113,8 +113,9 @@ MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleRealVariable{N
 MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} =
     @inbounds v.isconj ? m.exponents_conj[v.index] : m.exponents_complex[v.index]
 
+# These do not correspond to how they are defined in MP. But this definition makes more sense (and is what is needed).
 MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial) =
-    Int(max(sum(m.exponents_real, init=0) + sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
+    Int(sum(m.exponents_real, init=0) + max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
 MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} =
     degree(m, v)
 MultivariatePolynomials.degree_complex(m::SimpleDenseMonomial{Nr,Nc}, v::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} =

@@ -3,7 +3,8 @@ module Newton
 using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
 import BufferedStreams
 using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, moniter_state
-using PolynomialOptimization: @verbose_info, @capture, haveMPI, FastKey
+using PolynomialOptimization:  @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy, keepcol!,
+    FastKey
 
 export halfpolytope, halfpolytope_from_file
 
@@ -166,7 +167,6 @@ function default_newton_method()
 end
 
 include("./helpers/Utils.jl")
-include("./helpers/Mutation.jl")
 include("./helpers/Sampling.jl")
 include("./helpers/RangedMonomialIterator.jl")
 include("./helpers/InitialStateIterator.jl")

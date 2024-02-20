@@ -1,6 +1,4 @@
 # Define a Missing replacement, as we want to provide some conveniences that probably would not be welcome in Base...
-# TODO: a lot of the code was written before the Missing -> Absent transition. Probably some things can still be simplified and
-# now redundant method definitions removed.
 struct Absent end
 const absent = Absent()
 Base.IteratorSize(::Absent) = Base.HasLength()
@@ -9,8 +7,8 @@ Base.eltype(::Absent) = Nothing
 Base.length(::Absent) = 0
 Base.iterate(::Absent) = nothing
 Base.similar(::Absent) = absent
-function Base.similar(::Absent, dims::Integer)
-    iszero(dims) || error("Cannot create absent with length")
+function Base.similar(::Absent, dims::Integer...)
+    any(iszero, dims) || error("Cannot create absent with length")
     return absent
 end
 isabsent(x) = x === absent
@@ -18,6 +16,7 @@ Base.getindex(::Absent, ::Vararg{Any}) = absent
 Base.view(::Absent, ::Vararg{Any}) = absent
 SparseArrays.rowvals(::Absent) = absent
 SparseArrays.nonzeros(::Absent) = absent
+matrix_delete_end!(::Absent, ::Integer) = absent
 
 const XorTX{X} = Union{<:X,<:Type{<:X}}
 const XorA{X} = Union{<:X,Absent}

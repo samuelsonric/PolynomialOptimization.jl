@@ -9,7 +9,6 @@ import Graphs
 import Combinatorics
 import MutableArithmetics
 import StatsBase
-import BufferedStreams
 
 export Newton
 
@@ -79,6 +78,7 @@ macro capture(firstarg, secondarg=nothing)
     end
 end
 
+include("./helpers/Mutation.jl")
 include("./helpers/FastVector.jl")
 using .FastVector
 include("./poly/SimplePolynomials.jl")
@@ -91,10 +91,10 @@ include("./helpers/MatrixPolynomials.jl")
 include("./helpers/Allocations.jl")
 
 include("./Problem.jl")
-include("./newton/Newton.jl")
-import .Newton
 include("./relaxations/Relaxation.jl")
 include("./optimization/Optimization.jl")
 include("./Tightening.jl")
+include("./newton/Newton.jl")
+import .Newton
 
 end

@@ -317,70 +317,48 @@ for (fun, call, def) in [
     eval(quote
         function MultivariatePolynomials.$fun(x::SimpleRealMonomialVector)
             isempty(x) && return $def
-            return $call(arg -> Int(sum(arg, init=0)), eachcol(x.exponents_real), init=$def)
+            return $call(arg -> Int(sum(arg, init=0)), eachcol(x.exponents_real))
         end
         function MultivariatePolynomials.$fun(x::SimpleComplexMonomialVector)
             isempty(x) && return $def
             return $call(args -> Int(sum(args[1], init=0) + sum(args[2], init=0)),
-                zip(eachcol(x.exponents_complex), eachcol(x.exponents_conj)), init=$def)
+                zip(eachcol(x.exponents_complex), eachcol(x.exponents_conj)))
         end
         function MultivariatePolynomials.$fun(x::SimpleMonomialVector)
             isempty(x) && return $def
             return $call(args -> Int(sum(args[1], init=0) + sum(args[2], init=0) + sum(args[3], init=0)),
-                zip(eachcol(x.exponents_real), eachcol(x.exponents_complex), eachcol(x.exponents_conj)), init=$def)
+                zip(eachcol(x.exponents_real), eachcol(x.exponents_complex), eachcol(x.exponents_conj)))
         end
     end)
 end
 MultivariatePolynomials.extdegree_complex(x::SimpleRealMonomialVector) = extdegree(x)
 MultivariatePolynomials.mindegree_complex(x::SimpleRealMonomialVector) = mindegree(x)
 MultivariatePolynomials.maxdegree_complex(x::SimpleRealMonomialVector) = maxdegree(x)
-for (fun, call, def, ret) in [
-    (:extdegree_complex, :extrema, (0, 0), :((min(v1[1], v2[1]), max(v1[2], v2[2])))),
-    (:mindegree_complex, :minimum, 0, :(min(v1, v2))),
-    (:maxdegree_complex, :maximum, 0, :(max(v1, v2))),
-]
-    eval(quote
-        function MultivariatePolynomials.$fun(x::SimpleComplexMonomialVector)
-            isempty(x) && return $def
-            cl = arg -> Int(sum(arg, init=0))
-            v1 = $call(cl, eachcol(x.exponents_complex), init=0)
-            v2 = $call(cl, eachcol(x.exponents_conj), init=0)
-            return $ret
-        end
-        function MultivariatePolynomials.$fun(x::SimpleMonomialVector)
-            isempty(x) && return $def
-            v1 = $call(args -> Int(sum(args[1], init=0) + sum(args[2], init=0)),
-                zip(eachcol(x.exponents_real), eachcol(x.exponents_complex)), init=0)
-            v2 = $call(arg -> Int(sum(arg, init=0)), eachcol(x.exponents_conj), init=0)
-            return $ret
-        end
-    end)
-end
 MultivariatePolynomials.exthalfdegree(x::SimpleRealMonomialVector) = div.(extdegree(x), 2, RoundUp)
 MultivariatePolynomials.minhalfdegree(x::SimpleRealMonomialVector) = div(mindegree(x), 2, RoundUp)
 MultivariatePolynomials.maxhalfdegree(x::SimpleRealMonomialVector) = div(maxdegree(x), 2, RoundUp)
-for (fun, call, def, ret) in [
-    (:exthalfdegree, :extrema, (0, 0), :((div(v0[1], 2, RoundUp) + min(v1[1], v2[1]),
-                                          div(v0[2], 2, RoundUp) + max(v1[2], v2[2])))),
-    (:minhalfdegree, :minimum, 0, :(div(v0, 2, RoundUp) + min(v1, v2))),
-    (:maxhalfdegree, :maximum, 0, :(div(v0, 2, RoundUp) + max(v1, v2))),
+for (fun, call, def, realfn) in [
+    (:extdegree_complex, :extrema, (0, 0), identity),
+    (:mindegree_complex, :minimum, 0, identity),
+    (:maxdegree_complex, :maximum, 0, identity),
+    (:exthalfdegree, :extrema, (0, 0), expr -> :(div($expr, 2, RoundUp))),
+    (:minhalfdegree, :minimum, 0, expr -> :(div($expr, 2, RoundUp))),
+    (:maxhalfdegree, :maximum, 0, expr -> :(div($expr, 2, RoundUp)))
 ]
     eval(quote
         function MultivariatePolynomials.$fun(x::SimpleComplexMonomialVector)
             isempty(x) && return $def
-            cl = arg -> Int(sum(arg, init=0))
-            v0 = $def
-            v1 = $call(cl, eachcol(x.exponents_complex), init=0)
-            v2 = $call(cl, eachcol(x.exponents_conj), init=0)
-            return $ret
+            return $call(
+                args -> max(sum(args[1], init=0), sum(args[2], init=0)),
+                zip(eachcol(x.exponents_complex), eachcol(x.exponents_conj))
+            )
         end
         function MultivariatePolynomials.$fun(x::SimpleMonomialVector)
             isempty(x) && return $def
-            cl = arg -> Int(sum(arg, init=0))
-            v0 = $call(cl, eachcol(x.exponents_real), init=0)
-            v1 = $call(cl, eachcol(x.exponents_complex), init=0)
-            v2 = $call(cl, eachcol(x.exponents_conj), init=0)
-            return $ret
+            return $call(
+                args -> $(realfn(:(sum(args[1], init=0)))) + max(sum(args[2], init=0), sum(args[3], init=0)),
+                zip(eachcol(x.exponents_real), eachcol(x.exponents_complex), eachcol(x.exponents_conj))
+            )
         end
     end)
 end
@@ -523,7 +501,7 @@ end
 """
     monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI},
         order=Graded{LexOrder}; minmultideg=nothing, maxmultideg=nothing,
-        representation=:auto) where {DI}
+        representation=:auto, filter=powers -> true) where {DI}
 
 Returns a [`SimpleMonomialVector`](@ref) with `nreal` real and `ncomplex` complex variables, total degrees contained in
 `degree`, ordered by `order` (which currently is a dummy argument, as only `Graded{LexOrder}` is supported) and individual
@@ -533,6 +511,8 @@ The representation is either `:dense` or `:sparse`; if `:auto` is selected, the 
 representation requires more memory and choose an appropriate one.
 The maximal exponent of the return type is chosen as the smallest unsigned integer that can still hold the largest degree
 according to `degree` (ignoring `maxmultideg`).
+An additional `filter` may be employed to drop monomials during the construction. Note that size estimation cannot take the
+filter into account.
 
 This method internally relies on [`MonomialIterator`](@ref). The `minmultideg` and `maxmultideg` parameters will automatically
 be converted to `Vector{DI}` instances.
@@ -541,7 +521,7 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
     degree::AbstractUnitRange{DI}, order=Graded{LexOrder};
     minmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
     maxmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
-    representation::Symbol=:auto) where {DI<:Integer}
+    representation::Symbol=:auto, filter=powers -> true) where {DI<:Integer}
     representation ∈ (:auto, :dense, :sparse) || throw(ArgumentError("The representation must be :dense, :sparse, or :auto"))
 
     n = nreal + 2ncomplex
@@ -583,32 +563,39 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
         offset_complex = nreal +1
         offset_conj = nreal + ncomplex +1
         if !iszero(nreal)
-            exponents_real = Matrix{P}(undef, nreal, len)
+            exponents_real = resizable_array(P, nreal, len)
         end
+        j = 0
         if !iszero(ncomplex)
-            exponents_complex = Matrix{P}(undef, ncomplex, len)
-            exponents_conj = Matrix{P}(undef, ncomplex, len)
+            exponents_complex = resizable_array(P, ncomplex, len)
+            exponents_conj = resizable_array(P, ncomplex, len)
             if iszero(nreal)
-                @inbounds for (exps, exps_complex, exps_conj) in zip(iter, eachcol(exponents_complex), eachcol(exponents_conj))
-                    copyto!(exps_complex, 1, exps, 1, ncomplex)
-                    copyto!(exps_conj, 1, exps, offset_conj, ncomplex)
+                @inbounds for exps in iter
+                    filter(exps) || continue
+                    j += 1
+                    copyto!(@view(exponents_complex[:, j]), 1, exps, 1, ncomplex)
+                    copyto!(@view(exponents_conj[:, j]), 1, exps, offset_conj, ncomplex)
                 end
-                return SimpleMonomialVector{nreal,ncomplex}(exponents_complex, exponents_conj)
+                return SimpleMonomialVector{nreal,ncomplex}(matrix_delete_end!(exponents_complex, len - j),
+                    matrix_delete_end!(exponents_conj, len - j))
             else
-                @inbounds for (exps, exps_real, exps_complex, exps_conj) in zip(iter, eachcol(exponents_real),
-                                                                                eachcol(exponents_complex),
-                                                                                eachcol(exponents_conj))
-                    copyto!(exps_real, 1, exps, 1, nreal)
-                    copyto!(exps_complex, 1, exps, offset_complex, ncomplex)
-                    copyto!(exps_conj, 1, exps, offset_conj, ncomplex)
+                @inbounds for exps in iter
+                    filter(exps) || continue
+                    j += 1
+                    copyto!(@view(exponents_real[:, j]), 1, exps, 1, nreal)
+                    copyto!(@view(exponents_complex[:, j]), 1, exps, offset_complex, ncomplex)
+                    copyto!(@view(exponents_conj[:, j]), 1, exps, offset_conj, ncomplex)
                 end
-                return SimpleMonomialVector{nreal,ncomplex}(exponents_real, exponents_complex, exponents_conj)
+                return SimpleMonomialVector{nreal,ncomplex}(matrix_delete_end!(exponents_real, len - j),
+                    matrix_delete_end!(exponents_complex, len - j), matrix_delete_end!(exponents_conj, len - j))
             end
         else
-            @inbounds for (exps, exps_real) in zip(iter, eachcol(exponents_real))
-                copyto!(exps_real, exps)
+            @inbounds for exps in iter
+                filter(exps) || continue
+                j += 1
+                copyto!(@view(exponents_real[:, j]), exps)
             end
-            return SimpleMonomialVector{nreal,ncomplex}(exponents_real)
+            return SimpleMonomialVector{nreal,ncomplex}(matrix_delete_end!(exponents_real, len - j))
         end
     else
         Ti = smallest_unsigned(max(nreal, ncomplex, nz_real +1, nz_complex +1, nz_conj +1))
@@ -627,7 +614,10 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
         end
         range_real = 1:nreal
         range_complex = nreal+1:nreal+ncomplex
+        j = 0
         for m in iter
+            filter(m) || continue
+            j += 1
             if !iszero(nreal)
                 unsafe_push!(colptr_real, Ti(length(rowval_real)) + one(Ti))
                 i_real = one(Ti)
@@ -660,31 +650,25 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer,
             end
         end
         if iszero(ncomplex)
-            @assert(nz_real == length(rowval_real))
-            unsafe_push!(colptr_real, Ti(nz_real +1))
+            unsafe_push!(colptr_real, Ti(length(rowval_real) +1))
             return SimpleMonomialVector{nreal,ncomplex}(
-                SparseMatrixCSC(nreal, len, finish!(colptr_real), finish!(rowval_real), finish!(nzval_real))
+                SparseMatrixCSC(nreal, j, finish!(colptr_real), finish!(rowval_real), finish!(nzval_real))
             )
         elseif iszero(nreal)
-            @assert(nz_complex == length(rowval_complex))
-            @assert(nz_conj == length(rowval_conj))
-            unsafe_push!(colptr_complex, Ti(nz_complex +1))
-            unsafe_push!(colptr_conj, Ti(nz_conj +1))
+            unsafe_push!(colptr_complex, Ti(length(rowval_complex) +1))
+            unsafe_push!(colptr_conj, Ti(length(rowval_conj) +1))
             return SimpleMonomialVector{nreal,ncomplex}(
-                SparseMatrixCSC(ncomplex, len, finish!(colptr_complex), finish!(rowval_complex), finish!(nzval_complex)),
-                SparseMatrixCSC(ncomplex, len, finish!(colptr_conj), finish!(rowval_conj), finish!(nzval_conj))
+                SparseMatrixCSC(ncomplex, j, finish!(colptr_complex), finish!(rowval_complex), finish!(nzval_complex)),
+                SparseMatrixCSC(ncomplex, j, finish!(colptr_conj), finish!(rowval_conj), finish!(nzval_conj))
             )
         else
-            @assert(nz_real == length(rowval_real))
-            @assert(nz_complex == length(rowval_complex))
-            @assert(nz_conj == length(rowval_conj))
-            unsafe_push!(colptr_real, Ti(nz_real +1))
-            unsafe_push!(colptr_complex, Ti(nz_complex +1))
-            unsafe_push!(colptr_conj, Ti(nz_conj +1))
+            unsafe_push!(colptr_real, Ti(length(rowval_real) +1))
+            unsafe_push!(colptr_complex, Ti(length(rowval_complex) +1))
+            unsafe_push!(colptr_conj, Ti(length(rowval_conj) +1))
             return SimpleMonomialVector{nreal,ncomplex}(
-                SparseMatrixCSC(nreal, len, finish!(colptr_real), finish!(rowval_real), finish!(nzval_real)),
-                SparseMatrixCSC(ncomplex, len, finish!(colptr_complex), finish!(rowval_complex), finish!(nzval_complex)),
-                SparseMatrixCSC(ncomplex, len, finish!(colptr_conj), finish!(rowval_conj), finish!(nzval_conj))
+                SparseMatrixCSC(nreal, j, finish!(colptr_real), finish!(rowval_real), finish!(nzval_real)),
+                SparseMatrixCSC(ncomplex, j, finish!(colptr_complex), finish!(rowval_complex), finish!(nzval_complex)),
+                SparseMatrixCSC(ncomplex, j, finish!(colptr_conj), finish!(rowval_conj), finish!(nzval_conj))
             )
         end
     end

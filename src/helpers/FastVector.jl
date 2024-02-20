@@ -1,6 +1,7 @@
 module FastVector
 
 export FastVec, prepare_push!, unsafe_push!, unsafe_append!, unsafe_prepend!, finish!
+using PolynomialOptimization: @assert, resizable_array
 
 # Julia exploits the sizehint!/push! combination very poorly (https://github.com/JuliaLang/julia/issues/24909). Here, we define
 # a (limited) fast vector, which rectifies this issue. It is similar to the PushVectors.jl package, but allows for even more
@@ -21,17 +22,7 @@ mutable struct FastVec{V} <: AbstractVector{V}
 
     function FastVec{V}(::UndefInitializer, n::Integer; buffer::Integer=n) where {V}
         buffer ≥ n || error("The buffer must not be smaller than the number of elements")
-        # this is a duplication of Newton.resizable_array, but the submodule should not depend on the larger one...
-        if VERSION < v"1.11" && isbitstype(V)
-            v = unsafe_wrap(Array, Ptr{V}(Libc.malloc(buffer * sizeof(V))), (buffer,), own=true)
-            # by default, a is shared already, which is clearly not correct here
-            vp = pointer_from_objref(v)
-            flagsptr = Ptr{UInt16}(vp) + sizeof(Ptr) + sizeof(UInt)
-            unsafe_store!(flagsptr, unsafe_load(flagsptr) & 0b1_0_1_1_1_111111111_11)
-            new{V}(v, n)
-        else
-            new{V}(Vector{V}(undef, buffer), n)
-        end
+        new{V}(isbitstype(V) ? resizable_array(V, buffer) : Vector{V}(undef, buffer), n)
     end
 end
 

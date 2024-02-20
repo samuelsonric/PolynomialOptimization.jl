@@ -14,7 +14,14 @@ abstract type AbstractPORelaxation{Prob<:POProblem} end
     RelaxationGroupings
 
 Contains information about how the elements in a certain (sparse) polynomial optimization problem combine.
-Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`.
+Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
+- `∑ᵢ transpose(objᵢ) * σᵢ * conj(objᵢ)` is the SOS representation of the objective with `σᵢ` PSD
+- `∑ᵢ transpose(zeroₖᵢ) * fₖᵢ` is the prefactor for the kᵗʰ equality constraint with `fₖᵢ` a free vector. Every entry in zeroₖᵢ
+  must be a canonical monomial; the presence of its conjugate is implicit.
+- `∑ᵢ transpose(nonnegₖᵢ) * σₖᵢ * conj(nonnegₖᵢ)` is the SOS representation of the prefactor of the kᵗʰ nonnegative constraint
+  with `σₖᵢ` PSD
+- `∑ᵢ (transpose(psdₖᵢ) ⊗ 𝟙) * Zₖᵢ * (conj(psdₖᵢ) ⊗ 𝟙)` is the SOS matrix representation of the prefactor of the kᵗʰ PSD
+  constraint with Zₖᵢ PSD
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
@@ -100,7 +107,7 @@ Returns the degree associated with a polynomial optimization problem.
 
 See also [`poly_problem`](@ref).
 """
-MultivariatePolynomials.degree(relaxation::AbstractPORelaxation) = maxdegree(basis(relaxation))
+MultivariatePolynomials.degree(relaxation::AbstractPORelaxation) = maxdegree_complex(basis(relaxation))
 Base.isreal(relaxation::AbstractPORelaxation) = isreal(relaxation.problem)
 
 include("./basis/Basis.jl")

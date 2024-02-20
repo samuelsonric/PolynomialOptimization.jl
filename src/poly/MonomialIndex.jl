@@ -47,7 +47,7 @@ monomial_index(::Number) = 1 # just a lazy way to avoid constant_monomial constr
 monomial_index(m::SimpleRealVariable{Nr,Nc}) where {Nr,Nc} = 2 + Nr + 2Nc - m.index # constant has index 1
 monomial_index(m::SimpleComplexVariable{Nr,Nc}) where {Nr,Nc} = 2 + (m.isconj ? Nc : 2Nc) - m.index
 
-Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:SimpleMonomial{Nr,Nc,P},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,P<:Unsigned}
+Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc}
     items = length(m)
     quote
         nvars = $(Nr + 2Nc)

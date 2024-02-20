@@ -164,11 +164,12 @@ PolynomialOptimization.sos_solver_mindex(::SolverSetup, monomials::SimpleMonomia
 const sospsd_offset = UInt8(17)
 sos_get_tri(::SolverSetupPSD{Triangle}) where {Triangle} = Triangle
 
+PolynomialOptimization.sos_solver_supports_quadratic(::Union{<:SolverSetupQuadratic,<:SolverSetupQuadraticSimplified,<:SolverSetupScalar}) = true
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDDictLinear{I,T}) where {I,T} = (I, T, sospsd_offset)
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDDictExplicit{I1,I2,T}) where {I1,I2,T} =
     (Tuple{I1,I2}, T, sospsd_offset)
 PolynomialOptimization.sos_solver_psd_indextype(::SolverSetupPSDLinear{T}) where {T} = T
-PolynomialOptimization.sos_solver_psd_supports_complex(::SolverSetupPSD{<:Any,C}) where {C} = C
+PolynomialOptimization.sos_solver_supports_complex_psd(::SolverSetupPSD{<:Any,C}) where {C} = C
 
 # just to check the tests
 gi(computed_index, computed_value, (x₁, x₂, x₃, x₄), supposed_value::Int16) =
@@ -1357,7 +1358,7 @@ function PolynomialOptimization.sos_solver_add_psd!(state::SolverSetupPSDDictExp
         data_conv[k] = (newkeys, vals)
     end
     PolynomialOptimization.sos_solver_add_psd!(
-        SolverSetupPSDDictLinear{Int32,tri,PolynomialOptimization.sos_solver_psd_supports_complex(state)}(:none, state.instance),
+        SolverSetupPSDDictLinear{Int32,tri,PolynomialOptimization.sos_solver_supports_complex_psd(state)}(:none, state.instance),
         dim, data_conv
     )
 end
@@ -2444,9 +2445,12 @@ end
 @testset "Equality constraints (elementary)" begin
     # these are basic tests, we don't check special cases
     offset = 80
-    realgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0], UInt8[0; 0;; 0; 0], UInt8[0; 0;; 0; 0])
-    mixedgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 1; 0], UInt8[0; 0;; 0; 0])
-    altgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 1], UInt8[0; 0;; 0; 0])
+    realgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 2; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 0],
+        UInt8[0; 0;; 0; 0;; 0; 0])
+    mixedgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 1; 0],
+        UInt8[0; 0;; 1; 0;; 1; 0])
+    altgrouping = SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 0; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 1],
+        UInt8[0; 0;; 0; 1;; 0; 1])
 
     constraint = SimplePolynomial(Int16[5], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest(1 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, realgrouping, constraint)
@@ -2467,10 +2471,11 @@ end
 
 @testset failfast=true "Equality constraints ($text)" for (grouping, text, offset) in (
     (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]), "1-basis", 90),
-    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 2; 0; 0], UInt8[0; 0;; 0; 0;; 0; 0],
-        UInt8[0; 0;; 0; 0;; 0; 0]), "real basis", 100),
-    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0], UInt8[0; 0;; 0; 0;; 0; 2],
-        UInt8[0; 0;; 0; 0;; 0; 0]), "complex basis", 110)
+    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 0; 2; 0; 0;; 2; 0; 0; 0;; 1; 2; 0; 0;; 0; 4; 0; 0],
+        zeros(UInt8, 2, 6), zeros(UInt8, 2, 6)), "real basis", 100),
+    (SimpleMonomialVector{4,2}(UInt8[0; 0; 0; 0;; 1; 0; 0; 0;; 2; 0; 0; 0;; 0; 0; 0; 0;; 1; 0; 0; 0;; 0; 0; 0; 0],
+        UInt8[0; 0;; 0; 0;; 0; 0;; 0; 0;; 0; 0;; 0; 2],
+        UInt8[0; 0;; 0; 0;; 0; 0;; 0; 2;; 0; 2;; 0; 2]), "complex basis", 110)
 )
     constraint = SimplePolynomial(Int16[6], SimpleMonomialVector{4,2}(UInt8[1; 0; 0; 0;;], UInt8[0; 0;;], UInt8[0; 0;;]))
     sostest(1 + offset, SolverSetupFree, :add_free_finalize, sos_add_equality!, grouping, constraint)

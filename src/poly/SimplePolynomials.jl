@@ -2,6 +2,8 @@ module SimplePolynomials
 
 using MultivariatePolynomials, SparseArrays, PolynomialOptimization.FastVector
 using SparseArrays: AbstractSparseVector, AbstractSparseMatrixCSC, FixedSparseVector
+using PolynomialOptimization: resizable_array
+import PolynomialOptimization: matrix_delete_end!
 import StatsBase
 
 include("./Utils.jl")

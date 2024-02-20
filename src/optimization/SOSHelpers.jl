@@ -862,20 +862,16 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 See also [`sos_add_matrix!`](@ref).
 """
 function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
-    lg = length(grouping)
     real_constr = isreal(constraint)
     real_basis = true
-    items = let real_grouping=0, complex_grouping=0
+    items = 0
         for g in grouping
             if isreal(g)
-                real_grouping += 1
+            items += 1
             else
-                complex_grouping += 1
+            items += 2
                 real_basis = false
             end
-        end
-        trisize(real_grouping) + real_grouping * 2complex_grouping + complex_grouping^2
-        # only reals             mix a real with a complex or conj   only complexes
     end
     if !real_constr
         items *= 2
@@ -902,47 +898,42 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
                 values₄ = similar(values)
             end
         end
-        for exp2 in 1:lg
-            g₂ = grouping[exp2]
-            for exp1 in (isreal(g₂) ? exp2 : 1):lg
-                g₁ = grouping[exp1]
-                real_grouping = real_basis || g₁.exponents_complex == g₂.exponents_complex
-                # only canonical products g₁ * conj(g₂)
-                real_grouping || g₁.exponents_complex < g₂.exponents_complex || continue
+        for g in grouping
+            real_grouping = real_basis || isreal(g)
+            real_grouping || @assert(iscanonical(g))
                 for term_constr in constraint
                     mon_constr = monomial(term_constr)
                     coeff_constr = coefficient(term_constr)
                     recoeff = real(coeff_constr)
                     imcoeff = imag(coeff_constr)
-                    repart, impart, canonical = getreim(state, g₁, mon_constr, conj(g₂))
+                repart, impart, canonical = getreim(state, g, mon_constr)
                     if real_constr
-                        # Even here, it may happen that we get duplicates: this is if real_grouping is false, for then we also
-                        # might add something with the conjugate grouping; and a later (or earlier) term may, with the
-                        # canonical grouping, give rise to the same monomial.
+                    # Even here, it may happen that we get duplicates: this is if real_grouping is false, for then we also
+                    # might add something with the conjugate grouping; and a later (or earlier) term may, with the canonical
+                    # grouping, give rise to the same monomial.
                         if isreal(mon_constr)
                             @assert(iszero(imcoeff) && canonical)
                             if !iszero(recoeff)
-                                pushorupdate!(indices, repart, values, recoeff)
+                            pushorupdate!(indices, repart, values, recoeff)
                                 if repart != impart
                                     @assert(!real_basis)
-                                    pushorupdate!(indices₂, impart, values₂, recoeff)
+                                pushorupdate!(indices₂, impart, values₂, recoeff)
                                 end
                             end
                         elseif iscanonical(mon_constr)
                             @assert(canonical)
                             if real_grouping
                                 @assert(repart != impart)
-                                iszero(recoeff) || pushorupdate!(indices, repart, values, recoeff)
-                                iszero(imcoeff) || pushorupdate!(indices, impart, values, imcoeff)
-                            else
-                                repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, conj(g₁))
+                            iszero(recoeff) || pushorupdate!(indices, repart, values, recoeff)
+                            iszero(imcoeff) || pushorupdate!(indices, impart, values, imcoeff)
+                        else
+                            repart₂, impart₂, canonical₂ = getreim(state, conj(g), mon_constr)
                                 @assert(repart != repart₂ && impart != impart₂)
                                 if !iszero(recoeff)
                                     if repart == impart
                                         @assert(repart₂ != impart₂)
                                         # complex monomial, complex grouping, but real product
-                                        # -> will be very different for g₁*conj(mon_constr)*conj(g₂), but then, the
-                                        # conjugate grouping will have this.
+                                    # -> will be very different for conj(g)*conj(mon_constr)
                                         pushorupdate!(indices, repart, values, recoeff + recoeff)
                                         pushorupdate!(indices, repart₂, values, recoeff)
                                         pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
@@ -981,12 +972,12 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
                     elseif isreal(mon_constr)
                         @assert(canonical)
                         if !iszero(recoeff)
-                            pushorupdate!(indices, repart, values, recoeff)
-                            repart == impart || pushorupdate!(indices₃, impart, values₃, recoeff)
+                        pushorupdate!(indices, repart, values, recoeff)
+                        repart == impart || pushorupdate!(indices₃, impart, values₃, recoeff)
                         end
                         if !iszero(imcoeff)
-                            pushorupdate!(indices₂, repart, values₂, imcoeff)
-                            repart == impart || pushorupdate!(indices₄, impart, values₄, imcoeff)
+                        pushorupdate!(indices₂, repart, values₂, imcoeff)
+                        repart == impart || pushorupdate!(indices₄, impart, values₄, imcoeff)
                         end
                     else
                         if repart != impart || !real_grouping
@@ -1004,7 +995,7 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
                                 pushorupdate!(indices₂, repart, values₂, imcoeff)
                             end
                         else
-                            repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, conj(g₁))
+                        repart₂, impart₂, canonical₂ = getreim(state, conj(g), mon_constr)
                             @assert(repart != repart₂ && impart != impart₂)
                             if !iszero(recoeff)
                                 if repart == impart
@@ -1083,7 +1074,6 @@ function sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::Si
                             eqstate = @inline sos_solver_add_free!(state, eqstate, indices₄, values₄, false)
                             empty!(indices₄)
                             empty!(values₄)
-                        end
                     end
                 end
             end
