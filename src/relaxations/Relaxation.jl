@@ -45,7 +45,7 @@ SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:A
     for (i, (obj_a, obj_b)) in enumerate(Iterators.product(a.obj, b.obj))
         @inbounds newobj[i] = intersect(obj_a, obj_b)
     end
-    newobj = unique!(sort!(newobj))
+    newobj = Base._groupedunique!(sort!(newobj))
 
     $((quote
         $(Symbol(:new, name)) = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.$name)), eltype(eltype(b.$name)))}}(
@@ -57,7 +57,7 @@ SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:A
             for (i, (a, b)) in enumerate(Iterators.product(as, bs))
                 @inbounds newₖ[i] = intersect(a, b)
             end
-            @inbounds $(Symbol(:new, name))[k] = unique!(sort!(newₖ))
+            @inbounds $(Symbol(:new, name))[k] = Base._groupedunique!(sort!(newₖ))
         end
     end for name in (:zeros, :nonnegs, :psds))...)
 
@@ -65,7 +65,7 @@ SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:A
     for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
         @inbounds newcliques[i] = sort!(intersect(clique_a, clique_b))
     end
-    newcliques = unique!(sort!(newcliques, by=x -> (-length(x), x)))
+    newcliques = Base._groupedunique!(sort!(newcliques, by=x -> (-length(x), x)))
 
     return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end

@@ -281,14 +281,14 @@ function exponents_from_index_prepare(iter::MonomialIterator{<:Any,DI}) where {D
     # This is similar to _moniter_length, however, we will need to store all intermediate results and we'll need to iterate
     # backwards through the variables.
     @inbounds fill!(@view(occurrences[minmultideg[j]+1:min(maxmultideg[j], maxdeg)+1, j]), 1)
-    for j in iter.n-1:-1:1
+    @inbounds for j in iter.n-1:-1:1
         lastround = @view(occurrences[:, j+1])
         nextround = @view(occurrences[:, j])
         for degᵢ in minmultideg[j]:min(maxmultideg[j], maxdeg)
             for (degₖ, occₖ) in zip(Iterators.countfrom(0), lastround)
                 newdeg = degᵢ + degₖ
                 newdeg > maxdeg && break
-                @inbounds nextround[newdeg+1] += occₖ
+                nextround[newdeg+1] += occₖ
             end
         end
     end

@@ -15,7 +15,7 @@ function preproc_prequick(V, coeffs, verbose; parameters...)
             end
         end
     end
-    unique!(sort!(vertexindices))
+    Base._groupedunique!(sort!(vertexindices))
     return preproc_quick(V, coeffs, vertexindices, verbose; parameters...)
 end
 
