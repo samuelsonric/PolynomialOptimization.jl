@@ -79,17 +79,19 @@ The `parameters` will be passed on to the linear solver in every case (preproces
 
 See also [`halfpolytope_from_file`](@ref).
 """
-halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...) =
-    halfpolytope(Val(method), poly, Val(haveMPI[]); kwargs...)
-function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
-    obj = SimplePolynomial(poly)
-    P = typeof(obj)
-    mhd = maxhalfdegree(obj)
+function halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...)
+    P = typeof(poly)
+    mhd = maxhalfdegree(poly)
     T = smallest_unsigned(2mhd)
-    mons = LazyMonomials{_effective_nvars(obj),0}(zero(T):T(mhd))
+    mons = LazyMonomials{_effective_nvars(poly),0}(zero(T):T(mhd), powers=ownpowers)
     MV = typeof(mons)
-    out = halfpolytope(method, obj; verbose, zero=P[], nonneg=P[], psd=Matrix{P}[],
-        groupings=RelaxationGroupings([mons], MV[], Vector{MV}[], Vector{MV}[], []), kwargs...)
+    return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=P[], nonneg=P[], psd=Matrix{P}[],
+        groupings=RelaxationGroupings(
+            [mons], Vector{MV}[], Vector{MV}[], Vector{MV}[], Vector{variable_union_type(poly)}[]
+        ), kwargs...)
+end
+function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
+    out = halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)
     if out isa SimpleMonomialVector
         conv_time = @elapsed begin
             real_vars = variable_union_type(poly)[]

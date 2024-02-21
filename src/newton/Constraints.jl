@@ -54,7 +54,7 @@ function merge_constraints(objective::SimpleRealPolynomial{<:Any,Nr,P}, zero, no
     # decomposition cell-wise.
     isempty(psd) || @verbose_info("├ PSD constraints")
     for (groupings, psdᵢ) in zip(groupings.psds, psd)
-        dim = LinearAlgebra.checksquare(psdᵢ)
+        dim = size(psdᵢ, 1)
         sizehint!(mons_idx_set, length(mons_idx_set) + sum(g -> length(g) * (length(g) +1) ÷ 2, groupings.psds) *
                                 sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0))
         @inbounds for j in 1:dim, i in 1:j
