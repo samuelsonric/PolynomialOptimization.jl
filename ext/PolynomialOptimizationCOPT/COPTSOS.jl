@@ -144,6 +144,15 @@ function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::C
     return eqstate + one(Cint)
 end
 
+function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, eqstate::Cint)
+    rem = Int32(eqstate):state.num_vars-one(Cint)
+    if !isempty(rem)
+        _check_ret(copt_env, COPT_DelCols(state.problem, length(rem), collect(rem)))
+        state.num_vars -= length(rem)
+    end
+    return
+end
+
 function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))

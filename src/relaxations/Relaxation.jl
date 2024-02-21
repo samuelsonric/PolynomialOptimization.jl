@@ -36,7 +36,7 @@ struct RelaxationGroupings{Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc},
 end
 
 SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:Any,P}}) where {P<:Unsigned} = P
-function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGroupings{Nr,Nc,P,V}) where
+@eval function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGroupings{Nr,Nc,P,V}) where
     {Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc}}
     (length(a.zeros) == length(b.zeros) && length(a.nonnegs) == length(b.nonnegs) && length(a.psds) == length(b.psds)) ||
         error("Cannot intersect two relaxation groupings for different optimization problems")
@@ -47,38 +47,25 @@ function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGrouping
     end
     newobj = unique!(sort!(newobj))
 
-    newzeros = Vector{Base.promote_op(intersect, eltype(a.zeros), eltype(b.zeros))}(undef, length(a.zeros))
-    for (i, (zero_a, zero_b)) in enumerate(zip(a.zeros, b.zeros))
-        @inbounds newzeros[i] = intersect(zero_a, zero_b)
-    end
-
-    newnonnegs = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.nonnegs)), eltype(eltype(b.nonnegs)))}}(
-        undef, length(a.nonnegs)
-    )
-    Threads.@threads for k in 1:length(a.nonnegs)
-        @inbounds nonnegs_a, nonnegs_b = a.nonnegs[k], b.nonnegs[k]
-        newnonneg = Vector{MV}(undef, length(nonnegs_a) * length(nonnegs_b))
-        for (i, (nonneg_a, nonneg_b)) in enumerate(Iterators.product(nonnegs_a, nonnegs_b))
-            @inbounds newnonneg[i] = intersect(nonneg_a, nonneg_b)
+    $((quote
+        $(Symbol(:new, name)) = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.$name)), eltype(eltype(b.$name)))}}(
+            undef, length(a.$name)
+        )
+        for k in 1:length(a.$name)
+            @inbounds as, bs = a.$name[k], b.$name[k]
+            newₖ = eltype($(Symbol(:new, name)))(undef, length(as) * length(bs))
+            for (i, (a, b)) in enumerate(Iterators.product(as, bs))
+                @inbounds newₖ[i] = intersect(a, b)
+            end
+            @inbounds $(Symbol(:new, name))[k] = unique!(sort!(newₖ))
         end
-        @inbounds newnonnegs[k] = unique!(sort!(newnonneg))
-    end
-
-    newpsds = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.psds)), eltype(eltype(b.psds)))}}(undef, length(a.psds))
-    Threads.@threads for k in 1:length(a.psds)
-        @inbounds psds_a, psds_b = a.psds[k], b.psds[k]
-        newpsd = FastVec{MV}(buffer=length(psds_a) * length(psds_b))
-        for (i, (psd_a, psd_b)) in enumerate(Iterators.product(psds_a, psds_b))
-            @inbounds newpsd[i] = intersect(psd_a, psd_b)
-        end
-        @inbounds newpsds[k] = unique!(sort!(newpsd))
-    end
+    end for name in (:zeros, :nonnegs, :psds))...)
 
     newcliques = Vector{Vector{V}}(undef, length(a.var_cliques) * length(b.var_cliques))
     for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
-        @inbounds newcliques[i] = intersect(clique_a, clique_b)
+        @inbounds newcliques[i] = sort!(intersect(clique_a, clique_b))
     end
-    newcliques = unique!(sort!(newcliques))
+    newcliques = unique!(sort!(newcliques, by=x -> (-length(x), x)))
 
     return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end
@@ -140,8 +127,6 @@ The keyword arguments will be passed on to the constructor of `RelaxationXXX`.
 
 function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
     groups = groupings(x)
-    sort!.(groups.var_cliques)
-    sort!(groups.var_cliques)
     # we don't want to print the fully parameterized type type
     print(io, typeof(x).name.name, " of a polynomial optimization problem\nVariable cliques:")
     for va in groups.var_cliques
@@ -184,7 +169,7 @@ function MultivariatePolynomials.degree(relaxation::AbstractPORelaxation)
     subdegree = v -> maximum(maxdegree_complex, v)
     return max(
         maximum(maxdegree_complex, gr.obj),
-        maximum(maxhalfdegree, gr.zeros, init=0),
+        maximum(subdegree, gr.zeros, init=0),
         maximum(subdegree, gr.nonnegs, init=0),
         maximum(subdegree, gr.psds, init=0)
     )

@@ -274,9 +274,9 @@ sos_solver_supports_complex_psd(_) = false
 """
     sos_solver_add_free_prepare!(state, num::Int)
 
-Prepares to add `num` free variables (corresponding to polynomial equality constraints) to `state`; the actual data is then put
-into the problem by subsequent calls by [`sos_solver_add_free!`](@ref) and the whole transaction is completed by
-[`sos_solver_add_free_finalize!`](@ref).
+Prepares to add no more than `num` free variables (corresponding to polynomial equality constraints) to `state`; the actual
+data is then put into the problem by subsequent calls by [`sos_solver_add_free!`](@ref) and the whole transaction is completed
+by [`sos_solver_add_free_finalize!`](@ref).
 The return value of this function is passed on as `eqstate` to both functions, and will also be mutated by
 [`sos_solver_add_free!`](@ref).
 The default implementation does nothing.
@@ -295,13 +295,14 @@ calls, it will be the return value of the previous call.
 """
 function sos_solver_add_free! end
 """
-    sos_solver_add_free_finalize!(state, num::Int, eqstate)
+    sos_solver_add_free_finalize!(state, eqstate)
 
-Finishes the addition of `num` free variables to `state`; the value of `eqstate` is the return value of the last call to
-[`sos_solver_add_free!`](@ref).
+Finishes the addition of free variables to `state`; the value of `eqstate` is the return value of the last call to
+[`sos_solver_add_free!`](@ref). Note that less variables than initially requested might have been added; in this case, the
+implementation might decide to delete the unused ones or just leave them as they are.
 The default implementation does nothing.
 """
-sos_solver_add_free_finalize!(_, _, _) = nothing
+sos_solver_add_free_finalize!(_, _) = nothing
 
 """
     sos_solver_fix_constraints!(state, indices::Vector{T},

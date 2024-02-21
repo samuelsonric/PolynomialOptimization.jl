@@ -234,6 +234,15 @@ function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::I
     return eqstate + one(Int32)
 end
 
+function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, eqstate::Int32)
+    rem = Int32(eqstate):state.num_vars-one(Int32)
+    if !isempty(rem)
+        Mosek.@MSK_removevars(state.task.task, length(rem), collect(rem))
+        state.num_vars -= length(rem)
+    end
+    return
+end
+
 function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int32}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))

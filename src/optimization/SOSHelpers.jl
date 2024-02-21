@@ -849,10 +849,10 @@ function sos_add_matrix!(state, grouping::AbstractVector{M} where M<:SimpleMonom
 end
 
 """
-    sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+    sos_add_equality!(state, groupings::AbstractVector{M} where M<:SimpleMonomialVector, constraint::SimplePolynomial)
 
-Parses a polynomial equality constraint with a basis given in `grouping` (this might also be a partial basis due to sparsity)
-and calls the appropriate solver functions to set up the problem structure.
+Parses a polynomial equality constraint and calls the appropriate solver functions to set up the problem structure.
+`groupings` contains all the individual bases that will be squared in the process to generate the prefactor.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`sos_solver_add_free_prepare!`](@ref) (optional)
@@ -863,11 +863,16 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_matrix!`](@ref).
 """
-function sos_add_equality!(state, grouping::AbstractVector{M} where M<:SimpleMonomial, constraint::SimplePolynomial)
-    lg = length(grouping)
+function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:SimpleMonomial,MV<:AbstractVector{M}}, constraint::SimplePolynomial)
     real_constr = isreal(constraint)
     real_basis = true
-    items = let real_grouping=0, complex_grouping=0
+    buffer = length(constraint)
+    # First we need an overestimator on the number of variables that might come from all our multiplications. Some solvers will
+    # require adding the variables first.
+    maxbasisitems = 0
+    for grouping in groupings
+        real_grouping = 0
+        complex_grouping = 0
         for g in grouping
             if isreal(g)
                 real_grouping += 1
@@ -876,20 +881,31 @@ function sos_add_equality!(state, grouping::AbstractVector{M} where M<:SimpleMon
                 real_basis = false
             end
         end
-        trisize(real_grouping) + real_grouping * 2complex_grouping + complex_grouping^2
+        maxbasisitems += trisize(real_grouping) + real_grouping * 2complex_grouping + complex_grouping^2
         # only reals             mix a real with a complex or conj   only complexes
-    end
-    if !real_constr
-        items *= 2
     end
     # Now the prefactor is an arbitrary polynomial, and also constraint can be anything - there is no need that they be
     # real-valued any more. However, as we transfer everything to the objective, we then need to consider real and imaginary
     # part separately.
     # We will simply separate real and imaginary part in the constraint to give two separate constraints. Our prefactors will
     # in total always be real-valued.
-
-    eqstate = @inline sos_solver_add_free_prepare!(state, items)
-    buffer = length(constraint)
+    eqstate = @inline sos_solver_add_free_prepare!(state, real_constr ? maxbasisitems : 2maxbasisitems)
+    # Construct the basis for the zero constraints by considering the squares of all the elements in a given basis
+    # If we were to multiply every item in grouping with every item in conj(grouping), for real-valued problems, this would
+    # give rise to a large number of redundant constraints. Passing these linear dependencies to the optimizer might lead to
+    # severe numerical issues, even if a linear dependency checker is employed by the solver.
+    # Example: Problem (6.1) from the correlative sparsity paper with
+    # (nx = 2, ny = 4, μ = 0, M = 18). Mosek will have tons of issues.
+    # - Using the default parameters, it reports 0.053532 as optimal.
+    # - Switching off the presolver or PRESOLVE_LINDEP_USE gives the correct answer (which is lower!), 0.051707.
+    # - Setting PRESOLVE_ELIMINATOR_MAX_NUM_TRIES to 0, 1, 2 gives 0.215861, 0.052381, 0.053533.
+    # But in general, we want the presolver to work, so we'll have to take care that we don't generate all those duplicates.
+    # Unfortunately, this requires keeping track of everything we already did (unless we are in the specia case
+    # isone(length(groupings)) and first(groupings) is a LazyMonomials... Should we treat this separately? But then, our whole
+    # two-loop must be transformed into a one-loop.)
+    zero_basis = sizehint!(Set{FastKey{Int}}(), maxbasisitems)
+    for grouping in groupings
+        grouping₂ = lazy_unalias(grouping)
     @inbounds let T=Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(constraint)),
         V=realtype(coefficient_type(constraint)),
         indices=FastVec{T}(buffer=real_constr && real_basis ? buffer : (real_constr || real_basis ? 2buffer : 4buffer)),
@@ -905,13 +921,15 @@ function sos_add_equality!(state, grouping::AbstractVector{M} where M<:SimpleMon
             end
         end
         grouping₂ = lazy_unalias(grouping)
-        for exp2 in 1:lg
-            g₂ = grouping[exp2]
-            for exp1 in (isreal(g₂) ? exp2 : 1):lg
-                g₁ = grouping₂[exp1]
+            for (exp2, g₂) in enumerate(grouping)
+                for g₁ in Iterators.drop(grouping₂, isreal(g₂) ? exp2 -1 : 0)
                 real_grouping = real_basis || g₁.exponents_complex == g₂.exponents_complex
                 # only canonical products g₁ * conj(g₂)
                 real_grouping || g₁.exponents_complex < g₂.exponents_complex || continue
+                    # no duplicates
+                    let grouping_idx=FastKey(monomial_index(g₁, conj(g₂)))
+                        grouping_idx ∈ zero_basis ? continue : push!(zero_basis, grouping_idx)
+                    end
                 for term_constr in constraint
                     mon_constr = monomial(term_constr)
                     coeff_constr = coefficient(term_constr)
@@ -1092,7 +1110,8 @@ function sos_add_equality!(state, grouping::AbstractVector{M} where M<:SimpleMon
             end
         end
     end
-    @inline sos_solver_add_free_finalize!(state, items, eqstate)
+    end
+    @inline sos_solver_add_free_finalize!(state, eqstate)
     return
 end
 
@@ -1129,9 +1148,7 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
     end
     # free items
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
-        for grouping in groupingsᵢ
-            sos_add_equality!(state, grouping, constrᵢ)
-        end
+        sos_add_equality!(state, groupingsᵢ, constrᵢ)
     end
     # localizing matrices
     for (groupingsᵢ, constrᵢ) in zip(groupings.nonnegs, problem.constr_nonneg)
@@ -1151,7 +1168,6 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
     if isone(problem.prefactor)
         @inline sos_solver_add_free_finalize!(
             state,
-            1,
             sos_solver_add_free!(
                 state,
                 sos_solver_add_free_prepare!(state, 1),
@@ -1187,7 +1203,6 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
             end
             @inline sos_solver_add_free_finalize!(
                 state,
-                1,
                 sos_solver_add_free!(state, sos_solver_add_free_prepare!(state, 1), indices, values, true)
             )
         end
