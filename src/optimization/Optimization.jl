@@ -42,7 +42,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Boo
         if clique_merging
             clique_merging && @verbose_info("Merging cliques...")
             t = @elapsed begin
-                groups = merge_cliques(relaxation, groups)
+                groups = merge_cliques(groups)
             end
             @verbose_info("Cliques merged in ", t, " seconds.")
         else

@@ -6,8 +6,9 @@ function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     # first form the clique graph; this time, we work with the adjacency matrix
     n = length(cliques)
     n ≤ 1 && return [smallcliques; cliques]
-    @inbounds adjmOwn = [i > j ? length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3 : 0
-                         for i in 1:n, j in 1:n]
+    @inbounds adjmOwn = collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
+                                                 length(cliques[i] ∪ cliques[j])^3 : 0
+                                         for i in 1:n, j in 1:n))
     idxOwn = fill(true, n)
     GC.@preserve adjmOwn idxOwn begin
         adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
@@ -43,8 +44,9 @@ function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
                 n -= deleted
                 # we already have enough space allocated at adjm; we will now simply overwrite it.
                 adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
-                adjm .= [i > j ? length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3 : 0
-                         for i in 1:n, j in 1:n]
+                adjm .= collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
+                                                 length(cliques[i] ∪ cliques[j])^3 : 0
+                                         for i in 1:n, j in 1:n))
                 # same for idx
                 idx = unsafe_wrap(Array, pointer(idxOwn), n, own=false)
                 idx .= true
@@ -67,21 +69,49 @@ function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     return [smallcliques; cliques[idx]]
 end
 
-function merge_cliques(groupings::RelaxationGroupings{MV}) where {MV}
-    max_power = _get_p(MV)
-    representation = MV <: SimpleDenseMonomialVector ? :dense : :sparse
-    vars = filter(∘(!, isconj), variables(MV))
-    let cout=merge_cliques!(Set.(groupings.obj))
-        empty!(groupings.obj)
-        sizehint!(groupings.obj, length(cout))
-        for coutᵢ in cout
-            push!(groupings.obj, SimpleMonomialVector(coutᵢ, max_power, representation, vars))
+_convert_clique(cl) = Set(monomial_index(x) for x in cl)
+function _reconvert_clique(::Type{SMV}, clset) where {Nr,Nc,P<:Unsigned,SMV<:SimpleMonomialVector{Nr,Nc,P}}
+    exponents_real, exponents_complex, exponents_conj =
+        exponents_from_indices(P, Nr, Nc, clset, Val(SMV <: SimplePolynomials.SimpleDenseMonomialVector))
+    return SMV(iszero(Nr) ? SimplePolynomials.absent : exponents_real, exponents_complex, exponents_conj)
+end
+function _reconvert_clique(::Type{SMV}, clset) where {Nr,P<:Unsigned,SMV<:SimpleMonomialVector{Nr,0,P}}
+    exponents_real = exponents_from_indices(P, Nr, clset, Val(SMV <: SimplePolynomials.SimpleDenseMonomialVector))
+    return SMV(exponents_real, SimplePolynomials.absent, SimplePolynomials.absent)
+end
+
+function merge_cliques(groupings::RelaxationGroupings{Nr,Nc,P,<:Any,MV}) where {Nr,Nc,P<:Unsigned,MV}
+    dense = !(MV <: SimplePolynomials.SimpleSparseMonomialVectorOrView)
+    M = dense ? Matrix{P} : SparseMatrixCSC{P,UInt}
+    outtype_part = SimpleMonomialVector{Nr,Nc,P,M}
+    outtype_full = outtype_part{iszero(Nr) ? SimplePolynomials.Absent : M,iszero(Nc) ? SimplePolynomials.Absent : M}
+    newobj = let obj_merged=merge_cliques!(_convert_clique.(groupings.obj))
+        newobj = similar(obj_merged, outtype_full)
+        for (i, objᵢ) in enumerate(obj_merged)
+            @inbounds newobj[i] = _reconvert_clique(outtype_part, objᵢ)
+        end
+        newobj
+    end
+    # it does not make sense to merge the zero constraints, as every unique product corresponds to a separate variable anyway.
+    newnonnegs = similar(groupings.nonnegs, Vector{outtype_full})
+    @inbounds for (k, nonneg) in groupings.nonnegs
+        newnonnegs[k] = let nonneg_merged=merge_cliques!(_convert_clique.(nonneg))
+            newnonneg = similar(nonneg, outtype_full)
+            for (i, nonnegᵢ) in enumerate(nonneg_merged)
+                newnonneg[i] = _reconvert_clique(outtype_part, nonnegᵢ)
+            end
+            newnonneg
         end
     end
-    for constr in (groupings.zeros, groupings.nonnegs, groupings.psds)
-        for (i, cin) in enumerate(constr)
-            @inbounds constr[i] = SimpleMonomialVector.(merge_cliques!(Set.(cin)), max_power, representation, (vars,))
+    newpsds = similar(groupings.psds, Vector{outtype_full})
+    @inbounds for (k, psd) in groupings.psds
+        newpsds[k] = let psd_merged=merge_cliques!(_convert_clique.(psd))
+            newpsd = similar(psd, outtype_full)
+            for (i, psdᵢ) in enumerate(psd_merged)
+                newpsd[i] = _reconvert_clique(outtype_part, psdᵢ)
+            end
+            newpsd
         end
     end
-    return constr
+    return RelaxationGroupings(newobj, groupings.zeros, newnonnegs, newpsds, groupings.var_cliques)
 end
