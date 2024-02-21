@@ -5,20 +5,17 @@ using Documenter: doctest;
     @testset "Documentation" begin
         doctest(PolynomialOptimization)
     end
+    @testset "SimplePolynomials" begin
+        include("SimplePolynomials.jl")
+    end
+    @testset "SOS solver interface" begin
+        include("./SOSHelpers.jl")
+    end
     @testset "no sparsity" begin
         include("./RelaxationDense.jl")
     end
     @testset "correlative sparsity" begin
-        include("./SparsityCorrelative.jl")
-    end
-    @testset "term sparsity" begin
-        include("./SparsityTermBlock.jl")
-    end
-    @testset "term sparsity with chordal extension" begin
-        include("./SparsityTermCliques.jl")
-    end
-    @testset "correlative and term sparsity" begin
-        include("./SparsityCorrelativeTerm.jl")
+        include("./RelaxationSparsityCorrelative.jl")
     end
     if :MosekSOS ∈ all_solvers
         # Tightening requires Mosek at the moment

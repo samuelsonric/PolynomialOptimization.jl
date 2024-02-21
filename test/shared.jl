@@ -3,6 +3,7 @@ using PolynomialOptimization
 using MultivariatePolynomials
 import DynamicPolynomials
 import Mosek, COPT
+import StatsBase
 
 if !@isdefined(solvers)
     optimize = true
@@ -20,7 +21,6 @@ if !@isdefined(solvers)
         end
     end
         solvers = [:MosekSOS, :COPTSOS]
-        complex_solvers = [:MosekMoment, :HypatiaMoment]
     else
         solvers = [:COPTSOS]
     end

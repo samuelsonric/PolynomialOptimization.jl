@@ -177,3 +177,4 @@ end
 Base.isreal(relaxation::AbstractPORelaxation) = isreal(relaxation.problem)
 
 include("./degree/Degree.jl")
+include("./sparse/Sparse.jl")

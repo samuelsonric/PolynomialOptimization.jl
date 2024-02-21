@@ -460,56 +460,6 @@ function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{Nr,Nc,<:Simp
 
 MultivariatePolynomials.effective_variables(x::SimpleMonomialVector) = SimpleMonomialVectorEffectiveVariables(x)
 
-_effective_nvariables_has(name, field, k, ::Type{<:SimpleDenseMonomialVectorOrView}) = quote
-    !all(iszero, view($name.$field, $k, :))
-end
-_effective_nvariables_has(name, field, k, ::Type{<:SimpleSparseMonomialVectorOrView}) = quote
-    let rvs=rowvals($name.$field), nzs=nonzeros($name.$field), ret=false, find=isequal($k)
-        idx = findfirst(find, rvs)
-        while !isnothing(idx)
-            @inbounds if !iszero(nzs[idx])
-                ret = true
-                break
-            end
-            idx = findnext(find, rvs, idx +1)
-        end
-        ret
-    end
-end
-_effective_nvariables_has(name, field, k, ::Type{<:AbstractArray{E}}) where {E} = quote
-    let found=false
-        for xₖ in $name
-            $(_effective_nvariables_has(:xₖ, field, k, E)) && (found = true; break)
-        end
-        found
-    end
-end
-"""
-    effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},
-                                  <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
-
-Calculates the number of effective variable of its arguments: there are at most `Nr + 2Nc` variables that may occur in any
-of the monomial vectors or arrays of monomial vectors in the arguments. This function calculates efficiently the number of
-variables that actually occur at least once anywhere in any argument.
-"""
-@generated function effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
-    n = length(x)
-    quote
-        i = 0
-        for k in 1:$Nr
-            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_real, :k, x[i]) for i in 1:n)...)) && (i += 1)
-        end
-        for k in 1:$Nc
-            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_complex, :k, x[i]) for i in 1:n)...)) && (i += 1)
-        end
-        # two loops should be more efficient, as the memory regions are closer
-        for k in 1:$Nc
-            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_conj, :k, x[i]) for i in 1:n)...)) && (i += 1)
-        end
-        return i
-    end
-end
-
 function nzlength(iter, nreal::Integer, ncomplex::Integer, quick_exit::Union{Nothing,<:Integer})
     @specialize quick_exit
     nz_real = 0
@@ -810,6 +760,59 @@ MultivariatePolynomials.mindegree(lm::LazyMonomials) = mindegree(lm.iter)
 MultivariatePolynomials.maxdegree(lm::LazyMonomials) = maxdegree(lm.iter)
 MultivariatePolynomials.extdegree(lm::LazyMonomials) = extdegree(lm.iter)
 
+struct LazyMonomialsEffectiveVariables{Nr,Nc,LM<:LazyMonomials{Nr,Nc}}
+    lm::LM
+end
+
+Base.IteratorSize(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasLength()
+Base.IteratorEltype(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasEltype()
+Base.eltype(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} =
+    SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:MonomialIterator}}) where {Nr,Nc}
+    if isempty(lmev.lm)
+        return nothing
+    else
+        idx::Int = findfirst(∘(!, iszero), lmev.lm.iter.maxmultideg)
+        return SimpleVariable{Nr,Nc}(idx), idx
+    end
+end
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:MonomialIterator}}, state::Int) where {Nr,Nc}
+    idx = findnext(∘(!, iszero), lmev.lm.iter.maxmultideg, state +1)
+    return isnothing(idx) ? nothing : (SimpleVariable{Nr,Nc}(idx), idx)
+end
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:RangedMonomialIterator}}) where {Nr,Nc}
+    isempty(lmev.lm) && return nothing
+    riter = lmev.lm.iter
+    iter = riter.iter
+    tmppow = first(riter)
+    idx = findfirst(∘(!, iszero), iter.maxmultideg)
+    @inbounds while !isnothing(idx)
+        # maybe the index is already present in the first powers of the ranged iterator
+        iszero(tmppow[idx]) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
+        # it is not, so let us check if the next index that has the variable present is still within
+        tmppow[idx] = 1
+        isnothing(monomial_index(tmppow, riter, lmev.lm.index_data)) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
+        # it was not, go on
+        tmppow[idx] = 0
+        idx = findnext(∘(!, iszero), iter.maxmultideg, idx +1)
+    end
+    return nothing
+end
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:RangedMonomialIterator}}, (idx, tmppow)) where {Nr,Nc}
+    iter = lmev.lm.iter.iter
+    @inbounds while true
+        idx = findnext(∘(!, iszero), iter.maxmultideg, idx +1)
+        isnothing(idx) && return nothing
+        iszero(tmppow[idx]) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
+        tmppow[idx] = 1
+        isnothing(monomial_index(tmppow, lmev.lm.iter, lmev.lm.index_data)) ||
+            return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
+        tmppow[idx] = 0
+    end
+end
+
+MultivariatePolynomials.effective_variables(x::LazyMonomials) = LazyMonomialsEffectiveVariables(x)
+
 """
     lazy_unalias(lm::AbstractVector)
 
@@ -824,6 +827,110 @@ lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:Monom
 lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:RangedMonomialIterator{<:Any,P},E} =
     LazyMonomials{Nr,Nc,P,MI,E}(RangedMonomialIterator(lm.iter), lm.index_data)
 lazy_unalias(v::AbstractVector) = v
+
+_effective_nvariables_has(name, field, k, ::Type{<:SimpleDenseMonomialVectorOrView}) = quote
+    !all(iszero, view($name.$field, $k, :))
+end
+_effective_nvariables_has(name, field, k, ::Type{<:SimpleSparseMonomialVectorOrView}) = quote
+    let rvs=rowvals($name.$field), nzs=nonzeros($name.$field), ret=false, find=isequal($k)
+        idx = findfirst(find, rvs)
+        while !isnothing(idx)
+            @inbounds if !iszero(nzs[idx])
+                ret = true
+                break
+            end
+            idx = findnext(find, rvs, idx +1)
+        end
+        ret
+    end
+end
+_effective_nvariables_has(name, field, k, ::Type{<:AbstractArray{E}}) where {E} = quote
+    let found=false
+        for xₖ in $name
+            $(_effective_nvariables_has(:xₖ, field, k, E)) && (found = true; break)
+        end
+        found
+    end
+end
+_effective_nvariables_has(name, field, k, ::Type{<:LazyMonomials{Nr,Nc,<:Unsigned,<:MonomialIterator}}) where {Nr,Nc} = quote
+    let moniter=$name.iter, k=$k
+        $(if field === :exponents_complex
+            :(k += Nr)
+        elseif field === :exponents_conj
+            :(k += Nr + Nc)
+        else
+            :(nothing)
+        end)
+        # 1. is the current index allowed to be nonzero at all?
+        @inbounds moniter.maxmultideg[k] > 0 &&
+            # 2. when all other indices are minimal, is it then still possible for the current one to be nonzero?
+            moniter.Σminmultideg - moniter.minmultideg[k] < moniter.maxdeg &&
+            # 3. does the iterator contain any element at all: are all the minimal degrees together not too large?
+            moniter.Σminmultideg ≤ moniter.maxdeg &&
+            # 4. does the iterator contain any element at all: are all the maximal degrees together not too small?
+            moniter.Σmaxmultideg ≥ moniter.mindeg
+    end
+end
+_effective_nvariables_has(name, field, k, ::Type{<:LazyMonomials{Nr,Nc,<:Unsigned,<:RangedMonomialIterator}}) where {Nr,Nc} =
+    quote
+        let moniter=$name.iter.iter, k=$k
+            $(if field === :exponents_complex
+                :(k += Nr)
+            elseif field === :exponents_conj
+                :(k += Nr + Nc)
+            else
+                :(nothing)
+            end)
+            # 1. is the current index allowed to be nonzero at all?
+            @inbounds moniter.maxmultideg[k] > 0 &&
+                # 2. when all other indices are minimal, is it then still possible for the current one to be nonzero?
+                moniter.Σminmultideg - moniter.minmultideg[k] < moniter.maxdeg &&
+                # 3. are we in the range?
+                _effective_nvariables_has($name.iter, $name.index_data, k)
+        end
+    end
+_effective_nvariables_has(rangeiter::RangedMonomialIterator, ::Nothing, ::Integer) = false
+function _effective_nvariables_has(rangeiter::RangedMonomialIterator, ::Val{1}, var::Integer)
+    origrange = range(max(rangeiter.iter.mindeg, rangeiter.iter.minmultideg[1]),
+                        min(rangeiter.iter.maxdeg, rangeiter.iter.maxmultideg[1]))
+    return first(origrange) + rangeiter.start -1 ≤ var ≤
+        min(first(origrange) + rangeiter.start + rangeiter.length -2, last(origrange))
+end
+function _effective_nvariables_has(rangeiter::RangedMonomialIterator, prepared::Matrix{Int}, var::Integer)
+    rangeiter.length < 1 && return false
+    iter = rangeiter.iter
+    @assert(iter.maxmultideg[var] > 0) # this is checked before to save a function call
+    tmppow = first(rangeiter)
+    @inbounds iszero(tmppow[var]) || return true
+    @inbounds tmppow[var] = 1
+    return !isnothing(monomial_index(tmppow, rangeiter, prepared))
+end
+"""
+    effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},
+                                  <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
+
+Calculates the number of effective variable of its arguments: there are at most `Nr + 2Nc` variables that may occur in any
+of the monomial vectors or arrays of monomial vectors in the arguments. This function calculates efficiently the number of
+variables that actually occur at least once anywhere in any argument.
+"""
+@generated function effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractArray{<:SimpleMonomialVector{Nr,Nc}},
+                                                  <:LazyMonomials{Nr,Nc},<:AbstractArray{<:LazyMonomials{Nr,Nc}}}...) where {Nr,Nc}
+    n = length(x)
+    quote
+        i = 0
+        for k in 1:$Nr
+            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_real, :k, x[i]) for i in 1:n)...)) && (i += 1)
+        end
+        for k in 1:$Nc
+            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_complex, :k, x[i]) for i in 1:n)...)) && (i += 1)
+        end
+        # two loops should be more efficient, as the memory regions are closer
+        for k in 1:$Nc
+            $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_conj, :k, x[i]) for i in 1:n)...)) && (i += 1)
+        end
+        return i
+    end
+end
 
 function Base.intersect(a::MV, b::MV) where {Nr,Nc,P<:Unsigned,MV<:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}
     minlen = min(length(a), length(b))

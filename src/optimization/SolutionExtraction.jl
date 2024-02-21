@@ -49,7 +49,7 @@ function poly_solutions(result::POResult{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R
     relaxation = result.relaxation
     moments = result.moments
     nvars = Nr + Nc
-    deg = 2relaxation.degree
+    deg = 2degree(relaxation)
     # potentially scale the moment matrix
     λ = maximum(abs, @view(moments[monomial_count(deg -2, nvars)+1:monomial_count(deg -1, nvars)])) /
         maximum(abs, @view(moments[monomial_count(deg -1, nvars)+1:end]))
