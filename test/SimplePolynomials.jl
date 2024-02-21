@@ -500,7 +500,7 @@ end
                 @test !exponents_from_index!(powers, mi, length(mi) +1)
             end
         end
-        mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], true)
+        mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], ownpowers)
         @test_throws ArgumentError exponents_from_index!(Vector{UInt8}(undef, 4), mi, 1)
         powers = Vector{UInt8}(undef, 3)
         for (i, mipow) in enumerate(mi)

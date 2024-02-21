@@ -23,7 +23,8 @@ struct RelaxationDense{P<:POProblem,MV<:LazyMonomials,G<:RelaxationGroupings} <:
         degree < problem.mindegree && throw(ArgumentError("The minimally required degree is $(problem.mindegree)"))
         maxpower_T = SimplePolynomials.smallest_unsigned(2degree)
         basis = LazyMonomials{Nr,Nc}(Base.zero(maxpower_T):maxpower_T(degree);
-                                     maxmultideg=[fill(maxpower_T(degree), Nr + Nc); zeros(maxpower_T, Nc)])
+                                     maxmultideg=[fill(maxpower_T(degree), Nr + Nc); zeros(maxpower_T, Nc)],
+                                     powers=ownpowers)
         gr = groupings(problem, basis, degree, nothing)
         new{P,typeof(basis),typeof(gr)}(problem, Int(degree), basis, gr)
     end

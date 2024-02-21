@@ -125,7 +125,7 @@ function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepa
         # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
         # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
         # variables - this is commuting only.
-        iter = MonomialIterator(analysis..., true)
+        iter = MonomialIterator(analysis..., ownpowers)
         num = length(iter)
         @verbose_info("Starting point selection among ", num, " possible monomials")
         nthreads, task, secondtask = prepare(V, coeffs, num, verbose; parameters...)

@@ -579,7 +579,7 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, de
     elseif !(maxmultideg isa Vector{DI})
         maxmultideg = DI.(collect(maxmultideg))
     end
-    iter = MonomialIterator(first(degree), last(degree), minmultideg, maxmultideg, true)
+    iter = MonomialIterator(first(degree), last(degree), minmultideg, maxmultideg, ownpowers)
     len = length(iter)
     # How to decide whether dense or sparse representation is better?
     # We take the laborious approach of counting the nonzeros in every monomial beforehand. This is costly - we need to iterate
@@ -721,18 +721,19 @@ struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E} 
 
     @doc """
         LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P}; minmultideg=nothing,
-            maxmultideg=nothing, copy=true)
+            maxmultideg=nothing[, powers])
 
 Constructs a memory-efficient vector of monomials that contains the same data as given by [`monomials`](@ref) (with dense
 representation and no filter allowed). The monomials will be constructed on-demand and only a small precomputation is done to
 be able to quickly perform the indexing operation.
-If the monomials are only accessed one-at-a-time and never referenced when another one is requested, `copy` may be set to
-`false`. Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the monomial is
-changed.
+If the monomials are only accessed one-at-a-time and never referenced when another one is requested, `powers` may be set to
+[`ownpowers`](@ref). Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the
+monomial is changed.
     """
     function LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P};
         minmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing,
-        maxmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing, copy::Bool=true) where {Nr,Nc,P<:Integer}
+        maxmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing,
+        powers::Union{Nothing,OwnPowers}=nothing) where {Nr,Nc,P<:Integer}
         Pu = Unsigned(P)
         mindeg = Pu(first(degree))
         maxdeg = Pu(last(degree))
@@ -751,7 +752,7 @@ changed.
         elseif !(maxmultideg isa Vector{Pu})
             maxmultideg = Pu.(min.(collect(maxmultideg), maxdeg))
         end
-        iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, !copy)
+        iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, powers)
         index_data = exponents_from_index_prepare(iter)
         new{Nr,Nc,Pu,typeof(iter),typeof(index_data)}(iter, index_data)
     end
@@ -813,9 +814,10 @@ MultivariatePolynomials.extdegree(lm::LazyMonomials) = extdegree(lm.iter)
     lazy_unalias(lm::AbstractVector)
 
 Makes sure that for a vector of SimpleMonomials, the results of lm[i] and unalias(lm)[j] are distinct whenever the elements
-are. This is intended to be used for [`LazyMonomials`](@ref), where by setting `copy=true` extracting any monomial will always
-write to the same memory location. `unalias` will then produce a second iterator, identical in all respects except for the
-memory location. For all other types of vectors, `unalias` is an identity.
+are. This is intended to be used for [`LazyMonomials`](@ref), where by setting `powers=ownpowers` extracting any monomial will
+always write to the same memory location. `unalias` will then produce a second iterator, identical in all respects except for
+the memory location (the second iteration will still have `ownpowers` set, but to a different temporary vector). For all other
+types of vectors, `unalias` is an identity.
 """
 lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:MonomialIterator{<:Any,P},E} =
     LazyMonomials{Nr,Nc,P,MI,E}(MonomialIterator(lm.iter), lm.index_data)
@@ -1122,6 +1124,7 @@ Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P1}},
     b::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P2}}) where {Nr,Nc,P<:Unsigned,P1,P2} =
     LazyMonomials{Nr,Nc}(max(a.iter.mindeg, b.iter.mindeg):min(a.iter.maxdeg, b.iter.maxdeg),
         minmultideg=max.(a.iter.minmultideg, b.iter.minmultideg), maxmultideg=min.(a.iter.maxmultideg, b.iter.maxmultideg),
-        copy=P1 !== Nothing || P2 !== Nothing)
+        powers=P1 === Nothing || P2 === Nothing ? nothing : ownpowers)
 Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
-    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P}}}(a, b)
+    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
+                                                    iszero(Nc) ? Absent : Matrix{P}}}(a, b)

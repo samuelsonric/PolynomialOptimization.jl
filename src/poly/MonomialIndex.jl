@@ -110,7 +110,7 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
             next_col = 1
             max_col = length(mons_idx)
             @assert(max_col > 0)
-            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), true)
+            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownpowers)
             if dense
                 coeffs_real = resizable_array(T, Nr, max_col)
                 powers_real = @view(iter.powers[1:Nr])
@@ -192,7 +192,7 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
         function exponents_from_indices(T, $(params...), mons_idx::Vector, ::Val{dense}, ::Val{:index}) where {dense}
             $(splitvars ? :(nv = Nr + 2Nc) : :(nv = Nr))
             max_col = length(mons_idx)
-            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), true)
+            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownpowers)
             prepare = exponents_from_index_prepare(iter)
             if dense
                 coeffs_real = resizable_array(T, Nr, max_col)

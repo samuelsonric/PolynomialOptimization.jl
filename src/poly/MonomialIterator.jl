@@ -1,15 +1,23 @@
-export AbstractMonomialIterator, MonomialIterator, RangedMonomialIterator, exponents_from_index_prepare
+export AbstractMonomialIterator, MonomialIterator, RangedMonomialIterator, ownpowers, exponents_from_index_prepare
 
 abstract type AbstractMonomialIterator{P,DI<:Integer} end
 
+struct OwnPowers end
 """
-    MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, ownpowers=false)
+    const ownpowers
+
+This value instructs `MonomialIterator` to own its iterate. It will modify the same vector at every iteration.
+"""
+const ownpowers = OwnPowers()
+
+"""
+    MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg[, powers])
 
 This is an advanced iterator that is able to iterate through all monomials with constraints specified not only by a minimum and
-maximum total degree, but also by individual variable degrees. `ownpowers` can be set to `true` (or be passed a
-`Vector{<:Integer}` of appropriate length), which will make the iterator use the same vector of powers whenever it is used, so
-it must not be used multiple times simultaneously. Additionally, during iteration, no copy is created, so the vector must not
-be modified and accumulation e.g. by `collect` won't work.
+maximum total degree, but also by individual variable degrees.
+If `powers` is set to [`ownpowers`](@ref) (or passed a `Vector{<:Integer}` of appropriate length), the iterator use the same
+vector of powers whenever it is used, so it must not be used multiple times simultaneously. Additionally, during iteration, no
+copy is created, so the vector must not be modified and accumulation e.g. by `collect` won't work.
 Note that the powers that this iterator returns will be of the common integer type of `mindeg`, `maxdeg`, and the element types
 of `minmultideg`, `maxmultideg` (and potentially `ownpowers`).
 
@@ -26,7 +34,7 @@ struct MonomialIterator{P,DI<:Integer} <: AbstractMonomialIterator{P,DI}
     Σmaxmultideg::UInt
 
     function MonomialIterator(mindeg::DI, maxdeg::DI, minmultideg::Vector{DI}, maxmultideg::Vector{DI},
-        ownpowers::Union{Bool,<:AbstractVector{DI}}=false) where {DI<:Integer}
+        powers::Union{Nothing,OwnPowers,<:AbstractVector{DI}}=nothing) where {DI<:Integer}
         (mindeg < 0 || mindeg > maxdeg) && throw(ArgumentError("Invalid degree specification"))
         n = length(minmultideg)
         (n != length(maxmultideg) ||
@@ -34,16 +42,15 @@ struct MonomialIterator{P,DI<:Integer} <: AbstractMonomialIterator{P,DI}
             throw(ArgumentError("Invalid multidegree specification"))
         Σminmultideg = sum(minmultideg, init=zero(DI))
         Σmaxmultideg = sum(maxmultideg, init=zero(DI))
-        if ownpowers === true
+        if powers isa OwnPowers
             return new{Vector{DI},DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, Vector{DI}(undef, n), Σminmultideg,
                 Σmaxmultideg)
-        elseif ownpowers === false
+        elseif isnothing(powers)
             return new{Nothing,DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, nothing, Σminmultideg, Σmaxmultideg)
-        elseif length(ownpowers) != n
+        elseif length(powers) != n
             throw(ArgumentError("Invalid length of ownpowers"))
         else
-            return new{typeof(ownpowers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, ownpowers, Σminmultideg,
-                Σmaxmultideg)
+            return new{typeof(powers),DI}(n, mindeg, maxdeg, minmultideg, maxmultideg, powers, Σminmultideg, Σmaxmultideg)
         end
     end
 
