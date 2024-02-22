@@ -19,12 +19,19 @@ struct SimpleMonomialVector{Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P},Mr<:XorA{M},M
         new{Nr,Nc,P,M,M,M}(exponents_real, exponents_complex, exponents_conj)
 end
 
+function _sortedallunique(v::AbstractVector)
+    for (x, y) in zip(v, Iterators.drop(v, 1))
+        x == y && return false
+    end
+    return true
+end
+
 """
-    SimpleMonomialVector{Nr,0}(exponents_real::AbstractMatrix{<:Integer})
+    SimpleMonomialVector{Nr,0}(exponents_real::AbstractMatrix{<:Integer}, along...)
     SimpleMonomialVector{0,Nc}(exponents_complex::AbstractMatrix{<:Integer},
-        exponents_conj::AbstractMatrix{<:Integer})
+        exponents_conj::AbstractMatrix{<:Integer}, along...)
     SimpleMonomialVector{Nr,Nc}(exponents_real::AbstractMatrix{<:Integer},
-        exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer})
+        exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer}, along...)
 
 Creates a monomial vector, where each column corresponds to one monomial and each row is contains its exponents. The
 element types of the matrices will be promoted to a common unsigned integer type.
@@ -33,35 +40,39 @@ All matrices will be converted a common matrix type; dense matrices (or views) a
 (or views).
 Taking views of a `SimpleMonomialVector` will return another `SimpleMonomialVector` whose exponents are the corresponding
 views.
-
-No particular monomial order is enforced on a `SimpleMonomialVector`. It must not contain duplicates.
+The input will be sorted; if `along` are present, those vectors will be put in the same order as the inputs.
+The input must not contain duplicates.
 """
-function SimpleMonomialVector{Nr,0}(exponents_real::AbstractMatrix{<:Integer}) where {Nr}
+function SimpleMonomialVector{Nr,0}(exponents_real::AbstractMatrix{<:Integer}, along...) where {Nr}
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
-    allunique(eachcol(exponents_real)) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     P = Unsigned(eltype(exponents_real))
     exps = convert(AbstractMatrix{P}, exponents_real)
-    return SimpleMonomialVector{Nr,0,P,typeof(exps)}(exps, absent, absent)
+    smv = sort_along!(SimpleMonomialVector{Nr,0,P,typeof(exps)}(exps, absent, absent), along...)[1]
+    _sortedallunique(smv) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    return smv
 end
 
-function SimpleMonomialVector{0,Nc}(exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer}) where {Nc}
+function SimpleMonomialVector{0,Nc}(exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer},
+    along...) where {Nc}
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
         throw(ArgumentError("Complex and conjugate exponents lengths are different"))
     size(exponents_complex, 1) == Nc ||
         throw(ArgumentError("Requested $Nc complex variables, but got $(size(exponents_complex, 1))"))
     size(exponents_complex, 2) == size(exponents_conj, 2) ||
         throw(ArgumentError("Number of monomials is different"))
-    allunique(zip(eachcol(exponents_complex), eachcol(exponents_conj))) ||
-        throw(ArgumentError("Monomial vector must not contain duplicates"))
     P = promote_type(Unsigned(eltype(exponents_complex)), Unsigned(eltype(exponents_conj)))
     M1 = Base.promote_op(convert, Type{AbstractMatrix{P}}, typeof(exponents_complex))
     M2 = Base.promote_op(convert, Type{AbstractMatrix{P}}, typeof(exponents_conj))
     M = promote_type(M1, M2)
-    return SimpleMonomialVector{0,Nc,P,M}(absent, convert(M, exponents_complex), convert(M, exponents_conj))
+    smv = sort_along!(SimpleMonomialVector{0,Nc,P,M}(
+        absent, convert(M, exponents_complex), convert(M, exponents_conj)
+    ), along...)[1]
+    _sortedallunique(smv) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    return smv
 end
 
 function SimpleMonomialVector{Nr,Nc}(exponents_real::AbstractMatrix{<:Integer}, exponents_complex::AbstractMatrix{<:Integer},
-        exponents_conj::AbstractMatrix{<:Integer}) where {Nr,Nc}
+        exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nr,Nc}
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
         throw(ArgumentError("Complex and conjugate exponents lengths are different"))
@@ -69,20 +80,20 @@ function SimpleMonomialVector{Nr,Nc}(exponents_real::AbstractMatrix{<:Integer}, 
         throw(ArgumentError("Requested $Nc complex variables, but got $(size(exponents_complex, 1))"))
     size(exponents_real, 2) == size(exponents_complex, 2) == size(exponents_conj, 2) ||
         throw(ArgumentError("Number of monomials is different"))
-    allunique(zip(eachcol(exponents_real), eachcol(exponents_complex), eachcol(exponents_conj))) ||
-        throw(ArgumentError("Monomial vector must not contain duplicates"))
     P = promote_type(Unsigned(eltype(exponents_real)), Unsigned(eltype(exponents_complex)), Unsigned(eltype(exponents_conj)))
     M1 = Base.promote_op(convert, Type{AbstractMatrix{P}}, typeof(exponents_real))
     M2 = Base.promote_op(convert, Type{AbstractMatrix{P}}, typeof(exponents_complex))
     M3 = Base.promote_op(convert, Type{AbstractMatrix{P}}, typeof(exponents_conj))
     M = promote_type(M1, M2, M3)
-    return SimpleMonomialVector{Nr,Nc,P,M}(
+    smv = sort_along!(SimpleMonomialVector{Nr,Nc,P,M}(
         convert(M, exponents_real), convert(M, exponents_complex), convert(M, exponents_conj)
-    )
+    ), along...)[1]
+    _sortedallunique(smv) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    return smv
 end
 
 """
-    SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike};
+    SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, along...;
         max_power::Integer=maxdegree(mv), representation::Symbol=:auto, vars=variables(mv))
 
 Creates a `SimpleMonomialVector` from a generic monomial vector that supports `MultivariatePolynomials`'s interface.
@@ -94,9 +105,12 @@ this determine which representation is more efficient.
 The keyword argument `vars` must contain all real-valued and original complex-valued (so not the conjugates) variables that
 occur in the monomial vector. However, the order of this iterable (which must have a length) controls how the MP variables are
 mapped to [`SimpleVariable`](@ref)s.
+The input must not contain duplicates. It will be sorted; if `along` are present, those vectors will be put in the same order
+as the inputs.
 """
-function SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}; max_power::Integer=maxdegree(mv),
-    representation::Symbol=:auto, vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv))))
+function SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
+    max_power::Integer=maxdegree(mv), representation::Symbol=:auto,
+    vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv))))
     if representation === :auto
         sample_size = 10
         nvar_threshold_factor = 3
@@ -113,7 +127,7 @@ function SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}; max_po
             representation = :dense
         end
     end
-    return SimpleMonomialVector(mv, max_power, representation, vars)
+    return SimpleMonomialVector(mv, max_power, representation, vars, along...)
 end
 
 # mv must be an iterable with length
@@ -123,7 +137,7 @@ end
 Creates a `SimpleMonomialVector` from a generic iterable that gives `AbstractMonomialLike` elements. In contrast to when `mv`
 is a vector, now all arguments must be provided. `representation` must be either `:dense` or `:sparse`.
 """
-function SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, vars)
+function SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, vars, along::AbstractVector...)
     isempty(vars) && throw(ArgumentError("Variables must be present"))
     any(isconj, vars) && throw(ArgumentError("The variables must not contain conjuates"))
     allunique(vars) || throw(ArgumentError("Variables must not contain duplicates"))
@@ -155,7 +169,10 @@ function SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, va
                 end
             end
         end
-        return SimpleMonomialVector{vars_real,vars_complex,P,Matrix{P}}(exponents_real, exponents_complex, exponents_conj)
+        smv = sort_along!(
+            SimpleMonomialVector{vars_real,vars_complex,P,Matrix{P}}(exponents_real, exponents_complex, exponents_conj),
+            along...
+        )[1]
     else
         nz_real = 0
         nz_complex = 0
@@ -240,10 +257,14 @@ function SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, va
             spexponents_conj = SparseMatrixCSC{P,Ti}(vars_complex, n, finish!(colptr_conj), finish!(rowval_conj),
                 finish!(nzval_conj))
         end
-        return SimpleMonomialVector{vars_real,vars_complex,P,SparseMatrixCSC{P,Ti}}(
-            spexponents_real, spexponents_complex, spexponents_conj
-        )
+        smv = sort_along!(
+            SimpleMonomialVector{vars_real,vars_complex,P,SparseMatrixCSC{P,Ti}}(
+                spexponents_real, spexponents_complex, spexponents_conj
+            ), along...
+        )[1]
     end
+    _sortedallunique(smv) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    return smv
 end
 
 const SimpleRealMonomialVector{Nr,P<:Unsigned,M<:AbstractMatrix{P}} = SimpleMonomialVector{Nr,0,P,M,M,Absent}
@@ -270,6 +291,24 @@ _get_p(::XorTX{AbstractVector{<:SimpleMonomial{<:Any,<:Any,P}}}) where {P<:Unsig
 _get_p(::XorTX{AbstractVector{<:SimpleMonomial}}) = Val(Unsigned)
 _monvectype(::Type{M}) where {M<:AbstractMatrix} = Base.promote_op(view, M, Colon, Int)
 _monvectype(::XorTX{SimpleMonomialVector{<:Any,<:Any,P,M}}) where {P<:Unsigned,M<:AbstractMatrix{P}} = _monvectype(M)
+
+SortAlong.swap_items!(::Absent, _, _) = nothing
+Base.@propagate_inbounds function SortAlong.swap_items!(v::SimpleMonomialVector, i, j)
+    @assert(i < j)
+    SortAlong.swap_items!(v.exponents_real, i, j)
+    SortAlong.swap_items!(v.exponents_complex, i, j)
+    SortAlong.swap_items!(v.exponents_conj, i, j)
+    return
+end
+SortAlong.rotate_items_left!(::Absent, _, _, _) = nothing
+Base.@propagate_inbounds function SortAlong.rotate_items_left!(v::SimpleMonomialVector, i, j, k)
+    @assert(i < j < k)
+    SortAlong.rotate_items_left!(v.exponents_real, i, j, k)
+    SortAlong.rotate_items_left!(v.exponents_complex, i, j, k)
+    SortAlong.rotate_items_left!(v.exponents_conj, i, j, k)
+    return
+end
+SortAlong.can_extract(::Type{<:SimpleMonomialVector}) = false
 
 @inline function Base.getindex(x::SimpleMonomialVector{Nr,Nc,P}, i::Integer) where {Nr,Nc,P<:Unsigned}
     @boundscheck checkbounds(x, i)
@@ -456,7 +495,7 @@ function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{Nr,Nc,<:Simp
         end
     end
     return nothing
-    end
+end
 
 MultivariatePolynomials.effective_variables(x::SimpleMonomialVector) = SimpleMonomialVectorEffectiveVariables(x)
 

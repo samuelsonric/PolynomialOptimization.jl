@@ -1,6 +1,7 @@
 using Test
-using MultivariatePolynomials, PolynomialOptimization, PolynomialOptimization.SimplePolynomials
-using PolynomialOptimization: sos_add_matrix!, SOSPSDIterable, FastKey, sos_add_equality!, sort_along!
+using MultivariatePolynomials, PolynomialOptimization, PolynomialOptimization.SimplePolynomials,
+    PolynomialOptimization.SortAlong
+using PolynomialOptimization: sos_add_matrix!, SOSPSDIterable, FastKey, sos_add_equality!
 
 # These are the low-level tests. For every kind of possible problem, we must check that the appropriate solver methods are
 # called with exactly the right data.

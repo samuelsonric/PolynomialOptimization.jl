@@ -129,19 +129,14 @@ Creates a new `SimplePolynomial` based on any polynomial-like object that satisf
 internal representation of the monomial vector.
 """
 function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; kwargs...) where {C1,C}
-    mv = SimpleMonomialVector(monomials(p); kwargs...)
     coeffs = let c=coefficients(p)
-        if c isa Vector{C}
-            c
-        elseif eltype(c) == C && c isa AbstractVector
-            Vector{C}(c)
-        elseif eltype(c) == C
+        if eltype(c) == C
             collect(c)
         else
             convert(Vector{C}, collect(c))
         end
     end
-    return SimplePolynomial(coeffs, mv)
+    return SimplePolynomial(coeffs, SimpleMonomialVector(monomials(p), coeffs; kwargs...))
 end
 
 function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr,Nc}

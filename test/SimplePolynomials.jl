@@ -322,15 +322,15 @@ end
     end
     # we don't provide monomial_vector_type
 
-    X = SimpleMonomialVector{2,0}(UInt8[0 1 1; 0 0 1]) # directly sorted
+    for md in (identity, sparse)
+        X = SimpleMonomialVector{2,0}(md(UInt8[1 0 1; 0 0 1]))
     @test X == collect(X)
     @test nvariables(X) == 2
     @test variables(X)[1] == SimpleRealVariable{2,0}(1)
     @test variables(X)[2] == SimpleRealVariable{2,0}(2)
     @test X[2:3][1] == SimpleMonomial{2,0}([0x1, 0x0])
     @test X[2:3][2] == SimpleMonomial{2,0}([0x1, 0x1])
-
-    # no sort, no merge
+    end
 
     @test monomials(1, 0, 1:3) == SimpleMonomialVector{1,0}(UInt8[1 2 3])
 
@@ -340,21 +340,21 @@ end
                 0 0 0
                 0 0 1
                 0 1 0
-                1 0 0
-                0 0 2
-                0 1 1
-                0 2 0
-                1 0 1
-                1 1 0
-                2 0 0
-                0 0 3
-                0 1 2
-                0 2 1
-                0 3 0
-                1 0 2
                 1 1 1
                 1 2 0
                 2 0 1
+                0 2 1
+                0 3 0
+                2 0 0
+                0 2 0
+                1 0 1
+                0 0 3
+                1 0 0
+                0 0 2
+                0 1 1
+                1 1 0
+                0 1 2
+                1 0 2
                 2 1 0
                 3 0 0
             ]))
