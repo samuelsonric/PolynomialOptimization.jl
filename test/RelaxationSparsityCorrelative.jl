@@ -275,3 +275,12 @@ PSD block sizes:
 
     @test isnothing(iterate!(sp))
 end
+
+@testset "Example 6.1 from Josz, Molzahn" begin
+    @polyvar x[1:4]
+    prob = poly_problem(x[1]*x[2] + x[1]*x[4], nonneg=[x[1]*x[2]+x[1]*x[3], x[1]*x[3]+x[1]*x[4]+x[1]*x[2]])
+    @test strRep(groupings(RelaxationSparsityCorrelative(prob, 2, low_order_nonneg=[2], chordal_completion=false)).nonnegs) ==
+        "2-element Vector{Vector{LazyMonomials{4, 0, UInt8, MonomialIterator{Vector{UInt8}, UInt8}}}}:
+ [[1, x₄], [1, x₃, x₂, x₁]]
+ [[1]]"
+end
