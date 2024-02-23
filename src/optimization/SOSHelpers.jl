@@ -1115,6 +1115,9 @@ function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:Simple
     return
 end
 
+collect_grouping(g::AbstractVector{M} where M<:SimpleMonomial) = g
+collect_grouping(g) = collect(g)
+
 """
     sos_setup!(state, relaxation::AbstractPORelaxation, groupings::RelaxationGroupings)
 
@@ -1144,21 +1147,22 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
     problem = poly_problem(relaxation)
     # SOS term for objective
     for grouping in groupings.obj
-        sos_add_matrix!(state, grouping, SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))
+        sos_add_matrix!(state, collect_grouping(grouping),
+            SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))
     end
     # free items
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
-        sos_add_equality!(state, groupingsᵢ, constrᵢ)
+        sos_add_equality!(state, collect_grouping.(groupingsᵢ), constrᵢ)
     end
     # localizing matrices
     for (groupingsᵢ, constrᵢ) in zip(groupings.nonnegs, problem.constr_nonneg)
         for grouping in groupingsᵢ
-            sos_add_matrix!(state, grouping, constrᵢ)
+            sos_add_matrix!(state, collect_grouping(grouping), constrᵢ)
         end
     end
     for (groupingsᵢ, constrᵢ) in zip(groupings.psds, problem.constr_psd)
         for grouping in groupingsᵢ
-            sos_add_matrix!(state, grouping, constrᵢ)
+            sos_add_matrix!(state, collect_grouping(grouping), constrᵢ)
         end
     end
 

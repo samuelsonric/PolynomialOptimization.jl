@@ -212,23 +212,16 @@ function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterato
 end
 
 @inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{<:Any,DI},
-    ::Nothing, ::Integer) where {DI}
-    @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
-    return false
-end
-
-@inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{<:Any,DI}, ::Val{1},
-    index::Integer) where {DI}
-    @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
-    powers[1] = max(iter.mindeg, iter.minmultideg[1]) + index -1
-    powers[1] > min(iter.maxdeg, iter.maxmultideg[1]) && return false
-    return powers
-end
-
-@inline function exponents_from_index!(powers::AbstractVector{DI}, iter::MonomialIterator{<:Any,DI},
     occurrences::Matrix{Int}, index::Integer) where {DI}
     # While this is a rather long function, given that this form is used for speed, inlining should probably be done
     @boundscheck length(powers) == iter.n || throw(ArgumentError("powers and iter have different number of variables"))
+    if iszero(size(occurrences, 2))
+        return false
+    elseif isone(size(occurrences, 2))
+        @inbounds powers[1] = occurrences[1] + index
+        @inbounds powers[1] > occurrences[2] && return false
+        return powers
+    end
     # Now our occurrences matrix will fill the role of the binomial coefficient: it contains in each column j the number of
     # monomials if there were only the j right variables, while the row specifies the total degree.
     degree, maxdeg, minmultideg, maxmultideg = iter.mindeg, iter.maxdeg, iter.minmultideg, iter.maxmultideg
@@ -271,9 +264,9 @@ Prepares all the data necessary to quickly perform multiple calls to [`exponents
 """
 function exponents_from_index_prepare(iter::MonomialIterator{<:Any,DI}) where {DI}
     maxdeg = iter.maxdeg
-    iter.Σminmultideg > maxdeg && return nothing
-    iter.Σmaxmultideg < iter.mindeg && return nothing
-    isone(iter.n) && return Val(1)
+    iter.Σminmultideg > maxdeg && return Matrix{Int}(undef, 0, 0)
+    iter.Σmaxmultideg < iter.mindeg && return Matrix{Int}(undef, 0, 0)
+    isone(iter.n) && return [max(iter.mindeg, iter.minmultideg[1]) -1; min(iter.maxdeg, iter.maxmultideg[1])]
     minmultideg = iter.minmultideg
     maxmultideg = iter.maxmultideg
     j = iter.n

@@ -24,16 +24,27 @@ Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
-struct RelaxationGroupings{Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc},
-                           MV<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}),MVZ,MVN,MVP}
-    # all MV, MVZ, MVN, MVP are (AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}); but due to Julia issue #53371, we don't
-    # make this explicit
+struct RelaxationGroupings{Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc},MV,MVZ,MVN,MVP}
     obj::Vector{MV}
     zeros::Vector{Vector{MVZ}}
     nonnegs::Vector{Vector{MVN}}
     psds::Vector{Vector{MVP}}
     var_cliques::Vector{Vector{V}}
+
+    RelaxationGroupings(obj::Vector{MV}, zeros::Vector{Vector{MVZ}}, nonnegs::Vector{Vector{MVN}},
+        psds::Vector{Vector{MVP}}, var_cliques::Vector{Vector{V}}) where {Nr,Nc,V<:SimpleVariable{Nr,Nc},MV,MVZ,MVN,MVP} =
+        new{Nr,Nc,_good_groupings(eltype(MV), eltype(MVZ), eltype(MVN), eltype(MVP), V),V,MV,MVZ,MVN,MVP}(obj, zeros, nonnegs,
+            psds, var_cliques)
 end
+
+if v"1.10" ≤ VERSION ≤ v"1.10.2"
+    # Julia issue #53371 - the "more correct" version will compile forever
+    _good_groupings(::Type{<:SimpleMonomial{Nr,Nc,P}}, _, _, _, _) where {Nr,Nc,P<:Unsigned} = P
+else
+    _good_groupings(::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleMonomial{Nr,Nc,P}},
+        ::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleVariable{Nr,Nc}}) where {Nr,Nc,P<:Unsigned} = P
+end
+_good_groupings(_, _, _, _, _) = error("RelaxationGroupings must have elements from the same ring")
 
 SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:Any,P}}) where {P<:Unsigned} = P
 @eval function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGroupings{Nr,Nc,P,V}) where
@@ -54,8 +65,8 @@ SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:A
         for k in 1:length(a.$name)
             @inbounds as, bs = a.$name[k], b.$name[k]
             newₖ = eltype($(Symbol(:new, name)))(undef, length(as) * length(bs))
-            for (i, (a, b)) in enumerate(Iterators.product(as, bs))
-                @inbounds newₖ[i] = intersect(a, b)
+            for (i, (asᵢ, bsᵢ)) in enumerate(Iterators.product(as, bs))
+                @inbounds newₖ[i] = intersect(asᵢ, bsᵢ)
             end
             @inbounds $(Symbol(:new, name))[k] = Base._groupedunique!(sort!(newₖ))
         end

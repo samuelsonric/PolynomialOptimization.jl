@@ -17,6 +17,7 @@ Base.view(::Absent, ::Vararg{Any}) = absent
 SparseArrays.rowvals(::Absent) = absent
 SparseArrays.nonzeros(::Absent) = absent
 matrix_delete_end!(::Absent, ::Integer) = absent
+Base.copyto!(::Absent, ::Absent) = absent
 
 const XorTX{X} = Union{<:X,<:Type{<:X}}
 const XorA{X} = Union{<:X,Absent}

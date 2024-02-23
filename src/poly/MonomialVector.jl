@@ -704,9 +704,9 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, de
 end
 
 const _LazyMonomialsView{P} = SubArray{P,1,Vector{P},Tuple{UnitRange{Int}},true}
-struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
+struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
     iter::MI
-    index_data::E
+    index_data::Matrix{Int}
 
     @doc """
         LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P}; minmultideg=nothing,
@@ -743,21 +743,19 @@ monomial is changed.
         end
         iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, powers)
         index_data = exponents_from_index_prepare(iter)
-        new{Nr,Nc,Pu,typeof(iter),typeof(index_data)}(iter, index_data)
+        new{Nr,Nc,Pu,typeof(iter)}(iter, index_data)
     end
 
-    LazyMonomials{Nr,Nc,P,MI,E}(iter::MI, index_data::E) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E} =
-        new{Nr,Nc,P,MI,E}(iter, index_data)
+    LazyMonomials{Nr,Nc,P,MI}(iter::MI, index_data::Matrix{Int}) where {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}} =
+        new{Nr,Nc,P,MI}(iter, index_data)
 end
 
 # while we could always call length(lm.iter), index_data already contains our relevant pre-calculations
-Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:AbstractMonomialIterator{<:Any,P},Nothing} where {P<:Unsigned}) = 0
-function Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P},Val{1}} where {P<:Unsigned})
-    iter = lm.iter
-    @inbounds return min(iter.maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1]) +1
+function Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P}}) where {P<:Unsigned}
+    iszero(size(lm.index_data, 2)) && return 0
+    isone(size(lm.index_data, 2)) && @inbounds return lm.index_data[2] - lm.index_data[1]
+    @inbounds return sum(@view(lm.index_data[lm.iter.mindeg+1:end, 1]), init=0)
 end
-Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P},Matrix{Int}}) where {P<:Unsigned} =
-    @inbounds sum(@view(lm.index_data[lm.iter.mindeg+1:end, 1]), init=0)
 Base.length(lm::LazyMonomials) = length(lm.iter) # fallback for RangedMonomialIterator, which already has it precomputed
 Base.size(lm::LazyMonomials) = (length(lm),)
 @inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
@@ -773,7 +771,10 @@ Base.size(lm::LazyMonomials) = (length(lm),)
 end
 Base.IteratorSize(::Type{<:LazyMonomials}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:LazyMonomials}) = Base.HasEltype()
-Base.eltype(::Type{<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}
+function Base.eltype(::Type{<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+    M = _LazyMonomialsView{P}
+    return SimpleMonomial{Nr,Nc,P,M,iszero(Nr) ? Absent : M,iszero(Nc) ? Absent : M}
+end
 function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsigned}
     result = iterate(lm.iter, args...)
     isnothing(result) && return nothing
@@ -783,17 +784,17 @@ function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsig
         iszero(Nc) ? absent : @view(result[1][Nr+Nc+1:end])
     ), result[2]
 end
-@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,MI,E}, range::AbstractUnitRange) where
-    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E}
+@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where
+    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=true)
-    return LazyMonomials{Nr,Nc,P,typeof(iter),E}(iter, lm.index_data)
+    return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter, lm.index_data)
 end
-@inline function Base.view(lm::LazyMonomials{Nr,Nc,P,MI,E}, range::AbstractUnitRange) where
-    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P},E}
+@inline function Base.view(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where
+    {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=false)
-    return LazyMonomials{Nr,Nc,P,typeof(iter),E}(iter, lm.index_data)
+    return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter, lm.index_data)
 end
 MultivariatePolynomials.mindegree(lm::LazyMonomials) = mindegree(lm.iter)
 MultivariatePolynomials.maxdegree(lm::LazyMonomials) = maxdegree(lm.iter)
@@ -861,10 +862,10 @@ always write to the same memory location. `unalias` will then produce a second i
 the memory location (the second iteration will still have `ownpowers` set, but to a different temporary vector). For all other
 types of vectors, `unalias` is an identity.
 """
-lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:MonomialIterator{<:Any,P},E} =
-    LazyMonomials{Nr,Nc,P,MI,E}(MonomialIterator(lm.iter), lm.index_data)
-lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI,E}) where {Nr,Nc,P<:Unsigned,MI<:RangedMonomialIterator{<:Any,P},E} =
-    LazyMonomials{Nr,Nc,P,MI,E}(RangedMonomialIterator(lm.iter), lm.index_data)
+lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI}) where {Nr,Nc,P<:Unsigned,MI<:MonomialIterator{<:Any,P}} =
+    LazyMonomials{Nr,Nc,P,MI}(MonomialIterator(lm.iter), lm.index_data)
+lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI}) where {Nr,Nc,P<:Unsigned,MI<:RangedMonomialIterator{<:Any,P}} =
+    LazyMonomials{Nr,Nc,P,MI}(RangedMonomialIterator(lm.iter), lm.index_data)
 lazy_unalias(v::AbstractVector) = v
 
 _effective_nvariables_has(name, field, k, ::Type{<:SimpleDenseMonomialVectorOrView}) = quote
@@ -1087,17 +1088,16 @@ mutable struct SortedIteratorIntersection{I1,I2,X}
 end
 
 Base.IteratorSize(::Type{<:SortedIteratorIntersection}) = Base.HasLength()
-function Base.IteratorEltype(::Type{SortedIteratorIntersection{I1,I2}}) where {I1,I2}
+function Base.IteratorEltype(::Type{<:SortedIteratorIntersection{I1,I2}}) where {I1,I2}
     e1 = Base.IteratorEltype(I1)
     e2 = Base.IteratorEltype(I2)
-    e1 === e2 && return e1
+    return e1 === e2 ? e1 : Base.EltypeUnknown()
     error("Iterators are incompatible")
 end
-function Base.eltype(::Type{SortedIteratorIntersection{I1,I2}}) where {I1,I2}
+function Base.eltype(::Type{<:SortedIteratorIntersection{I1,I2}}) where {I1,I2}
     t1 = eltype(I1)
     t2 = eltype(I2)
-    t1 === t2 && return t1
-    error("Iterators are incompatible")
+    return Base.promote_typejoin(t1, t2)
 end
 function Base.iterate(iter::SortedIteratorIntersection, state=nothing)
     i1 = isnothing(state) ? iterate(iter.a) : iterate(iter.a, state[1])
@@ -1259,11 +1259,12 @@ function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},
 end
 
 Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleDenseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
-    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P}}}(a, b)
-Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleSparseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
-    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,
-        SparseMatrixCSC{P,SparseArrays.indtype(iszero(Nr) ? b.exponents_complex : b.exponents_real)}
-    }}(a, b)
+    SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
+                                                    iszero(Nc) ? Absent : Matrix{P}}}(a, b)
+function Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleSparseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned}
+    M = SparseMatrixCSC{P,SparseArrays.indtype(iszero(Nr) ? b.exponents_complex : b.exponents_real)}
+    return SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,M,iszero(Nr) ? Absent : M,iszero(Nc) ? Absent : M}}(a, b)
+end
 Base.intersect(a::SimpleMonomialVector{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     intersect(b, a) # just so that less compilation is necessary
 Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P1}},
