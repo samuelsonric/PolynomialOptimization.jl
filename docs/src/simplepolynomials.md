@@ -41,6 +41,8 @@ MultivariatePolynomials.monomials
 LazyMonomials
 effective_nvariables
 exponents_from_index!
-expoennts_from_index_prepare
+exponents_from_index_prepare
 ownpowers
+SimpleMonomialVectorCollection
+MultivariatePolynomials.merge_monomial_vectors
 ```

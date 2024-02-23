@@ -2,7 +2,7 @@ module SimplePolynomials
 
 using MultivariatePolynomials, SparseArrays, PolynomialOptimization.FastVector, PolynomialOptimization.SortAlong
 using SparseArrays: AbstractSparseVector, AbstractSparseMatrixCSC, FixedSparseVector
-using PolynomialOptimization: @assert, resizable_array
+using PolynomialOptimization: @assert, @capture, resizable_array
 import PolynomialOptimization: matrix_delete_end!
 import StatsBase
 

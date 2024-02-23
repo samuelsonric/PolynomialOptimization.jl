@@ -1,4 +1,4 @@
-export SimpleMonomialVector, effective_nvariables, LazyMonomials, lazy_unalias
+export SimpleMonomialVector, effective_nvariables, LazyMonomials, lazy_unalias, SimpleMonomialVectorCollection
 
 # in the matrix, the rows correspond to the exponents and the cols to the monomials
 struct SimpleMonomialVector{Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P},Mr<:XorA{M},Mc<:XorA{M}} <: AbstractVector{SimpleMonomial{Nr,Nc,P}}
@@ -1274,3 +1274,270 @@ Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P1}},
 Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
                                                     iszero(Nc) ? Absent : Matrix{P}}}(a, b)
+
+"""
+    const SimpleMonomialVectorCollection{Nr,Nc,P} = Vector{AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}}
+
+This type represents a vector that contains vectors of SimpleMonomials of possibly different type (say,
+[`SimpleMonomialVector`](@ref) and [`LazyMonomials`](@ref)).
+"""
+const SimpleMonomialVectorCollection{Nr,Nc,P<:Unsigned} = Vector{AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}}
+"""
+    merge_monomial_vectors(X[, dense])
+
+Returns the vector of monomials in the entries of X in increasing order and without any duplicates. The individual sub-vectors
+are assumed to be sorted. `dense` may be `Val(true)`/`Val(:dense)` or `Val(false)`/`Val(:sparse)` to determine the output
+format. If omitted, the most space-efficient format is chosen based on a primitive heuristic - this is not type-stable.
+
+!!! warning
+    Make sure that the argument is an `AbstractVector` whose eltype is a subtype of `AbstractVector`s of
+    [`SimpleMonomial`](@ref)s. Else, the generic implementation will be called, which will fail.
+    The exact type signature for `X` is
+    `AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})} where {Nr,Nc,P<:Unsigned}`.
+"""
+function MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), dense::Val) where {Nr,Nc,P<:Unsigned}
+    # We must be very careful here. The function must be fast, there's no way to allow for dynamic dispatch within the loop.
+    # However, we might get a collection of different types in the the vector - dense and sparse SimpleMonomialVector and
+    # LazyMonomials with all kinds of iterators. It is certainly not viable to compile a new function for every possible
+    # combination of inputs. Therefore, here we first sort them all by type, then pass them to a generated function.
+    grouped = Dict{DataType,Vector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}}()
+    for Xᵢ in X
+        t = typeof(Xᵢ)
+        v = get!(@capture(() -> $t[]), grouped, t)
+        push!(v, Xᵢ)
+    end
+    # We need to sort the types in an arbitrary, but consistent manner. The function is commutative, so no need to generate two
+    # different functions just because the order differs. Assuming hash probably never collides on the few couple of types that
+    # are possible, we'll use this as a comparison between Type objects.
+    # For the return type, this method now requires a single dynamic dispatch, but everything that is done in the submethod is
+    # then static only. However, the return type is already known, so let's fix it.
+    M = dense isa Val{:true} ? Matrix{P} : SparseMatrixCSC{P,UInt}
+    return merge_monomial_vectors(dense, values(sort(grouped, by=hash))...)::
+        SimpleMonomialVector{Nr,Nc,P,M,iszero(Nr) ? Absent : M,iszero(Nc) ? Absent : M}
+end
+
+MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), ::Val{:dense}) where {Nr,Nc,P<:Unsigned} =
+    merge_monomial_vectors(X, Val(true))
+MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), ::Val{:sparse}) where {Nr,Nc,P<:Unsigned} =
+    merge_monomial_vectors(X, Val(false))
+
+MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})})) where {Nr,Nc,P<:Unsigned} =
+    # stupid heuristic: #elements in dense vectors > #elements in sparse vectors -> dense.
+    # TODO: maybe consider the actual storage. sparse size = 2length(nzvals) + size(, 2); dense size = *(size()...)
+    # sparse size of dense: ≤ 2 * *(size()...) + size(, 2)
+    merge_monomial_vectors(X, Val(sum(length, X) > 2sum(mv -> mv isa SimpleSparseMonomialVectorOrView ? length(mv) : 0, X)))
+
+@generated function MultivariatePolynomials.merge_monomial_vectors(dense::Val,
+    Xs::(AbstractVector{MV} where {M<:SimpleMonomial{Nr,Nc,P},MV<:AbstractVector{M}})...) where {Nr,Nc,P<:Unsigned}
+    # Here, every vector contained in a single Xs[i] is of the same type and we can specialize
+    N = length(Xs)
+    result = Expr(:block, :(maxitems::Int = 0), :(remaining = 0))
+    iters = [Symbol(:iters, i) for i in 1:N]
+    idxs = [Symbol(:idxs, i) for i in 1:N]
+    mins = [Symbol(:min, i) for i in 1:N]
+    for i in 1:N
+        push!(result.args, quote
+            maxitems += sum(length, Xs[$i], init=0)
+            # we cannot just do iterate.(Xs[i]) - if none are Nothing, the Vector won't allow it.
+            $(iters[i]) = Vector{$(Base.promote_op(iterate, eltype(Xs[i])))}(undef, length(Xs[$i]))
+            $(idxs[i]) = similar($(iters[i]), Int)
+            $(mins[i]) = 1
+            curminidx = typemax(Int)
+            for (j, Xⱼ) in enumerate(Xs[$i])
+                $(iters[i])[j] = iterval = iterate(Xⱼ)
+                if isnothing(iterval)
+                    $(idxs[i])[j] = typemax(Int)
+                else
+                    $(idxs[i])[j] = mi = monomial_index(iterval[1])
+                    if mi < curminidx
+                        $(mins[i]) = j
+                        curminidx = mi
+                    end
+                end
+            end
+        end)
+    end
+    if dense === Val{true}
+        push!(result.args, iszero(Nr) ? :(exponents_real = absent) :
+            :(exponents_real = SimplePolynomials.resizable_array(P, Nr, maxitems)))
+        if iszero(Nc)
+            push!(result.args, :(exponents_complex = absent), :(exponents_conj = absent))
+        else
+            push!(result.args, :(exponents_complex = SimplePolynomials.resizable_array(P, Nc, maxitems)),
+                :(exponents_conj = SimplePolynomials.resizable_array(P, Nc, maxitems)))
+        end
+    else
+        push!(result.args, :(Ti = UInt)) # what else should we choose?
+        iszero(Nr) || push!(result.args, quote
+            colptr_real = FastVec{Ti}(buffer=maxitems +1)
+            rowval_real = FastVec{Ti}()
+            nzval_real = FastVec{P}()
+        end)
+        iszero(Nc) || push!(result.args, quote
+            colptr_complex = FastVec{Ti}(buffer=maxitems +1)
+            rowval_complex = FastVec{Ti}()
+            nzval_complex = FastVec{P}()
+            colptr_conj = FastVec{Ti}(buffer=maxitems +1)
+            rowval_conj = FastVec{Ti}()
+            nzval_conj = FastVec{P}()
+        end)
+    end
+    process_min = Expr(:if)
+    process_min_cur = process_min
+    for i in 1:N
+        if !isone(i)
+            process_min_cur = let process_min_next=Expr(:elseif)
+                push!(process_min_cur.args, process_min_next)
+                process_min_next
+            end
+        end
+        process_min_i = Expr(:block)
+        # Probably Julia won't be able to figure out that !isnothing($(iters[i])) actually holds true. This would be a good
+        # case for the @ensure/@assume... macro proposal to complement @assert (Julia issue #51729). But we don't have it
+        # (yet). On the other hand, Cthulhu seems to suggest that while $(iters[i])[...] is indeed always a Union (regardless
+        # of whether we wrap it in isnothing or not), accessing an index will automatically give the correct type again, even
+        # here.
+        if dense === Val{true}
+            iszero(Nr) ||
+                push!(process_min_i.args, :(copyto!(@view(exponents_real[:, col]), $(iters[i])[$(mins[i])][1].exponents_real)))
+            if !iszero(Nc)
+                push!(process_min_i.args,
+                :(copyto!(@view(exponents_complex[:, col]), $(iters[i])[$(mins[i])][1].exponents_complex)),
+                :(copyto!(@view(exponents_conj[:, col]), $(iters[i])[$(mins[i])][1].exponents_conj)))
+            end
+        else
+            process_block = Expr(:let, Expr(:block, :(mon=$(iters[i])[$(mins[i])][1])), Expr(:block))
+            if !iszero(Nr)
+                push!(process_block.args[1].args, :(mon_real = mon.exponents_real))
+                push!(process_block.args[2].args, :(unsafe_push!(colptr_real, length(rowval_real) +1)))
+            end
+            if !iszero(Nc)
+                push!(process_block.args[1].args, :(mon_complex = mon.exponents_complex), :(mon_conj = mon.exponents_conj))
+                push!(process_block.args[2].args, :(unsafe_push!(colptr_complex, length(rowval_complex) +1)),
+                    :(unsafe_push!(colptr_conj, length(rowval_conj) +1)))
+            end
+            if eltype(eltype(Xs[i])) <: SimpleSparseMonomialOrView
+                iszero(Nr) || push!(process_block.args[2].args,
+                    :(append!(rowval_real, rowvals(mon_real))),
+                    :(append!(nzval_real, nonzeros(mon_real)))
+                )
+                iszero(Nc) || push!(process_block.args[2].args,
+                    :(append!(rowval_complex, rowvals(mon_complex))),
+                    :(append!(rowval_conj, rowvals(mon_conj))),
+                    :(append!(nzval_complex, nonzeros(mon_complex))),
+                    :(append!(nzval_conj, nonzeros(mon_conj)))
+                )
+            else
+                if !iszero(Nr)
+                    push!(process_block.args[1].args, :(nz_real = count(∘(!, iszero), mon_real)))
+                    push!(process_block.args[2].args,
+                        :(prepare_push!(rowval_real, nz_real)),
+                        :(prepare_push!(nzval_real, nz_real)),
+                        :(for (j, v) in enumerate(mon_real)
+                            if !iszero(v)
+                                unsafe_push!(rowval_real, j)
+                                unsafe_push!(nzval_real, v)
+                            end
+                        end)
+                    )
+                end
+                if !iszero(Nc)
+                    push!(process_block.args[1].args, :(nz_complex = count(∘(!, iszero), mon_complex)),
+                        :(nz_conj = count(∘(!, iszero), mon_conj)))
+                    push!(process_block.args[2].args,
+                        :(prepare_push!(rowval_complex, nz_complex)),
+                        :(prepare_push!(nzval_complex, nz_complex)),
+                        :(prepare_push!(rowval_conj, nz_conj)),
+                        :(prepare_push!(nzval_conj, nz_conj)),
+                        :(for (j, (v₁, v₂)) in enumerate(zip(mon_complex, mon_conj))
+                            if !iszero(v₁)
+                                unsafe_push!(rowval_complex, j)
+                                unsafe_push!(nzval_complex, v₁)
+                            end
+                            if !iszero(v₂)
+                                unsafe_push!(rowval_conj, j)
+                                unsafe_push!(nzval_conj, v₂)
+                            end
+                        end)
+                    )
+                end
+            end
+            push!(process_min_i.args, process_block)
+        end
+        push!(process_min_i.args, quote
+            lastidx = $(idxs[i])[$(mins[i])]
+            while true
+                $(iters[i])[$(mins[i])] = nextiter = iterate(Xs[$i][$(mins[i])], $(iters[i])[$(mins[i])][2])
+                if isnothing(nextiter)
+                    $(idxs[i])[$(mins[i])] = typemax(Int)
+                else
+                    $(idxs[i])[$(mins[i])] = monomial_index(nextiter[1])
+                end
+                $(mins[i]) = argmin($(idxs[i]))
+                $(idxs[i])[$(mins[i])] == lastidx || break
+            end
+        end)
+        push!(process_min_cur.args, :(curmin == $i), process_min_i)
+    end
+    push!(process_min_cur.args, Expr(:break))
+    push!(result.args, quote
+        col = 1
+        while true
+            curmin = 0
+            curminidx = typemax(Int) -1 # Let's assume we don't ever encounter the two largest values, then we can safe some
+                                        # additional comparison logic
+            $((
+                :(if $(idxs[i])[$(mins[i])] < curminidx
+                    curmin = $i
+                    curminidx = $(idxs[i])[$(mins[i])]
+                else
+                    while $(idxs[i])[$(mins[i])] == curminidx
+                        # duplicate, skip it (doesn't matter whether it is the global minimum, if not it will be a duplicate
+                        # later)
+                        $(iters[i])[$(mins[i])] = nextiter = iterate(Xs[$i][$(mins[i])], $(iters[i])[$(mins[i])][2])
+                        if isnothing(nextiter)
+                            $(idxs[i])[$(mins[i])] = typemax(Int)
+                        else
+                            $(idxs[i])[$(mins[i])] = monomial_index(nextiter[1])
+                        end
+                        $(mins[i]) = argmin($(idxs[i]))
+                    end
+                end)
+                for i in 1:N
+            )...)
+            $process_min
+            col += 1
+        end
+    end)
+    if dense === Val{true}
+        push!(result.args,
+            :(del = maxitems - col +1),
+            :(return SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(
+                SimplePolynomials.matrix_delete_end!(exponents_real, del),
+                SimplePolynomials.matrix_delete_end!(exponents_complex, del),
+                SimplePolynomials.matrix_delete_end!(exponents_conj, del)
+            ))
+        )
+    else
+        iszero(Nr) || push!(result.args,
+            :(unsafe_push!(colptr_real, length(rowval_real) +1)),
+            :(@assert(length(colptr_real) == col))
+        )
+        iszero(Nc) || push!(result.args,
+            :(unsafe_push!(colptr_complex, length(rowval_complex) +1)),
+            :(unsafe_push!(colptr_conj, length(rowval_conj) +1)),
+            :(@assert(length(colptr_complex) == length(colptr_conj) == col))
+        )
+        push!(result.args,
+            :(return SimpleMonomialVector{Nr,Nc,P,SparseMatrixCSC{P,UInt}}(
+                $(iszero(Nr) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nr, col -1, finish!(colptr_real),
+                    finish!(rowval_real), finish!(nzval_real)))),
+                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nc, col -1, finish!(colptr_complex),
+                    finish!(rowval_complex), finish!(nzval_complex)))),
+                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nc, col -1, finish!(colptr_conj),
+                    finish!(rowval_conj), finish!(nzval_conj))))
+            ))
+        )
+    end
+    return :(@inbounds($result))
+end
