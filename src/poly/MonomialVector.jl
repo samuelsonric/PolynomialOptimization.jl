@@ -1,4 +1,4 @@
-export SimpleMonomialVector, effective_nvariables, LazyMonomials, lazy_unalias, SimpleMonomialVectorCollection
+export SimpleMonomialVector, effective_nvariables, LazyMonomials, lazy_unalias
 
 # in the matrix, the rows correspond to the exponents and the cols to the monomials
 struct SimpleMonomialVector{Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P},Mr<:XorA{M},Mc<:XorA{M}} <: AbstractVector{SimpleMonomial{Nr,Nc,P}}
@@ -1277,60 +1277,55 @@ Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,N
                                                     iszero(Nc) ? Absent : Matrix{P}}}(a, b)
 
 """
-    const SimpleMonomialVectorCollection{Nr,Nc,P} = Vector{AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}}
+    merge_monomial_vectors(::Type{<:SimpleMonomialVector{Nr,Nc,P}},
+        X::AbstractVector) where {Nr,Nc,P<:Unsigned}
 
-This type represents a vector that contains vectors of SimpleMonomials of possibly different type (say,
-[`SimpleMonomialVector`](@ref) and [`LazyMonomials`](@ref)).
+Returns the vector of monomials in the entries of X in increasing order and without any duplicates. The output format is
+specified in the first parameter; it may be a dense or sparse `SimpleMonomialVector`. If the sparsity is not specified, a
+primitive heuristic will be chosen (note that this introduces a type instability). The individual elements in `X` must be
+sorted iterables with a length and return `SimpleMonomial`s compatible with the output format.
 """
-const SimpleMonomialVectorCollection{Nr,Nc,P<:Unsigned} = Vector{AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P}}
-"""
-    merge_monomial_vectors(X[, dense])
-
-Returns the vector of monomials in the entries of X in increasing order and without any duplicates. The individual sub-vectors
-are assumed to be sorted. `dense` may be `Val(true)`/`Val(:dense)` or `Val(false)`/`Val(:sparse)` to determine the output
-format. If omitted, the most space-efficient format is chosen based on a primitive heuristic - this is not type-stable.
-
-!!! warning
-    Make sure that the argument is an `AbstractVector` whose eltype is a subtype of `AbstractVector`s of
-    [`SimpleMonomial`](@ref)s. Else, the generic implementation will be called, which will fail.
-    The exact type signature for `X` is
-    `AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})} where {Nr,Nc,P<:Unsigned}`.
-"""
-function MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), dense::Val) where {Nr,Nc,P<:Unsigned}
+function MultivariatePolynomials.merge_monomial_vectors(::Type{<:SimpleMonomialVector{Nr,Nc,P,M}},
+    @nospecialize(X::AbstractVector)) where {Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P}}
     # We must be very careful here. The function must be fast, there's no way to allow for dynamic dispatch within the loop.
     # However, we might get a collection of different types in the the vector - dense and sparse SimpleMonomialVector and
     # LazyMonomials with all kinds of iterators. It is certainly not viable to compile a new function for every possible
     # combination of inputs. Therefore, here we first sort them all by type, then pass them to a generated function.
-    grouped = Dict{DataType,Vector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}}()
+    grouped = Dict{DataType,Vector{<:AbstractVector}}()
     for Xᵢ in X
         t = typeof(Xᵢ)
+        eltype(t) <: SimpleMonomial{Nr,Nc,P} || error("An iterator does not have a compatible element type")
+        Base.IteratorSize(eltype(t)) isa Base.SizeUnknown && error("All iterators must have a length")
         v = get!(@capture(() -> $t[]), grouped, t)
         push!(v, Xᵢ)
     end
     # We need to sort the types in an arbitrary, but consistent manner. The function is commutative, so no need to generate two
     # different functions just because the order differs. Assuming hash probably never collides on the few couple of types that
     # are possible, we'll use this as a comparison between Type objects.
-    # For the return type, this method now requires a single dynamic dispatch, but everything that is done in the submethod is
-    # then static only. However, the return type is already known, so let's fix it.
-    M = dense isa Val{:true} ? Matrix{P} : SparseMatrixCSC{P,UInt}
-    return merge_monomial_vectors(dense, values(sort(grouped, by=hash))...)::
+    # Make sure outtype is not the fully specified type, but the one that has the constructor defined, regardless of what the
+    # input parameter actually was.
+    return merge_monomial_vectors_impl(SimpleMonomialVector{Nr,Nc,P,M}, values(sort(grouped, by=hash))...)::
         SimpleMonomialVector{Nr,Nc,P,M,iszero(Nr) ? Absent : M,iszero(Nc) ? Absent : M}
 end
 
-MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), ::Val{:dense}) where {Nr,Nc,P<:Unsigned} =
-    merge_monomial_vectors(X, Val(true))
-MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})}), ::Val{:sparse}) where {Nr,Nc,P<:Unsigned} =
-    merge_monomial_vectors(X, Val(false))
-
-MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<:(AbstractVector{M} where M<:SimpleMonomial{Nr,Nc,P})})) where {Nr,Nc,P<:Unsigned} =
+MultivariatePolynomials.merge_monomial_vectors(::Type{<:SimpleMonomialVector{Nr,Nc,P}},
+    @nospecialize(X::AbstractVector)) where {Nr,Nc,P<:Unsigned} =
     # stupid heuristic: #elements in dense vectors > #elements in sparse vectors -> dense.
     # TODO: maybe consider the actual storage. sparse size = 2length(nzvals) + size(, 2); dense size = *(size()...)
     # sparse size of dense: ≤ 2 * *(size()...) + size(, 2)
-    merge_monomial_vectors(X, Val(sum(length, X) > 2sum(mv -> mv isa SimpleSparseMonomialVectorOrView ? length(mv) : 0, X)))
+    merge_monomial_vectors(
+        SimpleMonomialVector{Nr,Nc,P,
+            sum(length, X) > 2sum(mv -> eltype(mv) isa SimpleSparseMonomialOrView ? length(mv) : 0, X) ?
+                Matrix{P} : SparseMatrixCSC{P,UInt}
+        }, X)
 
-@generated function MultivariatePolynomials.merge_monomial_vectors(dense::Val,
-    Xs::(AbstractVector{MV} where {M<:SimpleMonomial{Nr,Nc,P},MV<:AbstractVector{M}})...) where {Nr,Nc,P<:Unsigned}
+@generated function merge_monomial_vectors_impl(outtype::Type{<:SimpleMonomialVector{Nr,Nc,P,M}},
+    Xs::Vector...) where {Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P}}
     # Here, every vector contained in a single Xs[i] is of the same type and we can specialize
+    dense = M <: Matrix{P}
+    if !dense
+        sparse_idxtype = SparseArrays.indtype(M)
+    end
     N = length(Xs)
     result = Expr(:block, :(maxitems::Int = 0), :(remaining = 0))
     iters = [Symbol(:iters, i) for i in 1:N]
@@ -1358,17 +1353,17 @@ MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<
             end
         end)
     end
-    if dense === Val{true}
+    if dense
         push!(result.args, iszero(Nr) ? :(exponents_real = absent) :
-            :(exponents_real = SimplePolynomials.resizable_array(P, Nr, maxitems)))
+            :(exponents_real = resizable_array(P, Nr, maxitems)))
         if iszero(Nc)
             push!(result.args, :(exponents_complex = absent), :(exponents_conj = absent))
         else
-            push!(result.args, :(exponents_complex = SimplePolynomials.resizable_array(P, Nc, maxitems)),
-                :(exponents_conj = SimplePolynomials.resizable_array(P, Nc, maxitems)))
+            push!(result.args, :(exponents_complex = resizable_array(P, Nc, maxitems)),
+                :(exponents_conj = resizable_array(P, Nc, maxitems)))
         end
     else
-        push!(result.args, :(Ti = UInt)) # what else should we choose?
+        push!(result.args, :(Ti = $sparse_idxtype))
         iszero(Nr) || push!(result.args, quote
             colptr_real = FastVec{Ti}(buffer=maxitems +1)
             rowval_real = FastVec{Ti}()
@@ -1398,7 +1393,7 @@ MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<
         # (yet). On the other hand, Cthulhu seems to suggest that while $(iters[i])[...] is indeed always a Union (regardless
         # of whether we wrap it in isnothing or not), accessing an index will automatically give the correct type again, even
         # here.
-        if dense === Val{true}
+        if dense
             iszero(Nr) ||
                 push!(process_min_i.args, :(copyto!(@view(exponents_real[:, col]), $(iters[i])[$(mins[i])][1].exponents_real)))
             if !iszero(Nc)
@@ -1510,13 +1505,13 @@ MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<
             col += 1
         end
     end)
-    if dense === Val{true}
+    if dense
         push!(result.args,
             :(del = maxitems - col +1),
-            :(return SimpleMonomialVector{Nr,Nc,P,Matrix{P}}(
-                SimplePolynomials.matrix_delete_end!(exponents_real, del),
-                SimplePolynomials.matrix_delete_end!(exponents_complex, del),
-                SimplePolynomials.matrix_delete_end!(exponents_conj, del)
+            :(return outtype(
+                matrix_delete_end!(exponents_real, del),
+                matrix_delete_end!(exponents_complex, del),
+                matrix_delete_end!(exponents_conj, del)
             ))
         )
     else
@@ -1530,12 +1525,12 @@ MultivariatePolynomials.merge_monomial_vectors(@nospecialize(X::AbstractVector{<
             :(@assert(length(colptr_complex) == length(colptr_conj) == col))
         )
         push!(result.args,
-            :(return SimpleMonomialVector{Nr,Nc,P,SparseMatrixCSC{P,UInt}}(
-                $(iszero(Nr) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nr, col -1, finish!(colptr_real),
+            :(return outtype(
+                $(iszero(Nr) ? :(absent) : :(SparseMatrixCSC{P,$sparse_idxtype}(Nr, col -1, finish!(colptr_real),
                     finish!(rowval_real), finish!(nzval_real)))),
-                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nc, col -1, finish!(colptr_complex),
+                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,$sparse_idxtype}(Nc, col -1, finish!(colptr_complex),
                     finish!(rowval_complex), finish!(nzval_complex)))),
-                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,UInt}(Nc, col -1, finish!(colptr_conj),
+                $(iszero(Nc) ? :(absent) : :(SparseMatrixCSC{P,$sparse_idxtype}(Nc, col -1, finish!(colptr_conj),
                     finish!(rowval_conj), finish!(nzval_conj))))
             ))
         )

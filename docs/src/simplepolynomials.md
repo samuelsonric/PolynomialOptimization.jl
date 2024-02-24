@@ -43,6 +43,5 @@ effective_nvariables
 exponents_from_index!
 exponents_from_index_prepare
 ownpowers
-SimpleMonomialVectorCollection
 MultivariatePolynomials.merge_monomial_vectors
 ```
