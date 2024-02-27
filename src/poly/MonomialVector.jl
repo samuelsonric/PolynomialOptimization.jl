@@ -405,6 +405,69 @@ end
 Base.isreal(::SimpleRealMonomialVector) = true
 Base.isreal(x::SimpleMonomialVector) = all(isreal, x)
 
+Base.in(x::SimpleMonomial{Nr,Nc,P}, v::SimpleMonomialVector{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} = searchsortedlast(v, x) > 0
+function Base.in(x::SimpleMonomialProduct{Nr,Nc,P}, v::SimpleMonomialVector{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned}
+    isempty(v) && return false
+    # the product can only be accessed via iteration, so we'll have to implement the binary search manually
+    xiterate = iterate(x)
+    isnothing(xiterate) && return isnothing(iterate(first(v)))
+    xdegree = degree(x)
+    # first step: find the correct degree range
+    degrange = searchsorted(v, _DummyMonomial(xdegree), by=degree)
+    isempty(degrange) && return false
+    l, u = extrema(degrange)
+    # within the degree range, we can do lexicographic comparison
+    # second step: find monomials within the degree range. For this, bisect until the first exponent matches. Continue
+    # comparing until the first mismatch. In the next bisection, first compare all the exponents that previously matched, then
+    # go on with the iteration.
+    xvariable, xexponent = xiterate
+    local item
+    m = (l + u) >> 1
+    @inbounds item = x[m]
+    varidx = 1
+    @inbounds itemexponents = @view(exponents(item)[1:0]) # empty comparison at the beginning
+    @inbounds while l ≤ u
+        # compare with previous choice in the range where we know the previous choice to be valid
+        nextitem = x[m]
+        nextitemexponents = @view(exponents(nextitem)[1:varidx-1])
+        if nextitemexponents < itemexponents
+            l = m +1
+        elseif nextitemexponents > itemexponents
+            u = m -1
+        else
+            # It is identical in this range. First, set this item to our last choice.
+            item = nextitem
+            # Then go on comparing the variables.
+            itemiter = Iterators.drop(iterate(item), varidx -1)
+            itemiterate = iterate(itemiter)
+            if isnothing(itemiterate)
+                l = m +1 # we don't have any exponents left at the current position, but we still need ones: we are too low
+            else
+                itemvariable, itemexponent = itemiterate
+                if itemvariable == xvariable
+                    itemexponent == xexponent || return false
+                    varidx += 1
+                    itemiterate = iterate(itemiter, itemiterate[2])
+                    xiterate = iterate(x, xiterate[2])
+                    if isnothing(xiterate)
+                        isnothing(itemiterate) && return true
+                        u = m -1 # we still have exponents left at the  position, but we don't need them any more: we are
+                                 # too high
+                    else
+                        xvariable, xexponent = xiterate
+                        continue
+                    end
+                elseif itemvariable < xvariable
+                    l = m +1
+                else
+                    u = m -1
+                end
+            end
+        end
+    end
+    return false
+end
+
 Base.conj(x::SimpleMonomialVector{Nr,Nc,P,M}) where {Nr,Nc,P<:Unsigned,M<:AbstractMatrix{P}} =
     SimpleMonomialVector{Nr,Nc,P,M}(x.exponents_real, x.exponents_conj, x.exponents_complex)
 
@@ -779,7 +842,7 @@ function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsig
         iszero(Nr) ? absent : @view(result[1][1:Nr]),
         iszero(Nc) ? absent : @view(result[1][Nr+1:Nr+Nc]),
         iszero(Nc) ? absent : @view(result[1][Nr+Nc+1:end])
-    ), result[2]
+        ), result[2]
 end
 @inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
     @boundscheck checkbounds(lm, i)

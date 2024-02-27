@@ -554,5 +554,7 @@ function Base.length(p::SimpleMonomialProduct{Nr,Nc,P,Ms}) where {Nr,Nc,P<:Unsig
     end
     return len
 end
+MultivariatePolynomials.degree(p::SimpleMonomialProduct) = sum(degree, p.monomials, init=0)
+monomial_index(p::SimpleMonomialProduct) = monomial_index(p.monomials...)
 
 Base.:*(m::SimpleMonomial{Nr,Nc,P}...) where {Nr,Nc,P} = SimpleMonomialProduct(m)
