@@ -64,6 +64,49 @@ Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:S
 end
 
 """
+    monomial_index(exponents::AbstractVector{<:Integer}, iter::AbstractMonomialIterator[, prepared])
+
+Returns the unique index of the vector of exponents within an iterator `iter`. If the vector does not occur, return `0`.
+The `prepared` data must be constructed with [`monomial_index_prepare`](@ref) and allows for a faster execution of the function
+multiple times in a row.
+"""
+function monomial_index(exponents::AbstractVector{P}, iter::MonomialIterator{<:Any,P}) where {P}
+    length(exponents) == iter.n || throw(ArgumentError("exponents and iter have different number of variables"))
+    @inbounds return monomial_index(exponents, iter, monomial_index_prepare(iter))
+end
+
+@inline function monomial_index(exponents::AbstractVector{P}, iter::MonomialIterator{<:Any,P}, occurrences::Matrix{Int}) where {P}
+    @boundscheck length(exponents) == iter.n || throw(ArgumentError("exponents and iter have different number of variables"))
+    if iszero(size(occurrences, 2))
+        return 0
+    elseif isone(size(occurrences, 2))
+        @inbounds occurrences[1] < exponents[1] ≤ occurrences[2] && return exponents[1] - occurences[1]
+        return 0
+    end
+    # same logic as in the ordinary monomial_index, just with binomials replaces by summations in occurrences
+    mondeg::Int = sum(exponents, init=0)
+    size(occurrences, 1) > mondeg || return 0
+    @inbounds iszero(occurrences[mondeg+1, 1]) && return 0
+    @inbounds mindex = sum(@view(occurrences[iter.mindeg+1:mondeg+1, 1]))
+    @inbounds for (j, (vardeg, maxmultideg)) in enumerate(Iterators.take(zip(exponents, iter.maxmultideg), iter.n -1))
+        # check for all possible higher degrees that the current variable may have had
+        for i in vardeg+1:min(mondeg, maxmultideg) # check for all possible higher degrees that the current variable may have had
+            mindex -= occurrences[mondeg-i+1, j+1]
+            # #monomials with nvar-1 variables to the right of j with degree exactly mondeg - i
+        end
+        mondeg -= vardeg
+    end
+    return mindex
+end
+
+Base.@propagate_inbounds function monomial_index(exponents::AbstractVector{P}, iter::RangedMonomialIterator{<:Any,P},
+    args...) where {P}
+    i = monomial_index(exponents, iter.iter, args...)
+    isnothing(i) && return nothing
+    return iter.start ≤ i < iter.start + iter.length ? i - iter.start +1 : nothing
+end
+
+"""
     exponents_from_index!(exponents::AbstractVector{<:Integer}, index::Integer)
 
 Constructs the vector of exponents that is associated with the monomial index `index` and stores it in `exponents`. This can be
@@ -207,6 +250,14 @@ end
 
 exponents_from_index_prepare(iter::RangedMonomialIterator) = exponents_from_index_prepare(iter.iter)
 
+"""
+    monomial_index_prepare(iter::AbstractMonomialIterator)
+
+Prepares all the data necessary to quickly perform multiple calls to [`monomial_index`](@ref) with an iterator in a row.
+This function is identical with [`exponents_from_index_prepare`](@ref); the same data can also be used for
+[`exponents_from_index!`](@ref).
+"""
+monomial_index_prepare = exponents_from_index_prepare
 
 for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
     eval(quote

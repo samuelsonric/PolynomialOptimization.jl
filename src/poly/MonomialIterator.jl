@@ -142,12 +142,12 @@ function Base.iterate(iter::MonomialIterator{E}, state::Tuple{P,<:AbstractVector
     end
 end
 
-function _moniter_length(maxdeg, minmultideg, maxmultideg)
+function _moniter_length(maxdeg, minmultideg, maxmultideg, cache::AbstractMatrix{Int}=Matrix{Int}(undef, maxdeg +1, 2))
     # internal function without checks or quick path
     # ~ O(n*d^2)
-    occurrences = zeros(Int, maxdeg +1)
+    @inbounds occurrences = fill!(@view(cache[:, 1]), 0)
     @inbounds fill!(@view(occurrences[minmultideg[1]+1:min(maxmultideg[1], maxdeg)+1]), 1)
-    nextround = similar(occurrences)
+    @inbounds nextround = @view(cache[:, 2])
     for (minᵢ, maxᵢ) in Iterators.drop(zip(minmultideg, maxmultideg), 1)
         fill!(nextround, 0)
         for degᵢ in minᵢ:min(maxᵢ, maxdeg)
@@ -168,6 +168,18 @@ Base.@assume_effects :foldable :nothrow :notaskstate function Base.length(iter::
     @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1]) +1
     @inbounds return sum(@view(@inline(_moniter_length(maxdeg, iter.minmultideg, iter.maxmultideg))[iter.mindeg+1:end]), init=0)
 end
+Base.@assume_effects :consistent :terminates_globally :nothrow :notaskstate function Base.length(iter::MonomialIterator,
+    cache::AbstractMatrix{Int})
+    maxdeg = iter.maxdeg
+    iter.Σminmultideg > maxdeg && return 0
+    iter.Σmaxmultideg < iter.mindeg && return 0
+    @inbounds isone(iter.n) && return min(maxdeg, iter.maxmultideg[1]) - max(iter.mindeg, iter.minmultideg[1]) +1
+    @inbounds return sum(
+        @view(@inline(_moniter_length(maxdeg, iter.minmultideg, iter.maxmultideg, cache))[iter.mindeg+1:end]),
+        init=0
+    )
+end
+
 function exponents_increment_right(iter::MonomialIterator, exponents, δ, from)
     @assert(δ ≥ 0 && from ≥ 0)
     maxmultideg = iter.maxmultideg

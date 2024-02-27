@@ -33,15 +33,17 @@ SimplePolynomial
 
 ## Additional types and functions
 ```@docs
-monomial_count
-monomial_index
 MonomialIterator
 RangedMonomialIterator
 ownexponents
 MultivariatePolynomials.monomials
-LazyMonomials
-effective_nvariables
+monomial_count
+monomial_index
+monomial_index_prepare
 exponents_from_index!
 exponents_from_index_prepare
+LazyMonomials
+LazySubMonomials
+effective_nvariables
 MultivariatePolynomials.merge_monomial_vectors
 ```

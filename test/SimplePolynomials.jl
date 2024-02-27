@@ -5,7 +5,7 @@ using LinearAlgebra, SparseArrays
 
 using MultivariatePolynomials
 const MP = MultivariatePolynomials
-import DynamicPolynomials
+import DynamicPolynomials, Combinatorics
 
 using PolynomialOptimization.SimplePolynomials
 import PolynomialOptimization.SimplePolynomials: Absent
@@ -502,10 +502,16 @@ end
                 exponents = Vector{UInt8}(undef, 3)
                 for (i, mipow) in enumerate(mi)
                     @test exponents_from_index!(exponents, mi, i)
+                    mind = monomial_index(exponents, mi)
+                    if exponents != mipow || mind != i
+                        println(mindeg, " - ", maxdeg, " - ", minmultideg, " - ", maxmultideg, ": index ", i,
+                            " gives exponents ", exponents, " which claim index ", mind)
                     end
                     @test exponents == mipow
+                    @test mind == i
                 end
                 @test !exponents_from_index!(exponents, mi, length(mi) +1)
+                @test iszero(monomial_index(maxm .+ one(eltype(maxm)), mi))
             end
         end
         mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], ownexponents)
@@ -524,5 +530,40 @@ end
         @test mons[3:7] == lm[3:7]
         @test mons[3:7] == @view(lm[3:7])
         @test mons[6] == lm[6]
+        ind = [1, 2, 4, 7, 8]
+        @test mons[ind] == lm[ind]
+        @test mons[ind] == @view(lm[ind])
+        @test mons[3:7][[1, 3, 4]] == mons[[3, 5, 6]]
+        @test mons[ind][2:4] == mons[ind[2:4]]
+    end
+
+    @testset "LazyMonomials effective variables" begin
+        lm = LazyMonomials{3,0}(0x2:0x5, minmultideg=UInt8[1, 0, 2], maxmultideg=UInt8[7, 4, 3])
+        @test collect(effective_variables(lm)) == SimpleVariable{3,0}.(1:3)
+        @test effective_nvariables(lm) == 3
+        lm = LazyMonomials{3,0}(0x2:0x5, minmultideg=UInt8[1, 0, 4], maxmultideg=UInt8[7, 4, 8])
+        @test collect(effective_variables(lm)) == SimpleVariable{3,0}.([1, 3])
+        @test effective_nvariables(lm) == 2
+        lm = LazyMonomials{4,0}(0:5, minmultideg=[2, 0, 0, 0], maxmultideg=[4, 5, 6, 7])
+        for rstart in 1:length(lm), rend in rstart:length(lm)
+            sub = @view(lm[rstart:rend])
+            correct_efvars = Set{SimpleVariable{4,0}}()
+            for mon in sub, (var, pow) in mon
+                push!(correct_efvars, var)
+            end
+            efvars = collect(effective_variables(sub))
+            @test efvars == sort!(collect(correct_efvars))
+            @test effective_nvariables(sub) == length(correct_efvars)
+        end
+        for subs in Combinatorics.powerset(1:length(lm), 0, 4)
+            sub = @view(lm[subs])
+            correct_efvars = Set{SimpleVariable{4,0}}()
+            for mon in sub, (var, pow) in mon
+                push!(correct_efvars, var)
+            end
+            efvars = collect(effective_variables(sub))
+            @test efvars == sort!(collect(correct_efvars))
+            @test effective_nvariables(sub) == length(correct_efvars)
+        end
     end
 end

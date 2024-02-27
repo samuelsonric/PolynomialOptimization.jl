@@ -766,17 +766,6 @@ function Base.length(lm::LazyMonomials{<:Any,<:Any,P,<:MonomialIterator{<:Any,P}
 end
 Base.length(lm::LazyMonomials) = length(lm.iter) # fallback for RangedMonomialIterator, which already has it precomputed
 Base.size(lm::LazyMonomials) = (length(lm),)
-@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
-    @boundscheck checkbounds(lm, i)
-    powers = V === Nothing ? Vector{P}(undef, Nr + 2Nc) : lm.iter.powers
-    result = @inbounds exponents_from_index!(powers, lm.iter, lm.index_data, i)
-    @boundscheck @assert(result)
-    return SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}(
-        iszero(Nr) ? absent : @view(powers[1:Nr]),
-        iszero(Nc) ? absent : @view(powers[Nr+1:Nr+Nc]),
-        iszero(Nc) ? absent : @view(powers[Nr+Nc+1:end])
-    )
-end
 Base.IteratorSize(::Type{<:LazyMonomials}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:LazyMonomials}) = Base.HasEltype()
 function Base.eltype(::Type{<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
@@ -792,88 +781,366 @@ function Base.iterate(lm::LazyMonomials{Nr,Nc,P}, args...) where {Nr,Nc,P<:Unsig
         iszero(Nc) ? absent : @view(result[1][Nr+Nc+1:end])
     ), result[2]
 end
+@inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,<:AbstractMonomialIterator{V}}, i::Integer) where {Nr,Nc,P<:Unsigned,V}
+    @boundscheck checkbounds(lm, i)
+    exponents = V === Nothing ? Vector{P}(undef, Nr + 2Nc) : lm.iter.exponents
+    result = @inbounds exponents_from_index!(exponents, lm.iter, lm.index_data, i)
+    @boundscheck @assert(result)
+    return SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}(
+        iszero(Nr) ? absent : @view(exponents[1:Nr]),
+        iszero(Nc) ? absent : @view(exponents[Nr+1:Nr+Nc]),
+        iszero(Nc) ? absent : @view(exponents[Nr+Nc+1:end])
+    )
+end
 @inline function Base.getindex(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where
     {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=true)
     return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter, lm.index_data)
 end
+Base.@propagate_inbounds Base.getindex(lm::LazyMonomials, indices::AbstractVector) = LazySubMonomials(lm, indices, copy=true)
 @inline function Base.view(lm::LazyMonomials{Nr,Nc,P,MI}, range::AbstractUnitRange) where
     {Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}}
     @boundscheck checkbounds(lm, range)
     iter = RangedMonomialIterator(lm.iter, first(range), length(range), copy=false)
     return LazyMonomials{Nr,Nc,P,typeof(iter)}(iter, lm.index_data)
 end
+Base.@propagate_inbounds Base.view(lm::LazyMonomials, indices::AbstractVector) = LazySubMonomials(lm, indices, copy=false)
 MultivariatePolynomials.mindegree(lm::LazyMonomials) = mindegree(lm.iter)
 MultivariatePolynomials.maxdegree(lm::LazyMonomials) = maxdegree(lm.iter)
 MultivariatePolynomials.extdegree(lm::LazyMonomials) = extdegree(lm.iter)
+_get_iter(lm::LazyMonomials) = lm.iter
 
-struct LazyMonomialsEffectiveVariables{Nr,Nc,LM<:LazyMonomials{Nr,Nc}}
+struct LazySubMonomials{Nr,Nc,P<:Unsigned,LM<:LazyMonomials{Nr,Nc,P,<:MonomialIterator{<:Any,P}},I<:(AbstractVector{IT} where IT<:Integer)} <: AbstractVector{SimpleMonomial{Nr,Nc,P,_LazyMonomialsView{P}}}
+    parent::LM
+    indices::I
+    iteration::Bool
+
+    @doc """
+        LazySubMonomials(lm::LazyMonomials, indices::AbstractVector; copy::Bool)
+
+Constructs a memory-efficient vector of monomials that corresponds to a scattered view into `lm`. The monomials will be
+constructed on-demand.
+If `lm` was constructed using [`ownexponents`](@ref), `copy` determines whether this view shares the same memory or allocates
+new space.
+Note that the object will take possession of `indices`. It is not allowed to use the vector afterwards, as it might be
+modified.
+Elements of this type will be automatically constructed when indexing a [`LazyMonomials`](@ref) vector with an array (where the
+`copy` parameter will be set if the indexing is done by `view`).
+    """
+    @inline function LazySubMonomials(lm::LM, indices::AbstractVector{IT}; copy::Bool) where {Nr,Nc,P<:Unsigned,LM<:LazyMonomials{Nr,Nc,P},IT<:Integer}
+        Base.require_one_based_indexing(indices)
+        @boundscheck issorted(indices) || !_sortedallunique(indices) ||
+            throw(ArgumentError("indices must be sorted and not contain duplicates"))
+        @boundscheck @inbounds if !isempty(indices)
+            first(indices) ≤ 0 && throw(BoundsError(lm, first(indices)))
+            last(indices) > length(lm) && throw(BoundsError(lm, last(indices)))
+        end
+        if lm.iter isa RangedMonomialIterator
+            δ = lm.iter.start -1
+            @inbounds @simd for i in eachindex(indices)
+                indices[i] += δ
+            end
+        end
+        # Check how to go through this. In general, it takes about twice as long to calculate the exponents from the position
+        # compared to doing an iteration step. So if indices is pretty dense, use the iterative method, else use direct
+        # calculation (see also exponents_from_indices). This should not introduce type instabilities, so let's make it a
+        # variable.
+        new{Nr,Nc,P,LM,typeof(indices)}(LM(copy ? MonomialIterator(parent(lm.iter)) : parent(lm.iter), lm.index_data), indices,
+            2length(indices) ≥ length(lm))
+    end
+
+    LazySubMonomials{Nr,Nc,P,LM,I}(parent::LM, indices::I, iteration::Bool) where
+        {Nr,Nc,P<:Unsigned,LM<:LazyMonomials{Nr,Nc,P,<:MonomialIterator{<:Any,P}},I<:(AbstractVector{IT} where IT<:Integer)} =
+        new{Nr,Nc,P,LM,I}(parent, indices, iteration)
+end
+
+Base.@propagate_inbounds LazySubMonomials(lsm::LazySubMonomials, indices::AbstractVector{IT};
+    copy::Bool) where {IT<:Integer} = LazySubMonomials(lsm.parent, @view(lsm.indices[indices]); copy)
+
+Base.length(lsm::LazySubMonomials) = length(lsm.indices)
+Base.size(lsm::LazySubMonomials) = (length(lsm),)
+Base.IteratorSize(::Type{<:LazySubMonomials}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:LazySubMonomials}) = Base.HasEltype()
+Base.eltype(::Type{<:LazySubMonomials{Nr,Nc,P,LM}}) where {Nr,Nc,P<:Unsigned,LM<:LazyMonomials{Nr,Nc,P}} = eltype(LM)
+function Base.iterate(lsm::LazySubMonomials)
+    isempty(lsm.indices) && return nothing
+    if lsm.iteration
+        result, subi = iterate(lsm.parent)
+        for _ in 2:@inbounds(first(lsm.indices))
+            result, subi = iterate(lsm.parent, subi)
+        end
+        return result, (1, subi)
+    else
+        @inbounds return lsm.parent[first(lsm.indices)], 1
+    end
+end
+function Base.iterate(lsm::LazySubMonomials, state::Tuple{Integer,<:Any})
+    @assert(lsm.iteration)
+    oldpos, iterstate = state
+    oldpos ≥ length(lsm.indices) && return nothing
+    result, iterstate = iterate(lsm.parent, iterstate)
+    @inbounds for _ in lsm.indices[oldpos]+1:lsm.indices[oldpos+1]-1
+        result, iterstate = iterate(lsm.parent, iterstate)
+    end
+    return result, (oldpos +1, iterstate)
+end
+function Base.iterate(lsm::LazySubMonomials, state::Int)
+    @assert(!lsm.iteration)
+    state ≥ length(lsm.indices) && return nothing
+    @inbounds return lsm.parent[lsm.indices[state+1]], state +1
+end
+Base.@propagate_inbounds Base.getindex(lsm::LazySubMonomials, i::Integer) = lsm.parent[lsm.indices[i]]
+Base.@propagate_inbounds Base.getindex(lsm::LazySubMonomials, range::Union{<:AbstractRange,<:AbstractVector}) =
+    LazySubMonomials(lsm.parent, lsm.indices[range], copy=true)
+Base.@propagate_inbounds Base.view(lsm::LazySubMonomials, range::Union{<:AbstractRange,<:AbstractVector}) =
+    LazySubMonomials(lsm.parent, lsm.indices[range], copy=false)
+MultivariatePolynomials.mindegree(lsm::LazySubMonomials) = isempty(lsm.indices) ? 0 : degree(first(lsm))
+MultivariatePolynomials.maxdegree(lsm::LazySubMonomials) = isempty(lsm.indices) ? 0 : degree(lsm[length(lsm)])
+MultivariatePolynomials.extdegree(lsm::LazySubMonomials) =
+    isempty(lsm.indices) ? (0, 0) : (degree(first(iter)), degree(lsm[length(lsm)]))
+_get_iter(lsm::LazySubMonomials) = _get_iter(lsm.parent)
+
+const LazyMonomialsUnion{Nr,Nc,P<:Unsigned} =
+    Union{<:LazyMonomials{Nr,Nc,P},<:LazySubMonomials{Nr,Nc,P,<:LazyMonomials{Nr,Nc,P,<:MonomialIterator{<:Any,P}}}}
+
+struct LazyMonomialsEffectiveVariables{Nr,Nc,LM}
     lm::LM
 end
 
-Base.IteratorSize(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasLength()
+Base.IteratorSize(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.SizeUnknown()
 Base.IteratorEltype(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} = Base.HasEltype()
 Base.eltype(::Type{<:LazyMonomialsEffectiveVariables{Nr,Nc}}) where {Nr,Nc} =
     SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}
-function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:MonomialIterator}}) where {Nr,Nc}
-    if isempty(lmev.lm)
-        return nothing
-    else
-        idx::Int = findfirst(∘(!, iszero), lmev.lm.iter.maxmultideg)
-        return SimpleVariable{Nr,Nc}(idx), idx
-    end
-end
-function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:MonomialIterator}}, state::Int) where {Nr,Nc}
-    idx = findnext(∘(!, iszero), lmev.lm.iter.maxmultideg, state +1)
-    return isnothing(idx) ? nothing : (SimpleVariable{Nr,Nc}(idx), idx)
-end
-function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:RangedMonomialIterator}}) where {Nr,Nc}
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:(LazyMonomials{Nr,Nc,P,<:MonomialIterator{<:Any,P}} where {P<:Unsigned})}) where {Nr,Nc}
     isempty(lmev.lm) && return nothing
-    riter = lmev.lm.iter
-    iter = riter.iter
-    tmppow = first(riter)
-    idx = findfirst(∘(!, iszero), iter.maxmultideg)
-    @inbounds while !isnothing(idx)
-        # maybe the index is already present in the first powers of the ranged iterator
-        iszero(tmppow[idx]) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
-        # it is not, so let us check if the next index that has the variable present is still within
-        tmppow[idx] = 1
-        isnothing(monomial_index(tmppow, riter, lmev.lm.index_data)) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
-        # it was not, go on
-        tmppow[idx] = 0
-        idx = findnext(∘(!, iszero), iter.maxmultideg, idx +1)
-    end
-    return nothing
+    return iterate(lmev, (0,))
 end
-function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:LazyMonomials{Nr,Nc,<:Any,<:RangedMonomialIterator}}, (idx, tmppow)) where {Nr,Nc}
-    iter = lmev.lm.iter.iter
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc,<:Union{<:(LazyMonomials{Nr,Nc,P,<:RangedMonomialIterator{<:Any,P}} where {P<:Unsigned}),
+                                                                          <:LazySubMonomials{Nr,Nc}}}) where {Nr,Nc}
+    isempty(lmev.lm) && return nothing
+    iter = parent(_get_iter(lmev.lm))
+    return iterate(lmev, (0, all(∘(!, iszero), iter.minmultideg) ? iter.minmultideg : copy(iter.minmultideg),
+                          Matrix{Int}(undef, iter.maxdeg +1, 2)))
+end
+function Base.iterate(lmev::LazyMonomialsEffectiveVariables{Nr,Nc}, state) where {Nr,Nc}
+    iter = parent(_get_iter(lmev.lm))
+    idx = state[1]
+    rest = state[2:end]
     @inbounds while true
         idx = findnext(∘(!, iszero), iter.maxmultideg, idx +1)
         isnothing(idx) && return nothing
-        iszero(tmppow[idx]) || return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
-        tmppow[idx] = 1
-        isnothing(monomial_index(tmppow, lmev.lm.iter, lmev.lm.index_data)) ||
-            return (SimpleVariable{Nr,Nc}(idx), (idx, tmppow))
-        tmppow[idx] = 0
+        if _effective_variables_has(lmev.lm, idx, rest..., Val(:unsafe))
+            return SimpleVariable{Nr,Nc}(idx), (idx, rest...)
+        end
     end
 end
 
-MultivariatePolynomials.effective_variables(x::LazyMonomials) = LazyMonomialsEffectiveVariables(x)
+function _effective_variables_has(lm::LazyMonomials{<:Any,<:Any,<:Any,<:MonomialIterator},
+    idx::Integer, ::Check=Val(:check)) where {Check<:Union{Val{:check},Val{:bounds},Val{:empty},Val{:unsafe}}}
+    iter = _get_iter(lm)
+    Check <: Union{Val{:check},Val{:bounds}} && checkbounds(iter.minmultideg, idx)
+    if Check <: Union{Val{:check},Val{:empty}}
+        isempty(lm) && return false
+        @inbounds iszero(iter.maxmultideg[idx]) && return false
+    end
+    @inbounds return iter.Σminmultideg - iter.minmultideg[idx] < iter.maxdeg # only != should be necessary, as lm is nonempty
+end
+function _effective_variables_has(lm::LazyMonomials{<:Any,<:Any,<:Any,<:RangedMonomialIterator},
+    idx::Integer, tmpminmultideg::AbstractVector, lengthcache::AbstractMatrix{Int},
+    ::Check=Val(:check)) where {Check<:Union{Val{:check},Val{:bounds},Val{:empty},Val{:unsafe}}}
+    riter = _get_iter(lm)
+    iter = parent(riter)
+    if Check <: Union{Val{:check},Val{:bounds}}
+        checkbounds(iter.minmultideg, idx)
+        tmpminmultideg == iter.minmultideg || throw(ArgumentError("tmpminmultideg must be a copy of minmultideg"))
+        Base.require_one_based_indexing(tmpminmultideg)
+        size(lengthcache) == (iter.maxdeg +1, 2) || throw(ArgumentError("Wrong dimensions of lengthcache"))
+    end
+    if Check <: Union{Val{:check},Val{:empty}}
+        isempty(lm) && return false
+        iszero(iter.maxmultideg[idx]) && return false
+    end
+    @inbounds begin
+        iszero(tmpminmultideg[idx]) || return true
+        index_data = lm.index_data
+        tmpminmultideg[idx] = 1
+        tmpiter = typeof(iter)(iter.mindeg, iter.maxdeg, tmpminmultideg, iter.maxmultideg, iter.exponents,
+            iter.Σminmultideg + one(iter.Σminmultideg), iter.Σmaxmultideg)
+        # tmpiter only gives the items that we actually need to certify existence of the variable; so we'll do a binary
+        # search within this iterator.
+        minindex = riter.start
+        maxindex = riter.start + riter.length -1
+        lo = 1
+        hi = length(tmpiter, lengthcache)
+        while lo ≤ hi
+            mid = Base.midpoint(lo, hi)
+            miditem = tmpiter[mid]
+            miditemindex = monomial_index(miditem, iter, index_data)
+            @assert(!iszero(miditemindex)) # tmpiter is a refinement of iter, so it must be there
+            if miditemindex < minindex
+                lo = mid +1
+            elseif miditemindex > maxindex
+                hi = mid -1
+            else
+                break
+            end
+        end
+        tmpminmultideg[idx] = 0
+        return lo ≤ hi
+    end
+end
+function _effective_variables_has(lsm::LazySubMonomials, idx::Integer, tmpminmultideg::AbstractVector,
+    lengthcache::AbstractMatrix{Int}, ::Check=Val(:check)) where {Check<:Union{Val{:check},Val{:bounds},Val{:empty},Val{:unsafe}}}
+    iter = _get_iter(lsm)
+    if Check <: Union{Val{:check},Val{:bounds}}
+        checkbounds(iter.minmultideg, idx)
+        tmpminmultideg == iter.minmultideg || throw(ArgumentError("tmpminmultideg must be a copy of minmultideg"))
+        Base.require_one_based_indexing(tmpminmultideg)
+        size(lengthcache) == (iter.maxdeg +1, 2) || throw(ArgumentError("Wrong dimensions of lengthcache"))
+    end
+    if Check <: Union{Val{:check},Val{:empty}}
+        isempty(lsm) && return false
+        iszero(iter.maxmultideg[idx]) && return false
+    end
+    @inbounds begin
+        iszero(tmpminmultideg[idx]) || return true
+        indices = lsm.indices
+        index_data = lsm.parent.index_data
+        # The submonomials contain any scattered list of items, but it is sorted. So it is efficient to check membership of an
+        # index in the submonomials.
+        # Idea: we use tmpiter (which only gives items that have the required variable present) to get our first candidate for
+        # such a monomial; if its index with respect to iter is in the indices, we are done.
+        # If it is not, we do an exponential search in order to find the most distant monomial in tmpiter whose distance in
+        # iter is the same - this gives us a range of indices in which all monomials will have the required variable set. We
+        # can efficiently check for intersection of this range with indices (this also allows to reduce the part of indices
+        # that have to be looked at later).
+        # If the intersection was empty, we continue on with the next item.
+        # This is quite efficient unless the iterator is chosen such that we can expect those ranges to be approximately of
+        # size 1.
+        # And if the list of indices is very small compared to the number of items in tmpiter, we can instead just travel
+        # through the indices and check whether they have the variable.
+        tmpminmultideg[idx] = 1
+        tmpiter = typeof(iter)(iter.mindeg, iter.maxdeg, tmpminmultideg, iter.maxmultideg, iter.exponents,
+            iter.Σminmultideg + one(iter.Σminmultideg), iter.Σmaxmultideg)
+        lotmpiter = 1
+        maxtmpiter = length(tmpiter, lengthcache)
+        loindices = 1
+        hiindices = length(indices)
+        # Iteration requires hiindices-1 operations
+        # Check requires at best log(maxtmpiter) iterations, at worst maxtmpiter through tmpiter with (smaller and smaller)
+        # binary searches through no more than log(hiindices-1) items in indices.
+        # hiindices < log(maxtmpiter) * log(hiindices -1) ⇒ 2^hiindices < maxtmpiter + hiindices -1
+        # hiindices < maxtmpiter * log(hiindices -1) ⇒ 2^(hiindices - maxtmpiter) < hiindices -1
+        # Let's take a crude heuristic between log(maxtmpiter) and maxtmpiter: 2log(maxtmpiter)
+        if 1 << (hiindices -1) < maxtmpiter^2 + hiindices -1
+            for mon in lsm
+                if !iszero(exponents(mon)[idx])
+                    tmpminmultideg[idx] = 0
+                    return true
+                end
+            end
+        else
+            while lotmpiter ≤ maxtmpiter
+                startitem = tmpiter[lotmpiter]
+                startitemiterindex = monomial_index(startitem, iter, index_data)
+                @assert(!iszero(startitemiterindex)) # tmpiter is a refinement of iter
+                loindices = searchsortedfirst(indices, startitemiterindex, loindices, hiindices, Base.Forward)
+                # loindices: first position in indices ≥ startitemiterindex
+                loindices > hiindices && break
+                if indices[loindices] == startitemiterindex
+                    tmpminmultideg[idx] = 0
+                    return true
+                end
+                # not found yet -> exponential search (assume that the relevant item is closer to the starting point than the
+                # end of the list). Exponential part first.
+                local stopitemiterindex
+                hitmpiter = lotmpiter +1
+                while hitmpiter ≤ maxtmpiter
+                    stopitem = tmpiter[hitmpiter]
+                    stopitemiterindex = monomial_index(stopitem, iter, index_data)
+                    @assert(!iszero(stopitemiterindex))
+                    δ = (stopitemiterindex - startitemiterindex) - (hitmpiter - lotmpiter)
+                    if iszero(δ)
+                        # all elements so far have the variable present, let's double the search space.
+                        hitmpiter = lotmpiter + 2(hitmpiter - lotmpiter)
+                    else
+                        @assert(δ > 0)
+                        hitmpiter -= 1
+                        break
+                    end
+                end
+                if lotmpiter == hitmpiter
+                    # the next item already doesn't have the variable any more, short-circuit
+                    lotmpiter += 1
+                    continue
+                elseif lotmpiter == hitmpiter -1
+                    # in the +1 case, there was only a single item found. In this case, the exponential step only included
+                    # a single item, which we already know to be valid. So there's no need to bisect the remaining interval
+                    # again to check where we are.
+                    # However, steopitemiterindex was overwritten with an invalid item, we need to restore it. Fortunately,
+                    # this is much easier now, as we know that the start and stop item are adjacent in iter.
+                    stopitemiterindex = startitemiterindex + 1
+                else
+                    lotmpiter, hitmpiter = Base.midpoint(lotmpiter, hitmpiter), min(hitmpiter, maxtmpiter)
+                    # Binary part: find last item in the range for which this still holds
+                    hitmpiter = let lo=lotmpiter-1, hi=hitmpiter+1
+                        while lo < hi -1
+                            m = Base.midpoint(lo, hi)
+                            stopitem = tmpiter[m]
+                            stopitemiterindex = monomial_index(stopitem, iter, index_data)
+                            @assert(!iszero(stopitemiterindex))
+                            δ = (stopitemiterindex - startitemiterindex) - (m - lotmpiter)
+                            if iszero(δ)
+                                lo = m
+                            else
+                                @assert(δ > 0)
+                                hi = m
+                            end
+                        end
+                        lo
+                    end
+                end
+                if hitmpiter < lotmpiter
+                    break
+                else
+                    stopinindices = searchsortedlast(indices, stopitemiterindex, loindices, hiindices, Base.Forward)
+                    # stopinindices: last position in indices ≤ stopitemiterindex
+                    if stopinindices > loindices
+                        tmpminmultideg[idx] = 0
+                        return true
+                    else
+                        # indices does not contain anything in startitemindex:stopitemindex. Go to the next range of
+                        # monomials.
+                        lotmpiter = hitmpiter +1
+                    end
+                end
+            end
+        end
+        tmpminmultideg[idx] = 0
+        return false
+    end
+end
+
+MultivariatePolynomials.effective_variables(x::LazyMonomialsUnion{Nr,Nc}) where {Nr,Nc} =
+    LazyMonomialsEffectiveVariables{Nr,Nc,typeof(x)}(x)
 
 """
     lazy_unalias(lm::AbstractVector)
 
 Makes sure that for a vector of SimpleMonomials, the results of lm[i] and unalias(lm)[j] are distinct whenever the elements
-are. This is intended to be used for [`LazyMonomials`](@ref), where by setting `powers=ownpowers` extracting any monomial will
-always write to the same memory location. `unalias` will then produce a second iterator, identical in all respects except for
-the memory location (the second iteration will still have `ownpowers` set, but to a different temporary vector). For all other
-types of vectors, `unalias` is an identity.
+are. This is intended to be used for [`LazyMonomials`](@ref), where by setting `exponents=ownexponents` extracting any monomial
+will always write to the same memory location. `unalias` will then produce a second iterator, identical in all respects except
+for the memory location (the second iteration will still have `ownexponents` set, but to a different temporary vector). For all
+other types of vectors, `unalias` is an identity.
 """
 lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI}) where {Nr,Nc,P<:Unsigned,MI<:MonomialIterator{<:Any,P}} =
     LazyMonomials{Nr,Nc,P,MI}(MonomialIterator(lm.iter), lm.index_data)
 lazy_unalias(lm::LazyMonomials{Nr,Nc,P,MI}) where {Nr,Nc,P<:Unsigned,MI<:RangedMonomialIterator{<:Any,P}} =
     LazyMonomials{Nr,Nc,P,MI}(RangedMonomialIterator(lm.iter), lm.index_data)
+lazy_unalias(lsm::LazySubMonomials{Nr,Nc,P,LM,I}) where
+    {Nr,Nc,P<:Unsigned,LM<:LazyMonomials{Nr,Nc,P,<:MonomialIterator{<:Any,P}},I<:(AbstractVector{IT} where IT<:Integer)} =
+    LazySubMonomials{Nr,Nc,P,LM,I}(lazy_unalias(lsm.parent), lsm.indices, lsm.iteration)
 lazy_unalias(v::AbstractVector) = v
 
 _effective_nvariables_has(name, field, k, ::Type{<:SimpleDenseMonomialVectorOrView}) = quote
@@ -900,59 +1167,21 @@ _effective_nvariables_has(name, field, k, ::Type{<:AbstractArray{E}}) where {E} 
         found
     end
 end
-_effective_nvariables_has(name, field, k, ::Type{<:LazyMonomials{Nr,Nc,<:Unsigned,<:MonomialIterator}}) where {Nr,Nc} = quote
-    let moniter=$name.iter, k=$k
-        $(if field === :exponents_complex
-            :(k += Nr)
-        elseif field === :exponents_conj
-            :(k += Nr + Nc)
-        else
-            :(nothing)
-        end)
-        # 1. is the current index allowed to be nonzero at all?
-        @inbounds moniter.maxmultideg[k] > 0 &&
-            # 2. when all other indices are minimal, is it then still possible for the current one to be nonzero?
-            moniter.Σminmultideg - moniter.minmultideg[k] < moniter.maxdeg &&
-            # 3. does the iterator contain any element at all: are all the minimal degrees together not too large?
-            moniter.Σminmultideg ≤ moniter.maxdeg &&
-            # 4. does the iterator contain any element at all: are all the maximal degrees together not too small?
-            moniter.Σmaxmultideg ≥ moniter.mindeg
-    end
+_effective_nvariables_has(name, field, k, ::Type{<:LazyMonomialsUnion{Nr,Nc}}) where {Nr,Nc} = quote
+    _effective_variables_has($name,
+        $(field === :exponents_real ? :k :
+            (field === :exponents_complex ? :(k + Nr) : :(k + Nr + Nc))
+        ), $(Symbol(:prep, name))..., Val(:empty))
 end
-_effective_nvariables_has(name, field, k, ::Type{<:LazyMonomials{Nr,Nc,<:Unsigned,<:RangedMonomialIterator}}) where {Nr,Nc} =
-    quote
-        let moniter=$name.iter.iter, k=$k
-            $(if field === :exponents_complex
-                :(k += Nr)
-            elseif field === :exponents_conj
-                :(k += Nr + Nc)
-            else
-                :(nothing)
-            end)
-            # 1. is the current index allowed to be nonzero at all?
-            @inbounds moniter.maxmultideg[k] > 0 &&
-                # 2. when all other indices are minimal, is it then still possible for the current one to be nonzero?
-                moniter.Σminmultideg - moniter.minmultideg[k] < moniter.maxdeg &&
-                # 3. are we in the range?
-                _effective_nvariables_has($name.iter, $name.index_data, k)
-        end
-    end
-_effective_nvariables_has(rangeiter::RangedMonomialIterator, ::Nothing, ::Integer) = false
-function _effective_nvariables_has(rangeiter::RangedMonomialIterator, ::Val{1}, var::Integer)
-    origrange = range(max(rangeiter.iter.mindeg, rangeiter.iter.minmultideg[1]),
-                        min(rangeiter.iter.maxdeg, rangeiter.iter.maxmultideg[1]))
-    return first(origrange) + rangeiter.start -1 ≤ var ≤
-        min(first(origrange) + rangeiter.start + rangeiter.length -2, last(origrange))
-end
-function _effective_nvariables_has(rangeiter::RangedMonomialIterator, prepared::Matrix{Int}, var::Integer)
-    rangeiter.length < 1 && return false
-    iter = rangeiter.iter
-    @assert(iter.maxmultideg[var] > 0) # this is checked before to save a function call
-    tmppow = first(rangeiter)
-    @inbounds iszero(tmppow[var]) || return true
-    @inbounds tmppow[var] = 1
-    return !isnothing(monomial_index(tmppow, rangeiter, prepared))
-end
+_effective_nvariables_prepare(_, _) = :(nothing)
+_effective_nvariables_prepare(name, ::Type{<:LazyMonomials{<:Any,<:Any,<:Any,<:MonomialIterator}}) =
+    :($(Symbol(:prep, name)) = ())
+_effective_nvariables_prepare(name, ::Type{<:Union{<:LazyMonomials{<:Any,<:Any,<:Any,<:RangedMonomialIterator},
+                                                                   <:LazySubMonomials}}) =
+    :($(Symbol(:prep, name)) = let iter=parent(_get_iter($name))
+        (all(∘(!, iszero), iter.minmultideg) ? iter.minmultideg : copy(iter.minmultideg),
+         Matrix{Int}(undef, iter.maxdeg +1, 2))
+    end)
 """
     effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},
                                   <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
@@ -962,9 +1191,11 @@ of the monomial vectors or arrays of monomial vectors in the arguments. This fun
 variables that actually occur at least once anywhere in any argument.
 """
 @generated function effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractArray{<:SimpleMonomialVector{Nr,Nc}},
-                                                  <:LazyMonomials{Nr,Nc},<:AbstractArray{<:LazyMonomials{Nr,Nc}}}...) where {Nr,Nc}
+                                                  <:LazyMonomialsUnion{Nr,Nc},
+                                                  <:(AbstractArray{LM} where LM<:LazyMonomialsUnion{Nr,Nc})}...) where {Nr,Nc}
     n = length(x)
     quote
+        $((_effective_nvariables_prepare(:(x[$i]), x[i]) for i in 1:n)...)
         i = 0
         for k in 1:$Nr
             $(Expr(:||, (_effective_nvariables_has(:(x[$i]), :exponents_real, :k, x[i]) for i in 1:n)...)) && (i += 1)
@@ -1131,7 +1362,8 @@ function Base.collect(iter::SortedIteratorIntersection)
     end
     return iter.data
 end
-function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomialsUnion{Nr,Nc,P},
+                                                       <:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
     ismissing(iter.data) || return iter.data
     a, b = iter.a, iter.b
     astate = iterate(a)
@@ -1165,7 +1397,8 @@ function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},
     )
     return iter.data
 end
-function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:SimpleSparseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomialsUnion{Nr,Nc,P},
+                                                       <:SimpleSparseMonomialVectorOrView{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
     ismissing(iter.data) || return iter.data
     a, b = iter.a, iter.b
     astate = iterate(a)
@@ -1226,7 +1459,8 @@ function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},
     )
     return iter.data
 end
-function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},<:LazyMonomials{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
+function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomialsUnion{Nr,Nc,P},
+                                                       <:LazyMonomialsUnion{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
     ismissing(iter.data) || return iter.data
     a, b = iter.a, iter.b
     astate = iterate(a)
@@ -1265,24 +1499,33 @@ function Base.collect(iter::SortedIteratorIntersection{<:LazyMonomials{Nr,Nc,P},
     )
     return iter.data
 end
+Base.@propagate_inbounds Base.getindex(iter::SortedIteratorIntersection, i) = collect(iter)[i]
 
-Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleDenseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+Base.intersect(a::LazyMonomialsUnion{Nr,Nc,P}, b::SimpleDenseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
                                                     iszero(Nc) ? Absent : Matrix{P}}}(a, b)
-function Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleSparseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned}
+function Base.intersect(a::LazyMonomialsUnion{Nr,Nc,P}, b::SimpleSparseMonomialVectorOrView{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned}
     M = SparseMatrixCSC{P,SparseArrays.indtype(iszero(Nr) ? b.exponents_complex : b.exponents_real)}
     return SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,M,iszero(Nr) ? Absent : M,iszero(Nc) ? Absent : M}}(a, b)
 end
-Base.intersect(a::SimpleMonomialVector{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+Base.intersect(a::SimpleMonomialVector{Nr,Nc,P}, b::LazyMonomialsUnion{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     intersect(b, a) # just so that less compilation is necessary
 Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{E1}},
     b::LazyMonomials{Nr,Nc,P,<:MonomialIterator{E2}}) where {Nr,Nc,P<:Unsigned,E1,E2} =
     LazyMonomials{Nr,Nc}(max(a.iter.mindeg, b.iter.mindeg):min(a.iter.maxdeg, b.iter.maxdeg),
         minmultideg=max.(a.iter.minmultideg, b.iter.minmultideg), maxmultideg=min.(a.iter.maxmultideg, b.iter.maxmultideg),
         exponents=E1 === Nothing || E2 === Nothing ? nothing : ownexponents)
-Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
+Base.intersect(a::LazyMonomialsUnion{Nr,Nc,P}, b::LazyMonomialsUnion{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
                                                     iszero(Nc) ? Absent : Matrix{P}}}(a, b)
+function Base.intersect(a::LSM, b::LSM) where {Nr,Nc,P<:Unsigned,LSM<:LazySubMonomials{Nr,Nc,P}}
+    if a.lm === b.lm
+        return LazySubMonomials(a.lm, intersect(a.indices, b.indices), copy=!isnothing(a.lm.iter.exponents))
+    else
+        return SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
+                                                               iszero(Nc) ? Absent : Matrix{P}}}(a, b)
+    end
+end
 
 """
     merge_monomial_vectors(::Type{<:SimpleMonomialVector{Nr,Nc,P}},
