@@ -15,7 +15,6 @@ Returns the size of the space of monomials in `nvars` variables with degree at m
 Base.@assume_effects :consistent monomial_count(degree::Int, nvars::Int) =
     binomial(degree + nvars, nvars)
 
-
 function monomial_index(exponents::AbstractVector{<:Integer})
     nvars = length(exponents)
     mondeg::Int = sum(exponents, init=0)
@@ -65,14 +64,14 @@ Base.@assume_effects :consistent @generated function monomial_index(m::Union{<:S
 end
 
 """
-    exponents_from_index!(powers::AbstractVector{<:Integer}, index::Integer)
+    exponents_from_index!(exponents::AbstractVector{<:Integer}, index::Integer)
 
-Constructs the vector of powers that is associated with the monomial index `index` and stores it in `powers`. This can be
+Constructs the vector of exponents that is associated with the monomial index `index` and stores it in `exponents`. This can be
 thought of as an inverse function of [`monomial_index`](@ref), although for non-allocating purposes it works on a vector of
-powers instead of a monomial.
+exponents instead of a monomial.
 """
-Base.@assume_effects :consistent function exponents_from_index!(powers::AbstractVector{<:Integer}, index::Integer)
-    n = length(powers)
+Base.@assume_effects :consistent function exponents_from_index!(exponents::AbstractVector{<:Integer}, index::Integer)
+    n = length(exponents)
     degree = 0
     while true
         next = binomial(n + degree -1, n -1)
@@ -90,7 +89,7 @@ Base.@assume_effects :consistent function exponents_from_index!(powers::Abstract
             if total + next ≥ index
                 degree -= degᵢ
                 index -= total
-                @inbounds powers[i] = degᵢ
+                @inbounds exponents[i] = degᵢ
                 break
             else
                 total += next
@@ -99,9 +98,115 @@ Base.@assume_effects :consistent function exponents_from_index!(powers::Abstract
     end
     # special case i = n, as binomial(-1, -1) = 0 instead of 1
     @assert(1 ≥ index)
-    @inbounds powers[n] = degree
-    return powers
+    @inbounds exponents[n] = degree
+    return exponents
 end
+
+"""
+    exponents_from_index!(exponents::AbstractVector{<:Integer}, iter::AbstractMonomialIterator, index::Integer)
+
+Constructs the vector of exponents that is associated with the monomial index `index` in the given iterator `iter` and stores
+it in `exponents`. The method will return `false` if the index was out of bounds (with undefined state of `exponents`), else it
+will return `true`.
+
+
+    exponents_from_index!(exponents::AbstractVector{<:Integer}, iter::AbstractMonomialIterator, prepared, index::Integer)
+
+A faster version of [`exponents_from_index!`](@ref) that is suitable if it has to be called often with the same iterator.
+The `prepared` data must be constructed with [`exponents_from_index_prepare`](@ref)
+"""
+function exponents_from_index!(exponents::AbstractVector{P}, iter::MonomialIterator{<:Any,P}, index::Integer) where {P}
+    length(exponents) == iter.n || throw(ArgumentError("exponents and iter have different number of variables"))
+    @inbounds return exponents_from_index!(exponents, iter, exponents_from_index_prepare(iter), index)
+end
+
+@inline function exponents_from_index!(exponents::AbstractVector{P}, iter::MonomialIterator{<:Any,P},
+    occurrences::Matrix{Int}, index::Integer) where {P}
+    # While this is a rather long function, given that this form is used for speed, inlining should probably be done
+    @boundscheck length(exponents) == iter.n || throw(ArgumentError("exponents and iter have different number of variables"))
+    if iszero(size(occurrences, 2))
+        return false
+    elseif isone(size(occurrences, 2))
+        @inbounds exponents[1] = occurrences[1] + index
+        @inbounds exponents[1] > occurrences[2] && return false
+        return exponents
+    end
+    # Now our occurrences matrix will fill the role of the binomial coefficient: it contains in each column j the number of
+    # monomials if there were only the j right variables, while the row specifies the total degree.
+    degree, maxdeg, minmultideg, maxmultideg = iter.mindeg, iter.maxdeg, iter.minmultideg, iter.maxmultideg
+    while true
+        @inbounds next = occurrences[degree+1, 1]
+        if next ≥ index
+            break
+        else
+            index -= next
+            degree += 1
+            degree > maxdeg && return false
+        end
+    end
+    for i in 1:iter.n-1
+        total = 0
+        for degᵢ in minmultideg[i]:min(maxmultideg[i], maxdeg)
+            @inbounds next = occurrences[degree-degᵢ+1, i+1]
+            if total + next ≥ index
+                degree -= degᵢ
+                index -= total
+                @inbounds exponents[i] = degᵢ
+                break
+            else
+                total += next
+            end
+        end
+    end
+    if 1 ≥ index && minmultideg[iter.n] ≤ degree ≤ maxmultideg[iter.n]
+        @inbounds exponents[iter.n] = degree
+        return true
+    else
+        return false
+    end
+end
+
+Base.@propagate_inbounds exponents_from_index!(exponents::AbstractVector{P},
+    iter::RangedMonomialIterator{<:Any,P}, index::Integer) where {P} =
+    1 ≤ index ≤ iter.length && exponents_from_index!(exponents, iter.iter, index + iter.start -1)
+Base.@propagate_inbounds exponents_from_index!(exponents::AbstractVector{P},
+    iter::RangedMonomialIterator{<:Any,P}, prepared, index::Integer) where {P} =
+    1 ≤ index ≤ iter.length && exponents_from_index!(exponents, iter.iter, prepared, index + iter.start -1)
+
+"""
+    exponents_from_index_prepare(iter::AbstractMonomialIterator)
+
+Prepares all the data necessary to quickly perform multiple calls to [`exponents_from_index!`](@ref) with an iterator in a row.
+This function is identical with [`monomial_index_prepare`](@ref); the same data can also be used for [`monomial_index`](@ref).
+"""
+function exponents_from_index_prepare(iter::MonomialIterator{<:Any,P}) where {P}
+    maxdeg = iter.maxdeg
+    iter.Σminmultideg > maxdeg && return Matrix{Int}(undef, 0, 0)
+    iter.Σmaxmultideg < iter.mindeg && return Matrix{Int}(undef, 0, 0)
+    isone(iter.n) && return [max(iter.mindeg, iter.minmultideg[1]) -1; min(iter.maxdeg, iter.maxmultideg[1])]
+    minmultideg = iter.minmultideg
+    maxmultideg = iter.maxmultideg
+    j = iter.n
+    occurrences = zeros(Int, maxdeg +1, j)
+    # This is similar to _moniter_length, however, we will need to store all intermediate results and we'll need to iterate
+    # backwards through the variables.
+    @inbounds fill!(@view(occurrences[minmultideg[j]+1:min(maxmultideg[j], maxdeg)+1, j]), 1)
+    @inbounds for j in iter.n-1:-1:1
+        lastround = @view(occurrences[:, j+1])
+        nextround = @view(occurrences[:, j])
+        for degᵢ in minmultideg[j]:min(maxmultideg[j], maxdeg)
+            for (degₖ, occₖ) in zip(Iterators.countfrom(0), lastround)
+                newdeg = degᵢ + degₖ
+                newdeg > maxdeg && break
+                nextround[newdeg+1] += occₖ
+            end
+        end
+    end
+    return occurrences
+end
+
+exponents_from_index_prepare(iter::RangedMonomialIterator) = exponents_from_index_prepare(iter.iter)
+
 
 for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
     eval(quote
@@ -110,22 +215,22 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
             next_col = 1
             max_col = length(mons_idx)
             @assert(max_col > 0)
-            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownpowers)
+            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownexponents)
             if dense
                 coeffs_real = resizable_array(T, Nr, max_col)
-                powers_real = @view(iter.powers[1:Nr])
+                exponents_real = @view(iter.exponents[1:Nr])
                 $(splitvars ? quote
                     coeffs_complex = resizable_array(T, Nc, max_col)
                     coeffs_conj = resizable_array(T, Nc, max_col)
-                    powers_complex = @view(iter.powers[Nr+1:Nr+Nc])
-                    powers_conj = @view(iter.powers[Nr+Nc+1:end])
+                    exponents_complex = @view(iter.exponents[Nr+1:Nr+Nc])
+                    exponents_conj = @view(iter.exponents[Nr+Nc+1:end])
                 end : :(nothing))
                 @inbounds for (idx, _) in enumerate(iter)
                     if idx == convert(Int, mons_idx[next_col])
-                        copyto!(@view(coeffs_real[:, next_col]), powers_real)
+                        copyto!(@view(coeffs_real[:, next_col]), exponents_real)
                         $(splitvars ? quote
-                            copyto!(@view(coeffs_complex[:, next_col]), powers_complex)
-                            copyto!(@view(coeffs_conj[:, next_col]), powers_conj)
+                            copyto!(@view(coeffs_complex[:, next_col]), exponents_complex)
+                            copyto!(@view(coeffs_conj[:, next_col]), exponents_conj)
                         end : :(nothing))
                         next_col += 1
                         next_col > max_col && break
@@ -137,7 +242,7 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                 colptr_real = resizable_array(UInt, max_col +1)
                 rowval_real = FastVec{UInt}()
                 nzval_real = FastVec{T}()
-                powers_real = @view(iter.powers[1:Nr])
+                exponents_real = @view(iter.exponents[1:Nr])
                 $(splitvars ? quote
                     colptr_complex = resizable_array(UInt, max_col +1)
                     rowval_complex = FastVec{UInt}()
@@ -145,13 +250,13 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                     colptr_conj = resizable_array(UInt, max_col +1)
                     rowval_conj = FastVec{UInt}()
                     nzval_conj = FastVec{T}()
-                    powers_complex = @view(iter.powers[Nr+1:Nr+Nc])
-                    powers_conj = @view(iter.powers[Nr+Nc+1:end])
+                    exponents_complex = @view(iter.exponents[Nr+1:Nr+Nc])
+                    exponents_conj = @view(iter.exponents[Nr+Nc+1:end])
                 end : :(nothing))
                 @inbounds for (idx, _) in enumerate(iter)
                     if idx == convert(Int, mons_idx[next_col])
                         colptr_real[next_col] = length(rowval_real) +1
-                        for (row, val) in enumerate(powers_real)
+                        for (row, val) in enumerate(exponents_real)
                             if !iszero(val)
                                 push!(rowval_real, row)
                                 push!(nzval_real, val)
@@ -159,14 +264,14 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                         end
                         $(splitvars ? quote
                             colptr_complex[next_col] = length(rowval_complex) +1
-                            for (row, val) in enumerate(powers_complex)
+                            for (row, val) in enumerate(exponents_complex)
                                 if !iszero(val)
                                     push!(rowval_complex, row)
                                     push!(nzval_complex, val)
                                 end
                             end
                             colptr_conj[next_col] = length(rowval_conj) +1
-                            for (row, val) in enumerate(powers_conj)
+                            for (row, val) in enumerate(exponents_conj)
                                 if !iszero(val)
                                     push!(rowval_conj, row)
                                     push!(nzval_conj, val)
@@ -192,23 +297,23 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
         function exponents_from_indices(T, $(params...), mons_idx::Vector, ::Val{dense}, ::Val{:index}) where {dense}
             $(splitvars ? :(nv = Nr + 2Nc) : :(nv = Nr))
             max_col = length(mons_idx)
-            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownpowers)
+            iter = MonomialIterator(Base.zero(T), typemax(T), zeros(T, nv), fill(typemax(T), nv), ownexponents)
             prepare = exponents_from_index_prepare(iter)
             if dense
                 coeffs_real = resizable_array(T, Nr, max_col)
                 $(splitvars ? quote
                     coeffs_complex = resizable_array(T, Nc, max_col)
                     coeffs_conj = resizable_array(T, Nc, max_col)
-                    powers = iter.powers
-                    powers_real = @view(powers[1:Nr])
-                    powers_complex = @view(powers[Nr+1:Nr+Nc])
-                    powers_conj = @view(powers[Nr+Nc+1:Nr+2Nc])
+                    exponents = iter.exponents
+                    exponents_real = @view(exponents[1:Nr])
+                    exponents_complex = @view(exponents[Nr+1:Nr+Nc])
+                    exponents_conj = @view(exponents[Nr+Nc+1:Nr+2Nc])
                     @inbounds for (i, c_real, c_complex, c_conj) in zip(mons_idx, eachcol(coeffs_real),
                                                                         eachcol(coeffs_complex), eachcol(coeffs_conj))
-                        exponents_from_index!(powers, iter, prepare, convert(Int, idx))
-                        copyto!(c_real, powers_real)
-                        copyto!(c_complex, powers_complex)
-                        copyto!(c_conj, powers_conj)
+                        exponents_from_index!(exponents, iter, prepare, convert(Int, idx))
+                        copyto!(c_real, exponents_real)
+                        copyto!(c_complex, exponents_complex)
+                        copyto!(c_conj, exponents_conj)
                     end
                     return coeffs_real, coeffs_complex, coeffs_conj
                 end : quote
@@ -221,7 +326,7 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                 colptr_real = resizable_array(UInt, max_col +1)
                 rowval_real = FastVec{UInt}()
                 nzval_real = FastVec{T}()
-                powers = iter.powers
+                exponents = iter.exponents
                 $(splitvars ? quote
                     colptr_complex = resizable_array(UInt, max_col +1)
                     rowval_complex = FastVec{UInt}()
@@ -229,14 +334,14 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                     colptr_conj = resizable_array(UInt, max_col +1)
                     rowval_conj = FastVec{UInt}()
                     nzval_conj = FastVec{T}()
-                    powers_real = @view(powers[1:Nr])
-                    powers_complex = @view(powers[Nr+1:Nr+Nc])
-                    powers_conj = @view(powers[Nr+Nc+1:end])
-                end : :(powers_real = powers))
+                    exponents_real = @view(exponents[1:Nr])
+                    exponents_complex = @view(exponents[Nr+1:Nr+Nc])
+                    exponents_conj = @view(exponents[Nr+Nc+1:end])
+                end : :(exponents_real = exponents))
                 @inbounds for (i, idx) in enumerate(mons_idx)
-                    exponents_from_index!(powers, iter, prepare, convert(Int, idx))
+                    exponents_from_index!(exponents, iter, prepare, convert(Int, idx))
                     colptr_real[i] = length(rowval_real) +1
-                    for (row, val) in enumerate(powers_real)
+                    for (row, val) in enumerate(exponents_real)
                         if !iszero(val)
                             push!(rowval_real, row)
                             push!(nzval_real, val)
@@ -244,14 +349,14 @@ for (splitvars, params) in ((false, (:Nr,)), (true, (:Nr, :Nc)))
                     end
                     $(splitvars ? quote
                         colptr_complex[i] = length(rowval_complex) +1
-                        for (row, val) in enumerate(powers_complex)
+                        for (row, val) in enumerate(exponents_complex)
                             if !iszero(val)
                                 push!(rowval_complex, row)
                                 push!(nzval_complex, val)
                             end
                         end
                         colptr_conj[i] = length(rowval_conj) +1
-                        for (row, val) in enumerate(powers_conj)
+                        for (row, val) in enumerate(exponents_conj)
                             if !iszero(val)
                                 push!(rowval_conj, row)
                                 push!(nzval_conj, val)
@@ -287,7 +392,7 @@ end
     exponents_from_indices(P, nv, mons::Set{FastKey{Int}}, dense::Bool)
     exponents_from_indices(P, Nr, Nc, mons::Set{FastKey{Int}}, dense::Bool)
 
-Constructs the matrices of powers associated with the monomial indices listed in `mons`, where `P` is the eltype of the
+Constructs the matrices of exponents associated with the monomial indices listed in `mons`, where `P` is the eltype of the
 matrices. Depending on `dense`, the result will be a `Matrix{P}` or a `SparseMatrixCSC{P}`; the `nv` form will generate just
 one matrix for `nv` variables in total; the `Nr, Nc` form will generate three matrices for the exponents of `Nr` real and `Nc`
 complex/conjugate variables.

@@ -286,27 +286,27 @@ function poly_problem(objective::P;
 
     #region SimplePolynomial conversion
     @verbose_info("Converting data to simple polynomials")
-    max_power = 2mindeg
-    sobj = SimplePolynomial(objective, T; max_power, vars, representation)
+    max_exponent = 2mindeg
+    sobj = SimplePolynomial(objective, T; max_exponent, vars, representation)
     if sobj isa SimplePolynomials.SimpleDensePolynomial
         representation = :dense
     else
         representation = :sparse
     end
-    sprefactor = SimplePolynomial(factor_coercive, T; max_power, vars, representation)
+    sprefactor = SimplePolynomial(factor_coercive, T; max_exponent, vars, representation)
     szero = FastVec{typeof(sobj)}(buffer=length(zero))
     for zeroᵢ in zero
-        unsafe_push!(szero, SimplePolynomial(zeroᵢ, T; max_power, representation, vars))
+        unsafe_push!(szero, SimplePolynomial(zeroᵢ, T; max_exponent, representation, vars))
     end
     snonneg = FastVec{typeof(sobj)}(buffer=length(nonneg))
     for nonnegᵢ in nonneg
-        unsafe_push!(snonneg, SimplePolynomial(nonnegᵢ, T; max_power, representation, vars))
+        unsafe_push!(snonneg, SimplePolynomial(nonnegᵢ, T; max_exponent, representation, vars))
     end
     spsd = FastVec{Matrix{typeof(sobj)}}(buffer=length(psd))
     for psdᵢ in psd
         m = Matrix{typeof(sobj)}(undef, size(psdᵢ)...)
         for j in eachindex(psdᵢ, m)
-            @inbounds m[j] = SimplePolynomial(psdᵢ[j], T; max_power, representation, vars)
+            @inbounds m[j] = SimplePolynomial(psdᵢ[j], T; max_exponent, representation, vars)
         end
         unsafe_push!(spsd, m)
     end

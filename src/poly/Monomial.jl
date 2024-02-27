@@ -178,8 +178,8 @@ MultivariatePolynomials._zip(t::Tuple, e::SimpleMonomialExponents) = zip(t, e)
 #endregion
 MultivariatePolynomials.exponents(m::SimpleMonomial) = SimpleMonomialExponents(m)
 
-# implement an iteration method although there is the exponents function - this one gives a (SimpleVariable, power) tuple and
-# skips over zero powers
+# implement an iteration method although there is the exponents function - this one gives a (SimpleVariable, exponent) tuple and
+# skips over zero exponents
 Base.IteratorSize(::Type{<:SimpleMonomial}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:SimpleMonomial}) = Base.HasEltype()
 Base.eltype(::Type{<:SimpleMonomial{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} =

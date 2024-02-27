@@ -101,7 +101,7 @@ function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
         " single-threaded workers, each checking about ", workersize, " candidates")
 
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
-    # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
+    # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{eltype(eltype(iter))}()
     iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)
@@ -182,7 +182,7 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
 
     data_global = alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
-    # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
+    # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{eltype(eltype(iter))}()
     iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)

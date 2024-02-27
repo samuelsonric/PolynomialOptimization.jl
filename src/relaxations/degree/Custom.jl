@@ -15,12 +15,12 @@ struct RelaxationCustom{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroup
         if !(basis isa SimpleMonomialVector)
             # If we already have a custom basis, then the largest exponent in this basis will be doubled in the moment matrix -
             # this defines the data type.
-            max_power = 0
+            max_exponent = 0
             for m in basis
-                max_power = max(max_power, maximum(exponents(m), init=0))
+                max_exponent = max(max_exponent, maximum(exponents(m), init=0))
             end
-            max_power *= 2
-            basis = SimpleMonomialVector(basis; max_power, problem.original_variables)
+            max_exponent *= 2
+            basis = SimpleMonomialVector(basis; max_exponent, problem.original_variables)
             all(iszero, basis.exponents_conj) || throw(ArgumentError("Any custom basis must not contain explicit conjugates"))
         end
         degree = maxdegree(basis) # ≡ maxdegree_complex, but maxdegree cannot break branch prediction

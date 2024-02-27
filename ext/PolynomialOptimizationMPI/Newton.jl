@@ -18,7 +18,7 @@ function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
         zero, nonneg, psd, degree, kwargs...)
     nv = size(coeffs, 1)
     analysis = analyze(coeffs)
-    iter = MonomialIterator(analysis..., ownpowers)
+    iter = MonomialIterator(analysis..., ownexponents)
     num = length(iter)
 
     if isroot(rank)

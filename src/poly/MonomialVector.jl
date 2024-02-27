@@ -94,10 +94,10 @@ end
 
 """
     SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, along...;
-        max_power::Integer=maxdegree(mv), representation::Symbol=:auto, vars=variables(mv))
+        max_exponent::Integer=maxdegree(mv), representation::Symbol=:auto, vars=variables(mv))
 
 Creates a `SimpleMonomialVector` from a generic monomial vector that supports `MultivariatePolynomials`'s interface.
-It is possible to specify the maximal power that the monomial vector should be able to hold explicitly (which will determine
+It is possible to specify the maximal exponent that the monomial vector should be able to hold explicitly (which will determine
 the element type of the internal matrices).
 The keyword argument `representation` determines whether a `Matrix` (for `:dense`) or a `SparseMatrixCSC` (for `:sparse`) is
 chosen as the underlying representation. The default, `:auto`, will take a small sample of the monomials in the vector and from
@@ -109,7 +109,7 @@ The input must not contain duplicates. It will be sorted; if `along` are present
 as the inputs.
 """
 function SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
-    max_power::Integer=maxdegree(mv), representation::Symbol=:auto,
+    max_exponent::Integer=maxdegree(mv), representation::Symbol=:auto,
     vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv))))
     if representation === :auto
         sample_size = 10
@@ -127,22 +127,22 @@ function SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, along:
             representation = :dense
         end
     end
-    return SimpleMonomialVector(mv, max_power, representation, vars, along...)
+    return SimpleMonomialVector(mv, max_exponent, representation, vars, along...)
 end
 
 # mv must be an iterable with length
 """
-    SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, vars)
+    SimpleMonomialVector(mv, max_exponent::Integer, representation::Symbol, vars)
 
 Creates a `SimpleMonomialVector` from a generic iterable that gives `AbstractMonomialLike` elements. In contrast to when `mv`
 is a vector, now all arguments must be provided. `representation` must be either `:dense` or `:sparse`.
 """
-function SimpleMonomialVector(mv, max_power::Integer, representation::Symbol, vars, along::AbstractVector...)
+function SimpleMonomialVector(mv, max_exponent::Integer, representation::Symbol, vars, along::AbstractVector...)
     isempty(vars) && throw(ArgumentError("Variables must be present"))
     any(isconj, vars) && throw(ArgumentError("The variables must not contain conjuates"))
     allunique(vars) || throw(ArgumentError("Variables must not contain duplicates"))
     representation ∈ (:dense, :sparse) || throw(ArgumentError("The representation must be :dense or :sparse"))
-    P = smallest_unsigned(max_power)
+    P = smallest_unsigned(max_exponent)
 
     vars_real = count(isreal, vars)
     vars_complex = count(∘(!, isreal), vars)
@@ -530,45 +530,51 @@ function nzlength(iter, nreal::Integer, ncomplex::Integer, quick_exit::Union{Not
 end
 
 """
-    monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI};
+    monomials(nreal::Int, ncomplex::Int, degree::AbstractUnitRange{P};
         minmultideg=nothing, maxmultideg=nothing, representation=:auto,
-        filter=powers -> true) where {DI}
+        filter=exponents -> true) where {P}
 
 Returns a [`SimpleMonomialVector`](@ref) with `nreal` real and `ncomplex` complex variables, total degrees contained in
 `degree`, ordered according to `Graded{LexOrder}` and individual variable degrees varying between `minmultideg` and
 `maxmultideg` (where real variables come first, then complex variables, then their conjugates).
 The representation is either `:dense` or `:sparse`; if `:auto` is selected, the method will estimate (rather accurately) which
-representation requires more memory and choose an appropriate one.
+representation requires more memory and choose an appropriate one. To make this funtion type stable, use `Val(:dnese)` or
+`Val(:sparse)` instead of the symbols.
 The maximal exponent of the return type is chosen as the smallest unsigned integer that can still hold the largest degree
 according to `degree` (ignoring `maxmultideg`).
 An additional `filter` may be employed to drop monomials during the construction. Note that size estimation cannot take the
 filter into account.
 
 This method internally relies on [`MonomialIterator`](@ref). The `minmultideg` and `maxmultideg` parameters will automatically
-be converted to `Vector{DI}` instances.
+be converted to `Vector{P}` instances.
 """
-function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, degree::AbstractUnitRange{DI};
-    minmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
-    maxmultideg::Union{Nothing,<:AbstractVector{DI},Tuple{Vararg{DI}}}=nothing,
-    representation::Symbol=:auto, filter=powers -> true) where {DI<:Integer}
-    representation ∈ (:auto, :dense, :sparse) || throw(ArgumentError("The representation must be :dense, :sparse, or :auto"))
+function MultivariatePolynomials.monomials(nreal::Int, ncomplex::Int, degree::AbstractUnitRange{P_};
+    minmultideg::Union{Nothing,<:AbstractVector{P_},Tuple{Vararg{P_}}}=nothing,
+    maxmultideg::Union{Nothing,<:AbstractVector{P_},Tuple{Vararg{P_}}}=nothing,
+    representation::Union{Symbol,Val{:dense},Val{:sparse}}=:auto, filter=exponents -> true) where {P_<:Integer}
+    if representation isa Symbol
+        representation ∈ (:auto, :dense, :sparse) ||
+            throw(ArgumentError("The representation must be :dense, :sparse, or :auto"))
+    end
+    (first(degree) < 0 || first(degree) > last(degree)) && throw(ArgumentError("Invalid degree specification"))
+    P = Unsigned(P_)
 
     n = nreal + 2ncomplex
     if isnothing(minmultideg)
-        minmultideg = fill(zero(first(degree)), n)
+        minmultideg = fill(zero(P), n)
     elseif length(minmultideg) != n
         throw(DimensionMismatch("minmultideg has length $(length(minmultideg)), expected $n"))
-    elseif !(minmultideg isa Vector{DI})
-        minmultideg = DI.(collect(minmultideg))
+    elseif !(minmultideg isa Vector{P})
+        minmultideg = P.(collect(minmultideg))
     end
     if isnothing(maxmultideg)
-        maxmultideg = fill(last(degree), n)
+        maxmultideg = fill(P(last(degree)), n)
     elseif length(maxmultideg) != n
         throw(DimensionMismatch("maxmultideg has length $(length(maxmultideg)), expected $n"))
-    elseif !(maxmultideg isa Vector{DI})
-        maxmultideg = DI.(collect(maxmultideg))
+    elseif !(maxmultideg isa Vector{P})
+        maxmultideg = P.(collect(maxmultideg))
     end
-    iter = MonomialIterator(first(degree), last(degree), minmultideg, maxmultideg, ownpowers)
+    iter = MonomialIterator(P(first(degree)), P(last(degree)), minmultideg, maxmultideg, ownexponents)
     len = length(iter)
     # How to decide whether dense or sparse representation is better?
     # We take the laborious approach of counting the nonzeros in every monomial beforehand. This is costly - we need to iterate
@@ -579,16 +585,18 @@ function MultivariatePolynomials.monomials(nreal::Integer, ncomplex::Integer, de
     if representation === :auto
         nzl = nzlength(iter, nreal, ncomplex, len * n ÷ 3)
         if isnothing(nzl)
-            representation = :dense
+            dense = true
         else
-            representation = :sparse
+            dense = false
             nz_real, nz_complex, nz_conj = nzl
         end
-    elseif representation === :sparse
+    elseif representation === :sparse || representation isa Val{:sparse}
+        dense = false
         nz_real, nz_complex, nz_conj = nzlength(iter, nreal, ncomplex, nothing)
+    else
+        dense = true
     end
-    P = smallest_unsigned(last(degree))
-    if representation === :dense
+    if dense
         offset_complex = nreal +1
         offset_conj = nreal + ncomplex +1
         if !iszero(nreal)
@@ -710,19 +718,19 @@ struct LazyMonomials{Nr,Nc,P<:Unsigned,MI<:AbstractMonomialIterator{<:Any,P}} <:
 
     @doc """
         LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P}; minmultideg=nothing,
-            maxmultideg=nothing[, powers])
+            maxmultideg=nothing[, exponents])
 
 Constructs a memory-efficient vector of monomials that contains the same data as given by [`monomials`](@ref) (with dense
 representation and no filter allowed). The monomials will be constructed on-demand and only a small precomputation is done to
 be able to quickly perform the indexing operation.
-If the monomials are only accessed one-at-a-time and never referenced when another one is requested, `powers` may be set to
-[`ownpowers`](@ref). Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the
+If the monomials are only accessed one-at-a-time and never referenced when another one is requested, `exponents` may be set to
+[`ownexponents`](@ref). Then, obtaining a monomial will not allocate any memory; instead, only the memory that represents the
 monomial is changed.
     """
     function LazyMonomials{Nr,Nc}(degree::AbstractUnitRange{P};
         minmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing,
         maxmultideg::Union{Nothing,<:AbstractVector{P},Tuple{Vararg{P}}}=nothing,
-        powers::Union{Nothing,OwnPowers}=nothing) where {Nr,Nc,P<:Integer}
+        exponents::Union{Nothing,OwnExponents}=nothing) where {Nr,Nc,P<:Integer}
         Pu = Unsigned(P)
         mindeg = Pu(first(degree))
         maxdeg = Pu(last(degree))
@@ -741,7 +749,7 @@ monomial is changed.
         elseif !(maxmultideg isa Vector{Pu})
             maxmultideg = Pu.(min.(collect(maxmultideg), maxdeg))
         end
-        iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, powers)
+        iter = MonomialIterator(mindeg, maxdeg, minmultideg, maxmultideg, exponents)
         index_data = exponents_from_index_prepare(iter)
         new{Nr,Nc,Pu,typeof(iter)}(iter, index_data)
     end
@@ -1267,11 +1275,11 @@ function Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::SimpleSparseMonomialVector
 end
 Base.intersect(a::SimpleMonomialVector{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     intersect(b, a) # just so that less compilation is necessary
-Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P1}},
-    b::LazyMonomials{Nr,Nc,P,<:MonomialIterator{P2}}) where {Nr,Nc,P<:Unsigned,P1,P2} =
+Base.intersect(a::LazyMonomials{Nr,Nc,P,<:MonomialIterator{E1}},
+    b::LazyMonomials{Nr,Nc,P,<:MonomialIterator{E2}}) where {Nr,Nc,P<:Unsigned,E1,E2} =
     LazyMonomials{Nr,Nc}(max(a.iter.mindeg, b.iter.mindeg):min(a.iter.maxdeg, b.iter.maxdeg),
         minmultideg=max.(a.iter.minmultideg, b.iter.minmultideg), maxmultideg=min.(a.iter.maxmultideg, b.iter.maxmultideg),
-        powers=P1 === Nothing || P2 === Nothing ? nothing : ownpowers)
+        exponents=E1 === Nothing || E2 === Nothing ? nothing : ownexponents)
 Base.intersect(a::LazyMonomials{Nr,Nc,P}, b::LazyMonomials{Nr,Nc,P}) where {Nr,Nc,P<:Unsigned} =
     SortedIteratorIntersection{SimpleMonomialVector{Nr,Nc,P,Matrix{P},iszero(Nr) ? Absent : Matrix{P},
                                                     iszero(Nc) ? Absent : Matrix{P}}}(a, b)

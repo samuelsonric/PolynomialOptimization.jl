@@ -78,8 +78,6 @@ function merge_constraints(objective::SimpleRealPolynomial{<:Any,Nr,P}, zero, no
     # now we need to re-cast the indices into the exponent-representations
     @verbose_info("├ Total number of coefficients: ", length(mons_idx_set),
         "\nConverting back from intermediate to exponent representation")
-    # Taking indices is about twice as slow as iterating through monomials. So let's check how many monomials we have and which
-    # method is more efficient.
     return exponents_from_indices(P, Nr, mons_idx_set, dense)
 end
 

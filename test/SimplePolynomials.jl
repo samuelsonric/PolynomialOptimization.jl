@@ -303,16 +303,16 @@ end
 end
 @testset "Monomial vector" begin
     # by default, our monomial vector does not impose any order
-    @test_throws ArgumentError monomials(2, 0, 1:0)
+    @test_throws ArgumentError monomials(2, 0, 0x1:0x0)
     X = [SimpleMonomial{2,0}(UInt8[0, 2]),
          SimpleMonomial{2,0}(UInt8[1, 1]),
          SimpleMonomial{2,0}(UInt8[2, 0])]
-    monos = monomials(2, 0, 2:2)
+    monos = monomials(2, 0, 0x2:0x2)
     @test length(monos) == length(X)
     for (x, m) in zip(X, monos)
         @test m == x
     end
-    monos = monomials(2, 0, 2:2, representation=:sparse)
+    monos = monomials(2, 0, 0x2:0x2, representation=:sparse)
     @test length(monos) == length(X)
     X = [SimpleMonomial{2,0}(sparsevec(UInt8[2], UInt8[2], 2)),
          SimpleMonomial{2,0}(sparsevec(UInt8[1, 2], UInt8[1, 1], 2)),
@@ -332,20 +332,20 @@ end
         @test X[2:3][2] == SimpleMonomial{2,0}([0x1, 0x1])
     end
 
-    @test merge_monomial_vectors(SimpleMonomialVectorCollection{2,0,UInt}([
+    @test merge_monomial_vectors(SimpleMonomialVector{2,0,UInt}, [
         SimpleMonomialVector{2,0}([1; 1;; 1; 0]), SimpleMonomialVector{2,0}([2; 1;; 1; 0])
+    ]) == SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1])
+    @test @inferred(merge_monomial_vectors(SimpleMonomialVector{2,0,UInt,Matrix{UInt}}, [
+        SimpleMonomialVector{2,0}([1; 1;; 1; 0]), SimpleMonomialVector{2,0}(sparse([2; 1;; 1; 0]))
     ])) == SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1])
-    @test @inferred(merge_monomial_vectors(SimpleMonomialVectorCollection{2,0,UInt}([
+    @test @inferred(merge_monomial_vectors(SimpleMonomialVector{2,0,UInt,SparseMatrixCSC{UInt,UInt8}}, [
         SimpleMonomialVector{2,0}([1; 1;; 1; 0]), SimpleMonomialVector{2,0}(sparse([2; 1;; 1; 0]))
-    ]), Val(:dense))) == SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1])
-    @test @inferred(merge_monomial_vectors(SimpleMonomialVectorCollection{2,0,UInt}([
-        SimpleMonomialVector{2,0}([1; 1;; 1; 0]), SimpleMonomialVector{2,0}(sparse([2; 1;; 1; 0]))
-    ]), Val(:sparse))) == SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1])
+    ])) == SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1])
 
-    @test monomials(1, 0, 1:3) == SimpleMonomialVector{1,0}(UInt8[1 2 3])
+    @test monomials(1, 0, 0x1:0x3) == SimpleMonomialVector{1,0}(UInt8[1 2 3])
 
     @testset "monomials" begin
-        @test monomials(3, 0, 0:3) == SimpleMonomialVector{3,0}(
+        @test monomials(3, 0, 0x0:0x3) == SimpleMonomialVector{3,0}(
             copy(transpose(UInt8[
                 0 0 0
                 0 0 1
@@ -374,9 +374,9 @@ end
     @test_throws ArgumentError monomials(1, 0, -1:0)
 
     # new tests
-    @test effective_nvariables(monomials(2, 3, 0:2)) == 8
-    @test effective_nvariables(monomials(2, 3, 0:1), monomials(2, 3, 0:2, representation=:sparse)) == 8
-    @test effective_nvariables(monomials(2, 3, 0:0)) == 0
+    @test effective_nvariables(monomials(2, 3, 0x0:0x2)) == 8
+    @test effective_nvariables(monomials(2, 3, 0x0:0x1), monomials(2, 3, 0:2, representation=:sparse)) == 8
+    @test effective_nvariables(monomials(2, 3, 0x0:0x0)) == 0
     @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 0 0])) == 1
     @test effective_nvariables(SimpleMonomialVector{2,0}([1 2; 0 0])) == 1
     @test effective_nvariables(SimpleMonomialVector{2,0}([0 1; 1 0])) == 2
@@ -396,7 +396,7 @@ end
         [Term(1, SimpleMonomial{1,0}([0x0])),
          Term(1, SimpleMonomial{1,0}([0x1])),
          Term(3, SimpleMonomial{1,0}([0x2]))]
-    @test terms(SimplePolynomial(polynomial([1, x^2, x, 2x^2]), representation=:dense, max_power=typemax(UInt16))) ==
+    @test terms(SimplePolynomial(polynomial([1, x^2, x, 2x^2]), representation=:dense, max_exponent=typemax(UInt16))) ==
         [Term(1, SimpleMonomial{1,0}([0x0000])),
          Term(1, SimpleMonomial{1,0}([0x0001])),
          Term(3, SimpleMonomial{1,0}([0x0002]))]
@@ -496,31 +496,29 @@ end
                 @test_throws ArgumentError MonomialIterator(mindeg, maxdeg, minm, maxm)
             else
                 mi = MonomialIterator(mindeg, maxdeg, minm, maxm)
-                exp = exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ exponents(m) .≤ maxm)))
+                exp = MP.exponents.(monomials(x, Int(mindeg):Int(maxdeg), m -> all(minm .≤ MP.exponents(m) .≤ maxm)))
                 @test collect(mi) == exp
                 @test length(mi) == length(exp)
-                powers = Vector{UInt8}(undef, 3)
+                exponents = Vector{UInt8}(undef, 3)
                 for (i, mipow) in enumerate(mi)
-                    @test exponents_from_index!(powers, mi, i)
-                    if powers != mipow
-                        println(mindeg, " - ", maxdeg, " - ", minmultideg, " - ", maxmultideg, ": ", i)
+                    @test exponents_from_index!(exponents, mi, i)
                     end
-                    @test powers == mipow
+                    @test exponents == mipow
                 end
-                @test !exponents_from_index!(powers, mi, length(mi) +1)
+                @test !exponents_from_index!(exponents, mi, length(mi) +1)
             end
         end
-        mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], ownpowers)
+        mi = MonomialIterator(0x0, 0x4, [0x0, 0x0, 0x0], [0x4, 0x4, 0x4], ownexponents)
         @test_throws ArgumentError exponents_from_index!(Vector{UInt8}(undef, 4), mi, 1)
-        powers = Vector{UInt8}(undef, 3)
+        exponents = Vector{UInt8}(undef, 3)
         for (i, mipow) in enumerate(mi)
-            exponents_from_index!(powers, i)
-            @test powers == mipow
+            exponents_from_index!(exponents, i)
+            @test exponents == mipow
         end
     end
 
     @testset "Ranged monomial iterator, LazyMonomials" begin
-        mons = monomials(3, 0, 2:5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3])
+        mons = monomials(3, 0, 0x2:0x5, minmultideg=UInt8[1, 0, 2], maxmultideg=UInt8[7, 4, 3])
         lm = LazyMonomials{3,0}(0x2:0x5, minmultideg=UInt8[1, 0, 2], maxmultideg=UInt8[7, 4, 3])
         @test mons == lm
         @test mons[3:7] == lm[3:7]

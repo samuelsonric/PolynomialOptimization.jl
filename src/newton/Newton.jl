@@ -83,7 +83,7 @@ function halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...)
     P = typeof(poly)
     mhd = maxhalfdegree(poly)
     T = smallest_unsigned(2mhd)
-    mons = LazyMonomials{_effective_nvars(poly),0}(zero(T):T(mhd), powers=ownpowers)
+    mons = LazyMonomials{_effective_nvars(poly),0}(zero(T):T(mhd), exponents=ownexponents)
     MV = typeof(mons)
     return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=P[], nonneg=P[], psd=Matrix{P}[],
         groupings=RelaxationGroupings(
@@ -127,7 +127,7 @@ function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepa
         # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
         # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
         # variables - this is commuting only.
-        iter = MonomialIterator(analysis..., ownpowers)
+        iter = MonomialIterator(analysis..., ownexponents)
         num = length(iter)
         @verbose_info("Starting point selection among ", num, " possible monomials")
         nthreads, task, secondtask = prepare(V, coeffs, num, verbose; parameters...)

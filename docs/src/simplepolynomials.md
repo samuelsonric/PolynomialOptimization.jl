@@ -37,11 +37,11 @@ monomial_count
 monomial_index
 MonomialIterator
 RangedMonomialIterator
+ownexponents
 MultivariatePolynomials.monomials
 LazyMonomials
 effective_nvariables
 exponents_from_index!
 exponents_from_index_prepare
-ownpowers
 MultivariatePolynomials.merge_monomial_vectors
 ```

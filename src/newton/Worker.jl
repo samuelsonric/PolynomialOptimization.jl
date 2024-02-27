@@ -74,7 +74,7 @@ function execute(V, nv, verbose, iter, num, task, filepath)
     @verbose_info("Preparing to determine Newton polytope (single-threaded)")
 
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
-    # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
+    # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{eltype(eltype(iter))}()
 
@@ -141,7 +141,7 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
         " candidates")
     data_global = alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
-    # lot of powers by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
+    # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
     candidates = FastVec{eltype(eltype(iter))}()
     iterators = Vector{Base.promote_op(Core.kwcall, @NamedTuple{copy::Bool}, Type{RangedMonomialIterator}, typeof(iter), Int,

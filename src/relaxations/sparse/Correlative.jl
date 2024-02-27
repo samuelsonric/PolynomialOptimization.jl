@@ -133,13 +133,13 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
         @inbounds for (i, clique) in enumerate(cliques)
             maxmultideg = zeros(T, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
-            newobj[i] = LazyMonomials{Nr,Nc}(zero(T):parentmaxobjdeg; minmultideg, maxmultideg, powers=ownpowers)
+            newobj[i] = LazyMonomials{Nr,Nc}(zero(T):parentmaxobjdeg; minmultideg, maxmultideg, exponents=ownexponents)
             for (parentdeg, news) in ((parentmaxzerodeg, newzero), (parentmaxnonnegdeg, newnonneg), (parentmaxpsddeg, newpsd))
                 for (maxdeg, newel) in zip(parentdeg, news)
                     maxmultideg = zeros(T, Nr + 2Nc)
                     fill!(@view(maxmultideg[clique]), maxdeg)
                     newel[i] = LazyMonomials{Nr,Nc}(zero(T):min(maxdeg, T(length(clique) * maxdeg)); minmultideg, maxmultideg,
-                        powers=ownpowers)
+                        exponents=ownexponents)
                 end
             end
         end

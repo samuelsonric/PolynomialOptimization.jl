@@ -50,7 +50,7 @@ function truncate_basis(v::AbstractVector{M} where {M<:SimpleMonomial}, maxdeg::
 end
 truncate_basis(v::LazyMonomials{Nr,Nc,P,<:MonomialIterator{V,P}}, maxdeg::Integer) where {Nr,Nc,P<:Unsigned,V} =
     LazyMonomials{Nr,Nc}(P(mindegree(v)):P(min(maxdeg, maxdegree(v))); v.iter.minmultideg, v.iter.maxmultideg,
-        powers=V === Nothing ? nothing : ownpowers)
+        exponents=V === Nothing ? nothing : ownexponents)
 
 include("./Dense.jl")
 include("./Custom.jl")

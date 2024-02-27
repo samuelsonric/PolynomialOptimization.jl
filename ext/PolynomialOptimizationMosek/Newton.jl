@@ -132,18 +132,18 @@ Newton.alloc_local(::Val{:Mosek}, nv) = Vector{Float64}(undef, nv)
 Newton.clonetask(t::Mosek.Task) = Mosek.Task(t)
 
 @inline function Newton.work(::Val{:Mosek}, task, bk, tmp, moniter, Δprogress, Δacceptance, add_callback, iteration_callback)
-    for powers in moniter
-        # check the previous power in the linear program and add it if possible
-        copyto!(tmp, powers)
+    for exponents in moniter
+        # check the previous exponent in the linear program and add it if possible
+        copyto!(tmp, exponents)
         Mosek.@MSK_putconboundslice(task.task, 0, length(bk), bk, tmp, tmp)
         optimize(task)
         if getsolsta(task, MSK_SOL_BAS) == MSK_SOL_STA_OPTIMAL
             # this candidate is part of the Newton polytope
-            @inline add_callback(powers)
+            @inline add_callback(exponents)
             Δacceptance[] += 1
         end
         Δprogress[] += 1
-        isnothing(iteration_callback) || @inline iteration_callback(powers)
+        isnothing(iteration_callback) || @inline iteration_callback(exponents)
     end
     return
 end
