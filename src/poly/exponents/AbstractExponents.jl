@@ -128,11 +128,13 @@ function _calc_index_counts! end
 @inline _has_index_counts(e::AbstractExponentsDegreeBounded) = isdefined(e, :counts)
 
 """
-    exponents_to_index(::AbstractExponents{N,I}, exponents)
+    exponents_to_index(::AbstractExponents{N,I}, exponents, degree::Int=sum(exponents, init=0))
 
 Calculates the index of a monomial in `N` variables in an exponent set with exponents given by the iterable `exponents` (whose
 length should match `N`, else the behavior is undefined). The data type of the output is `I`.
 If `exponents` is not present in the exponent set, the result is zero.
+`degree` must always match the sum of all elements in the exponent set, but if it is already known, it can be passed to the
+function. No validity check is performed.
 """
 function exponents_to_index end
 

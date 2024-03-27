@@ -71,28 +71,26 @@ function _calc_index_counts!(e::ExponentsMultideg{N,I}) where {N,I<:Integer}
     return
 end
 
-function exponents_to_index(e::ExponentsMultideg{N,I}, exponents) where {N,I<:Integer}
-    e.mindeg > e.maxdeg && return zero(I)
-    mondeg::Int = sum(exponents, init=0)
-    e.mindeg ≤ mondeg ≤ e.maxdeg || return zero(I)
-    iszero(mondeg) && return one(I)
-    counts, success = @inbounds index_counts(e, mondeg)
+function exponents_to_index(e::ExponentsMultideg{N,I}, exponents, degree::Int=sum(exponents, init=0)) where {N,I<:Integer}
+    e.mindeg ≤ degree ≤ e.maxdeg || return zero(I)
+    iszero(degree) && return one(I)
+    counts, success = @inbounds index_counts(e, degree)
     @assert(success)
     # Our index starts with the last exponent that has a degree ≤ the required
-    mindex::I = @inbounds counts[mondeg+1, 1]
-    iszero(e.mindeg) || (mindex -= @inbounds counts[e.mindeg, 1])
+    index::I = @inbounds counts[degree+1, 1]
+    iszero(e.mindeg) || (index -= @inbounds counts[e.mindeg, 1])
     @inbounds for (i, vardeg, minmultideg, maxmultideg) in zip(2:N, exponents, e.minmultideg, e.maxmultideg)
         minmultideg ≤ vardeg ≤ maxmultideg || return zero(I)
         # We still need to get mondeg for the total degree, but the current variable only has vardeg. Skip over all the
         # exponents where the current variable had a higher degree - these are given by the total number of exponents where the
         # variables to the right of the current one have degree exactly mondeg-(vardeg+1), mondeg-(vardeg+2), ...,
         # mondeg-maxmultideg.
-        mondeg > vardeg && (mindex -= counts[mondeg-vardeg, i])
-        mondeg > maxmultideg && (mindex += counts[mondeg-maxmultideg, i])
-        mondeg -= vardeg
+        degree > vardeg && (index -= counts[degree-vardeg, i])
+        degree > maxmultideg && (index += counts[degree-maxmultideg, i])
+        degree -= vardeg
     end
-    @inbounds last(e.minmultideg) ≤ mondeg ≤ last(e.maxmultideg) || return zero(I)
-    return mindex
+    @inbounds last(e.minmultideg) ≤ degree ≤ last(e.maxmultideg) || return zero(I)
+    return index
 end
 
 @inline function degree_from_index(::Unsafe, e::ExponentsMultideg{<:Any,I}, index::I) where {I<:Integer}

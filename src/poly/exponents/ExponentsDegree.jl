@@ -29,24 +29,22 @@ function _calc_index_counts!(E::ExponentsDegree{N,I}) where {N,I<:Integer}
     return
 end
 
-function exponents_to_index(e::ExponentsDegree{N,I}, exponents) where {N,I<:Integer}
-    e.mindeg > e.maxdeg && return zero(I)
-    mondeg::Int = sum(exponents, init=0)
-    e.mindeg ≤ mondeg ≤ e.maxdeg || return zero(I)
-    iszero(mondeg) && return one(I)
-    counts, success = @inbounds index_counts(e, mondeg)
+function exponents_to_index(e::ExponentsDegree{N,I}, exponents, degree::Int=sum(exponents, init=0)) where {N,I<:Integer}
+    e.mindeg ≤ degree ≤ e.maxdeg || return zero(I)
+    iszero(degree) && return one(I)
+    counts, success = @inbounds index_counts(e, degree)
     @assert(success)
     # Our index starts with the last exponent that has a degree ≤ the required
-    mindex::I = @inbounds counts[mondeg+1, 1]
-    iszero(e.mindeg) || (mindex -= @inbounds counts[e.mindeg, 1])
+    index::I = @inbounds counts[degree+1, 1]
+    iszero(e.mindeg) || (index -= @inbounds counts[e.mindeg, 1])
     @inbounds for (i, vardeg) in zip(2:N, exponents)
         # We still need to get mondeg for the total degree, but the current variable only has vardeg. Skip over all the
         # exponents where the current variable had a higher degree - these are given by the total number of exponents where the
         # variables to the right of the current one have degree exactly mondeg-(vardeg+1), mondeg-(vardeg+2), ....
-        mondeg > vardeg && (mindex -= counts[mondeg-vardeg, i])
-        iszero(mondeg -= vardeg) && break
+        degree > vardeg && (index -= counts[degree-vardeg, i])
+        iszero(degree -= vardeg) && break
     end
-    return mindex
+    return index
 end
 
 @inline function degree_from_index(::Unsafe, e::ExponentsDegree{<:Any,I}, index::I) where {I<:Integer}
