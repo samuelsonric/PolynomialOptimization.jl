@@ -1,0 +1,53 @@
+export exponents_from_index
+
+struct ExponentIndices{I<:Integer,E<:AbstractExponents{<:Any,I}} <: AbstractVector{Int}
+    parent::E
+    index::I
+    degree::Int
+end
+
+"""
+    exponents_from_index(unsafe, ::AbstractExponents, index::I[, degree::Int])
+
+Calculates the exponents that are associated with the monomial index `index` in `N` variables within a given exponent set.
+This is an indexable iterator. The degree must match the degree of the index. Assumes that the cache for degree `degree`
+has already been populated, and that the exponent set contains `index`.
+"""
+exponents_from_index(::Unsafe, e::AbstractExponents{<:Any,I}, index::I, degree::Int=degree_from_index(unsafe, e, index)) where {I<:Integer} =
+    ExponentIndices(e, index, degree)
+
+"""
+    exponents_from_index(::AbstractExponents, index::I[, degree::Int])
+
+Same as above, but makes sure that the cache for degree `degree` has already been populated and `degree` is indeed the correct
+value for `index`.
+
+See also [`degree_from_index`](@ref).
+"""
+exponents_from_index(e::AbstractExponents{<:Any,I}, index::I) where {I<:Integer} =
+    exponents_from_index(e, index, degree_from_index(e, index))
+
+Base.IndexStyle(::Type{<:ExponentIndices}) = IndexLinear()
+Base.size(::(ExponentIndices{I,<:AbstractExponents{N,I}} where {I<:Integer})) where {N} = (N,)
+
+Base.@assume_effects :foldable :nothrow @inline function Base.getindex(efi::(ExponentIndices{I,<:AbstractExponents{N,I}} where {I<:Integer}),
+    varidx::Integer) where {N}
+    @boundscheck checkbounds(efi, varidx)
+    iter = iterate(efi)
+    for _ in 2:varidx
+        iter = iterate(efi, iter[2])
+    end
+    return iter[1]
+end
+
+# Standardized part of the iterator state: degree, index of next variable must be first. Do not change.
+
+# we want the iterator-based versions for copying
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, src::ExponentIndices) =
+    @invoke copyto!(dest::AbstractArray, src::Any)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::ExponentIndices) =
+    @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::ExponentIndices, sstart::Integer) =
+    @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::ExponentIndices, sstart::Integer, n::Integer) =
+    @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer, n::Integer)

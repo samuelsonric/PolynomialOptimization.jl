@@ -7,9 +7,8 @@ import PolynomialOptimization: matrix_delete_end!
 import StatsBase
 
 include("./Utils.jl")
-include("./Variable.jl")
-include("./Monomial.jl")
-include("./MonomialIterator.jl")
+include("./exponents/MultivariateExponents.jl")
+using .MultivariateExponents
 include("./MonomialIndex.jl")
 include("./MonomialVector.jl")
 include("./Term.jl")
