@@ -9,9 +9,113 @@ import DynamicPolynomials, Combinatorics
 
 using PolynomialOptimization.SimplePolynomials
 import PolynomialOptimization.SimplePolynomials: Absent
+using SimplePolynomials.MultivariateExponents
 
 testdir = dirname(pathof(MP)) * "/../test"
 include("$testdir/utils.jl")
+
+@testset "Exponents" begin
+    @testset "ExponentsAll" begin
+        ea = ExponentsAll{5,Int32}()
+        @test stack(Iterators.take(Iterators.drop(ea, 5), 7)) == Int[
+            1  0  0  0  0  0  0
+            0  0  0  0  0  0  0
+            0  0  0  0  1  1  2
+            0  0  1  2  0  1  0
+            0  2  1  0  1  0  0
+        ]
+        @test ea[Int32(8)] == [0, 0, 0, 1, 1]
+        @test_throws BoundsError ea[Int32(0)]
+        counts, success = index_counts(ea, 8)
+        @test success
+        @test counts == Int32[   1   1   1  1 1 1
+                                 6   5   4  3 2 1
+                                21  15  10  6 3 1
+                                56  35  20 10 4 1
+                               126  70  35 15 5 1
+                               252 126  56 21 6 1
+                               462 210  84 28 7 1
+                               792 330 120 36 8 1
+                              1287 495 165 45 9 1]
+        alloc_test(let ea=ea; () -> index_counts(ea, 8) end, 0)
+
+        ei = Vector{Int}(undef, 5)
+        for i in Int32(1):Int32(500)
+            alloc_test(let ea=ea, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(ea, i)) end, 0)
+            alloc_test(let ea=ea, ei=ei; () -> exponents_to_index(ea, ei) end, 0)
+            @test exponents_to_index(ea, ei) === i
+        end
+        @test degree_from_index(ea, Int32(2000)) == 9
+    end
+    @testset "ExponentsDegree" begin
+        ed = ExponentsDegree{5,Int32}(2:7)
+        @test length(ed) == 786
+        @test length(unsafe, ed) == 786
+        @test stack(Iterators.take(Iterators.drop(ed, 5), 7)) == Int[
+            0  0  0  0  0  1  1
+            0  1  1  1  2  0  0
+            2  0  0  1  0  0  0
+            0  0  1  0  0  0  1
+            0  1  0  0  0  1  0
+        ]
+        @test ed[Int32(8)] == [0, 1, 0, 1, 0]
+        @test_throws BoundsError ed[Int32(0)]
+        @test_throws BoundsError ed[Int32(787)]
+        # Checking index_counts does not make much sense, it is shared with the generic verison. Just ensure that no higher
+        # degrees are created than what we had before (which was one higher than for 2000 -> 10)
+        counts, success = index_counts(ed, 11)
+        @test !success
+
+        ei = Vector{Int}(undef, 5)
+        copyto!(ei, exponents_from_index(ed, one(Int32)))
+        @test ei == [0, 0, 0, 0, 2]
+        for i in Int32(1):Int32(500)
+            alloc_test(let ed=ed, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(ed, i)) end, 0)
+            alloc_test(let ed=ed, ei=ei; () -> exponents_to_index(ed, ei) end, 0)
+            @test exponents_to_index(ed, ei) === i
+        end
+        @test degree_from_index(ed, Int32(786)) == 7
+        @test degree_from_index(ed, Int32(787)) == 8
+    end
+
+    @testset "ExponentsMultideg" begin
+        emd = ExponentsMultideg{5,Int32}(2:7, [1, 2, 0, 2, 0], [5, 3, 6, 7, 2])
+        @test length(emd) == 20
+        @test length(unsafe, emd) == 20
+        @test stack(Iterators.take(Iterators.drop(emd, 5), 7)) == Int[
+            2  1  1  1  1  1  1
+            2  2  2  2  2  2  2
+            0  0  0  0  1  1  2
+            2  2  3  4  2  3  2
+            0  2  1  0  1  0  0
+        ]
+        @test emd[Int32(8)] == [1, 2, 0, 3, 1]
+        @test_throws BoundsError emd[Int32(0)]
+        @test_throws BoundsError emd[Int32(21)]
+        @test !index_counts(emd, 8)[2]
+        counts, success = index_counts(emd, 7)
+        @test success
+        @test counts == Int32[ 0   0   0   0  1  0
+                               0   0   0   0  2  0
+                               0   0   1   1  3  0
+                               0   0   4   3  3  0
+                               0   1  10   6  3  0
+                               1   5  19   9  3  0
+                               6  14  31  12  3  0
+                              20  29  46  15  3  0]
+
+        ei = Vector{Int}(undef, 5)
+        copyto!(ei, exponents_from_index(emd, one(Int32)))
+        @test ei == [1, 2, 0, 2, 0]
+        for i in Int32(1):Int32(20)
+            alloc_test(let emd=emd, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(emd, i)) end, 0)
+            alloc_test(let emd=emd, ei=ei; () -> exponents_to_index(emd, ei) end, 0)
+            @test exponents_to_index(emd, ei) === i
+        end
+        @test degree_from_index(emd, Int32(20)) == 7
+        @test degree_from_index(emd, Int32(21)) == 8
+    end
+end
 
 @testset "Variable" begin
     # No polyvar macro index set: we don't provide a macro for variable construction.
