@@ -147,3 +147,31 @@ function Base.iterate(efi::ExponentIndices{I,ExponentsAll{N,I}}, (degree, i, ind
         return nothing
     end
 end
+
+function iterate!(::Unsafe, v::AbstractVector{Int}, e::ExponentsAll)
+    @inbounds begin
+        while true
+            # This is not a loop at all, we only go through it once, but we need to be able to leave the block at multiple
+            # positions. If we do it with @goto, as would be proper, Julia begins to box all our arrays.
+
+            # find the next exponent that can be decreased
+            i = findlast(>(0), v)
+            isnothing(i) && break
+
+            # we must increment the exponents to the left by 1 in total
+            isone(i) && break
+            v[i-1] += 1
+            # this implies that we reset everything to the right of the increment to its minimum and then compensate for all
+            # the reductions by increasing the exponents again
+            δ = v[i] -1
+            v[i] = 0
+            v[end] += δ
+            return true
+        end
+        # there's still hope: we can perhaps go to the next degree
+        deg = sum(v, init=0) +1
+        fill!(@view(v[1:end-1]), 0)
+        @inbounds v[end] = deg
+        return true
+    end
+end

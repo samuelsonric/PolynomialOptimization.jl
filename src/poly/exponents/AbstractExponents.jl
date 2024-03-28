@@ -1,5 +1,12 @@
-export index_counts, index_counts, exponents_to_index, degree_from_index
+export index_counts, index_counts, exponents_to_index, degree_from_index, iterate!, veciter
 
+"""
+    AbstractExponents{N,I}
+
+Supertype for all collections of multivariate exponents. Every collection is iterable (both using a default lazy iteration and
+a mutable iteration into a vector using [`veciter`](@ref)) and indexable (return a lazy collection of exponents). The
+collection has a length if it is finite.
+"""
 abstract type AbstractExponents{N,I<:Integer} end
 # all AbstractExponents descendants must implement index_counts(::Unsafe, ::AbstractExponents{N,I}) -> Matrix{I} that returns a
 # unique (potentially uninitialized) cache matrix for the given object (should be fast)
@@ -77,6 +84,59 @@ function Base.iterate(e::AbstractExponentsDegreeBounded{<:Any, I}, (index, degre
         return ExponentIndices(e, index + one(I), degree), (index + one(I), degree, remainingdeg - one(I))
     end
 end
+
+"""
+    iterate!(v::AbstractVector{Int}, e::AbstractExponents)
+
+Iterates through a set of exponents by maintaining an explicit representation of all exponents. This is slightly more efficient
+that the lazy iteration version if every exponent has to be accessed explicitly. Note that `v` must be initialized with a valid
+exponent combination in `e` (this may be done via `copyto!(v, first(e))`).
+The function returns `true` if successful and `false` if the end was reached.
+"""
+@inline function iterate!(v::AbstractVector{Int}, e::AbstractExponents{N}) where {N}
+    @boundscheck length(v) == N || throw(DimensionMismatch("Vector length does not match variable count"))
+    iterate!(unsafe, v, e)
+end
+
+struct ExponentsVectorIterator{V,E<:AbstractExponents}
+    v::V
+    e::E
+
+    function ExponentsVectorIterator(v::V, e::E) where {V<:AbstractVector{Int},N,E<:AbstractExponents{N}}
+        length(v) == N || throw(DimensionMismatch("Vector length does not match variable count"))
+        index_counts(e, 0) # make sure that the cache is populated
+        new{V,E}(v, e)
+    end
+
+    function ExponentsVectorIterator(e::E) where {E<:AbstractExponents}
+        index_counts(e, 0)
+        new{Nothing,E}(nothing, e)
+    end
+end
+
+Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsUnbounded}}) = Base.IsInfinite()
+Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}}) = Base.HasLength()
+Base.length(ei::ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}) = length(unsafe, ei.e)
+# AbstractExponents are never empty
+Base.iterate(ei::ExponentsVectorIterator{<:AbstractVector{Int}}) = copyto!(ei.v, first(ei.e)), ei.v
+function Base.iterate(ei::ExponentsVectorIterator{Nothing})
+    v = collect(first(ei.e))
+    return v, v
+end
+Base.iterate(ei::ExponentsVectorIterator, state::AbstractVector{Int}) =
+    iterate!(unsafe, state, ei.e) ? (state, state) : nothing
+
+"""
+    veciter(e::AbstractExponents[, v::AbstractVector{Int}])
+
+Creates an iterator over exponents that stores its result in a vector. This results in zero-allocations (as the iteration over
+`e` also does), but is more efficient if every element in `e` must be accessed.
+If the vector `v` is given as an argument, the data will be stored in this vector; it is then not allowed to nest the iterator.
+If the vector is omitted, it will be created once at the beginning of the iteration process.
+The vector must never be altered, as it also serves as the state for the iterator.
+"""
+veciter(e::AbstractExponents, v::AbstractVector{Int}) = ExponentsVectorIterator(v, e)
+veciter(e::AbstractExponents) = ExponentsVectorIterator(e)
 
 # Memory layout: We need to have the counts available for all exponents of nvars variables where nvars ∈ {1, ..., N} and
 # of a degree that we don't want to fix yet (for the unbounded case, in the degree bounded case, everything is just calculated

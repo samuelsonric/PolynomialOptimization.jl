@@ -9,7 +9,7 @@ import DynamicPolynomials, Combinatorics
 
 using PolynomialOptimization.SimplePolynomials
 import PolynomialOptimization.SimplePolynomials: Absent
-using SimplePolynomials.MultivariateExponents
+using PolynomialOptimization.SimplePolynomials.MultivariateExponents
 
 testdir = dirname(pathof(MP)) * "/../test"
 include("$testdir/utils.jl")
@@ -28,7 +28,10 @@ include("$testdir/utils.jl")
         @test_throws BoundsError ea[Int32(0)]
         counts, success = index_counts(ea, 8)
         @test success
-        @test counts == Int32[   1   1   1  1 1 1
+        # note: in a fresh Julia session, this should be the whole counts. However, if something has already run (or the test
+        # suite is executed more than once), the previous runs will have populated the cache some more, so counts might have
+        # more rows.
+        @test counts[1:9, :] == Int32[   1   1   1  1 1 1
                                  6   5   4  3 2 1
                                 21  15  10  6 3 1
                                 56  35  20 10 4 1
@@ -40,10 +43,17 @@ include("$testdir/utils.jl")
         alloc_test(let ea=ea; () -> index_counts(ea, 8) end, 0)
 
         ei = Vector{Int}(undef, 5)
-        for i in Int32(1):Int32(500)
+        eiter = similar(ei)
+        @test_throws DimensionMismatch iterate!(@view(eiter[1:3]), ea)
+        copyto!(eiter, first(ea))
+        for (i, eitervec, eitervec2) in zip(Int32(1):Int32(500), veciter(ea), veciter(ea, similar(ei)))
             alloc_test(let ea=ea, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(ea, i)) end, 0)
             alloc_test(let ea=ea, ei=ei; () -> exponents_to_index(ea, ei) end, 0)
             @test exponents_to_index(ea, ei) === i
+            @test eiter == ei
+            @test iterate!(eiter, ea)
+            @test eitervec == ei
+            @test eitervec2 == ei
         end
         @test degree_from_index(ea, Int32(2000)) == 9
     end
@@ -69,10 +79,17 @@ include("$testdir/utils.jl")
         ei = Vector{Int}(undef, 5)
         copyto!(ei, exponents_from_index(ed, one(Int32)))
         @test ei == [0, 0, 0, 0, 2]
-        for i in Int32(1):Int32(500)
+        eiter = similar(ei)
+        @test_throws DimensionMismatch iterate!(@view(eiter[1:3]), ed)
+        copyto!(eiter, first(ed))
+        for (i, eitervec, eitervec2) in zip(Int32(1):Int32(786), veciter(ed), veciter(ed, similar(ei)))
             alloc_test(let ed=ed, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(ed, i)) end, 0)
             alloc_test(let ed=ed, ei=ei; () -> exponents_to_index(ed, ei) end, 0)
             @test exponents_to_index(ed, ei) === i
+            @test eiter == ei
+            @test iterate!(eiter, ed) == (i != 786)
+            @test eitervec == ei
+            @test eitervec2 == ei
         end
         @test degree_from_index(ed, Int32(786)) == 7
         @test degree_from_index(ed, Int32(787)) == 8
@@ -107,10 +124,17 @@ include("$testdir/utils.jl")
         ei = Vector{Int}(undef, 5)
         copyto!(ei, exponents_from_index(emd, one(Int32)))
         @test ei == [1, 2, 0, 2, 0]
-        for i in Int32(1):Int32(20)
+        eiter = similar(ei)
+        @test_throws DimensionMismatch iterate!(@view(eiter[1:3]), ed)
+        copyto!(eiter, first(emd))
+        for (i, eitervec, eitervec2) in zip(Int32(1):Int32(20), veciter(emd), veciter(emd, similar(ei)))
             alloc_test(let emd=emd, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(emd, i)) end, 0)
             alloc_test(let emd=emd, ei=ei; () -> exponents_to_index(emd, ei) end, 0)
             @test exponents_to_index(emd, ei) === i
+            @test eiter == ei
+            @test iterate!(eiter, emd) == (i != 20)
+            @test eitervec == ei
+            @test eitervec2 == ei
         end
         @test degree_from_index(emd, Int32(20)) == 7
         @test degree_from_index(emd, Int32(21)) == 8

@@ -152,3 +152,67 @@ function Base.iterate(efi::ExponentIndices{I,<:ExponentsMultideg{N,I}}, (degree,
         return nothing
     end
 end
+
+function iterate!(::Unsafe, v::AbstractVector{Int}, e::ExponentsMultideg{N}) where {N}
+    @inbounds begin
+        minmultideg, maxmultideg = e.minmultideg, e.maxmultideg
+        while true
+            # This is not a loop at all, we only go through it once, but we need to be able to leave the block at multiple
+            # positions. If we do it with @goto, as would be proper, Julia begins to box all our arrays.
+
+            # find the next exponent that can be decreased
+            found = false
+            local i
+            for outer i in lastindex(v):-1:firstindex(v)
+                if v[i] > minmultideg[i]
+                    found = true
+                    break
+                end
+            end
+            found || break
+            # we must increment the exponents to the left by 1 in total
+            found = false
+            local j
+            for outer j in i-1:-1:firstindex(v)
+                if v[j] < maxmultideg[j]
+                    found = true
+                    break
+                end
+            end
+            found || break
+
+            v[j] += 1
+            # this implies that we reset everything to the right of the increment to its minimum and then compensate for all
+            # the reductions by increasing the exponents again
+            δ = -1
+            for k in j+1:i
+                δ += v[k] - minmultideg[k]
+            end
+            copyto!(v, j +1, minmultideg, j +1, i - j)
+            exponents_increment_right!(v, e, δ, j +1) && return true
+        end
+        # there's still hope: we can perhaps go to the next degree
+        deg = sum(v, init=0) +1
+        deg > e.maxdeg && return false
+        copyto!(v, minmultideg)
+        return exponents_increment_right!(v, e, deg - e.Σminmultideg, firstindex(v))
+    end
+end
+
+function exponents_increment_right!(v::AbstractVector{Int}, e::ExponentsMultideg{N}, δ, from) where {N}
+    @assert(δ ≥ 0 && from ≥ 0)
+    maxmultideg = e.maxmultideg
+    i = N
+    @inbounds while δ > 0 && i ≥ from
+        δᵢ = maxmultideg[i] - v[i]
+        if δᵢ ≥ δ
+            v[i] += δ
+            return true
+        else
+            v[i] = maxmultideg[i]
+            δ -= δᵢ
+        end
+        i -= 1
+    end
+    return iszero(δ)
+end
