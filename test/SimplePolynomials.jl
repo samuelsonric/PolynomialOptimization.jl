@@ -32,14 +32,14 @@ include("$testdir/utils.jl")
         # suite is executed more than once), the previous runs will have populated the cache some more, so counts might have
         # more rows.
         @test counts[1:9, :] == Int32[   1   1   1  1 1 1
-                                 6   5   4  3 2 1
-                                21  15  10  6 3 1
-                                56  35  20 10 4 1
-                               126  70  35 15 5 1
-                               252 126  56 21 6 1
-                               462 210  84 28 7 1
-                               792 330 120 36 8 1
-                              1287 495 165 45 9 1]
+                                         6   5   4  3 2 1
+                                        21  15  10  6 3 1
+                                        56  35  20 10 4 1
+                                       126  70  35 15 5 1
+                                       252 126  56 21 6 1
+                                       462 210  84 28 7 1
+                                       792 330 120 36 8 1
+                                      1287 495 165 45 9 1]
         alloc_test(let ea=ea; () -> index_counts(ea, 8) end, 0)
 
         ei = Vector{Int}(undef, 5)
@@ -94,50 +94,49 @@ include("$testdir/utils.jl")
         @test degree_from_index(ed, Int32(786)) == 7
         @test degree_from_index(ed, Int32(787)) == 8
     end
-
     @testset "ExponentsMultideg" begin
-        emd = ExponentsMultideg{5,Int32}(2:7, [1, 2, 0, 2, 0], [5, 3, 6, 7, 2])
-        @test length(emd) == 20
-        @test length(unsafe, emd) == 20
+        emd = ExponentsMultideg{5,Int32}(3:7, [1, 0, 0, 1, 0], [5, 3, 6, 7, 2])
+        @test length(emd) == 223
+        @test length(unsafe, emd) == 223
         @test stack(Iterators.take(Iterators.drop(emd, 5), 7)) == Int[
-            2  1  1  1  1  1  1
-            2  2  2  2  2  2  2
-            0  0  0  0  1  1  2
-            2  2  3  4  2  3  2
-            0  2  1  0  1  0  0
+            1  1  1  1  1  1  1
+            0  0  0  0  0  0  1
+            0  0  0  1  1  2  0
+            1  2  3  1  2  1  1
+            2  1  0  1  0  0  1
         ]
-        @test emd[Int32(8)] == [1, 2, 0, 3, 1]
+        @test emd[Int32(8)] == [1, 0, 0, 3, 0]
         @test_throws BoundsError emd[Int32(0)]
-        @test_throws BoundsError emd[Int32(21)]
+        @test_throws BoundsError emd[Int32(224)]
         @test !index_counts(emd, 8)[2]
         counts, success = index_counts(emd, 7)
         @test success
-        @test counts == Int32[ 0   0   0   0  1  0
-                               0   0   0   0  2  0
-                               0   0   1   1  3  0
-                               0   0   4   3  3  0
-                               0   1  10   6  3  0
-                               1   5  19   9  3  0
-                               6  14  31  12  3  0
-                              20  29  46  15  3  0]
+        @test counts == Int32[  0    0   0   0  1  0
+                                0    1   1   1  2  0
+                                1    5   4   3  3  0
+                                6   15  10   6  3  0
+                               21   34  19   9  3  0
+                               55   64  31  12  3  0
+                              119  106  46  15  3  0
+                              224  160  64  18  3  0]
 
         ei = Vector{Int}(undef, 5)
         copyto!(ei, exponents_from_index(emd, one(Int32)))
-        @test ei == [1, 2, 0, 2, 0]
+        @test ei == [1, 0, 0, 1, 1]
         eiter = similar(ei)
-        @test_throws DimensionMismatch iterate!(@view(eiter[1:3]), ed)
+        @test_throws DimensionMismatch iterate!(@view(eiter[1:3]), emd)
         copyto!(eiter, first(emd))
-        for (i, eitervec, eitervec2) in zip(Int32(1):Int32(20), veciter(emd), veciter(emd, similar(ei)))
+        for (i, eitervec, eitervec2) in zip(Int32(1):Int32(223), veciter(emd), veciter(emd, similar(ei)))
             alloc_test(let emd=emd, ei=ei, i=i; () -> copyto!(ei, exponents_from_index(emd, i)) end, 0)
             alloc_test(let emd=emd, ei=ei; () -> exponents_to_index(emd, ei) end, 0)
             @test exponents_to_index(emd, ei) === i
             @test eiter == ei
-            @test iterate!(eiter, emd) == (i != 20)
+            @test iterate!(eiter, emd) == (i != 223)
             @test eitervec == ei
             @test eitervec2 == ei
         end
-        @test degree_from_index(emd, Int32(20)) == 7
-        @test degree_from_index(emd, Int32(21)) == 8
+        @test degree_from_index(emd, Int32(223)) == 7
+        @test degree_from_index(emd, Int32(224)) == 8
     end
 end
 

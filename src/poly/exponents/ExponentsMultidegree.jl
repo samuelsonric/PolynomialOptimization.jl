@@ -30,7 +30,10 @@ mutable struct ExponentsMultideg{N,I<:Integer,V} <: AbstractExponentsDegreeBound
             Σmaxmultideg = Base.Checked.checked_add(Σmaxmultideg, Int(maxmultideg[i]))
             Σminmultideg += Int(minmultideg[i])
         end
-        new{N,I,V}(max(mindeg, Σminmultideg), min(maxdeg, Σmaxmultideg), minmultideg, maxmultideg, Σminmultideg, Σmaxmultideg)
+        mindeg = max(mindeg, Σminmultideg)
+        maxdeg = min(maxdeg, Σmaxmultideg)
+        0 ≤ mindeg ≤ maxdeg || throw(ArgumentError("Invalid multidegree specification"))
+        new{N,I,V}(mindeg, maxdeg, minmultideg, maxmultideg, Σminmultideg, Σmaxmultideg)
     end
 end
 
@@ -126,7 +129,8 @@ function Base.iterate(efi::ExponentIndices{I,<:ExponentsMultideg{<:Any,I}}) wher
     parent = efi.parent
     counts = index_counts(unsafe, parent)
     degree = efi.degree
-    @inbounds return iterate(efi, (degree, 2, (iszero(degree) ? efi.index : efi.index - counts[degree, 1])))
+    @inbounds return iterate(efi, (degree, 2, (iszero(degree) ? efi.index : efi.index - counts[degree, 1]) +
+                                              (iszero(parent.mindeg) ? zero(I) : counts[parent.mindeg, 1])))
 end
 
 function Base.iterate(efi::ExponentIndices{I,<:ExponentsMultideg{N,I}}, (degree, i, index)::Tuple{Int,Int,I}) where {N,I<:Integer}
