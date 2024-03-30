@@ -138,6 +138,86 @@ include("$testdir/utils.jl")
         @test degree_from_index(emd, Int32(223)) == 7
         @test degree_from_index(emd, Int32(224)) == 8
     end
+    @testset "Conversion" begin
+        testexps(target, source, exps) =
+            @test @inferred(convert_index(target, source, exponents_to_index(source, exps))) ===
+                exponents_to_index(target, exps)
+
+        target = ExponentsAll{4,Int32}()
+        testexps(target, ExponentsAll{4,Int}(), [1, 2, 3, 4])
+        testexps(target, ExponentsDegree{4,Int}(0, 7), [1, 0, 2, 3])
+        testexps(target, ExponentsDegree{4,Int}(2, 7), [1, 0, 2, 3])
+        testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+        testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 3])
+        testexps(target, ExponentsMultideg{4,Int}(0, 7, [1, 0, 1, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+        testexps(target, ExponentsMultideg{4,Int}(2, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+
+        for target_mindeg in (0, 2)
+            target = ExponentsDegree{4,Int32}(target_mindeg, 6)
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 1, 0])
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 3, 4])
+            testexps(target, ExponentsDegree{4,Int}(0, 7), [1, 0, 2, 3])
+            testexps(target, ExponentsDegree{4,Int}(2, 7), [1, 0, 2, 3])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 4])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [1, 0, 1, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+            testexps(target, ExponentsMultideg{4,Int}(2, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+        end
+
+        for target_mindeg in (0, 2)
+            target = ExponentsMultideg{4,Int32}(target_mindeg, 6, [0, 0, 0, 0], [3, 4, 5, 6])
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 1, 0])
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 3, 4])
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 3, 0])
+            testexps(target, ExponentsDegree{4,Int}(0, 7), [1, 0, 2, 3])
+            testexps(target, ExponentsDegree{4,Int}(2, 7), [1, 0, 2, 3])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 4])
+            testexps(target, ExponentsMultideg{4,Int}(0, 7, [1, 0, 1, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+            testexps(target, ExponentsMultideg{4,Int}(2, 7, [0, 0, 0, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+        end
+
+        for target_mindeg in (2, 4)
+            target = ExponentsMultideg{4,Int32}(target_mindeg, 6, [1, 0, 1, 0], [3, 4, 5, 6])
+            testexps(target, ExponentsAll{4,Int}(), [1, 2, 1, 0])
+            testexps(target, ExponentsDegree{4,Int}(0, 7), [1, 0, 2, 3])
+            for source_mindeg in (2, 3)
+                testexps(target, ExponentsMultideg{4,Int}(source_mindeg, 7, [1, 0, 1, 0], [3, 4, 5, 6]), [1, 0, 2, 0])
+                testexps(target, ExponentsMultideg{4,Int}(source_mindeg, 7, [1, 0, 1, 0], [3, 4, 5, 6]), [1, 0, 2, 4])
+                testexps(target, ExponentsMultideg{4,Int}(source_mindeg, 7, [1, 0, 1, 0], [3, 5, 5, 6]), [1, 0, 2, 0])
+                testexps(target, ExponentsMultideg{4,Int}(source_mindeg, 7, [1, 0, 1, 0], [3, 5, 5, 6]), [1, 0, 2, 1])
+                testexps(target, ExponentsMultideg{4,Int}(source_mindeg, 7, [0, 0, 0, 0], [3, 5, 5, 6]), [1, 0, 2, 1])
+            end
+        end
+    end
+    @testset "Comparison" begin
+        ea = ExponentsAll{4,Int}()
+        function testexps(e₁, exps₁, e₂, exps₂)
+            ie₁ = exponents_to_index(e₁, exps₁)
+            iszero(ie₁) && return
+            ie₂ = exponents_to_index(e₂, exps₂)
+            iszero(ie₂) && return
+            ia₁ = exponents_to_index(ea, exps₁)
+            ia₂ = exponents_to_index(ea, exps₂)
+            for op in (==, <, ≤, >, ≤)
+                @test @inferred(compare_indices(e₁, ie₁, op, e₂, ie₂)) === op(ia₁, ia₂)
+            end
+        end
+
+        for (e₁, e₂) in Combinatorics.multiset_combinations(
+            (ExponentsAll{4,Int}(), ExponentsDegree{4,Int}(0, 7), ExponentsDegree{4,Int}(2, 7),
+            ExponentsMultideg{4,Int}(0, 7, [0, 0, 0, 0], [3, 4, 5, 6]),
+            ExponentsMultideg{4,Int}(0, 7, [1, 0, 1, 0], [3, 4, 5, 6]),
+            ExponentsMultideg{4,Int}(2, 7, [0, 0, 0, 0], [3, 4, 5, 6]),
+            ExponentsMultideg{4,Int}(3, 7, [1, 0, 1, 0], [3, 5, 5, 6])), 2
+        )
+            for (i₁, i₂) in Iterators.product(Iterators.repeated(([1, 2, 3, 4], [1, 0, 2, 3], [1, 0, 2, 0],
+                                                                  [1, 2, 1, 0], [1, 0, 2, 4],
+                                                                  [1, 0, 2, 1]), 2)...)
+                testexps(e₁, i₁, e₂, i₂)
+            end
+        end
+    end
 end
 
 @testset "Variable" begin

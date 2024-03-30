@@ -1,4 +1,4 @@
-export index_counts, index_counts, exponents_to_index, degree_from_index, iterate!, veciter
+export index_counts, index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices
 
 """
     AbstractExponents{N,I}
@@ -211,3 +211,174 @@ the cache, a degree larger than the maximal degree allowed in the iterator will 
 Same as above, but makes sure that the cache is initialized appropriately.
 """
 function degree_from_index end
+
+"""
+    convert_index([unsafe,] target::AbstractExponents, source::AbstractExponents, index[, degree::Int])
+
+Converts an index from an exponent set `source` to an exponent set `target`. The unsafe variant assumes that caches for both
+the source and the target are set up as required for `degree`.
+`index` is always assumed to be a valid index for `source`, else the behavior is undefined.
+"""
+@inline function convert_index(::Unsafe, target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS,
+    degree::Int) where {N,I<:Integer,IS<:Integer}
+    # there are several paths (and compile time reduces these to at most one if) that provide shorted conditions because we
+    # know that the indices must coincide.
+    source === target && return index
+    if target isa ExponentsAll
+        if source isa ExponentsAll
+            return I(index)
+        elseif source isa ExponentsDegree
+            return iszero(source.mindeg) ? I(index) : I(@inbounds(index_counts(unsafe, source)[source.mindeg, 1]) + index)
+        elseif source isa ExponentsMultideg && all(≥(degree), source.maxmultideg)
+            iszero(source.mindeg) && return I(index) # implies minmultideg = 0
+            all(iszero, source.minmultideg) && return I(@inbounds(index_counts(unsafe, source)[source.mindeg, 1]) + index)
+        end
+    elseif target isa ExponentsDegree
+        target.mindeg ≤ degree ≤ target.maxdeg || return zero(I)
+        if source isa ExponentsAll
+            return iszero(target.mindeg) ? I(index) : I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+        elseif source isa ExponentsDegree
+            iszero(source.mindeg) || (index += @inbounds(index_counts(unsafe, source)[source.mindeg, 1]))
+            return iszero(target.mindeg) ? I(index) : I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+        elseif source isa ExponentsMultideg && all(≥(degree), source.maxmultideg)
+            iszero(source.mindeg) &&
+                return iszero(target.mindeg) ? I(index) : I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+            if all(iszero, source.minmultideg)
+                index += @inbounds(index_counts(unsafe, source)[source.mindeg, 1])
+                return iszero(target.mindeg) ? I(index) : I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+            end
+        end
+    elseif target isa ExponentsMultideg
+        target.mindeg ≤ degree ≤ target.maxdeg || return zero(I)
+        if source isa ExponentsAll && all(≥(degree), target.maxmultideg)
+            iszero(target.mindeg) && return I(index)
+            all(iszero, target.minmultideg) && return I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+        elseif source isa ExponentsDegree && all(≥(degree), target.maxmultideg)
+            index0 = index
+            iszero(source.mindeg) || (index0 += @inbounds(index_counts(unsafe, source)[source.mindeg, 1]))
+            iszero(target.mindeg) && return I(index0)
+            all(iszero, target.minmultideg) && return I(index0) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+        elseif source isa ExponentsMultideg && source.minmultideg == target.minmultideg &&
+            all(let degree=degree; x -> min(x[1], degree) == min(x[2], degree) end,
+                zip(target.maxmultideg, source.maxmultideg))
+            iszero(source.mindeg) || (index += @inbounds(index_counts(unsafe, source)[source.mindeg, 1]))
+            return iszero(target.mindeg) ? I(index) : I(index) - @inbounds(index_counts(unsafe, target)[target.mindeg, 1])
+        end
+    end
+    # no shortcut available, must do it the hard way
+    return exponents_to_index(target, exponents_from_index(unsafe, source, index, degree), degree)
+end
+
+@inline function convert_index(::Unsafe, target::AbstractExponents{N}, source::AbstractExponents{N,IS}, index::IS) where {N,IS<:Integer}
+    source === target && return index
+    return convert_index(unsafe, target, source, index, degree_from_index(unsafe, source, index))
+end
+
+@inline function convert_index(target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS, degree::Int) where {N,I<:Integer,IS<:Integer}
+    source === target && return index
+    index_counts(source, degree) # populate caches
+    index_counts(target, degree)[2] || return zero(I)
+    return convert_index(unsafe, target, source, index, degree)
+end
+
+@inline function convert_index(target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS) where {N,I<:Integer,IS<:Integer}
+    source === target && return index
+    degree = degree_from_index(source, index)
+    index_counts(target, degree)[2] || return zero(I)
+    return convert_index(unsafe, target, source, index, degree)
+end
+
+_CompareOp = Union{typeof(==),typeof(<),typeof(≤),typeof(>),typeof(≥)}
+"""
+    compare_indices([unsafe,] e₁::AbstractExponents, index₁, op, e₂::AbstractExponents, index₂[, degree::Int])
+
+Compares two indices from two possibly different exponent sets. The unsafe variant assumes that both caches are set up as
+required for `degree` (which, if given, must be the common degree of both exponents).
+Both indices are assumed to be valid for their respective exponent sets, else the behavior is undefined. However, it is not
+necessary that both indices are also valid in the others exponent sets.
+If ẽ₁ and ẽ₂ denote the conversion of the indices to a common exponent set (say, [`ExponentsAll`](@ref)), then the result is
+`op(ẽ₁, ẽ₂)`. The only allowed values for `op` are `==`, `<`, `≤`, `>`, and `≥`.
+"""
+@inline function compare_indices(::Unsafe, e₁::AbstractExponents{N,I1}, index₁::I1,
+    op::_CompareOp, e₂::AbstractExponents{N,I2}, index₂::I2,
+    degree::Int) where {N,I1<:Integer,I2<:Integer}
+    # there are several paths (and compile time reduces these to at most one if) that provide shorted conditions because we
+    # know that the indices must coincide.
+    e₂ === e₁ && return op(index₁, index₂)
+    if e₁ isa ExponentsAll
+        if e₂ isa ExponentsAll
+            return op(index₁, index₂)
+        elseif e₂ isa ExponentsDegree
+            return op(index₁, iszero(e₂.mindeg) ? index₂ : index₂ + @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+        elseif e₂ isa ExponentsMultideg && all(≥(degree), e₂.maxmultideg)
+            iszero(e₂.mindeg) && return op(index₁, index₂) # implies minmultideg = 0
+            all(iszero, e₂.minmultideg) && return op(index₁, index₂ + @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+        end
+    elseif e₁ isa ExponentsDegree
+        if e₂ isa ExponentsAll
+            return op(iszero(e₁.mindeg) ? index₁ : index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]), index₂)
+        elseif e₂ isa ExponentsDegree
+            return op(iszero(e₁.mindeg) ? index₁ : index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]),
+                      iszero(e₂.mindeg) ? index₂ : index₂ + @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+        elseif e₂ isa ExponentsMultideg && all(≥(degree), e₂.maxmultideg)
+            iszero(e₂.mindeg) &&
+                return op(iszero(e₁.mindeg) ? index₁ : index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]), index₂)
+            if all(iszero, e₂.minmultideg)
+                return op(iszero(e₁.mindeg) ? index₁ : index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]),
+                          index₂ + @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+            end
+        end
+    elseif e₁ isa ExponentsMultideg
+        if e₂ isa ExponentsAll && all(≥(degree), e₁.maxmultideg)
+            iszero(e₁.mindeg) && return op(index₁, index₂)
+            all(iszero, e₁.minmultideg) && return op(index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]), index₂)
+        elseif e₂ isa ExponentsDegree && all(≥(degree), e₁.maxmultideg)
+            index₂0 = index₂
+            iszero(e₂.mindeg) || (index₂0 += @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+            iszero(e₁.mindeg) && return op(index₁, index₂0)
+            all(iszero, e₁.minmultideg) && return op(index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]), index₂0)
+        elseif e₂ isa ExponentsMultideg && e₂.minmultideg == e₁.minmultideg &&
+            all(let degree=degree; x -> min(x[1], degree) == min(x[2], degree) end,
+                zip(e₁.maxmultideg, e₂.maxmultideg))
+            return op(iszero(e₁.mindeg) ? index₁ : index₁ + @inbounds(index_counts(unsafe, e₁)[e₁.mindeg, 1]),
+                      iszero(e₂.mindeg) ? index₂ : index₂ + @inbounds(index_counts(unsafe, e₂)[e₂.mindeg, 1]))
+        end
+    end
+    # no shortcut available, must do it the hard way, but we can perhaps short-circuit along the way
+    for (exp₁, exp₂) in zip(exponents_from_index(unsafe, e₁, index₁, degree), exponents_from_index(unsafe, e₂, index₂, degree))
+        if op === ==
+            exp₁ == exp₂ || return false
+        elseif (op === <) || (op === ≤)
+            exp₁ < exp₂ && return true
+            exp₁ > exp₂ && return false
+        elseif (op === >) || (op === ≥)
+            exp₁ > exp₂ && return true
+            exp₁ < exp₂ && return false
+        end
+    end
+    return op ∈ (==, ≤, ≥)
+end
+
+@inline function compare_indices(::Unsafe, e₁::AbstractExponents{N,I1}, index₁::I1, op::_CompareOp,
+    e₂::AbstractExponents{N,I2}, index₂::I2) where {N,I1<:Integer,I2<:Integer}
+    e₁ === e₂ && return op(index₁, index₂)
+    deg₁ = degree_from_index(unsafe, e₁, index₁)
+    deg₂ = degree_from_index(unsafe, e₂, index₂)
+    return deg₁ == deg₂ ? compare_indices(unsafe, e₁, index₁, op, e₂, index₂, deg₁) : op(deg₁, deg₂)
+end
+
+@inline function compare_indices(e₁::AbstractExponents{N,I1}, index₁::I1, op::_CompareOp, e₂::AbstractExponents{N,I2},
+    index₂::I2, degree::Int) where {N,I1<:Integer,I2<:Integer}
+    e₁ === e₂ && return op(index₁, index₂)
+    index_counts(e₁, degree) # populate caches
+    index_counts(e₂, degree)
+    return compare_indices(unsafe, e₁, index₁, op, e₂, index₂, degree)
+end
+
+@inline function compare_indices(e₁::AbstractExponents{N,I1}, index₁::I1, op::_CompareOp, e₂::AbstractExponents{N,I2},
+    index₂::I2) where {N,I1<:Integer,I2<:Integer}
+    e₁ === e₂ && return op(index₁, index₂)
+    deg₁ = degree_from_index(e₁, index₁)
+    deg₂ = degree_from_index(e₂, index₂)
+    return deg₁ == deg₂ ? compare_indices(unsafe, e₁, index₁, op, e₂, index₂, deg₁) : op(deg₁, deg₂)
+end
