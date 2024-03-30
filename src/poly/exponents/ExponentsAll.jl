@@ -57,7 +57,7 @@ end
     end
 end
 
-function exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int=sum(exponents, init=0)) where {N,I<:Integer}
+function _exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int) where {N,I<:Integer}
     iszero(degree) && return one(I)
     nvars::Int = N
     counts, success = index_counts(e, degree)

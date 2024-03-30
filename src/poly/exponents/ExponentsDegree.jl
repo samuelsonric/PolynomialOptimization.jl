@@ -29,7 +29,7 @@ function _calc_index_counts!(E::ExponentsDegree{N,I}) where {N,I<:Integer}
     return
 end
 
-function exponents_to_index(e::ExponentsDegree{N,I}, exponents, degree::Int=sum(exponents, init=0)) where {N,I<:Integer}
+function _exponents_to_index(e::ExponentsDegree{N,I}, exponents, degree::Int) where {N,I<:Integer}
     e.mindeg ≤ degree ≤ e.maxdeg || return zero(I)
     iszero(degree) && return one(I)
     counts, success = @inbounds index_counts(e, degree)

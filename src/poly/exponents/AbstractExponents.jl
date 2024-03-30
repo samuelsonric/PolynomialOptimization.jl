@@ -196,7 +196,9 @@ If `exponents` is not present in the exponent set, the result is zero.
 `degree` must always match the sum of all elements in the exponent set, but if it is already known, it can be passed to the
 function. No validity check is performed.
 """
-function exponents_to_index end
+exponents_to_index(e::AbstractExponents, exponents, degree::Int=sum(exponents, init=0)) =
+    _exponents_to_index(e, exponents, degree)
+function _exponents_to_index end # implement this worker for all concrete AbstractExponents types with three mandatory args
 
 """
     degree_from_index(unsafe, ::AbstractExponents{N,I}, index::I)
@@ -266,7 +268,7 @@ the source and the target are set up as required for `degree`.
         end
     end
     # no shortcut available, must do it the hard way
-    return exponents_to_index(target, exponents_from_index(unsafe, source, index, degree), degree)
+    return _exponents_to_index(target, exponents_from_index(unsafe, source, index, degree), degree)
 end
 
 @inline function convert_index(::Unsafe, target::AbstractExponents{N}, source::AbstractExponents{N,IS}, index::IS) where {N,IS<:Integer}
