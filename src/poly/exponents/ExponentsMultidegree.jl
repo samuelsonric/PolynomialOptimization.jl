@@ -1,10 +1,10 @@
 export ExponentsMultideg
 
-mutable struct ExponentsMultideg{N,I<:Integer,V} <: AbstractExponentsDegreeBounded{N,I}
+mutable struct ExponentsMultideg{N,I<:Integer,Vmin,Vmax} <: AbstractExponentsDegreeBounded{N,I}
     const mindeg::Int
     const maxdeg::Int
-    const minmultideg::V
-    const maxmultideg::V
+    const minmultideg::Vmin
+    const maxmultideg::Vmax
     const Σminmultideg::Int
     const Σmaxmultideg::Int
     counts::Matrix{I}
@@ -16,8 +16,8 @@ mutable struct ExponentsMultideg{N,I<:Integer,V} <: AbstractExponentsDegreeBound
     variable degrees. Note that the vectors must not be used afterwards, and the constructor may clip maxmultideg to be no
     larger than maxdeg in each entry.
     """
-    function ExponentsMultideg{N,I}(mindeg::Integer, maxdeg::Integer, minmultideg::V, maxmultideg::V) where
-        {N,I<:Integer,V<:AbstractVector{<:Integer}}
+    function ExponentsMultideg{N,I}(mindeg::Integer, maxdeg::Integer, minmultideg::Vmin, maxmultideg::Vmax) where
+        {N,I<:Integer,Vmin<:AbstractVector{<:Integer},Vmax<:AbstractVector{<:Integer}}
         0 ≤ N || throw(MethodError(ExponentDegree{N}, (mindeg, maxdeg)))
         0 ≤ mindeg ≤ maxdeg || throw(ArgumentError("Invalid degree specification"))
         length(minmultideg) == length(maxmultideg) == N || throw(ArgumentError("Unsuitable multidegree lengths"))
@@ -33,11 +33,11 @@ mutable struct ExponentsMultideg{N,I<:Integer,V} <: AbstractExponentsDegreeBound
         mindeg = max(mindeg, Σminmultideg)
         maxdeg = min(maxdeg, Σmaxmultideg)
         0 ≤ mindeg ≤ maxdeg || throw(ArgumentError("Invalid multidegree specification"))
-        new{N,I,V}(mindeg, maxdeg, minmultideg, maxmultideg, Σminmultideg, Σmaxmultideg)
+        new{N,I,Vmin,Vmax}(mindeg, maxdeg, minmultideg, maxmultideg, Σminmultideg, Σmaxmultideg)
     end
 end
 
-ExponentsMultideg{N,I}(range::AbstractUnitRange, minmultideg::V, maxmultideg::V) where {N,I<:Integer,V<:AbstractVector{<:Integer}} =
+ExponentsMultideg{N,I}(range::AbstractUnitRange, minmultideg::Vmin, maxmultideg::Vmax) where {N,I<:Integer,Vmin<:AbstractVector{<:Integer},Vmax<:AbstractVector{<:Integer}} =
     ExponentsMultideg{N,I}(first(range), last(range), minmultideg, maxmultideg)
 
 function _calc_index_counts!(e::ExponentsMultideg{N,I}) where {N,I<:Integer}
