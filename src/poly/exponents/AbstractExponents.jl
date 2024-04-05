@@ -58,8 +58,8 @@ Base.getindex(e::AbstractExponents{<:Any,I}, index::I) where {I<:Integer} = expo
 Base.iterate(e::AbstractExponentsUnbounded{<:Any,I}) where {I<:Integer} =
     ExponentIndices(e, one(I), 0), (one(I), 0, one(I))
 function Base.iterate(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer}
-    iszero(e.mindeg) && return ExponentIndices(e, one(I), e.min), (one(I), e.mindeg, one(I))
-    counts, success = index_counts(e, e.mindeg)
+    counts, success = index_counts(e, e.mindeg) # ExponentIndices requires the cache to be set up
+    iszero(e.mindeg) && return ExponentIndices(e, one(I), e.mindeg), (one(I), e.mindeg, one(I))
     @assert(success)
     @inbounds return ExponentIndices(e, one(I), e.mindeg), (one(I), e.mindeg, counts[e.mindeg+1, 1] - counts[e.mindeg, 1])
 end
