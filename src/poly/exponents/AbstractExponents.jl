@@ -50,7 +50,7 @@ function Base.length(e::AbstractExponentsDegreeBounded)
 end
 
 Base.firstindex(::AbstractExponents{<:Any,I}) where {I<:Integer} = one(I)
-Base.lastindex(e::AbstractExponentsDegreeBounded) = length(e)
+Base.lastindex(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer} = I(length(e))
 Base.getindex(e::AbstractExponents{<:Any,I}, index::I) where {I<:Integer} = exponents_from_index(e, index)
 # ^ should we maybe dispatch the @inbounds version to unsafe and the normal to the one with known cache? Dangerous, this makes
 # assumptions not only about whether the index is valid, but also whether the cache is populated to know about the index...
