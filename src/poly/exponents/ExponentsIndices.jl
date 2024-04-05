@@ -53,11 +53,10 @@ Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src:
     @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer, n::Integer)
 
 # potentially more efficient shortcut
-@inline function exponents_to_index(e::AbstractExponents, exponents::ExponentIndices)
+@inline function exponents_to_index(e::AbstractExponents, exponents::ExponentIndices, ::Int, ::Val{false}=Val(false))
     e === exponents.parent && return exponents.index
     index_counts(e, exponents.degree)
     return convert_index(unsafe, e, exponents.parent, exponents.index)
 end
-exponents_to_index(e::AbstractExponents, exponents::ExponentIndices, ::Int) = exponents_to_index(e, exponents)
 
 Base.sum(exponents::ExponentIndices; init=0) = exponents.degree

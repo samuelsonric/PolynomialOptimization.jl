@@ -57,20 +57,29 @@ end
     end
 end
 
-function _exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int) where {N,I<:Integer}
-    iszero(degree) && return one(I)
+function _exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int, report_lastexp) where {N,I<:Integer}
+    iszero(degree) && return isnothing(report_lastexp) ? one(I) : (one(I), 0)
     nvars::Int = N
     counts, success = index_counts(e, degree)
     @assert(success)
     index::I = @inbounds counts[degree+1, 1]
-    for (i, vardeg) in zip(2:N, exponents)
+    lastexp = -1
+    for (i, vardeg) in zip(2:(isnothing(report_lastexp) ? N : report_lastexp+1), exponents)
+        lastexp = vardeg
+        i == N +1 && break # just for report_lastexp, where we must visit the last exponent also.
+
         # We still need to get mondeg for the total degree, but the current variable only has vardeg. Skip over all the
         # exponents where the current variable had a higher degree - these are given by the total number of exponents where the
         # variables to the right of the current one have degree exactly mondeg-(vardeg+1), mondeg-(vardeg+2), ....
         degree > vardeg && (index -= counts[degree-vardeg, i])
-        iszero(degree -= vardeg) && break
+        if iszero(degree -= vardeg) # shortcut
+            if !isnothing(report_lastexp) && i ≤ report_lastexp
+                lastexp = 0
+            end
+            break
+        end
     end
-    return index
+    return isnothing(report_lastexp) ? index : (index, lastexp)
 end
 
 @inline function degree_from_index(::Unsafe, e::ExponentsAll{<:Any,I}, index::I) where {I<:Integer}

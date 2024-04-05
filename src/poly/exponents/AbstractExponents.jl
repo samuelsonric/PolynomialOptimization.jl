@@ -188,17 +188,26 @@ function _calc_index_counts! end
 @inline _has_index_counts(e::AbstractExponentsDegreeBounded) = isdefined(e, :counts)
 
 """
-    exponents_to_index(::AbstractExponents{N,I}, exponents, degree::Int=sum(exponents, init=0))
+    exponents_to_index(::AbstractExponents{N,I}, exponents, degree::Int=sum(exponents, init=0)[, report_lastexp::Int])
 
 Calculates the index of a monomial in `N` variables in an exponent set with exponents given by the iterable `exponents` (whose
 length should match `N`, else the behavior is undefined). The data type of the output is `I`.
 If `exponents` is not present in the exponent set, the result is zero.
 `degree` must always match the sum of all elements in the exponent set, but if it is already known, it can be passed to the
 function. No validity check is performed.
+
+!!! info "Truncated lengths"
+    If the last argument `report_lastexp` is set to a value between `1` and `N`, the function will only consider the first
+    `report_lastexp` exponents and return the largest index whose left exponents are compatible with those in `exponents`
+    (whose length should still match `N`, unless `degree` is correctly specified manually).
+    Again, if no such match can be found, the index is zero.
+    If `report_lastexp` is set, the result will be a 2-tuple whose first entry is the index and whose second entry is the value
+    of the exponents, i.e. `exponents[report_lastexp]` if `exponents` is indexable.
 """
-exponents_to_index(e::AbstractExponents, exponents, degree::Int=sum(exponents, init=0)) =
-    _exponents_to_index(e, exponents, degree)
-function _exponents_to_index end # implement this worker for all concrete AbstractExponents types with three mandatory args
+exponents_to_index(e::AbstractExponents, exponents, degree::Int=sum(exponents, init=0), report_lastexp=nothing) =
+    _exponents_to_index(e, exponents, degree, report_lastexp)
+function _exponents_to_index end
+# implement this worker for all concrete AbstractExponents types with four mandatory args
 
 """
     degree_from_index(unsafe, ::AbstractExponents{N,I}, index::I)
@@ -268,7 +277,7 @@ the source and the target are set up as required for `degree`.
         end
     end
     # no shortcut available, must do it the hard way
-    return _exponents_to_index(target, exponents_from_index(unsafe, source, index, degree), degree)
+    return _exponents_to_index(target, exponents_from_index(unsafe, source, index, degree), degree, nothing)
 end
 
 @inline function convert_index(::Unsafe, target::AbstractExponents{N}, source::AbstractExponents{N,IS}, index::IS) where {N,IS<:Integer}

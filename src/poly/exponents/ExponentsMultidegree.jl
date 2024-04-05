@@ -74,16 +74,23 @@ function _calc_index_counts!(e::ExponentsMultideg{N,I}) where {N,I<:Integer}
     return
 end
 
-function _exponents_to_index(e::ExponentsMultideg{N,I}, exponents, degree::Int) where {N,I<:Integer}
+function _exponents_to_index(e::ExponentsMultideg{N,I}, exponents, degree::Int, report_lastexp) where {N,I<:Integer}
     e.mindeg ≤ degree ≤ e.maxdeg || return zero(I)
-    iszero(degree) && return one(I)
+    iszero(degree) && return isnothing(report_lastexp) ? one(I) : (one(I), 0)
     counts, success = @inbounds index_counts(e, degree)
     @assert(success)
     # Our index starts with the last exponent that has a degree ≤ the required
     index::I = @inbounds counts[degree+1, 1]
     iszero(e.mindeg) || (index -= @inbounds counts[e.mindeg, 1])
-    @inbounds for (i, vardeg, minmultideg, maxmultideg) in zip(2:N, exponents, e.minmultideg, e.maxmultideg)
-        minmultideg ≤ vardeg ≤ maxmultideg || return zero(I)
+    Σminmultideg_rem = e.Σminmultideg
+    Σmaxmultideg_rem = e.Σmaxmultideg
+    lastexp = -1
+    @inbounds for (i, vardeg, minmultideg, maxmultideg) in zip(2:(isnothing(report_lastexp) ? N : report_lastexp+1), exponents,
+                                                               e.minmultideg, e.maxmultideg)
+        minmultideg ≤ vardeg ≤ maxmultideg || return isnothing(report_lastexp) ? zero(I) : (zero(I), vardeg)
+        lastexp = vardeg
+        i == N +1 && break # just for report_lastexp, where we must visit the last exponent also.
+
         # We still need to get mondeg for the total degree, but the current variable only has vardeg. Skip over all the
         # exponents where the current variable had a higher degree - these are given by the total number of exponents where the
         # variables to the right of the current one have degree exactly mondeg-(vardeg+1), mondeg-(vardeg+2), ...,
@@ -91,9 +98,14 @@ function _exponents_to_index(e::ExponentsMultideg{N,I}, exponents, degree::Int) 
         degree > vardeg && (index -= counts[degree-vardeg, i])
         degree > maxmultideg && (index += counts[degree-maxmultideg, i])
         degree -= vardeg
+        Σminmultideg_rem -= minmultideg
+        Σmaxmultideg_rem -= maxmultideg
     end
-    @inbounds last(e.minmultideg) ≤ degree ≤ last(e.maxmultideg) || return zero(I)
-    return index
+    # We take the slightly more expensive approach to accumulate the remaining multidegs instead of just accessing
+    # last(multideg). This allows exponents to have less entries than required, calculating the last index in this subspace.
+    # The check is redundant if exponents was complete.
+    Σminmultideg_rem ≤ degree ≤ Σmaxmultideg_rem || return isnothing(report_lastexp) ? zero(I) : (zero(I), lastexp)
+    return isnothing(report_lastexp) ? index : (index, lastexp)
 end
 
 @inline function degree_from_index(::Unsafe, e::ExponentsMultideg{<:Any,I}, index::I) where {I<:Integer}
