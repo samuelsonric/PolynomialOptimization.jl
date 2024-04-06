@@ -4,9 +4,10 @@ export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBou
 """
     AbstractExponents{N,I}
 
-Supertype for all collections of multivariate exponents. Every collection is iterable (both using a default lazy iteration and
-a mutable iteration into a vector using [`veciter`](@ref)) and indexable (return a lazy collection of exponents). The
-collection has a length if it is finite.
+Abstract supertype for all collections of multivariate exponents in `N` variables (`N > 0`). Every collection is iterable (both
+using a default lazy iteration and a mutable iteration into a vector by means of [`iterate!`](@ref) or [`veciter`](@ref)) and
+indexable (return a lazy collection of exponents) with index type `I`. The collection has a length if it is finite; it is never
+empty.
 """
 abstract type AbstractExponents{N,I<:Integer} end
 # all AbstractExponents descendants must implement index_counts(::Unsafe, ::AbstractExponents{N,I}) -> Matrix{I} that returns a
@@ -15,6 +16,12 @@ abstract type AbstractExponents{N,I<:Integer} end
 Base.IteratorEltype(::Type{<:AbstractExponents}) = Base.HasEltype()
 Base.eltype(::Type{E}) where {I<:Integer,E<:AbstractExponents{<:Any,I}} = ExponentIndices{I,E}
 
+"""
+    AbstractExponentsUnbounded{N,I} <: AbstractExponents{N,I}
+
+Abstract supertype for unbounded collections of multivariate exponents. These collections do not have a length; they are
+infinite. Their cache is always initialized incrementally as required.
+"""
 abstract type AbstractExponentsUnbounded{N,I<:Integer} <: AbstractExponents{N,I} end
 # AbstractExponentsUnbounded descendants must implement
 # - _has_index_counts(::AbstractExponentsUnbounded, degree::Integer) that checks whether the cache matrix is valid for the
@@ -23,6 +30,13 @@ abstract type AbstractExponentsUnbounded{N,I<:Integer} <: AbstractExponents{N,I}
 #   entries for at least degree+1 rows
 Base.IteratorSize(::Type{<:AbstractExponentsUnbounded}) = Base.IsInfinite()
 
+"""
+    AbstractExponentsDegreeBounded{N,I} <: AbstractExponents{N,I}
+
+Abstract supertype for finite collections of multivariate exponents, bounded by their degrees. These collections have a length;
+they also provide at least the fields `mindeg` and `maxdeg` that describe (a superset of) the described degree range. Their
+cache is always initialized completely when required.
+"""
 abstract type AbstractExponentsDegreeBounded{N,I<:Integer} <: AbstractExponents{N,I} end
 # AbstractExponentsDegreeBounded descendants must implement
 # - _has_index_counts(::AbstractExponents) that checks whether the cache matrix is fully initialized (should be fast)
@@ -32,8 +46,8 @@ Base.IteratorSize(::Type{<:AbstractExponentsDegreeBounded}) = Base.HasLength()
 """
     length(unsafe, e::AbstractExponentsDegreeBounded)
 
-Returns the total number of exponents present in `e`. Requires the cache to be set up correctly, else the behavior is
-undefined.
+Unsafe variant of [`length`](@ref length(::AbstractExponentsDegreeBounded)): requires the cache to be set up
+correctly, else the behavior is undefined.
 """
 function Base.length(::Unsafe, e::AbstractExponentsDegreeBounded)
     counts = index_counts(unsafe, e)
@@ -130,11 +144,12 @@ Base.iterate(ei::ExponentsVectorIterator, state::AbstractVector{Int}) =
 """
     veciter(e::AbstractExponents[, v::AbstractVector{Int}])
 
-Creates an iterator over exponents that stores its result in a vector. This results in zero-allocations (as the iteration over
-`e` also does), but is more efficient if every element in `e` must be accessed.
-If the vector `v` is given as an argument, the data will be stored in this vector; it is then not allowed to nest the iterator.
+Creates an iterator over exponents that stores its result in a vector. This results in zero-allocations per iteration (as the
+iteration over `e` also does), but is more efficient if every element in `e` must be accessed.
+If the vector `v` is given as an argument, the data will be stored in this vector.
 If the vector is omitted, it will be created once at the beginning of the iteration process.
-The vector must never be altered, as it also serves as the state for the iterator.
+The vector must never be altered, as it also serves as the state for the iterator; therefore, the same iterator may also not be
+nested.
 """
 veciter(e::AbstractExponents, v::AbstractVector{Int}) = ExponentsVectorIterator(v, e)
 veciter(e::AbstractExponents) = ExponentsVectorIterator(e)
@@ -148,6 +163,8 @@ veciter(e::AbstractExponents) = ExponentsVectorIterator(e)
 # Ref alive. When we extend, we generate a new matrix, copy the data all over, then swap the reference. This can be made in
 # a thread-safe manner without compromising performance.
 
+function index_counts end
+
 """
     index_counts(unsafe, ::AbstractExponents{N,I})
 
@@ -155,7 +172,7 @@ Returns the current `Matrix{I}` that holds the exponents counts for up to `N` va
 order, ending with zero variables), and for the maximal degrees in the rows (in ascending order, starting with zero).
 The result is neither guaranteed to be defined at all nor have the required form if the cache was not calculated before.
 """
-function index_counts end
+index_counts(::Unsafe, ::AbstractExponents{N,I}) where {N,I<:Integer}
 
 Base.@assume_effects :total !:inaccessiblememonly index_counts(::Unsafe, e::AbstractExponentsDegreeBounded) =
     (@inline; e.counts)
@@ -189,13 +206,14 @@ function _calc_index_counts! end
 @inline _has_index_counts(e::AbstractExponentsDegreeBounded) = isdefined(e, :counts)
 
 """
-    exponents_to_index(::AbstractExponents{N,I}, exponents, degree::Int=sum(exponents, init=0)[, report_lastexp::Int])
+    exponents_to_index(::AbstractExponents{N,I}, exponents,
+        degree::Int=sum(exponents, init=0)[, report_lastexp::Int])
 
 Calculates the index of a monomial in `N` variables in an exponent set with exponents given by the iterable `exponents` (whose
 length should match `N`, else the behavior is undefined). The data type of the output is `I`.
-If `exponents` is not present in the exponent set, the result is zero.
+If `exponents` is not present in the exponent set, the result is `zero(I)`.
 `degree` must always match the sum of all elements in the exponent set, but if it is already known, it can be passed to the
-function. No validity check is performed.
+function. No validity check is performed on `degree`.
 
 !!! info "Truncated lengths"
     If the last argument `report_lastexp` is set to a value between `1` and `N`, the function will only consider the first
@@ -203,33 +221,40 @@ function. No validity check is performed.
     (whose length should still match `N`, unless `degree` is correctly specified manually).
     Again, if no such match can be found, the index is zero.
     If `report_lastexp` is set, the result will be a 2-tuple whose first entry is the index and whose second entry is the value
-    of the exponents, i.e. `exponents[report_lastexp]` if `exponents` is indexable.
+    of the last considered exponent, i.e. `exponents[report_lastexp]` if `exponents` is indexable.
 """
 exponents_to_index(e::AbstractExponents, exponents, degree::Int=sum(exponents, init=0), report_lastexp=nothing) =
     _exponents_to_index(e, exponents, degree, report_lastexp)
 function _exponents_to_index end
 # implement this worker for all concrete AbstractExponents types with four mandatory args
 
+function degree_from_index end
 """
     degree_from_index(unsafe, ::AbstractExponents{N,I}, index::I)
 
-Returns the degree that is associated with a given monomial index `index` in `N` variables. This function is unsafe; it assumes
-that the required cache for the output degree has already been initialized. If the index was larger than the number of items in
-the cache, a degree larger than the maximal degree allowed in the iterator will be contained.
+Unsafe variant of [`degree_from_index`](@ref degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}): assumes
+that the required cache for the degree that is associated with `index` has already been initialized, else the behavior is
+undefined (and in fact, non-deterministic, as it depends on the current size of the cache).
+"""
+degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
 
-
+"""
     degree_from_index(::AbstractExponents{N,I}, index::I)
 
-Same as above, but makes sure that the cache is initialized appropriately.
+Returns the degree that is associated with a given monomial index `index` in `N` variables. If the index was larger than the
+maximally allowed index in the exponent set, a degree larger than the maximal degree allowed in the iterator will be returned
+(not necessarily `lastindex +1`).
 """
-function degree_from_index end
+degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
 
 """
-    convert_index([unsafe,] target::AbstractExponents, source::AbstractExponents, index[, degree::Int])
+    convert_index(unsafe, target::AbstractExponents{N}, source::AbstractExponents{N,I},
+        index::I[, degree::Int])
 
-Converts an index from an exponent set `source` to an exponent set `target`. The unsafe variant assumes that caches for both
-the source and the target are set up as required for `degree`.
-`index` is always assumed to be a valid index for `source`, else the behavior is undefined.
+Unsafe variant of [`convert_index`](@ref convert_index(::AbstractExponents{N,I}, ::AbstractExponents{N,IS}, ::IS, ::Int) where {N,I<:Integer,IS<:Integer}):
+assumes that caches for both the source and the target are set up as required for `degree`. If `degree` is omitted, it is
+calculated using the unsafe variant of
+[`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).`
 """
 @inline function convert_index(::Unsafe, target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS,
     degree::Int) where {N,I<:Integer,IS<:Integer}
@@ -286,6 +311,13 @@ end
     return convert_index(unsafe, target, source, index, degree_from_index(unsafe, source, index))
 end
 
+"""
+    convert_index(target::AbstractExponents{N}, source::AbstractExponents{N,I},
+        index::I[, degree::Int])
+
+Converts an index from an exponent set `source` to an exponent set `target`.
+`index` is always assumed to be a valid index for `source`, else the behavior is undefined.
+"""
 @inline function convert_index(target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS, degree::Int) where {N,I<:Integer,IS<:Integer}
     source === target && return index
     index_counts(source, degree) # populate caches
@@ -302,14 +334,13 @@ end
 
 _CompareOp = Union{typeof(==),typeof(!=),typeof(<),typeof(≤),typeof(>),typeof(≥)}
 """
-    compare_indices([unsafe,] e₁::AbstractExponents, index₁, op, e₂::AbstractExponents, index₂[, degree::Int])
+    compare_indices(unsafe, e₁::AbstractExponents, index₁, op, e₂::AbstractExponents,
+        index₂[, degree::Int])
 
-Compares two indices from two possibly different exponent sets. The unsafe variant assumes that both caches are set up as
-required for `degree` (which, if given, must be the common degree of both exponents).
-Both indices are assumed to be valid for their respective exponent sets, else the behavior is undefined. However, it is not
-necessary that both indices are also valid in the others exponent sets.
-If ẽ₁ and ẽ₂ denote the conversion of the indices to a common exponent set (say, [`ExponentsAll`](@ref)), then the result is
-`op(ẽ₁, ẽ₂)`. The only allowed values for `op` are `==`, `<`, `≤`, `>`, and `≥`.
+Unsafe variant of [`compare_indices`](@ref compare_indices(::AbstractExponents{N,I1}, ::I1, ::_CompareOp, ::AbstractExponents{N,I2}, ::I2, ::Int) where {N,I1<:Integer,I2<:Integer}):
+assumes that both caches are set up as required for `degree` (which, if given, must be the common degree of both exponents).
+If `degree` is omitted, it is calculated using the unsafe variant of
+[`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).
 """
 @inline function compare_indices(::Unsafe, e₁::AbstractExponents{N,I1}, index₁::I1,
     op::_CompareOp, e₂::AbstractExponents{N,I2}, index₂::I2,
@@ -381,6 +412,17 @@ end
     return deg₁ == deg₂ ? compare_indices(unsafe, e₁, index₁, op, e₂, index₂, deg₁) : op(deg₁, deg₂)
 end
 
+"""
+    compare_indices(e₁::AbstractExponents, index₁, op, e₂::AbstractExponents,
+        index₂[, degree::Int])
+
+Compares two indices from two possibly different exponent sets. `degree`, if given, must be the common degree of both
+exponents); when `degree` is omitted, also different degrees are possible.
+Both indices are assumed to be valid for their respective exponent sets, else the behavior is undefined. However, it is not
+necessary that an index is also valid in the other's exponent set.
+If ẽ₁ and ẽ₂ denote the conversion of the indices to a common exponent set (say, [`ExponentsAll`](@ref)), then the result is
+`op(ẽ₁, ẽ₂)`. The only allowed values for `op` are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
+"""
 @inline function compare_indices(e₁::AbstractExponents{N,I1}, index₁::I1, op::_CompareOp, e₂::AbstractExponents{N,I2},
     index₂::I2, degree::Int) where {N,I1<:Integer,I2<:Integer}
     e₁ === e₂ && return op(index₁, index₂)

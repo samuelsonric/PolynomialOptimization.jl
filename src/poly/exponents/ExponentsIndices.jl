@@ -7,20 +7,22 @@ struct ExponentIndices{I<:Integer,E<:AbstractExponents{<:Any,I}} <: AbstractVect
 end
 
 """
-    exponents_from_index(unsafe, ::AbstractExponents, index::I[, degree::Int])
+    exponents_from_index(unsafe, ::AbstractExponents{N,I}, index::I[, degree::Int])
 
-Calculates the exponents that are associated with the monomial index `index` in `N` variables within a given exponent set.
-This is an indexable iterator. The degree must match the degree of the index. Assumes that the cache for degree `degree`
-has already been populated, and that the exponent set contains `index`.
+Unsafe variant of [`exponents_from_index`](@ref exponents_from_index):
+assumes that the cache for degree `degree` has already been populated, and that the exponent set contains `index`. If `degree`
+is omitted, it is calculated using the unsafe variant of
+[`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).
 """
 exponents_from_index(::Unsafe, e::AbstractExponents{<:Any,I}, index::I, degree::Int=degree_from_index(unsafe, e, index)) where {I<:Integer} =
     ExponentIndices(e, index, degree)
 
 """
-    exponents_from_index(::AbstractExponents, index::I[, degree::Int])
+    exponents_from_index(::AbstractExponents{N,I}, index::I[, degree::Int])
 
-Same as above, but makes sure that the cache for degree `degree` has already been populated and `degree` is indeed the correct
-value for `index`.
+Calculates the exponents that are associated with the monomial index `index` in `N` variables within a given exponent set.
+The return value will be a lazy implementation of `AbstractVector{Int}` (though iterating is more efficient than indexing).
+`degree` must match the degree of the index, if it is specified.
 
 See also [`degree_from_index`](@ref).
 """

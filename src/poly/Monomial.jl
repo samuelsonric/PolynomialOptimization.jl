@@ -1,11 +1,11 @@
 export SimpleMonomial, SimpleConjMonomial, monomial_produt, monomial_index
 
 """
-    SimpleMonomial{Nr,Nc,I<:Integer} <: AbstractMonomial
+    SimpleMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
 
 `SimpleMonomial` represents a monomial. In order to be used together in operations, the number of real-valued variables `Nr`
-and the number of complex-valued variables `Nc` are fixed in the type. The monomial is identified according to its index in the
-deglex order, which will be of type `I`. This should be an unsigned type, but to allow for `BigInt`, no such restriction is
+and the number of complex-valued variables `Nc` are fixed in the type. The monomial is identified according to its index (of
+type `I`) in an exponent set of type `E`. This should be an unsigned type, but to allow for `BigInt`, no such restriction is
 imposed.
 """
 struct SimpleMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
@@ -25,16 +25,22 @@ Base.parent(m::SimpleMonomial) = m
 SimpleMonomial(m::SimpleMonomial) = m
 
 """
-    SimpleMonomial{Nr,0}([e::AbstractExponents,] exponents_real::AbstractVector{<:Integer})
-    SimpleMonomial{0,Nc}([e::AbstractExponents,] exponents_complex::AbstractVector{<:Integer},
+    SimpleMonomial{Nr,0[,I]}([e::AbstractExponents,]
+        exponents_real::AbstractVector{<:Integer})
+    SimpleMonomial{0,Nc[,I]}([e::AbstractExponents,]
+        exponents_complex::AbstractVector{<:Integer},
         exponents_conj::AbstractVector{<:Integer})
-    SimpleMonomial{Nr,Nc}([e::AbstractExponents,] exponents_real::AbstractVector{<:Integer},
-        exponents_complex::AbstractVector{<:Integer}, exponents_conj::AbstractVector{<:Integer})
+    SimpleMonomial{Nr,Nc[,I]}([e::AbstractExponents,]
+        exponents_real::AbstractVector{<:Integer},
+        exponents_complex::AbstractVector{<:Integer},
+        exponents_conj::AbstractVector{<:Integer})
 
-Creates a monomial with exponent set `e`. If `e` is omitted, `ExponentsAll{Nr+2Nc,UInt}` is chosen by default. Alternatively,
-all three methods may also be called with the index type `I` as a third type parameter, omitting `e`, which then chooses
-`ExponentsAll{Nr+2Nc,I}` by default.
+Creates a monomial within an exponent set `e`. If `e` is omitted, `ExponentsAll{Nr+2Nc,UInt}` is chosen by default.
+Alternatively, all three methods may also be called with the index type `I` as a third type parameter, omitting `e`, which then
+chooses `ExponentsAll{Nr+2Nc,I}` by default.
 """
+SimpleMonomial{Nr,Nc}(::AbstractExponents, ::AbstractVector{<:Integer}...) where {Nr,Nc}
+
 function SimpleMonomial{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractVector{<:Integer}) where {Nr,I<:Integer}
     length(exponents_real) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(length(exponents_real))"))
     degree = sum(exponents_real, init=0)
@@ -112,6 +118,8 @@ const SimpleComplexMonomial{Nc,I<:Integer,E<:AbstractExponents} = SimpleMonomial
 
 This is a wrapper type for the conjugate of a simple monomial. A lot of operations allow to pass either `SimpleConjMonomial`
 or `SimpleMonomial`. Constructing the conjugate using this type works in zero time.
+
+See also [`conj`](@ref Base.conj(::SimpleMonomialOrConj)).
 """
 struct SimpleConjMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
     m::SimpleMonomial{Nr,Nc,I,E}
@@ -334,15 +342,16 @@ function MultivariatePolynomials.constant_monomial(::Type{<:Union{<:SimpleMonomi
                                                                        # exponents, so we must change the type
 end
 
+Base.conj(m::SimpleMonomial{Nr,0} where {Nr}) = m
+Base.conj(m::SimpleMonomial{Nr,Nc}) where {Nr,Nc} = SimpleMonomial(SimpleConjMonomial(m))
+Base.conj(m::SimpleConjMonomial{Nr,Nc}) where {Nr,Nc} = parent(m)
 """
-    conj(m::SimpleMonomial)
+    conj(m::Union{<:SimpleMonomial,<:SimpleConjMonomial})
 
 Creates the conjugate of a [`SimpleMonomial`](@ref). The result type of this operation will always be [`SimpleMonomial`](@ref).
 If the conjugate can be used to work with lazily, consider wrapping the monomial in a [`SimpleConjMonomial`](@ref) instead.
 """
-Base.conj(m::SimpleMonomial{Nr,0} where {Nr}) = m
-Base.conj(m::SimpleMonomial{Nr,Nc}) where {Nr,Nc} = SimpleMonomial(SimpleConjMonomial(m))
-Base.conj(m::SimpleConjMonomial{Nr,Nc}) where {Nr,Nc} = parent(m)
+Base.conj(::SimpleMonomialOrConj)
 
 Base.@assume_effects :consistent function Base.isreal(m::SimpleMonomial{Nr,Nc}) where {Nr,Nc}
     exps = exponents(m)
@@ -398,8 +407,7 @@ end
     monomial_product(e::AbstractExponents, m...)
 
 Calculates the product of all monomials (or conjugates, or variables) `m`. The result must be part of the exponent set `e`.
-If the default multiplication `*` is used instead, `e` will always be `ExponentsAll` with the same shared index type. The
-index type can be different for `monomial_product`.
+If the default multiplication `*` is used instead, `e` will always be `ExponentsAll` with the jointly promoted index type.
 """
 Base.@assume_effects :consistent @generated function monomial_product(e::AbstractExponents{N},
                                                                       m::Union{<:SimpleMonomialOrConj{Nr,Nc},
@@ -442,6 +450,12 @@ end
 Base.:*(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
     monomial_product(ExponentsAll{Nr+2Nc,_get_I(m...)}(), m...)
 
+"""
+    monomial_index([e::AbstractExponents,] m...)
+
+Calculates the index of the given monomial (or the product of all given monomials, or conjugates, or variables) `m`. The result
+must be part of the exponent set `e`. If `e` is omitted, it will be be `ExponentsAll` with the jointly promoted index type.
+"""
 @inline function monomial_index(e::AbstractExponents{N}, m::SimpleMonomial{<:Any,<:Any,<:Integer,<:AbstractExponents{N}}) where {N}
     e === m.e && return m.index
     d = degree(m)

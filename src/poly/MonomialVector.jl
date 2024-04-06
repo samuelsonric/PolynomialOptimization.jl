@@ -28,14 +28,20 @@ SimpleMonomialVector{Nr,Nc}(indices::AbstractVector{I}) where {Nr,Nc,I<:Integer}
     SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), indices)
 
 """
-    SimpleMonomialVector{Nr,0[,I]}(exponents_real::AbstractMatrix{<:Integer}, along...)
-    SimpleMonomialVector{0,Nc[,I]}(exponents_complex::AbstractMatrix{<:Integer},
+    SimpleMonomialVector{Nr,0[,I]}([e::AbstractExponents,]
+        exponents_real::AbstractMatrix{<:Integer}, along...)
+    SimpleMonomialVector{0,Nc[,I]}([e::AbstractExponents,]
+        exponents_complex::AbstractMatrix{<:Integer},
         exponents_conj::AbstractMatrix{<:Integer}, along...)
-    SimpleMonomialVector{Nr,Nc[,I]}(exponents_real::AbstractMatrix{<:Integer},
-        exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer}, along...)
+    SimpleMonomialVector{Nr,Nc[,I]}([e::AbstractExponents,]
+        exponents_real::AbstractMatrix{<:Integer},
+        exponents_complex::AbstractMatrix{<:Integer},
+        exponents_conj::AbstractMatrix{<:Integer}, along...)
 
-Creates a monomial vector, where each column corresponds to one monomial and each row is contains its exponents. The internal
-representation will use the index type `I` (`UInt` by default).
+Creates a monomial vector, where each column corresponds to one monomial and each row contains its exponents. The internal
+representation will be made with respect to the exponent set `e`. If `e` is omitted, `ExponentsAll{Nr+2Nc,UInt}` is chosen by
+default. Alternatively, all three methods may also be called with the index type `I` as a third type parameter, omitting `e`,
+which then chooses `ExponentsAll{Nr+2Nc,I}` by default.
 All matrices must have the same number of columns; complex and conjugate matrices must have the same number of rows.
 The input will be sorted; if `along` are present, those vectors will be put in the same order as the inputs.
 The input must not contain duplicates.
@@ -96,7 +102,8 @@ SimpleMonomialVector{Nr,Nc,I}(exponents::AbstractMatrix{<:Integer}, args...) whe
     SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), exponents, args...)
 
 """
-    SimpleMonomialVector[{I}](mv::AbstractVector{<:AbstractMonomialLike}, along...; vars=variables(mv))
+    SimpleMonomialVector[{I}](mv::AbstractVector{<:AbstractMonomialLike}, along...;
+        vars=variables(mv))
 
 Creates a `SimpleMonomialVector` from a generic monomial vector that supports `MultivariatePolynomials`'s interface.
 The monomials will internally be represented by the type `I` (`UInt` by default).
@@ -370,7 +377,7 @@ MultivariatePolynomials.effective_variables(x::SimpleMonomialVector) = SimpleMon
 
 """
     effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},
-                                  <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
+                                  <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...)
 
 Calculates the number of effective variable of its arguments: there are at most `Nr + 2Nc` variables that may occur in any
 of the monomial vectors or arrays of monomial vectors in the arguments. This function calculates efficiently the number of
@@ -435,18 +442,21 @@ effective_nvariables(x::SimpleMonomialVectorComplete) = length(effective_variabl
 end
 
 """
-    monomials(nreal, ncomplex, degree::AbstractUnitRange{<:Integer};
+    monomials(Nr, Nc, degree::AbstractUnitRange{<:Integer};
         minmultideg=nothing, maxmultideg=nothing, filter_exps=nothing,
         filter_mons=nothing, I=UInt)
 
-Returns a [`SimpleMonomialVector`](@ref) with `nreal` real and `ncomplex` complex variables, total degrees contained in
-`degree`, ordered according to `Graded{LexOrder}` and individual variable degrees varying between `minmultideg` and
-`maxmultideg` (where real variables come first, then complex variables, then their conjugates).
+Returns a [`SimpleMonomialVector`](@ref) with `Nr` real and `Nc` complex variables, total degrees contained in `degree`,
+ordered according to `Graded{LexOrder}` and individual variable degrees varying between `minmultideg` and `maxmultideg` (where
+real variables come first, then complex variables, then their conjugates).
+
 The monomial vector will take possession of the min/maxmultidegs, do not modify them afterwards.
+
 An additional filter may be employed to drop monomials during the construction. Note that the presence of a filter function
-will change to a less efficient internal representation. This may be a filter function that gets a vector with the exponents as
-its argument (`filter_exps`) or a filter function that gets the corresponding `SimpleMonomial`. The former is more efficient if
+will change to a less efficient internal representation. The filter function can get a vector with the exponents as its
+argument (`filter_exps`) or a filter function that gets the corresponding `SimpleMonomial`. The former is more efficient if
 every exponent has to be retrieved (but do not alter the argument).
+
 The internal representation will be of the type `I`.
 
 This function can be made type-stable by passing `Nr` and `Nc` as `Val`s.
@@ -488,6 +498,13 @@ end
 
 MultivariatePolynomials.monomials(Nr::Integer, Nc::Integer, degree::AbstractUnitRange{<:Integer}; kwargs...) =
     monomials(Val(Nr), Val(Nc), degree; kwargs...)
+
+"""
+    intersect(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc})
+
+Calculates efficiently the intersection of two monomial vectors.
+"""
+Base.intersect(::SimpleMonomialVector{Nr,Nc}, ::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
 
 function Base.intersect(a::MV, b::MV) where {Nr,Nc,I<:Integer,MV<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree}}
     a.e == b.e && return a
@@ -633,11 +650,11 @@ Base.intersect(a::SimpleMonomialVectorSubset{Nr,Nc,I},
 """
     merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e::AbstractExponents, X::AbstractVector)
 
-Returns the vector of monomials in the entries of X in increasing order and without any duplicates. The individual elements in
+Returns the vector of monomials contained `X` in increasing order and without any duplicates. The individual elements in
 `X` must be sorted iterables with a length and return `SimpleMonomial`s compatible with the number of real `Nr` and complex
-variables `Nc`. The output will internally use the expoents `e`.
-The result type will be a `SimpleMonomialVector` with `Nr` and `Nc` as given, `I` and the exponent given determined by `e`,
-and indexed internally with a `Vector{I}`.
+variables `Nc`. The output will internally use the exponents `e`.
+The result type will be a `SimpleMonomialVector` with `Nr` and `Nc` as given, `I` and the exponents determined by `e`, and
+indexed internally with a `Vector{I}`.
 """
 function MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e::AbstractExponents{N,I},
     X::AbstractVector) where {Nr,Nc,N,I<:Integer}
@@ -682,19 +699,29 @@ _to_I(::Type{I}, e::ExponentsDegree{N,<:Integer}) where {I<:Integer,N} = Exponen
 _to_I(::Type{I}, e::ExponentsMultideg{N,<:Integer}) where {I<:Integer,N} =
     ExponentsMultideg{N,I}(e.mindeg, e.maxdeg, e.minmultideg, e.maxmultideg)
 
-"""
+@doc """
     merge_monomial_vectors(X::AbstractVector)
 
 Potentially type-unstable variant that automatically determines the output format.
 If `X` has a defined eltype with known eltype `<:SimpleMonomial{Nr,Nc,I,E}`, `Nr`, `Nc`, and `I` are determined automatically
 in a type-stable manner. If not, they are taken from the eltype of the first iterable in `X` (which is not type stable). If
 this is not possible, either, they are taken from the first element in the first nonempty iterable in `X`.
+
 Regarding the automatic determination of `E`, the following rule is applied: it is assumed that if `E` is known in the element
 type, then every monomial will have the same instance of `e` as the exponents _per iterable_ (this is always satisfied if the
 iterables are `SimpleMonomialVector`s). If there is one exponent that covers all others, this instance will be used. If not,
-the largest necessary exponents will be constructed; the result will be indexed unless can be merged contiguously). Note that
-inhomogeneous iterables must implement `last` if the elements are based on `ExponentsAll`.
+the largest necessary exponents will be constructed; the result will be indexed unless all can be merged contiguously). Note
+that inhomogeneous iterables must implement `last` if the elements are based on `ExponentsAll`.
+
+!!! info
+    This method has a very general type signature and may therefore also be called for other implementations of
+    `MultivariatePolynomials`. However, this case will be caught and then forwarded to the generic MP implementation.
 """
+MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{<:SimpleMonomialVector})
+# ^ Julia assigns docstrings in a faulty way when type parameters are involved. As there is the generic (::Any) function and
+# every (unconstrained) type parameter that is present will lead to a pseudo-signature (::Any), we must avoid this.
+# (https://github.com/JuliaLang/julia/pull/53824)
+
 function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) where {T}
     if Base.IteratorEltype(T) isa Base.HasEltype
         nrnc = _extract_n(eltype(T))
@@ -707,7 +734,10 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
         for Xᵢ in X
             item = iterate(Xᵢ)
             if !isnothing(item)
-                nrnc = _extract_n(item[1])
+                if ismissing((nrnc = _extract_n(item[1]);))
+                    # oops... Looks like this was not really SimplePolynomials related. Call the generic MP version.
+                    return @invoke merge_monomial_vectors(X::Any)
+                end
                 break
             end
         end

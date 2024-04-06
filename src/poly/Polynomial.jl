@@ -88,12 +88,13 @@ MultivariatePolynomials.LinearAlgebra.transpose(p::SimplePolynomial) = SimplePol
 
 SimplePolynomial(p::SimplePolynomial) = p
 """
-    SimplePolynomial(p::AbstractPolynomialLike{C}, coefficient_type=C; indextype=UInt, kwargs...) where {C}
+    SimplePolynomial[{I}](p::AbstractPolynomialLike{C}, coefficient_type=C; kwargs...) where {C}
 
-Creates a new `SimplePolynomial` based on any polynomial-like object that satisfied `MultivariatePolynomials`'s
-`AbstractPolynomialLike` interface. The coefficients will be of type `coefficient_type`. Keyword arguments are passed on to
-[`SimpleMonomialVector`](@ref SimpleMonomialVector[I}(::AbstractVector{<:AbstractMonomialLike}, ::AbstractVector...)), which
-allows to influence the variable mapping. The indextype used internally is defined by `indextype`.
+Creates a new `SimplePolynomial` based on any polynomial-like object that implements `MultivariatePolynomials`'s
+`AbstractPolynomialLike` interface. The coefficients will be of type `coefficient_type`, the internal index type for the
+monomials will be `I` (`UInt` if omitted). Keyword arguments are passed on to
+[`SimpleMonomialVector`](@ref SimpleMonomialVector{I}(::AbstractVector{<:AbstractMonomialLike}, ::AbstractVector...)), which
+allows to influence the variable mapping.
 """
 function SimplePolynomial{I}(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; kwargs...) where {C1,C,I<:Integer}
     coeffs = let c=coefficients(p)

@@ -1,12 +1,17 @@
 export SimpleVariable, SimpleRealVariable, SimpleComplexVariable
 
 """
-    SimpleVariable{I} <: AbstractVariable
+    SimpleVariable{Nr,Nc,I<:Unsigned} <: AbstractVariable
 
-`SimpleVariable` is the basic type for any real- or complex-valued simple variables, which is identified by its index of type
-`I` alone. A variable can be explicitly cast to `I` in order to obtain its index.
+`SimpleVariable` is the basic type for any simple variable in a polynomial right with `Nr` real and `Nc` complex-valued
+variables. The variable is identified by its index of type `I` alone. A variable can be explicitly cast to `I` in order to
+obtain its index.
 
 To construct a real-valued or complex-valued variable, see [`SimpleRealVariable`](@ref) and [`SimpleComplexVariable`](@ref).
+
+!!! warning
+    Note that `I` has nothing to do with the index type used to identify monomials or exponents; in fact, `I` is automatically
+    calculated as the smallest `Unsigned` descendant that can still hold the value `Nr+2Nc`.
 """
 struct SimpleVariable{Nr,Nc,I<:Unsigned} <: AbstractVariable
     index::I
@@ -28,7 +33,7 @@ struct SimpleRealVariable{Nr,Nc}
         SimpleRealVariable{Nr,Nc}(index::Integer)
 
     Creates a new real-valued simple variable whose identity is determined by `index`. Real-valued variables with the same
-    index are considered identical; however, they are different from complex-valued variables of the same index.
+    index are considered identical; however, they are different from complex-valued variables constructed with the same index.
     A real variable will print as `xᵢ`, where the subscript is given by `index`.
     The variable is part of the polynomial ring with `Nr` real and `Nc` complex variables.
 
@@ -47,7 +52,7 @@ struct SimpleComplexVariable{Nr,Nc}
 
     Creates a new complex-valued simple variable whose identity is determined by `index`, and which is a conjugate variable if
     `isconj` is set appropriately. Complex-valued variables with the same index and `isconj` state are considered identical;
-    however, they are different from real-valued variables of the same index, even if they are not conjugate.
+    however, they are different from real-valued variables constructed with the same index, even if they are not conjugate.
     A complex variable will print as `zᵢ` (if `isconj=false`) or `z̄ᵢ` (if `isconj=true`), where the subscript is given by
     `index`.
     The variable is part of the polynomial ring with `Nr` real and `Nc` complex variables.

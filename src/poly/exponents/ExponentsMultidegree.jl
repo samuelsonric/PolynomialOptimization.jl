@@ -10,7 +10,8 @@ mutable struct ExponentsMultideg{N,I<:Integer,Vmin,Vmax} <: AbstractExponentsDeg
     counts::Matrix{I}
 
     @doc """
-        ExponentMultideg{N,I}(mindeg, maxdeg, minmultideg::AbstractVector, maxmultideg::AbstractVector)
+        ExponentMultideg{N,I}(mindeg::Integer, maxdeg::Integer,
+            minmultideg::AbstractVector, maxmultideg::AbstractVector)
 
     Represents an exponent range that is restricted both by a global bound on the degree and by individual bounds on the
     variable degrees. Note that the vectors must not be used afterwards, and the constructor may clip maxmultideg to be no
