@@ -40,21 +40,20 @@ All matrices must have the same number of columns; complex and conjugate matrice
 The input will be sorted; if `along` are present, those vectors will be put in the same order as the inputs.
 The input must not contain duplicates.
 """
-function SimpleMonomialVector{Nr,0,I}(exponents_real::AbstractMatrix{<:Integer}, along...) where {Nr,I<:Integer}
+function SimpleMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractMatrix{<:Integer}, along...) where {Nr,I<:Integer}
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
     exps = Vector{I}(undef, size(exponents_real, 2))
-    let ea=ExponentsAll{Nr,I}()
-        for (i, col) in zip(eachindex(exps), eachcol(exponents_real))
-            @inbounds exps[i] = exponents_to_index(ea, col)
-        end
+    for (i, col) in zip(eachindex(exps), eachcol(exponents_real))
+        @inbounds exps[i] = exponents_to_index(e, col)
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
-    return SimpleMonomialVector{Nr,0}(unsafe, exps)
+    return SimpleMonomialVector{Nr,0}(unsafe, e, exps)
 end
 
-function SimpleMonomialVector{0,Nc,I}(exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer},
-    along...) where {Nc,I<:Integer}
+function SimpleMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::AbstractMatrix{<:Integer},
+    exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nc,N,I<:Integer}
+    N == 2Nc || throw(MethodError(SimpleMonomialVector{0,Nc}, (e, exponents_complex, exponents_conj, along...)))
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
         throw(ArgumentError("Complex and conjugate exponents lengths are different"))
     size(exponents_complex, 1) == Nc ||
@@ -62,18 +61,18 @@ function SimpleMonomialVector{0,Nc,I}(exponents_complex::AbstractMatrix{<:Intege
     size(exponents_complex, 2) == size(exponents_conj, 2) ||
         throw(ArgumentError("Number of monomials is different"))
     exps = Vector{I}(undef, size(exponents_complex, 2))
-    let ea=ExponentsAll{2Nc,I}()
-        for (i, col) in zip(eachindex(exps), zip(eachcol(exponents_complex), eachcol(exponents_conj)))
-            @inbounds exps[i] = exponents_to_index(ea, (x[i] for i in 1:Nc for x in col))
-        end
+    for (i, col) in zip(eachindex(exps), zip(eachcol(exponents_complex), eachcol(exponents_conj)))
+        @inbounds exps[i] = exponents_to_index(e, (x[i] for i in 1:Nc for x in col))
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
-    return SimpleMonomialVector{0,Nc}(unsafe, exps)
+    return SimpleMonomialVector{0,Nc}(unsafe, e, exps)
 end
 
-function SimpleMonomialVector{Nr,Nc,I}(exponents_real::AbstractMatrix{<:Integer}, exponents_complex::AbstractMatrix{<:Integer},
-        exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nr,Nc,I<:Integer}
+function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::AbstractMatrix{<:Integer},
+    exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nr,Nc,N,I<:Integer}
+    N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (e, exponents_real, exponents_complex, exponents_conj,
+                                                                     along...)))
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
         throw(ArgumentError("Complex and conjugate exponents lengths are different"))
@@ -82,19 +81,19 @@ function SimpleMonomialVector{Nr,Nc,I}(exponents_real::AbstractMatrix{<:Integer}
     size(exponents_real, 2) == size(exponents_complex, 2) == size(exponents_conj, 2) ||
         throw(ArgumentError("Number of monomials is different"))
     exps = Vector{I}(undef, size(exponents_real, 2))
-    let ea=ExponentsAll{Nr+2Nc,I}()
-        for (i, colreal, colcomplex, colconj) in zip(eachindex(exps), eachcol(exponents_real), eachcol(exponents_complex),
-                                                     eachcol(exponents_conj))
-            @inbounds exps[i] = exponents_to_index(ea, OrderedExponents(colreal, colcomplex, colconj))
-        end
+    for (i, colreal, colcomplex, colconj) in zip(eachindex(exps), eachcol(exponents_real), eachcol(exponents_complex),
+                                                    eachcol(exponents_conj))
+        @inbounds exps[i] = exponents_to_index(e, OrderedExponents(colreal, colcomplex, colconj))
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
-    return SimpleMonomialVector{Nr,Nc}(unsafe, exps)
+    return SimpleMonomialVector{Nr,Nc}(unsafe, e, exps)
 end
 
 SimpleMonomialVector{Nr,Nc}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc} =
     SimpleMonomialVector{Nr,Nc,UInt}(exponents, args...)
+SimpleMonomialVector{Nr,Nc,I}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc,I<:Integer} =
+    SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), exponents, args...)
 
 """
     SimpleMonomialVector[{I}](mv::AbstractVector{<:AbstractMonomialLike}, along...; vars=variables(mv))

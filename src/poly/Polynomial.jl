@@ -95,7 +95,7 @@ Creates a new `SimplePolynomial` based on any polynomial-like object that satisf
 [`SimpleMonomialVector`](@ref SimpleMonomialVector[I}(::AbstractVector{<:AbstractMonomialLike}, ::AbstractVector...)), which
 allows to influence the variable mapping. The indextype used internally is defined by `indextype`.
 """
-function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; indextype::Type{<:Integer}=UInt, kwargs...) where {C1,C}
+function SimplePolynomial{I}(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; kwargs...) where {C1,C,I<:Integer}
     coeffs = let c=coefficients(p)
         if eltype(c) == C
             collect(c)
@@ -103,8 +103,10 @@ function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; indextype
             convert(Vector{C}, collect(c))
         end
     end
-    return SimplePolynomial(coeffs, SimpleMonomialVector{indextype}(monomials(p), coeffs; kwargs...))
+    return SimplePolynomial(coeffs, SimpleMonomialVector{I}(monomials(p), coeffs; kwargs...))
 end
+
+SimplePolynomial(p::AbstractPolynomialLike, args...; kwargs...) = SimplePolynomial{UInt}(p, args...; kwargs...)
 
 function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr,Nc}
     if length(values) == Nr + 2Nc
