@@ -1,5 +1,5 @@
 export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBounded,
-    index_counts, index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices
+    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices
 
 """
     AbstractExponents{N,I}
