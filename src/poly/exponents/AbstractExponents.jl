@@ -300,7 +300,7 @@ end
     return convert_index(unsafe, target, source, index, degree)
 end
 
-_CompareOp = Union{typeof(==),typeof(<),typeof(≤),typeof(>),typeof(≥)}
+_CompareOp = Union{typeof(==),typeof(!=),typeof(<),typeof(≤),typeof(>),typeof(≥)}
 """
     compare_indices([unsafe,] e₁::AbstractExponents, index₁, op, e₂::AbstractExponents, index₂[, degree::Int])
 
@@ -360,6 +360,8 @@ If ẽ₁ and ẽ₂ denote the conversion of the indices to a common exponent s
     for (exp₁, exp₂) in zip(exponents_from_index(unsafe, e₁, index₁, degree), exponents_from_index(unsafe, e₂, index₂, degree))
         if op === ==
             exp₁ == exp₂ || return false
+        elseif op === !=
+            exp₁ == exp₂ || return true
         elseif (op === <) || (op === ≤)
             exp₁ < exp₂ && return true
             exp₁ > exp₂ && return false
