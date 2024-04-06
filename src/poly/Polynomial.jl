@@ -1,6 +1,6 @@
 export SimplePolynomial
 
-struct SimplePolynomial{C,Nr,Nc,P<:Unsigned,M<:SimpleMonomialVector{Nr,Nc,P}} <: AbstractPolynomial{C}
+struct SimplePolynomial{C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} <: AbstractPolynomial{C}
     coeffs::Vector{C}
     monomials::M
 
@@ -9,42 +9,14 @@ struct SimplePolynomial{C,Nr,Nc,P<:Unsigned,M<:SimpleMonomialVector{Nr,Nc,P}} <:
 
     Creates a `SimplePolynomial` with well-defined coefficients and monomials, which must have the same length.
     """
-    function SimplePolynomial(coeffs::Vector{C}, monomials::M) where {C,Nr,Nc,P<:Unsigned,M<:SimpleMonomialVector{Nr,Nc,P}}
+    function SimplePolynomial(coeffs::Vector{C}, monomials::M) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}}
         length(coeffs) == length(monomials) || throw(ArgumentError("Lengths are different"))
-        return new{C,Nr,Nc,P,M}(coeffs, monomials)
+        return new{C,Nr,Nc,M}(coeffs, monomials)
     end
 end
 
-const SimpleRealPolynomial{C,Nr,P<:Unsigned,M<:SimpleRealMonomialVector{Nr,P}} = SimplePolynomial{C,Nr,0,P,M}
-const SimpleComplexPolynomial{C,Nc,P<:Unsigned,M<:SimpleComplexMonomialVector{Nc,P}} = SimplePolynomial{C,0,Nc,P,M}
-const SimpleDensePolynomial{C,Nr,Nc,P<:Unsigned} = SimplePolynomial{C,Nr,Nc,P,<:SimpleDenseMonomialVectorOrView{Nr,Nc,P}}
-const SimpleRealDensePolynomial{C,Nr,P<:Unsigned} = SimpleRealPolynomial{C,Nr,P,<:SimpleRealDenseMonomialVectorOrView{Nr,P}}
-const SimpleComplexDensePolynomial{C,Nc,P<:Unsigned} = SimpleComplexPolynomial{C,Nc,P,<:SimpleComplexDenseMonomialVectorOrView{Nc,P}}
-const SimpleSparsePolynomial{C,Nr,Nc,P<:Unsigned} = SimplePolynomial{C,Nr,Nc,P,<:SimpleSparseMonomialVectorOrView{Nr,Nc,P}}
-const SimpleRealSparsePolynomial{C,Nr,P<:Unsigned} = SimpleRealPolynomial{C,Nr,P,<:SimpleRealSparseMonomialVectorOrView{Nr,P}}
-const SimpleComplexSparsePolynomial{C,Nc,P<:Unsigned} = SimpleComplexPolynomial{C,Nc,P,<:SimpleComplexSparseMonomialVectorOrView{Nc,P}}
-
-_get_c(::XorTX{SimplePolynomial{C}}) where {C} = C
-_get_c(::XorTX{SimplePolynomial}) = Val(Any)
-_get_nr(::XorTX{SimplePolynomial{<:Any,Nr}}) where {Nr} = Nr
-_get_nr(::XorTX{SimplePolynomial}) = Val(Any)
-_get_nc(::XorTX{SimplePolynomial{<:Any,<:Any,Nc}}) where {Nc} = Nc
-_get_nc(::XorTX{SimplePolynomial}) = Val(Any)
-_get_p(::XorTX{SimplePolynomial{<:Any,<:Any,<:Any,P}}) where {P<:Unsigned} = P
-_get_p(::XorTX{SimplePolynomial}) = Val(Unsigned)
-_get_m(::XorTX{SimplePolynomial{<:Any,Nr,Nc,P,M}}) where {Nr,Nc,P<:Unsigned,M<:SimpleMonomialVector{Nr,Nc,P}} = M
-_get_m(::Type{SimplePolynomial{<:Any,Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} = Val(SimpleMonomialVector{Nr,Nc,P})
-_get_m(::Type{SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Val(SimpleMonomialVector{Nr,Nc})
-_get_m(::Type{SimplePolynomial{<:Any,Nr,<:Any,P}}) where {Nr,P<:Unsigned} = Val(SimpleMonomialVector{Nr,<:Any,P})
-_get_m(::Type{SimplePolynomial{<:Any,<:Any,Nc,P}}) where {Nc,P<:Unsigned} = Val(SimpleMonomialVector{<:Any,Nc,P})
-_get_m(::Type{SimplePolynomial{<:Any,Nr}}) where {Nr} = Val(SimpleMonomialVector{Nr})
-_get_m(::Type{SimplePolynomial{<:Any,<:Any,Nc}}) where {Nc} = Val(SimpleMonomialVector{<:Any,Nc})
-_get_m(::Type{SimplePolynomial{<:Any,<:Any,<:Any,P}}) where {P<:Unsigned} = Val(SimpleMonomialVector{<:Any,<:Any,P})
-_get_m(::Type{SimplePolynomial}) = Val(SimpleMonomialVector)
-_monvectype(::XorTX{SimplePolynomial{<:Any,Nr,Nc,P,M}}) where {Nr,Nc,P<:Unsigned,M<:SimpleMonomialVector{Nr,Nc,P}} =
-    _monvectype(M)
-_monvectype(::XorTX{SimplePolynomial{<:Any,<:Any,<:Any,P}}) where {P<:Unsigned} = Val(AbstractVector{P})
-_monvectype(::XorTX{SimplePolynomial}) = Val(AbstractVector)
+const SimpleRealPolynomial{C,Nr,M<:SimpleRealMonomialVector{Nr}} = SimplePolynomial{C,Nr,0,M}
+const SimpleComplexPolynomial{C,Nc,M<:SimpleComplexMonomialVector{Nc}} = SimplePolynomial{C,0,Nc,M}
 
 MultivariatePolynomials.variables(p::XorTX{SimplePolynomial}) = variables(monomial_type(p))
 
@@ -56,8 +28,7 @@ MultivariatePolynomials.terms(p::SimplePolynomial) = collect(p)
 
 MultivariatePolynomials.nterms(p::SimplePolynomial) = length(p.coeffs)
 
-MultivariatePolynomials.nvariables(::XorTX{SimplePolynomial{C,Nr,Nc} where {C}}) where {Nr,Nc} =
-    Nr + 2Nc
+MultivariatePolynomials.nvariables(::XorTX{SimplePolynomial{C,Nr,Nc} where {C}}) where {Nr,Nc} = Nr + 2Nc
 
 Base.iterate(p::SimplePolynomial) =
     isempty(p.coeffs) ? nothing : (@inbounds(term_type(p)(first(p.coeffs), first(p.monomials))), 2)
@@ -77,8 +48,7 @@ MultivariatePolynomials.constant_monomial(m::SimplePolynomial) = constant_monomi
 
 MultivariatePolynomials.constant_monomial(P::Type{<:SimplePolynomial}) = constant_monomial(eltype(P))
 
-MultivariatePolynomials.map_coefficients(f::Function, p::SimplePolynomial) =
-    SimplePolynomial(map(f, p.coeffs), copy(p.monomials))
+MultivariatePolynomials.map_coefficients(f::Function, p::SimplePolynomial) = SimplePolynomial(map(f, p.coeffs), p.monomials)
 
 function MultivariatePolynomials.map_coefficients!(f::Function, p::SimplePolynomial)
     @inbounds for i in 1:length(p.coeffs)
@@ -89,46 +59,43 @@ end
 
 # these are tricky. They shouldn't even be there since they might (or will) violate the no-allocation policy of
 # SimplePolynomials
-Base.conj(p::SimplePolynomial) = SimplePolynomial(conj(p.coeffs), conj(p.monomials))
-MultivariatePolynomials.LinearAlgebra.adjoint(p::SimplePolynomial) =
-    SimplePolynomial(adjoint.(p.coeffs), conj(p.monomials))
+function Base.conj(p::SimplePolynomial)
+    newcoeffs = conj(p.coeffs)
+    SimplePolynomial(newcoeffs, conj(p.monomials, newcoeffs)) # conjugation implies reordering, so sort the coefficients along
+end
+function MultivariatePolynomials.LinearAlgebra.adjoint(p::SimplePolynomial)
+    newcoeffs = adjoint.(p.coeffs)
+    SimplePolynomial(newcoeffs, conj(p.monomials, newcoeffs))
+end
 Base.isreal(p::SimpleRealPolynomial) = all(∘(iszero, imag), p.coeffs)
 function Base.isreal(p::SimplePolynomial)
-    # we can rely on the fact that the monomial vector must not contain duplicates; however, we don't know about monomial
-    # ordering
+    # the monomial vector is sorted and unique
     @inbounds for i in 1:length(p)
         mon = p.monomials[i]
         coeff = p.coeffs[i]
-        if isreal(mon)
+        conmon = conj(mon)
+        if monidx.index == conmon.index
             isreal(coeff) ? continue : return false
         end
-        found_conj = false
-        mon = conj(mon)
-        for j in 1:length(p)
-            if mon == p.monomials[j]
-                @assert(i != j)
-                found_conj = coeff == conj(p.coeffs[j])
-                break
-            end
-        end
-        found_conj || return false
+        conpos = searchsortedlast(p, conmon)
+        iszero(conpos) && return false
+        coeff == conj(p.coeffs[j]) || return false
     end
     return true
 end
 
-MultivariatePolynomials.LinearAlgebra.transpose(p::SimplePolynomial) =
-    SimplePolynomial(transpose.(p.coeffs), p.monomials)
+MultivariatePolynomials.LinearAlgebra.transpose(p::SimplePolynomial) = SimplePolynomial(transpose.(p.coeffs), p.monomials)
 
 SimplePolynomial(p::SimplePolynomial) = p
 """
-    SimplePolynomial(p::AbstractPolynomialLike{C}, coefficient_type=C; kwargs...) where {C}
+    SimplePolynomial(p::AbstractPolynomialLike{C}, coefficient_type=C; indextype=UInt, kwargs...) where {C}
 
 Creates a new `SimplePolynomial` based on any polynomial-like object that satisfied `MultivariatePolynomials`'s
 `AbstractPolynomialLike` interface. The coefficients will be of type `coefficient_type`. Keyword arguments are passed on to
-[`SimpleMonomialVector`](@ref SimpleMonomialVector(::AbstractVector{<:AbstractMonomialLike})), which allows to influence the
-internal representation of the monomial vector.
+[`SimpleMonomialVector`](@ref SimpleMonomialVector[I}(::AbstractVector{<:AbstractMonomialLike}, ::AbstractVector...)), which
+allows to influence the variable mapping. The indextype used internally is defined by `indextype`.
 """
-function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; kwargs...) where {C1,C}
+function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; indextype::Type{<:Integer}=UInt, kwargs...) where {C1,C}
     coeffs = let c=coefficients(p)
         if eltype(c) == C
             collect(c)
@@ -136,7 +103,7 @@ function SimplePolynomial(p::AbstractPolynomialLike{C1}, ::Type{C}=C1; kwargs...
             convert(Vector{C}, collect(c))
         end
     end
-    return SimplePolynomial(coeffs, SimpleMonomialVector(monomials(p), coeffs; kwargs...))
+    return SimplePolynomial(coeffs, SimpleMonomialVector{indextype}(monomials(p), coeffs; kwargs...))
 end
 
 function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr,Nc}
@@ -170,7 +137,7 @@ end
 
 function effective_variables_in(p::SimplePolynomial, in)
     for t in p
-        iszero(coefficient(t)) || effective_variables_in(monomial(t), in) || return false
+        !iszero(coefficient(t)) && effective_variables_in(monomial(t), in) || return true
     end
-    return true
+    return false
 end

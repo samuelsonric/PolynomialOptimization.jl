@@ -1,10 +1,10 @@
-export SimpleVariable, SimpleRealVariable, SimpleComplexVariable, variable_index
+export SimpleVariable, SimpleRealVariable, SimpleComplexVariable
 
 """
     SimpleVariable{I} <: AbstractVariable
 
 `SimpleVariable` is the basic type for any real- or complex-valued simple variables, which is identified by its index of type
-`I` alone.
+`I` alone. A variable can be explicitly cast to `I` in order to obtain its index.
 
 To construct a real-valued or complex-valued variable, see [`SimpleRealVariable`](@ref) and [`SimpleComplexVariable`](@ref).
 """
@@ -20,10 +20,7 @@ struct SimpleVariable{Nr,Nc,I<:Unsigned} <: AbstractVariable
     end
 end
 
-_get_nr(::XorTX{SimpleVariable{Nr}}) where {Nr} = Nr
-_get_nr(::XorTX{SimpleVariable}) = Val{Any}
-_get_nc(::XorTX{SimpleVariable{<:Any,Nc}}) where {Nc} = Nc
-_get_nc(::XorTX{SimpleVariable}) = Val{Any}
+(::Type{I})(v::SimpleVariable{<:Any,<:Any,I}) where {I<:Unsigned} = v.index
 
 # we want curly-initialization style, so use this singleton that can never be constructed
 struct SimpleRealVariable{Nr,Nc}
@@ -59,55 +56,76 @@ struct SimpleComplexVariable{Nr,Nc}
     """
     function SimpleComplexVariable{Nr,Nc}(index::Integer, isconj::Bool=false) where {Nr,Nc}
         0 < index ≤ Nc || throw(DomainError(index, "Invalid index: must be between 1 and $Nc"))
-        return SimpleVariable{Nr,Nc}(index + Nr + (isconj ? Nc : 0))
+        return SimpleVariable{Nr,Nc}(2index + Nr - typeof(index)(!isconj))
     end
 end
 
 function MultivariatePolynomials.name(v::SimpleVariable{Nr,Nc}) where {Nr,Nc}
-    if v.index ≤ Nr
+    if iszero(Nc) || v.index ≤ Nr # compile-time short-circuit
         return "x" * MultivariatePolynomials.unicode_subscript(v.index)
     else
-        return "z" * MultivariatePolynomials.unicode_subscript(v.index ≤ Nr + Nc ? v.index - Nr : v.index - Nr - Nc)
+        cindex = v.index - Nr
+        return "z" * MultivariatePolynomials.unicode_subscript(div(cindex, 2, RoundUp), iseven(cindex))
     end
 end
 
 function MultivariatePolynomials.name_base_indices(v::SimpleVariable{Nr,Nc}) where {Nr,Nc}
-    if v.index ≤ Nr
+    if iszero(Nc) || v.index ≤ Nr # compile-time short-circuit
         return (:x, v.index)
     else
-        return (:z, v.index ≤ Nr + Nc ? v.index - Nr : v.index - Nr - Nc)
+        cindex = v.index - Nr
+        return (:z, div(cindex, 2, RoundUp), iseven(cindex))
     end
 end
 
 Base.:(==)(x::V, y::V) where {V<:SimpleVariable} = x.index == y.index
-# variables is defined later together with SimpleMonomialVector
+Base.isless(x::V, y::V) where {V<:SimpleVariable} = isless(x.index, y.index)
 
-MultivariatePolynomials.nvariables(::XorTX{SimpleVariable{Nr,Nc}}) where {Nr,Nc} = Nr + 2Nc
+#region Variables iterator
+struct SimpleVariables{Nr,Nc,V<:SimpleVariable{Nr,Nc}} <: AbstractVector{V}
+    SimpleVariables{Nr,Nc}() where {Nr,Nc} = new{Nr,Nc,SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}}()
+end
+
+Base.IndexStyle(::Type{<:SimpleVariables}) = IndexLinear()
+Base.size(::SimpleVariables{Nr,Nc}) where {Nr,Nc} = (Nr + 2Nc,)
+
+@inline function Base.getindex(smv::SimpleVariables{Nr,Nc}, idx::Integer) where {Nr,Nc}
+    @boundscheck checkbounds(smv, idx)
+    return SimpleVariable{Nr,Nc}(idx)
+end
+
+Base.collect(::SimpleVariables{Nr,Nc}) where {Nr,Nc} = map(SimpleVariable{Nr,Nc}, 1:Nr+2Nc)
+#endregion
+
+MultivariatePolynomials.variables(::XorTX{<:SimpleVariable{Nr,Nc}}) where {Nr,Nc} = SimpleVariables{Nr,Nc}()
+MultivariatePolynomials.nvariables(::XorTX{<:SimpleVariable{Nr,Nc}}) where {Nr,Nc} = Nr + 2Nc
+
+function MultivariatePolynomials.monomial(v::SimpleVariable{Nr,Nc}) where {Nr,Nc}
+    # construct the monomial directly. But beware that the constructor is unsafe, so we need to make sure the cache is set up
+    # properly before. Also, we don't know the exponents type, so this function just uses a default.
+    e = ExponentsAll{Nr+2Nc,UInt}()
+    index_counts(e, 1) # populate cache
+    return SimpleMonomial{Nr,Nc}(unsafe, e, UInt(Nr + 2Nc - v.index +2), 1)
+end
 
 #region exponents iterator
-struct SimpleVariableExponents{Nr,Nc,V<:SimpleVariable{Nr,Nc}} <: AbstractVector{UInt8}
+struct SimpleVariableExponents{Nr,Nc,V<:SimpleVariable{Nr,Nc}} <: AbstractVector{Int}
     v::V
 end
 
-Base.IteratorSize(::Type{<:SimpleVariableExponents{Nr,Nc}}) where {Nr,Nc} = Base.HasLength()
-Base.IteratorEltype(::Type{<:SimpleVariableExponents}) = Base.HasEltype()
-Base.eltype(::Type{SimpleVariableExponents}) = UInt8
-Base.length(::SimpleVariableExponents{Nr,Nc}) where {Nr,Nc} = Nr + 2Nc
+Base.IndexStyle(::Type{<:SimpleVariableExponents}) = IndexLinear()
 Base.size(::SimpleVariableExponents{Nr,Nc}) where {Nr,Nc} = (Nr + 2Nc,)
 
 @inline function Base.getindex(sve::SimpleVariableExponents, idx::Integer)
     @boundscheck checkbounds(sve, idx)
-    return UInt8(idx == sve.v.index)
+    return Int(idx == sve.v.index)
 end
 
 function Base.collect(sve::SimpleVariableExponents{Nr,Nc}) where {Nr,Nc}
-    result = zeros(UInt8, Nr + 2Nc)
-    @inbounds result[sve.v.index] = 0x1
+    result = zeros(Int, Nr + 2Nc)
+    @inbounds result[sve.v.index] = 1
     return result
 end
-
-Base.iterate(sve::SimpleVariableExponents, state::Int=1) =
-    state ≤ length(sve) ? (@inbounds(sve[state]), state +1) : nothing
 
 MultivariatePolynomials._zip(t::Tuple, e::SimpleVariableExponents) = zip(t, e)
 #endregion
@@ -115,7 +133,7 @@ MultivariatePolynomials.exponents(v::SimpleVariable) = SimpleVariableExponents(v
 
 Base.conj(v::SimpleVariable{<:Any,0}) = v
 Base.conj(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
-    SimpleVariable{Nr,Nc}(v.index ≤ Nr ? v.index : (v.index ≤ Nr + Nc ? v.index + Nc : v.index - Nc))
+    SimpleVariable{Nr,Nc}(v.index ≤ Nr ? v.index : (Nr + one(Nr) + ((v.index - Nr - one(Nr)) ⊻ one(v.index))))
 
 Base.real(::SimpleVariable) = error("Not implemented")
 Base.imag(::SimpleVariable) = error("Not implemented")
@@ -123,8 +141,14 @@ Base.imag(::SimpleVariable) = error("Not implemented")
 MultivariatePolynomials.isreal(::SimpleVariable{<:Any,0}) = true
 MultivariatePolynomials.isreal(v::SimpleVariable{Nr}) where {Nr} = v.index ≤ Nr
 MultivariatePolynomials.isconj(::SimpleVariable{<:Any,0}) = false
-MultivariatePolynomials.isconj(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} = v.index > Nr + Nc
+MultivariatePolynomials.isconj(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} = v.index > Nr && iseven(v.index - Nr)
 
 MultivariatePolynomials.ordinary_variable(v::SimpleVariable{<:Any,0}) = v
 MultivariatePolynomials.ordinary_variable(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
-    SimpleVariable{Nr,Nc}(v.index ≤ Nr + Nc ? v.index : v.index - Nc)
+    SimpleVariable{Nr,Nc}(v.index ≤ Nr ? v.index : (Nr + ((v.index - Nr - one(Nr)) | one(v.index))))
+
+function monomial_index(::ExponentsAll{N,I}, v::SimpleVariable{Nr,Nc}) where {N,I<:Integer,Nr,Nc}
+    N == Nr + 2Nc || throw(MethodError(monomial_index, (e, v)))
+    return I(N - v.index +2)
+end
+monomial_index(e::AbstractExponents, v::SimpleVariable) = exponents_to_index(e, exponents(v), 1)

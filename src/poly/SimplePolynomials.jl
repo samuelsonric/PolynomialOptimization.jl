@@ -1,19 +1,16 @@
 module SimplePolynomials
 
-using MultivariatePolynomials, SparseArrays, PolynomialOptimization.FastVector, PolynomialOptimization.SortAlong
-using SparseArrays: AbstractSparseVector, AbstractSparseMatrixCSC, FixedSparseVector
-using PolynomialOptimization: @assert, @capture, resizable_array
-import PolynomialOptimization: matrix_delete_end!
-import StatsBase
+using MultivariatePolynomials, PolynomialOptimization.FastVector, PolynomialOptimization.SortAlong
+using PolynomialOptimization: @assert
 
 include("./Utils.jl")
 include("./exponents/MultivariateExponents.jl")
 using .MultivariateExponents
-include("./MonomialIndex.jl")
+using .MultivariateExponents: ExponentIndices, Unsafe, index_counts
+include("./Variable.jl")
+include("./Monomial.jl")
 include("./MonomialVector.jl")
-include("./Term.jl")
 include("./Polynomial.jl")
 include("./TypeHandling.jl")
-include("./Compare.jl")
 
 end

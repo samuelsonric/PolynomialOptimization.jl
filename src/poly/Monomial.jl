@@ -1,285 +1,461 @@
-export SimpleMonomial
+export SimpleMonomial, SimpleConjMonomial, monomial_produt, monomial_index
 
 """
-    SimpleMonomial{Nr,Nc,P<:Unsigned,V<:AbstractVector{P}} <: AbstractMonomial
+    SimpleMonomial{Nr,Nc,I<:Integer} <: AbstractMonomial
 
 `SimpleMonomial` represents a monomial. In order to be used together in operations, the number of real-valued variables `Nr`
-and the number of complex-valued variables `Nc` are fixed in the type. The possible exponents in a SimpleMonomial are of type
-`P`, which should usually be chosen in a space-optimal way, i.e., typically, it will be `UInt8`.
-Note that the total degree of a `SimpleMonomial` will always be an `Int` (as required by the `compare` functions of
-`MultivariatePolynomials`), but variable-specific degrees are of type `P`.
+and the number of complex-valued variables `Nc` are fixed in the type. The monomial is identified according to its index in the
+deglex order, which will be of type `I`. This should be an unsigned type, but to allow for `BigInt`, no such restriction is
+imposed.
 """
-struct SimpleMonomial{Nr,Nc,P<:Unsigned,V<:AbstractVector{P},Vr<:XorA{V},Vc<:XorA{V}} <: AbstractMonomial
-    exponents_real::Vr
-    exponents_complex::Vc
-    exponents_conj::Vc
+struct SimpleMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
+    e::E
+    index::I
+    degree::Int # because it is required very often, we'll precalculate it
 
-    # internal functions, don't use
-    SimpleMonomial{Nr,0,P,V}(exponents_real::V, ::Absent, ::Absent) where {Nr,P<:Unsigned,V<:AbstractVector{P}} =
-        new{Nr,0,P,V,V,Absent}(exponents_real, absent, absent)
-
-    SimpleMonomial{0,Nc,P,V}(::Absent, exponents_complex::V, exponents_conj::V) where {Nc,P<:Unsigned,V<:AbstractVector{P}} =
-        new{0,Nc,P,V,Absent,V}(absent, exponents_complex, exponents_conj)
-
-    SimpleMonomial{Nr,Nc,P,V}(exponents_real::V, exponents_complex::V, exponents_conj::V) where
-        {Nr,Nc,P<:Unsigned,V<:AbstractVector{P}} =
-        new{Nr,Nc,P,V,V,V}(exponents_real, exponents_complex, exponents_conj)
+    # internal functions, don't use.
+    function SimpleMonomial{Nr,Nc}(::Unsafe, e::E, index::I, degree::Int=degree_from_index(unsafe, e, index)) where
+        {Nr,Nc,N,I<:Integer,E<:AbstractExponents{N,I}}
+        N == Nr + 2Nc || throw(MethodError(SimpleMonomial{Nr,Nc,E}, (unsafe, index, degree)))
+        new{Nr,Nc,I,E}(e, index, degree)
+    end
 end
 
+Base.parent(m::SimpleMonomial) = m
+SimpleMonomial(m::SimpleMonomial) = m
+
 """
-    SimpleMonomial{Nr,0}(exponents_real::AbstractVector{<:Integer})
-    SimpleMonomial{0,Nc}(exponents_complex::AbstractVector{<:Integer}, exponents_conj::AbstractVector{<:Integer})
-    SimpleMonomial{Nr,Nc}(exponents_real::AbstractVector{<:Integer}, exponents_complex::AbstractVector{<:Integer},
+    SimpleMonomial{Nr,0}([e::AbstractExponents,] exponents_real::AbstractVector{<:Integer})
+    SimpleMonomial{0,Nc}([e::AbstractExponents,] exponents_complex::AbstractVector{<:Integer},
         exponents_conj::AbstractVector{<:Integer})
+    SimpleMonomial{Nr,Nc}([e::AbstractExponents,] exponents_real::AbstractVector{<:Integer},
+        exponents_complex::AbstractVector{<:Integer}, exponents_conj::AbstractVector{<:Integer})
 
-Creates a monomial. The vectors will be owned by the monomial afterwards.
+Creates a monomial with exponent set `e`. If `e` is omitted, `ExponentsAll{Nr+2Nc,UInt}` is chosen by default. Alternatively,
+all three methods may also be called with the index type `I` as a third type parameter, omitting `e`, which then chooses
+`ExponentsAll{Nr+2Nc,I}` by default.
 """
-function SimpleMonomial{Nr,0}(exponents_real::AbstractVector{<:Integer}) where {Nr}
+function SimpleMonomial{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractVector{<:Integer}) where {Nr,I<:Integer}
     length(exponents_real) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(length(exponents_real))"))
-    P = Unsigned(eltype(exponents_real))
-    exps = convert(AbstractVector{P}, exponents_real)
-    return SimpleMonomial{Nr,0,P,typeof(exps)}(exps, absent, absent)
+    degree = sum(exponents_real, init=0)
+    return SimpleMonomial{Nr,0}(unsafe, e, exponents_to_index(e, exponents_real, degree), degree)
 end
 
-function SimpleMonomial{0,Nc}(exponents_complex::AbstractVector{<:Integer}, exponents_conj::AbstractVector{<:Integer}) where {Nc}
+function SimpleMonomial{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::AbstractVector{<:Integer},
+    exponents_conj::AbstractVector{<:Integer}) where {Nc,N,I<:Integer}
+    N == 2Nc || throw(MethodError(SimpleMonomial{0,Nc}, (e, exponents_complex, exponents_conj)))
     length(exponents_complex) == length(exponents_conj) ||
         throw(ArgumentError("Complex and conjugate exponent lengths are different"))
     length(exponents_complex) == Nc ||
         throw(ArgumentError("Requested $Nc complex variables, but got $(length(exponents_complex))"))
-    P = promote_type(Unsigned(eltype(exponents_complex)), Unsigned(eltype(exponents_conj)))
-    V1 = Base.promote_op(convert, Type{AbstractVector{P}}, typeof(exponents_complex))
-    V2 = Base.promote_op(convert, Type{AbstractVector{P}}, typeof(exponents_conj))
-    V = promote_type(V1, V2)
-    return SimpleMonomial{0,Nc,P,V}(absent, convert(V, exponents_complex), convert(V, exponents_conj))
+    degree = sum(exponents_complex, init=0) + sum(exponents_conj, init=0)
+    return SimpleMonomial{0,Nc}(unsafe, e, exponents_to_index(
+        e, (x[i] for i in 1:Nc for x in (exponents_complex, exponents_conj)), degree
+    ), degree)
 end
 
-function SimpleMonomial{Nr,Nc}(exponents_real::AbstractVector{<:Integer}, exponents_complex::AbstractVector{<:Integer},
-    exponents_conj::AbstractVector{<:Integer}) where {Nr,Nc}
+struct OrderedExponents{T,R,C,Cj}
+    exponents_real::R
+    exponents_complex::C
+    exponents_conj::Cj
+
+    OrderedExponents(real::R, complex::C, conj::Cj) where {R<:AbstractVector,C<:AbstractVector,Cj<:AbstractVector} =
+        new{promote_type(eltype(R),eltype(C),eltype(Cj)),R,C,Cj}(real, complex, conj)
+end
+
+Base.IteratorSize(::Type{<:OrderedExponents}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:OrderedExponents}) = Base.HasEltype()
+Base.length(oe::OrderedExponents) = length(oe.exponents_real) + 2length(oe.exponents_complex)
+Base.eltype(::Type{<:OrderedExponents{T}}) where {T} = T
+function Base.iterate(oe::OrderedExponents{T}, (pos, idx)=(0x1, 1)) where {T}
+    if pos == 0x1
+        if idx > length(oe.exponents_real)
+            pos += one(UInt8)
+            idx = 1
+        else
+            @inbounds return oe.exponents_real[idx], (pos, idx +1)
+        end
+    end
+    idx > length(oe.exponents_complex) && return nothing
+    if pos == 0x2
+        @inbounds return oe.exponents_complex[idx], (0x3, idx)
+    else
+        @inbounds return oe.exponents_conj[idx], (0x2, idx +1)
+    end
+end
+
+function SimpleMonomial{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::AbstractVector{<:Integer},
+    exponents_complex::AbstractVector{<:Integer}, exponents_conj::AbstractVector{<:Integer}) where {Nr,Nc,N,I<:Integer}
+    N == Nr + 2Nc || throw(MethodError(SimpleMonomial{Nr,Nc}, (e, exponents_real, exponents_complex, exponents_conj)))
     length(exponents_real) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(length(exponents_real))"))
     length(exponents_complex) == length(exponents_conj) ||
         throw(ArgumentError("Complex and conjugate exponent lengths are different"))
     length(exponents_complex) == Nc ||
         throw(ArgumentError("Requested $Nc complex variables, but got $(length(exponents_complex))"))
-    P = promote_type(Unsigned(eltype(exponents_real)), Unsigned(eltype(exponents_complex)), Unsigned(eltype(exponents_conj)))
-    V1 = Base.promote_op(convert, Type{AbstractVector{P}}, typeof(exponents_real))
-    V2 = Base.promote_op(convert, Type{AbstractVector{P}}, typeof(exponents_complex))
-    V3 = Base.promote_op(convert, Type{AbstractVector{P}}, typeof(exponents_conj))
-    V = promote_type(V1, V2, V3)
-    return SimpleMonomial{Nr,Nc,P,V}(convert(V, exponents_real), convert(V, exponents_complex), convert(V, exponents_conj))
+    degree = sum(exponents_real, init=0) + sum(exponents_complex, init=0) + sum(exponents_conj, init=0)
+    return SimpleMonomial{Nr,Nc}(unsafe, e, exponents_to_index(
+        e,
+        OrderedExponents(exponents_real, exponents_complex, exponents_conj),
+        degree
+    ), degree)
 end
 
-const SimpleRealMonomial{Nr,P<:Unsigned,V<:AbstractVector{P}} = SimpleMonomial{Nr,0,P,V,V,Absent}
-const SimpleComplexMonomial{Nc,P<:Unsigned,V<:AbstractVector{P}} = SimpleMonomial{0,Nc,P,V,Absent,V}
-const SimpleMixedMonomial{Nr,Nc,P<:Unsigned,V<:AbstractVector{P}} = SimpleMonomial{Nr,Nc,P,V,V,V}
-const SimpleDenseMonomial{Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,<:DenseVector}
-const SimpleSparseMonomial{Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,<:AbstractSparseVector}
-const SimpleRealDenseMonomial{Nr,P<:Unsigned} = SimpleRealMonomial{Nr,P,<:DenseVector}
-const SimpleComplexDenseMonomial{Nc,P<:Unsigned} = SimpleComplexMonomial{Nc,P,<:DenseVector}
-const SimpleRealSparseMonomial{Nr,P<:Unsigned} = SimpleRealMonomial{Nr,P,<:AbstractSparseVector}
-const SimpleComplexSparseMonomial{Nc,P<:Unsigned} = SimpleComplexMonomial{Nc,P,<:AbstractSparseVector}
-const SimpleDenseMonomialOrView{Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,<:Union{<:DenseVector{P},<:(SubArray{P,1,<:DenseArray{P}})}}
-const SimpleSparseMonomialOrView{Nr,Nc,P<:Unsigned} = SimpleMonomial{Nr,Nc,P,<:Union{<:AbstractSparseVector{P},<:(SubArray{P,1,<:AbstractSparseArray{P}})}}
-const SimpleRealDenseMonomialOrView{Nr,P<:Unsigned} = SimpleRealMonomial{Nr,P,<:Union{<:DenseVector{P},<:(SubArray{P,1,<:DenseArray{P}})}}
-const SimpleComplexDenseMonomialOrView{Nc,P<:Unsigned} = SimpleComplexMonomial{Nc,P,<:Union{<:DenseVector{P},<:(SubArray{P,1,<:DenseArray{P}})}}
-const SimpleRealSparseMonomialOrView{Nr,P<:Unsigned} = SimpleRealMonomial{Nr,P,<:Union{<:AbstractSparseVector{P},<:(SubArray{P,1,<:AbstractSparseArray{P}})}}
-const SimpleComplexSparseMonomialOrView{Nc,P<:Unsigned} = SimpleComplexMonomial{Nc,P,<:Union{<:AbstractSparseVector{P},<:(SubArray{P,1,<:AbstractSparseArray{P}})}}
+SimpleMonomial{Nr,Nc}(args::AbstractVector...) where {Nr,Nc} = SimpleMonomial{Nr,Nc,UInt}(args...)
+SimpleMonomial{Nr,Nc,I}(args::AbstractVector...) where {Nr,Nc,I<:Integer} =
+    SimpleMonomial{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), args...)
 
-_get_nr(::XorTX{SimpleMonomial{Nr}}) where {Nr} = Nr
-_get_nr(::XorTX{SimpleMonomial}) = Val(Any)
-_get_nc(::XorTX{SimpleMonomial{<:Any,Nc}}) where {Nc} = Nc
-_get_nc(::XorTX{SimpleMonomial}) = Val(Any)
-_get_p(::XorTX{SimpleMonomial{<:Any,<:Any,P}}) where {P<:Unsigned} = P
-_get_p(::XorTX{SimpleMonomial}) = Val(Unsigned)
-_get_v(::XorTX{SimpleMonomial{<:Any,<:Any,P,V}}) where {P<:Unsigned,V<:AbstractVector{P}} = V
-_get_v(::XorTX{SimpleMonomial{<:Any,<:Any,P}}) where {P<:Unsigned} = Val(AbstractVector{P})
-_get_v(::XorTX{SimpleMonomial}) = Val(AbstractVector)
+const SimpleRealMonomial{Nr,I<:Integer,E<:AbstractExponents} = SimpleMonomial{Nr,0,I,E}
+const SimpleComplexMonomial{Nc,I<:Integer,E<:AbstractExponents} = SimpleMonomial{0,Nc,I,E}
+
+"""
+    SimpleConjMonomial(m::SimpleMonomial) <: AbstractMonomial
+
+This is a wrapper type for the conjugate of a simple monomial. A lot of operations allow to pass either `SimpleConjMonomial`
+or `SimpleMonomial`. Constructing the conjugate using this type works in zero time.
+"""
+struct SimpleConjMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
+    m::SimpleMonomial{Nr,Nc,I,E}
+
+    # don't create conjugates of real monomials
+    SimpleConjMonomial(m::SimpleMonomial{Nr,Nc,I,E}) where {Nr,Nc,I<:Integer,E<:AbstractExponents} =
+        iszero(Nc) ? m : new{Nr,Nc,I,E}(m)
+end
+
+Base.getproperty(c::SimpleConjMonomial, f::Symbol) = getproperty(getfield(c, :m), f)
+Base.propertynames(c::SimpleConjMonomial, args...) = propertynames(parent(c), args...)
+Base.parent(c::SimpleConjMonomial) = getfield(c, :m)
+SimpleConjMonomial(m::SimpleConjMonomial) = parent(m)
+
+"""
+    SimpleMonomial(c::SimpleConjMonomial)
+
+Converts a [`SimpleConjMonomial`](@ref) into a [`SimpleMonomial`](@ref). This performs the calculation of the conjugate index.
+"""
+SimpleMonomial(c::SimpleConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc} =
+    SimpleMonomial{Nr,Nc}(unsafe, c.e, exponents_to_index(c.e, exponents(c), degree(c)), degree(c))
+Base.convert(::Type{<:Union{SimpleMonomial,SimpleMonomial{Nr,Nc},SimpleMonomial{Nr,Nc,I},SimpleMonomial{Nr,Nc,I,E}}},
+    c::SimpleConjMonomial{Nr,Nc,I,E}) where {Nr,Nc,I<:Integer,E<:AbstractExponents} = SimpleMonomial(c)
 
 MultivariatePolynomials.monomial(m::SimpleMonomial) = m
+MultivariatePolynomials.monomial(m::SimpleConjMonomial) = SimpleMonomial(m)
 
-# variables is defined later together with SimpleMonomialVector
+const SimpleMonomialOrConj{Nr,Nc,I<:Integer,E<:AbstractExponents} =
+    Union{SimpleMonomial{Nr,Nc,I,E},SimpleConjMonomial{Nr,Nc,I,E}}
 
-MultivariatePolynomials.nvariables(::XorTX{SimpleMonomial{Nr,Nc}}) where {Nr,Nc} = Nr + 2Nc
+Base.isless(x::SimpleMonomial{Nr,Nc}, y::SimpleMonomial{Nr,Nc}) where {Nr,Nc} =
+    degree(x) == degree(y) ? compare_indices(unsafe, x.e, x.index, <, y.e, y.index, degree(x)) : isless(degree(x), degree(y))
+function Base.isless(x::SimpleMonomialOrConj{Nr,Nc}, y::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    degree(x) == degree(y) || return isless(degree(x), degree(y))
+    for (xᵢ, yᵢ) in zip(exponents(x), exponents(y))
+        if xᵢ > yᵢ
+            return false
+        elseif xᵢ < yᵢ
+            return true
+        end
+    end
+    return false
+end
 
-function MultivariatePolynomials.convert_constant(T::Type{<:SimpleMonomial}, α)
+Base.:(==)(x::SimpleMonomial{Nr,Nc}, y::SimpleMonomial{Nr,Nc}) where {Nr,Nc} =
+    degree(x) == degree(y) && compare_indices(unsafe, x.e, x.index, ==, y.e, y.index, degree(x))
+function Base.:(==)(x::SimpleMonomialOrConj{Nr,Nc}, y::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    degree(x) == degree(y) || return false
+    if (x isa SimpleMonomial && y isa SimpleMonomial) || (x isa SimpleConjMonomial && y isa SimpleConjMonomial)
+        return compare_indices(unsafe, x.e, x.index, ==, y.e, y.index, degree(x))
+    else
+        return all(==, zip(exponents(x), exponents(y)))
+    end
+end
+
+MultivariatePolynomials.variables(::XorTX{<:SimpleMonomialOrConj{Nr,Nc}}) where {Nr,Nc} = SimpleVariables{Nr,Nc}()
+MultivariatePolynomials.nvariables(::XorTX{<:SimpleMonomialOrConj{Nr,Nc}}) where {Nr,Nc} = Nr + 2Nc
+
+function MultivariatePolynomials.convert_constant(T::Type{<:SimpleMonomialOrConj}, α)
     isone(α) || error("Cannot convert `$α` to a `SimpleMonomial` as it is not one")
     return constant_monomial(T)
 end
 
-# We must convert degree to Ints. MP will do subtractions in the comparisons, so an Unsigned will fail.
-MultivariatePolynomials.degree(m::SimpleMonomial) =
-    Int(sum(m.exponents_real, init=0) + sum(m.exponents_complex, init=0) + sum(m.exponents_conj, init=0))
-MultivariatePolynomials.degree(m::SimpleMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
-    @inbounds v.index ≤ Nr ? m.exponents_real[v.index] : (v.index ≤ Nr + Nc ? m.exponents_complex[v.index-Nr] :
-                                                          m.exponents_conj[v.index-Nr-Nc])
+MultivariatePolynomials.degree(m::SimpleMonomialOrConj) = m.degree
+MultivariatePolynomials.degree(m::SimpleMonomialOrConj{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
+    @inbounds exponents(m)[v.index]
 
-# These do not correspond to how they are defined in MP. But this definition makes more sense (and is what is needed).
-MultivariatePolynomials.degree_complex(m::SimpleMonomial) =
-    Int(sum(m.exponents_real, init=0) + max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
-MultivariatePolynomials.degree_complex(m::SimpleMonomial{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
-    @inbounds v.index ≤ Nr ? m.exponents_real[v.index] :
-        (v.index ≤ Nr + Nc ? max(m.exponents_complex[v.index-Nr], m.exponents_conj[v.index-Nr]) :
-                             max(m.exponents_complex[v.index-Nr-Nc], m.exponents_conj[v.index-Nr-Nc]))
-
-MultivariatePolynomials.halfdegree(m::SimpleMonomial) = Int(div(sum(m.exponents_real, init=0), 2, RoundUp) +
-    max(sum(m.exponents_complex, init=0), sum(m.exponents_conj, init=0)))
+# New definition according to https://github.com/JuliaAlgebra/MultivariatePolynomials.jl/pull/292.
+for fn in (:degree_complex, :halfdegree)
+    @eval function MultivariatePolynomials.$fn(m::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+        exps = exponents(parent(m)) # iteration for SimpleMonomial is faster than for conjugate and it doesn't matter here
+        Σreal::Int = 0
+        Σcomplex::Int = 0
+        Σconj::Int = 0
+        iter = iterate(exps)::Tuple
+        for i in 1:Nr
+            Σreal += iter[1]
+            if iszero(Nc)
+                iter = iterate(exps, iter[2])
+                isnothing(iter) && return $(fn === :degree_complex ? :(Σreal) : :(div(Σreal, 2, RoundUp)))
+            else
+                iter = iterate(exps, iter[2])::Tuple
+            end
+        end
+        for i in 1:Nc
+            Σcomplex += iter[1]
+            iter = iterate(exps, iter[2])::Tuple
+            Σconj += iter[1]
+            iter = iterate(exps, iter[2])
+            isnothing(iter) && return $(fn === :degree_complex ? :(Σreal) : :(div(Σreal, 2, RoundUp))) + max(Σcomplex, Σconj)
+        end
+        @assert(false)
+    end
+end
+function MultivariatePolynomials.degree_complex(m::SimpleMonomialOrConj{Nr,Nc}, v::SimpleVariable{Nr,Nc}) where {Nr,Nc}
+    exps = exponents(parent(m))
+    # while we could use getindex, this will implicitly iterate. So better if we iterate by ourselves, saving some duplication.
+    ind₁, ind₂ = minmax(v.index, conj(v).index)
+    iter = iterate(exps)::Tuple
+    for i in 1:ind₁-1
+        iter = iterate(exps, iter[2])::Tuple
+    end
+    result = iter[1]
+    ind₂ == ind₁ && return result
+    for i in ind₁:ind₂-1
+        iter = iterate(exps, iter[2])::Tuple
+    end
+    return max(result, iter[1])
+end
 
 #region exponents iterator
-struct SimpleMonomialExponents{Nr,Nc,P<:Unsigned,M<:SimpleMonomial{Nr,Nc,P}} <: AbstractVector{P}
-    m::M
+struct SimpleMonomialExponents{Nr,Nc,Conj,EI<:ExponentIndices} <: AbstractVector{Int}
+    ei::EI
+
+    function SimpleMonomialExponents{Nr,Nc}(conj::Bool, ei::EI) where {Nr,Nc,EI<:ExponentIndices}
+        length(ei) == Nr + 2Nc || throw(MethodError(SimpleMonomialExponents{Nr,Nc}, (conj, ei)))
+        new{Nr,Nc,conj,EI}(ei)
+    end
 end
 
-Base.IteratorSize(::Type{<:SimpleMonomialExponents{Nr,Nc}}) where {Nr,Nc} = Base.HasLength()
-Base.IteratorEltype(::Type{<:SimpleMonomialExponents{<:Any,<:Any,P}}) where {P<:Unsigned} = Base.HasEltype()
-Base.eltype(::Type{SimpleMonomialExponents{<:Any,<:Any,P}}) where {P<:Unsigned} = P
-Base.length(::SimpleMonomialExponents{Nr,Nc}) where {Nr,Nc} = Nr + 2Nc
+Base.IndexStyle(::Type{<:SimpleMonomialExponents}) = IndexLinear()
 Base.size(::SimpleMonomialExponents{Nr,Nc}) where {Nr,Nc} = (Nr + 2Nc,)
 
-@inline function Base.getindex(sme::SimpleMonomialExponents{Nr,Nc}, idx::Integer) where {Nr,Nc}
-    @boundscheck checkbounds(sme, idx)
-    idx ≤ Nr && @inbounds return sme.m.exponents_real[idx]
-    idx ≤ Nr + Nc && @inbounds return sme.m.exponents_complex[idx-Nr]
-    @inbounds return sme.m.exponents_conj[idx-Nr-Nc]
+Base.@propagate_inbounds function Base.getindex(sme::SimpleMonomialExponents{Nr,Nc,Conj}, varidx::Integer) where {Nr,Nc,Conj}
+    if Conj
+        if varidx > Nr
+            varidx = Nr + one(Nr) + ((varidx - Nr - one(Nr)) ⊻ one(varidx))
+        end
+    end
+    return sme.ei[varidx]
 end
 
-Base.collect(sme::SimpleMonomialExponents) =
-    [sme.m.exponents_real; sme.m.exponents_complex; sme.m.exponents_conj]
-
-Base.iterate(sme::SimpleMonomialExponents, state::Int=1) =
-    state ≤ length(sme) ? (@inbounds(sme[state]), state +1) : nothing
-
-function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,P,<:SimpleSparseMonomial}, state::NTuple{2,Int}=(1,1)) where {Nr,Nc,P<:Unsigned}
-    # we provide an extra sparse implementation, as there's no need to search for the next index again and again
-    outeridx, inneridx = state
-    if outeridx ≤ Nr
-        let idxs=rowvals(sme.m.exponents_real), vals=nonzeros(sme.m.exponents_real)
-            @inbounds inneridx ≤ lastindex(idxs) && outeridx == idxs[inneridx] &&
-                return vals[inneridx], (outeridx +1, outeridx == Nr ? 1 : inneridx +1)
-            return zero(P), (outeridx +1, outeridx == Nr ? 1 : inneridx)
-        end
+Base.iterate(sme::SimpleMonomialExponents{<:Any,<:Any,false}, args...) = iterate(sme.ei, args...)
+function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,true}) where {Nr,Nc}
+    @assert(!iszero(Nc))
+    next = iterate(sme.ei)::Tuple
+    if iszero(Nr)
+        second = iterate(sme.ei, next[2])::Tuple
+        return second[1], (second[2], next[1])
+    else
+        return next[1], (next[2], -1)
     end
-    if outeridx ≤ Nr + Nc
-        let idxs=rowvals(sme.m.exponents_complex), vals=nonzeros(sme.m.exponents_complex)
-            @inbounds inneridx ≤ lastindex(idxs) && outeridx - Nr == idxs[inneridx] &&
-                return vals[inneridx], (outeridx +1, outeridx == Nr + Nc ? 1 : inneridx +1)
-            return zero(P), (outeridx +1, outeridx == Nr + Nc ? 1 : inneridx)
-        end
-    end
-    if outeridx ≤ Nr + 2Nc
-        let idxs=rowvals(sme.m.exponents_conj), vals=nonzeros(sme.m.exponents_conj)
-            @inbounds inneridx ≤ lastindex(idxs) && outeridx - Nr - Nc == idxs[inneridx] &&
-                return vals[inneridx], (outeridx +1, outeridx == Nr + 2Nc ? 1 : inneridx +1)
-        end
-        return zero(P), (outeridx +1, outeridx == Nr + 2Nc ? 1 : inneridx)
-    end
-    return nothing
 end
+function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,true}, (state, prev)) where {Nr,Nc}
+    # we know that Nc ≠ 0, for it is not possible to create a real-valued SimpleConjMonomial
+    @assert(!iszero(Nc))
+    i = state[2] # standardized part of state
+    if i ≤ Nr +1
+        next = iterate(sme.ei, state)::Tuple
+        return next[1], (next[2], -1)
+    elseif prev == -1
+        next = iterate(sme.ei, state)
+        isnothing(next) && return nothing # might happen when we are at the end
+        second = iterate(sme.ei, next[2])::Tuple # but then this cannot happen
+        return second[1], (second[2], next[1])
+    else
+        # everything was already calculated previously, just yield it and go on
+        return prev, (state, -1)
+    end
+end
+# iteration is faster than indexed access, so let's fall back to the generic iterator-based functions
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, src::SimpleMonomialExponents) =
+    @invoke copyto!(dest::AbstractArray, src::Any)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::SimpleMonomialExponents) =
+    @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::SimpleMonomialExponents, sstart::Integer) =
+    @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer)
+Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::SimpleMonomialExponents, sstart::Integer,
+    n::Integer) = @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer, n::Integer)
 
 MultivariatePolynomials._zip(t::Tuple, e::SimpleMonomialExponents) = zip(t, e)
 #endregion
-MultivariatePolynomials.exponents(m::SimpleMonomial) = SimpleMonomialExponents(m)
+MultivariatePolynomials.exponents(m::SimpleMonomialOrConj{Nr,Nc,I}) where {Nr,Nc,I<:Integer} =
+    SimpleMonomialExponents{Nr,Nc}(
+        m isa SimpleConjMonomial,
+        exponents_from_index(unsafe, m.e, m.index, degree(m))
+    )
 
-# implement an iteration method although there is the exponents function - this one gives a (SimpleVariable, exponent) tuple and
-# skips over zero exponents
-Base.IteratorSize(::Type{<:SimpleMonomial}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:SimpleMonomial}) = Base.HasEltype()
-Base.eltype(::Type{<:SimpleMonomial{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned} =
-    Tuple{SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)},P}
-function Base.iterate(m::SimpleMonomial{Nr,Nc}, state::Int=0) where {Nr,Nc}
-    @inbounds for i in state+1:Nr
-        iszero(m.exponents_real[i]) || return (SimpleVariable{Nr,Nc}(i), m.exponents_real[i]), i
-    end
-    @inbounds for i in max(1, state - Nr +1):Nc
-        iszero(m.exponents_complex[i]) || return (SimpleVariable{Nr,Nc}(i + Nr), m.exponents_complex[i]), i + Nr
-    end
-    @inbounds for i in max(1, state - Nr - Nc +1):Nc
-        iszero(m.exponents_conj[i]) || return (SimpleVariable{Nr,Nc}(i + Nr + Nc), m.exponents_conj[i]), i + Nr + Nc
-    end
-    return nothing
-end
-function Base.iterate(m::SimpleSparseMonomial{Nr,Nc}, state::Int=0) where {Nr,Nc}
-    local δ, δ₂
-    let idxs=rowvals(m.exponents_real), vals=nonzeros(m.exponents_real)
-        δ = length(idxs)
-        @inbounds for i in state+1:δ
-            iszero(vals[i]) || return (SimpleVariable{Nr,Nc}(idxs[i]), vals[i]), i
-        end
-    end
-    let idxs=rowvals(m.exponents_complex), vals=nonzeros(m.exponents_complex)
-        δ₂ = δ + length(idxs)
-        @inbounds for i in state-δ+1:length(idxs)
-            iszero(vals[i]) || return (SimpleVariable{Nr,Nc}(idxs[i] + Nr), vals[i]), i + δ
-        end
-    end
-    let idxs=rowvals(m.exponents_conj), vals=nonzeros(m.exponents_conj)
-        @inbounds for i in state-δ₂+1:length(idxs)
-            iszero(idxs[i]) || return (SimpleVariable{Nr,Nc}(idxs[i] + Nr + Nc), vals[i]), i + δ₂
-        end
-    end
-    return nothing
-end
-Base.length(m::SimpleMonomial) = count(isnonzero, m.exponents_real, init=0) +
-    count(isnonzero, m.exponents_complex, init=0) + count(m.exponents_conj, init=0)
-
-MultivariatePolynomials.isconstant(m::SimpleMonomial) =
-    all(iszero, m.exponents_real) && all(iszero, m.exponents_complex) && all(iszero, m.exponents_conj)
-
-SparseArrays.indtype(::Type{<:AbstractSparseArray{<:Any,Ti}}) where {Ti} = Ti # not defined for types
-function MultivariatePolynomials.constant_monomial(::XorTX{SimpleMonomial{Nr,Nc,P,V}}) where {Nr,Nc,P<:Unsigned,V<:AbstractVector{P}}
-    # we cannot use similar (even for the concrete case) - V might be a view-backed vector, which cannot be recreated.
-    if V <: AbstractSparseVector
-        vals = P[]
-    end
-    if iszero(Nr)
-        re_v = absent
-    elseif V <: AbstractSparseVector
-        re_v = FixedSparseVector(Nr, SparseArrays.indtype(V)[], vals)
+# implement an iteration method although there is the exponents function - this one gives a (SimpleVariable, exponent) tuple
+# and skips over zero exponents
+Base.IteratorSize(::Type{<:SimpleMonomialOrConj}) = Base.SizeUnknown()
+Base.IteratorEltype(::Type{<:SimpleMonomialOrConj}) = Base.HasEltype()
+Base.eltype(::Type{<:SimpleMonomialOrConj{Nr,Nc}}) where {Nr,Nc} =
+    Tuple{SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)},Int}
+function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    sme = exponents(m)
+    iter = iterate(sme)::Tuple
+    exponent, state = iter
+    if iszero(exponent)
+        return iterate(m, (sme, state...))
     else
-        re_v = zeros(P, Nr)
+        return (SimpleVariable{Nr,Nc}(1), exponent), (sme, state)
     end
-    if iszero(Nc)
-        im_v = absent
-        T = typeof(re_v)
-    elseif V <: AbstractSparseVector
-        im_v = FixedSparseVector(Nc, SparseArrays.indtype(V)[], vals)
-        T = typeof(im_v)
-    else
-        im_v = zeros(P, Nc)
-        T = typeof(im_v)
+end
+function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}, (sme, state)) where {Nr,Nc}
+    # state[1]: remaining degree, state[2]: index of next variable
+    while true
+        iszero(state[1]) && return nothing # fast-path: if the remaining degree is already zero, we can finish
+        iter = iterate(sme, state)
+        isnothing(iter) && return nothing
+        exponent, state = iter
+        iszero(exponent) || return (SimpleVariable{Nr,Nc}(state[2] -2), exponent), (sme, state)
+        # index of next variable after iteration -> current variable is -2
     end
-    return SimpleMonomial{Nr,Nc,P,T}(re_v, im_v, im_v)
 end
 
-# also provide a version for the unknown type which defaults to the sparse case. Note that here, we don't really bother with
-# incomplete specifications of SimpleMonomial, where maybe one of the vector types is missing.
-function MultivariatePolynomials.constant_monomial(::Type{SimpleMonomial{Nr,Nc,P}}) where {Nr,Nc,P<:Unsigned}
-    vals = P[]
-    su = promote_type(smallest_unsigned(Nr), smallest_unsigned(Nc))
-    idxs = su[]
-    if iszero(Nr)
-        re_v = absent
-    else
-        re_v = FixedSparseVector(Nr, idxs, vals)
-    end
-    if iszero(Nc)
-        im_v = absent
-    else
-        im_v = FixedSparseVector(Nc, idxs, vals)
-    end
-    return SimpleMonomial{Nr,Nc,P,FixedSparseVector{P,su}}(re_v, im_v, im_v)
-end
-MultivariatePolynomials.constant_monomial(::Type{SimpleMonomial{Nr,Nc}}) where {Nr,Nc} =
-    constant_monomial(SimpleMonomial{Nr,Nc,UInt8})
+MultivariatePolynomials.isconstant(m::SimpleMonomialOrConj{<:Any,<:Any,<:Integer,<:ExponentsAll}) = isone(m.index)
+MultivariatePolynomials.isconstant(m::SimpleMonomialOrConj{<:Any,<:Any,<:Integer,<:AbstractExponentsDegreeBounded}) =
+    isone(m.index) && iszero(m.e.mindeg)
 
-Base.conj(m::SimpleMonomial{Nr,Nc,P,V}) where {Nr,Nc,P<:Unsigned,V<:AbstractVector{P}} =
-    isreal(m) ? m : SimpleMonomial{Nr,Nc,P,V}(m.exponents_real, m.exponents_conj, m.exponents_complex)
-# ^ we do this additional check so that for monomials found to be real, Julia knows that conj is an identity and can propagate
-# the effects.
-Base.@assume_effects :consistent Base.isreal(m::SimpleMonomial) = m.exponents_complex == m.exponents_conj
-# ^ while these are in principle mutable vectors, we explictly demand Simplexxx to be immutable, so let's put this knowledge
-# to use.
+MultivariatePolynomials.constant_monomial(m::SimpleMonomialOrConj{Nr,Nc,I,<:ExponentsAll}) where {Nr,Nc,I<:Integer} =
+    SimpleMonomial{Nr,Nc}(unsafe, m.e, one(I), 0)
+MultivariatePolynomials.constant_monomial(m::SimpleMonomialOrConj{Nr,Nc,I,<:AbstractExponentsDegreeBounded}) where {Nr,Nc,I<:Integer} =
+    iszero(m.e.mindeg) ? SimpleMonomial{Nr,Nc}(unsafe, e, one(I), 0) :
+                         throw(ArgumentError("Constant monomial is not part of the exponent set"))
+function MultivariatePolynomials.constant_monomial(::Type{<:Union{<:SimpleMonomialOrConj{Nr,Nc,I_},
+                                                                  <:SimpleMonomialOrConj{Nr,Nc}}}) where {Nr,Nc,I_<:Integer}
+    I = @isdefined(I_) ? I_ : UInt
+    SimpleMonomial{Nr,Nc}(unsafe, ExponentsAll{Nr+2Nc,I}(), one(I), 0) # we cannot obtain the necessary information about the
+                                                                       # exponents, so we must change the type
+end
+
+"""
+    conj(m::SimpleMonomial)
+
+Creates the conjugate of a [`SimpleMonomial`](@ref). The result type of this operation will always be [`SimpleMonomial`](@ref).
+If the conjugate can be used to work with lazily, consider wrapping the monomial in a [`SimpleConjMonomial`](@ref) instead.
+"""
+Base.conj(m::SimpleMonomial{Nr,0} where {Nr}) = m
+Base.conj(m::SimpleMonomial{Nr,Nc}) where {Nr,Nc} = SimpleMonomial(SimpleConjMonomial(m))
+Base.conj(m::SimpleConjMonomial{Nr,Nc}) where {Nr,Nc} = parent(m)
+
+Base.@assume_effects :consistent function Base.isreal(m::SimpleMonomial{Nr,Nc}) where {Nr,Nc}
+    exps = exponents(m)
+    iter = iterate(exps)
+    for _ in 1:Nr
+        isnothing(iter) && return true # should not happen, but let's help the compiler to figure out type stability
+        iszero(iter[2][1]) && return true # short-circuit if no nonzero exponents follow
+        iter = iterate(exps, iter[2])
+    end
+    for _ in 1:Nc
+        isnothing(iter) && return true
+        complexdeg = iter[1]
+        iter = iterate(exps, iter[2])
+        isnothing(iter) && return false
+        iter[1] == complexdeg || return false
+        iszero(iter[2][1]) && return true # short-circuit if the remaining degree is zero
+        isodd(iter[2][1]) && return false # short-circuit if an odd number of complex variables remain, they can never be
+                                          # distributed evenly.
+        iter = iterate(exps, iter[2])
+    end
+    return true
+end
+Base.isreal(m::SimpleConjMonomial) = isreal(parent(m)) # iteration for the ordinary monomial is faster
 
 # we hash the monomial to its index, assuming that usually we are interested in a list of monomials of the same type, so no
 # collisions should occur in this way.
-Base.hash(m::SimpleMonomial, h::UInt) = hash(monomial_index(m), h)
+Base.hash(m::SimpleMonomialOrConj, h::UInt) = hash(m.index, h)
 
 effective_variables_in(m::SimpleMonomial, in) = all(vp -> ordinary_variable(vp[1]) ∈ in, m)
+
+struct ExponentsSum{N,T<:Tuple}
+    e::T
+
+    ExponentsSum{N}(e...) where {N} = new{N,typeof(e)}(e)
+end
+
+Base.IteratorSize(::Type{<:ExponentsSum}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:ExponentsSum}) = Base.HasEltype()
+Base.length(s::ExponentsSum{N}) where {N} = N
+Base.eltype(::Type{<:ExponentsSum}) = Int
+Base.iterate(s::ExponentsSum{<:Any,T}) where {C,T<:NTuple{C,Any}} = iterate(s, ntuple(i -> iterate(s.e[i])::Tuple, Val(C)))
+@generated function Base.iterate(s::ExponentsSum, state)
+    items = fieldcount(state)
+    quote
+        total = +($((:(state[$i][1]) for i in 1:items)...))
+        $((:(isnothing($(Expr(:(=), Symbol(:nextstate, i), :(iterate(s.e[$i], state[$i][2]))))) &&
+            return nothing) for i in 1:items)...)
+        return total, ($(((Symbol(:nextstate, i)) for i in 1:items)...),)
+    end
+end
+
+"""
+    monomial_product(e::AbstractExponents, m...)
+
+Calculates the product of all monomials (or conjugates, or variables) `m`. The result must be part of the exponent set `e`.
+If the default multiplication `*` is used instead, `e` will always be `ExponentsAll` with the same shared index type. The
+index type can be different for `monomial_product`.
+"""
+Base.@assume_effects :consistent @generated function monomial_product(e::AbstractExponents{N},
+                                                                      m::Union{<:SimpleMonomialOrConj{Nr,Nc},
+                                                                               <:SimpleVariable{Nr,Nc}}...) where {N,Nr,Nc}
+    N == Nr + 2Nc || throw(MethodError(monomial_product, (e, m...)))
+    items = length(m)
+    quote
+        d = +($((:(degree(m[$i])) for i in 1:items)...))
+        index = exponents_to_index(
+            e,
+            ExponentsSum{Nr+2Nc}($((:(exponents(m[$i])) for i in 1:items)...)),
+            d
+        )
+        e isa ExponentsAll ||
+            (iszero(index) && throw(ArgumentError("The given product is not present in the required exponent range")))
+        return SimpleMonomial{Nr,Nc}(unsafe, e, index, d)
+    end
+end
+
+_get_I(::Type{<:SimpleMonomial{<:Any,<:Any,I}}) where {I<:Integer} = I
+_get_I(::Type{<:SimpleVariable}) = missing
+@generated function _get_I(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc}
+    I = missing
+    for T in m
+        if ismissing(I)
+            I = _get_I(T)
+        else
+            newI = _get_I(T)
+            if !ismissing(newI)
+                I = promote_type(I, newI)
+            end
+        end
+    end
+    if ismissing(I)
+        I = UInt
+    end
+    return :(return $I)
+end
+
+Base.:*(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    monomial_product(ExponentsAll{Nr+2Nc,_get_I(m...)}(), m...)
+
+@inline function monomial_index(e::AbstractExponents{N}, m::SimpleMonomial{<:Any,<:Any,<:Integer,<:AbstractExponents{N}}) where {N}
+    e === m.e && return m.index
+    d = degree(m)
+    index_counts(e, d) # we don't know whether the cache in `e` is sufficient
+    return convert_index(unsafe, e, m.e, m.index, d)
+end
+
+@inline function monomial_index(e::AbstractExponents{N}, m::SimpleConjMonomial{<:Any,<:Any,<:Integer,<:AbstractExponents{N}}) where {N}
+    d = degree(m)
+    e === m.e || index_counts(e, d)
+    return exponents_to_index(e, exponents(m), d)
+end
+
+monomial_index(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    monomial_index(ExponentsAll{Nr+2Nc,_get_I(m...)}(), m...)
+monomial_index(e::AbstractExponents, m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    monomial_product(e, m...).index
