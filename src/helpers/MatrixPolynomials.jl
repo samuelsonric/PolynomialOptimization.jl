@@ -59,6 +59,7 @@ end
 
 MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(effective_variables.(m)...)
 
-effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) = all(Base.Fix2(effective_variables_in, in), m)
+SimplePolynomials.effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) =
+    all(Base.Fix2(effective_variables_in, in), m)
 
 Base.isreal(m::AbstractMatrix{<:AbstractPolynomialLike}) = all(isreal, m)

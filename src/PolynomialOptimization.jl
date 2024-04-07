@@ -88,17 +88,8 @@ macro capture(firstarg, secondarg=nothing)
     end
 end
 
-include("./helpers/Mutation.jl")
-include("./helpers/FastVector.jl")
-using .FastVector
-include("./helpers/SortAlong.jl")
-include("./poly/SimplePolynomials.jl")
-using .SimplePolynomials
+include("./helpers/Helpers.jl")
 using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial
-include("./helpers/StackVector.jl")
-include("./helpers/FastKey.jl")
-include("./helpers/MatrixPolynomials.jl")
-include("./helpers/Allocations.jl")
 
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")
