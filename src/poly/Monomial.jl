@@ -309,7 +309,7 @@ function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     iter = iterate(sme)::Tuple
     exponent, state = iter
     if iszero(exponent)
-        return iterate(m, (sme, state...))
+        return iterate(m, (sme, state))
     else
         return (SimpleVariable{Nr,Nc}(1), exponent), (sme, state)
     end

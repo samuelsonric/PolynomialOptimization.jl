@@ -308,6 +308,10 @@ end
     @test nvariables(SimpleMonomialVector{4,0}([2 0; 0 1; 0 1; 0 1])) == 4
 
     @test nterms(SimpleMonomial{1,0}([2])) == 1
+    @test collect(m) == [(SimpleRealVariable{7,0}(1), 1), (SimpleRealVariable{7,0}(3), 1),
+                         (SimpleRealVariable{7,0}(5), 1), (SimpleRealVariable{7,0}(7), 1)]
+    @test collect(SimpleMonomial{7,0}([0, 1, 0, 2, 0, 3, 0])) ==
+        [(SimpleRealVariable{7,0}(2), 1), (SimpleRealVariable{7,0}(4), 2), (SimpleRealVariable{7,0}(6), 3)]
 
     @test degree(SimpleMonomial{3,0}([1, 0, 2]), SimpleRealVariable{3,0}(1)) == UInt(1)
     @test degree(SimpleMonomial{3,0}([1, 0, 2]), SimpleRealVariable{3,0}(2)) == UInt(0)
@@ -366,6 +370,11 @@ end
     @test nvariables(SimpleMonomialVector{0,4}([2 0; 0 1; 0 0; 0 1], [0 0; 0 0; 0 1; 0 0])) == 8
 
     @test nterms(SimpleMonomial{0,1}([2], [0])) == 1
+    @test collect(m) == [(SimpleComplexVariable{0,7}(1), 1), (SimpleComplexVariable{0,7}(3, true), 1),
+                         (SimpleComplexVariable{0,7}(5), 1), (SimpleComplexVariable{0,7}(7), 1)]
+    @test collect(SimpleMonomial{0,7}([0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
+                        [(SimpleComplexVariable{0,7}(2), 1), (SimpleComplexVariable{0,7}(4, true), 2),
+                         (SimpleComplexVariable{0,7}(6), 3)]
 
     @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(1)) === 1
     @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(1, true)) === 0
@@ -438,6 +447,13 @@ end
     @test nvariables(SimpleMonomialVector{3,4}([0 2; 0 0; 1 1], [0 2; 1 0; 0 0; 1 0], [0 0; 0 0; 1 0; 0 0])) == 11
 
     @test nterms(SimpleMonomial{1,1}([3], [2], [0])) == 1
+    @test collect(m) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
+                         (SimpleComplexVariable{2,7}(1), 1), (SimpleComplexVariable{2,7}(3, true), 1),
+                         (SimpleComplexVariable{2,7}(5), 1), (SimpleComplexVariable{2,7}(7), 1)]
+    @test collect(SimpleMonomial{2,7}([0, 4], [0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
+                         [(SimpleRealVariable{2,7}(2), 4),
+                          (SimpleComplexVariable{2,7}(2), 1), (SimpleComplexVariable{2,7}(4, true), 2),
+                          (SimpleComplexVariable{2,7}(6), 3)]
 
     @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(1)) === 2
     @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(2)) === 1
