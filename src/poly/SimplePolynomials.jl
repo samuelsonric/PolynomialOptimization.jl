@@ -1,7 +1,7 @@
 module SimplePolynomials
 
-using MultivariatePolynomials, PolynomialOptimization.FastVector, PolynomialOptimization.SortAlong
-using PolynomialOptimization: @assert
+using MultivariatePolynomials, PolynomialOptimization.FastVector
+using PolynomialOptimization: @assert, sort_along!
 
 include("./Utils.jl")
 include("./exponents/MultivariateExponents.jl")

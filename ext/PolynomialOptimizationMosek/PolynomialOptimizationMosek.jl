@@ -1,9 +1,8 @@
 module PolynomialOptimizationMosek
 
-using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.FastVector,
-    PolynomialOptimization.SortAlong
+using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.FastVector
 using PolynomialOptimization: @assert, POProblem, RelaxationGroupings, @verbose_info, @allocdiff, monomial_count, MomentVector,
-    StackVec, FastKey, Newton
+    StackVec, FastKey, Newton, sort_along!
 using PolynomialOptimization.SimplePolynomials: SimpleMonomial, monomial_index
 using Mosek: msk_global_env, Env, deletetask
 

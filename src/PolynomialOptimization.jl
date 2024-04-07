@@ -92,7 +92,6 @@ include("./helpers/Mutation.jl")
 include("./helpers/FastVector.jl")
 using .FastVector
 include("./helpers/SortAlong.jl")
-using .SortAlong
 include("./poly/SimplePolynomials.jl")
 using .SimplePolynomials
 using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial
