@@ -13,9 +13,6 @@ end
 smallest_unsigned(::Val{T}) where {T} = Val(typeintersect(T, Unsigned))
 smallest_unsigned(::T) where {T} = typeintersect(T, Unsigned)
 
-Base.Unsigned(U::Type{<:Unsigned}) = U
-Base.Unsigned(S::Type{<:Signed}) = smallest_unsigned(typemax(S))
-
 function _sortedallunique(v::AbstractVector)
     for (x, y) in zip(v, Iterators.drop(v, 1))
         x == y && return false
