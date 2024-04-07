@@ -1,7 +1,7 @@
 module FastVector
 
 export FastVec, prepare_push!, unsafe_push!, unsafe_append!, unsafe_prepend!, finish!
-using PolynomialOptimization: @assert, resizable_array
+using ..PolynomialOptimization: @assert, resizable_array
 
 # Julia exploits the sizehint!/push! combination very poorly (https://github.com/JuliaLang/julia/issues/24909). Here, we define
 # a (limited) fast vector, which rectifies this issue. It is similar to the PushVectors.jl package, but allows for even more

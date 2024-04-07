@@ -3,7 +3,7 @@ module Newton
 using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
 import BufferedStreams
 using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, smallest_unsigned
-using PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy,
+using ..PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy,
     keepcol!, FastKey, RelaxationGroupings
 
 export halfpolytope, halfpolytope_from_file
