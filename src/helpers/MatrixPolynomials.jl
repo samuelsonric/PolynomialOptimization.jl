@@ -48,15 +48,6 @@ function MultivariatePolynomials.exthalfdegree(m::AbstractMatrix{<:AbstractPolyn
     return l, u
 end
 
-function MultivariatePolynomials.divides(t1s::AbstractVector{<:AbstractTermLike}, t2)
-    for t1 in t1s
-        if divides(t1, t2)
-            return true
-        end
-    end
-    return false
-end
-
 MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(effective_variables.(m)...)
 
 SimplePolynomials.effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) =
