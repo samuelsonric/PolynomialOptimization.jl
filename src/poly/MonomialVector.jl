@@ -583,7 +583,7 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
     if ae == be
         return SimpleMonomialVector{Nr,Nc}(unsafe, ae, intersect_sorted(a.indices, b.indices))
     else
-        @assert(!(EA <: ExponentsAll && EB <: ExponentsAll))
+        @assert(!(ae isa ExponentsAll && be isa ExponentsAll))
         mindeg = max(ae isa AbstractExponentsDegreeBounded ? ae.mindeg : 0,
                      be isa AbstractExponentsDegreeBounded ? be.mindeg : 0)
         maxdeg = min(ae isa AbstractExponentsDegreeBounded ? ae.maxdeg : typemax(Int),
@@ -593,13 +593,13 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
             if !(ae isa ExponentsMultideg)
                 minmultideg = be.minmultideg
                 maxmultideg = be.maxmultideg
-            elseif !(be isa ExponentMultideg)
+            elseif !(be isa ExponentsMultideg)
                 minmultideg = ae.minmultideg
                 maxmultideg = ae.maxmultideg
             else
                 minmultideg = elementwise(max, ae.minmultideg, be.minmultideg)
                 maxmultideg = elementwise(min, ae.maxmultideg, be.maxmultideg)
-                all(splat(≤), minmultideg, maxmultideg) || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+                all(splat(≤), zip(minmultideg, maxmultideg)) || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
             end
             newe = ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, minmultideg, maxmultideg)
         else
@@ -623,18 +623,20 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
                 if nexta == nextb
                     unsafe_push!(indices, nexta)
                     ia += 1
+                    nexta = convert_index(unsafe, newe, ae, indices_a[ia])
                     ib += 1
+                    nextb = convert_index(unsafe, newe, be, indices_b[ib])
                     iszero(rema -= 1) && @goto done
                     iszero(remb -= 1) && @goto done
                 else
                     while nexta < nextb
                         ia += 1
-                        iszero(rem_a -= 1) && @goto done
+                        iszero(rema -= 1) && @goto done
                         nexta = convert_index(unsafe, newe, ae, indices_a[ia])
                     end
                     while nextb < nexta
                         ib += 1
-                        iszero(rem_b -= 1) && @goto done
+                        iszero(remb -= 1) && @goto done
                         nextb = convert_index(unsafe, newe, be, indices_b[ib])
                     end
                 end
