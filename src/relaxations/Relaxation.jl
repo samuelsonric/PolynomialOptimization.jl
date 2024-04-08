@@ -120,7 +120,11 @@ needlessly complicates calculations without any benefit.
 
 The keyword arguments will be passed on to the constructor of `RelaxationXXX`.
 """
-(r::Type{<:AbstractPORelaxation})(problem::POProblem, args...; kwargs...) = r(RelaxationDense(problem, args...); kwargs...)
+function (r::Type{<:AbstractPORelaxation})(problem::POProblem, args...; kwargs...)
+    r <: RelaxationDense && throw(MethodError(r, (problem, args...)))
+    # to avoid infinite recursion if the arguments did not match
+    return r(RelaxationDense(problem, args...); kwargs...)
+end
 
 function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
     groups = groupings(x)
