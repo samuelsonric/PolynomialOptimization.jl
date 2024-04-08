@@ -39,8 +39,8 @@ See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions
 """
 MultivariatePolynomials.nvariables(::POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
 
-const RealPOProblem = POProblem{<:SimplePolynomials.SimpleRealPolynomial}
-const ComplexPOProblem = POProblem{<:SimplePolynomials.SimpleComplexPolynomial}
+const RealPOProblem = POProblem{<:SimplePolynomial{<:Any,<:Any,0}}
+const ComplexPOProblem = POProblem{<:SimplePolynomial{<:Any,0}}
 
 """
     isreal(problem::Union{POProblem,<:AbstractPORelaxation})

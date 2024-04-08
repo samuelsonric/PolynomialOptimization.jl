@@ -15,9 +15,6 @@ struct SimplePolynomial{C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} <: AbstractPolyn
     end
 end
 
-const SimpleRealPolynomial{C,Nr,M<:SimpleRealMonomialVector{Nr}} = SimplePolynomial{C,Nr,0,M}
-const SimpleComplexPolynomial{C,Nc,M<:SimpleComplexMonomialVector{Nc}} = SimplePolynomial{C,0,Nc,M}
-
 MultivariatePolynomials.variables(p::XorTX{SimplePolynomial}) = variables(monomial_type(p))
 
 MultivariatePolynomials.coefficients(p::SimplePolynomial) = p.coeffs
@@ -67,7 +64,7 @@ function MultivariatePolynomials.LinearAlgebra.adjoint(p::SimplePolynomial)
     newcoeffs = adjoint.(p.coeffs)
     SimplePolynomial(newcoeffs, conj(p.monomials, newcoeffs))
 end
-Base.isreal(p::SimpleRealPolynomial) = all(∘(iszero, imag), p.coeffs)
+Base.isreal(p::SimplePolynomial{<:Any,<:Any,0}) = all(∘(iszero, imag), p.coeffs)
 function Base.isreal(p::SimplePolynomial)
     # the monomial vector is sorted and unique
     @inbounds for i in 1:length(p)

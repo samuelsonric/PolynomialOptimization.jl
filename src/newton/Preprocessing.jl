@@ -128,7 +128,7 @@ end
 function preproc(V, objective::P; verbose::Bool=false, zero::AbstractVector{P}, nonneg::AbstractVector{P},
     psd::AbstractVector{<:AbstractMatrix{P}}, groupings::RelaxationGroupings, preprocess::Union{Nothing,Bool}=nothing,
     preprocess_quick::Bool=true, preprocess_randomized::Bool=false, preprocess_fine::Bool=false,
-    warn_disable_randomization::Bool=true, parameters...) where {P<:SimpleRealPolynomial}
+    warn_disable_randomization::Bool=true, parameters...) where {P<:SimplePolynomial{<:Any,<:Any,0}}
     if !isnothing(preprocess)
         preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
     end

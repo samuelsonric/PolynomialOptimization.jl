@@ -115,8 +115,8 @@ function Base.iterate(iter::PolynomialSolutions)
     return iterate(iter, state)
 end
 
-variable_index(v::SimpleRealVariable) = v.index
-variable_index(v::SimpleComplexVariable{Nr}) where {Nr} = (@assert(!v.isconj); Nr + v.index)
+variable_index(v::SimpleVariable{<:Any,0}) = v.index
+variable_index(v::SimpleVariable{Nr}) where {Nr} = (@assert(!v.isconj); Nr + v.index)
 
 function Base.iterate(iter::PolynomialSolutions{R,V,Nr,Nc}, state::Vector{Int}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}
     verbose = iter.verbose

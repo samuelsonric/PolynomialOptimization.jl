@@ -37,8 +37,12 @@ struct SimpleRealVariable{Nr,Nc}
     A real variable will print as `xᵢ`, where the subscript is given by `index`.
     The variable is part of the polynomial ring with `Nr` real and `Nc` complex variables.
 
-    See also [`SimpleVariable`](@ref), [`SimpleComplexVariable`](@ref).
+    !!! warning
+        This method is for construction of the variable only. Do not use it in type comparisons; variables constructed with
+        this method will _not_ be of type `SimpleRealVariable` (in fact, don't think of it as a type), but rather of type
+        [`SimpleVariable`](@ref)!
 
+    See also [`SimpleVariable`](@ref), [`SimpleComplexVariable`](@ref).
     """
     function SimpleRealVariable{Nr,Nc}(index::Integer) where {Nr,Nc}
         0 < index ≤ Nr || throw(DomainError(index, "Invalid index: must be between 1 and $Nr"))
@@ -56,6 +60,11 @@ struct SimpleComplexVariable{Nr,Nc}
     A complex variable will print as `zᵢ` (if `isconj=false`) or `z̄ᵢ` (if `isconj=true`), where the subscript is given by
     `index`.
     The variable is part of the polynomial ring with `Nr` real and `Nc` complex variables.
+
+    !!! warning
+        This method is for construction of the variable only. Do not use it in type comparisons; variables constructed with
+        this method will _not_ be of type `SimpleComplexVariable` (in fact, don't think of it as a type), but rather of type
+        [`SimpleVariable`](@ref)!
 
     See also [`SimpleVariable`](@ref), [`SimpleRealVariable`](@ref).
     """

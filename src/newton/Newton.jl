@@ -2,7 +2,7 @@ module Newton
 
 using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
 import BufferedStreams
-using ..SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleComplexMonomial, smallest_unsigned
+using ..SimplePolynomials: smallest_unsigned
 using ..PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy,
     keepcol!, FastKey, RelaxationGroupings
 
@@ -119,7 +119,7 @@ halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
 
 function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepath::Union{<:AbstractString,Nothing}=nothing,
     zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}},
-    groupings::RelaxationGroupings, kwargs...) where {P<:SimpleRealPolynomial}
+    groupings::RelaxationGroupings, kwargs...) where {Nr,P<:SimplePolynomial{<:Any,Nr,0}}
     parameters, coeffs = preproc(V, objective; verbose, zero, nonneg, psd, groupings, kwargs...)
     newton_time = @elapsed candidates = let
         analysis = analyze(coeffs)
@@ -146,7 +146,7 @@ end
 
 function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false, zero::AbstractVector{P}=P[],
     nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[],
-    degree::Int=maxhalfdegree(objective)) where {Nc,P<:SimpleComplexPolynomial{<:Any,Nc}}
+    degree::Int=maxhalfdegree(objective)) where {Nc,P<:SimplePolynomial{<:Any,0,Nc}}
     # For complex-valued polynomials, the SDP looks like dot(basis, M, basis); due to the conjugation of the first element,
     # this is a 1:1 mapping between elements in M and monomials - contrary to the non-unique real case. Given that the
     # polynomials must be real-valued, any monomial that is present in the objective will also be present with its conjugate.

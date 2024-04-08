@@ -110,9 +110,6 @@ SimpleMonomial{Nr,Nc}(args::AbstractVector...) where {Nr,Nc} = SimpleMonomial{Nr
 SimpleMonomial{Nr,Nc,I}(args::AbstractVector...) where {Nr,Nc,I<:Integer} =
     SimpleMonomial{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), args...)
 
-const SimpleRealMonomial{Nr,I<:Integer,E<:AbstractExponents} = SimpleMonomial{Nr,0,I,E}
-const SimpleComplexMonomial{Nc,I<:Integer,E<:AbstractExponents} = SimpleMonomial{0,Nc,I,E}
-
 """
     SimpleConjMonomial(m::SimpleMonomial) <: AbstractMonomial
 

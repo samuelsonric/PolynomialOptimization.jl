@@ -33,19 +33,19 @@ end
 end
 
 # The same goes for resizing, which is done after the monomial vector was sorted by calling unique!.
-function Base.resize!(x::SimplePolynomials.SimpleRealMonomialVector{Nr,P,M}, len) where {Nr,P<:Unsigned,M<:DenseMatrix}
+function Base.resize!(x::SimpleMonomialVector{Nr,0,P,M}, len) where {Nr,P<:Unsigned,M<:DenseMatrix}
     n = length(x) - len
     n < 0 && error("Cannot increase the size of a monomial vector")
     iszero(n) && return x
     return SimpleMonomialVector{Nr,0,P,M}(matrix_delete_end!(x.exponents_real, n))
 end
-function Base.resize!(x::SimplePolynomials.SimpleComplexMonomialVector{Nc,P,M}, len) where {Nc,P<:Unsigned,M<:DenseMatrix}
+function Base.resize!(x::SimpleMonomialVector{0,Nc,P,M}, len) where {Nc,P<:Unsigned,M<:DenseMatrix}
     n = length(x) - len
     n < 0 && error("Cannot increase the size of a monomial vector")
     iszero(n) && return x
     return SimpleMonomialVector{0,Nc,P,M}(matrix_delete_end!(x.exponents_complex, n), matrix_delete_end!(x.exponents_conj, n))
 end
-function Base.resize!(x::SimplePolynomials.SimpleMonomialVector{Nr,Nc,P,M}, len) where {Nr,Nc,P<:Unsigned,M<:DenseMatrix}
+function Base.resize!(x::SimpleMonomialVector{Nr,Nc,P,M}, len) where {Nr,Nc,P<:Unsigned,M<:DenseMatrix}
     n = length(x) - len
     n < 0 && error("Cannot increase the size of a monomial vector")
     iszero(n) && return x

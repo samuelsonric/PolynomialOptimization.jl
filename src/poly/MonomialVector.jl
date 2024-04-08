@@ -148,8 +148,6 @@ end
 SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, args...; kwargs...) =
     SimpleMonomialVector{UInt}(mv, args...; kwargs...)
 
-const SimpleRealMonomialVector{Nr,I<:Integer,E} = SimpleMonomialVector{Nr,0,I,E}
-const SimpleComplexMonomialVector{Nc,I<:Integer,E} = SimpleMonomialVector{0,Nc,I,E}
 const SimpleMonomialVectorComplete{Nr,Nc,I<:Integer,E<:AbstractExponentsDegreeBounded,T<:SimpleMonomial{Nr,Nc,I}} =
     SimpleMonomialVector{Nr,Nc,I,E,T}
 const SimpleMonomialVectorSubset{Nr,Nc,I<:Integer,E<:AbstractExponents,T<:SimpleMonomial{Nr,Nc,I}} =
@@ -196,19 +194,19 @@ MultivariatePolynomials.mindegree(x::SimpleMonomialVectorSubset) =
 MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorComplete) = x.e.maxdeg
 MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorSubset) =
     isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, last(x.indices))
-MultivariatePolynomials.extdegree_complex(x::SimpleRealMonomialVector) = extdegree(x)
-MultivariatePolynomials.mindegree_complex(x::SimpleRealMonomialVector) = mindegree(x)
-MultivariatePolynomials.maxdegree_complex(x::SimpleRealMonomialVector) = maxdegree(x)
-MultivariatePolynomials.exthalfdegree(x::SimpleRealMonomialVector) = div.(extdegree(x), 2, RoundUp)
-MultivariatePolynomials.minhalfdegree(x::SimpleRealMonomialVector) = div(mindegree(x), 2, RoundUp)
-MultivariatePolynomials.maxhalfdegree(x::SimpleRealMonomialVector) = div(maxdegree(x), 2, RoundUp)
+MultivariatePolynomials.extdegree_complex(x::SimpleMonomialVector{<:Any,0}) = extdegree(x)
+MultivariatePolynomials.mindegree_complex(x::SimpleMonomialVector{<:Any,0}) = mindegree(x)
+MultivariatePolynomials.maxdegree_complex(x::SimpleMonomialVector{<:Any,0}) = maxdegree(x)
+MultivariatePolynomials.exthalfdegree(x::SimpleMonomialVector{<:Any,0}) = div.(extdegree(x), 2, RoundUp)
+MultivariatePolynomials.minhalfdegree(x::SimpleMonomialVector{<:Any,0}) = div(mindegree(x), 2, RoundUp)
+MultivariatePolynomials.maxhalfdegree(x::SimpleMonomialVector{<:Any,0}) = div(maxdegree(x), 2, RoundUp)
 # TODO: is there any more efficient way to obtain the [ext,min,max][half]degree[_complex] information for complex-valued
 # vectors than the default iteration over exponents. This should be possible at least partly, though it might also depend on
 # whether there is a multideg restriction present or not. We might be able to infer the maximal degree for a range of indices
 # and a range exponents, at least if these exponents are to the right.
 
-Base.isreal(::SimpleRealMonomialVector) = true
-Base.conj(v::SimpleRealMonomialVector, along...) = v
+Base.isreal(::SimpleMonomialVector{<:Any,0}) = true
+Base.conj(v::SimpleMonomialVector{<:Any,0}, along...) = v
 Base.conj(v::SimpleMonomialVector, along...) = _conj(v, along...)
 _conj(v::SimpleMonomialVectorComplete{<:Any,<:Any,<:Integer,<:ExponentsDegree}, along...) = v
 function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}

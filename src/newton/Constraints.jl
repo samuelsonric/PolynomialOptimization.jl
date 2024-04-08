@@ -1,5 +1,5 @@
-function merge_constraints(objective::SimpleRealPolynomial{<:Any,Nr,P}, zero, nonneg, psd, groupings::RelaxationGroupings,
-    dense::Val, verbose::Bool) where {Nr,P<:Unsigned}
+function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero, nonneg, psd, groupings::RelaxationGroupings,
+    dense::Val, verbose::Bool) where {Nr}
     @verbose_info("Incorporating constraints into set of exponents")
     mons_idx_set = sizehint!(Set{FastKey{Int}}(), length(objective))
     # we start by storing the indices of the monomials only, which is the most efficient way for eliminating duplicates
@@ -81,11 +81,11 @@ function merge_constraints(objective::SimpleRealPolynomial{<:Any,Nr,P}, zero, no
     return exponents_from_indices(P, Nr, mons_idx_set, dense)
 end
 
-_realify(m::SimpleComplexMonomial{Nc,P,V}) where {Nc,P<:Unsigned,V<:AbstractVector{P}} =
+_realify(m::SimpleMonomial{0,Nc,P,V}) where {Nc,P<:Unsigned,V<:AbstractVector{P}} =
     SimpleMonomial{Nc,0,P,V}(m.exponents_complex, SimplePolynomials.absent, SimplePolynomials.absent)
 
-function merge_constraints(objective::SimpleComplexPolynomial{<:Any,Nc,P}, zero, nonneg, psd, groupings::RelaxationGroupings,
-    dense::Val, verbose::Bool) where {Nc,P<:Unsigned}
+function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg, psd, groupings::RelaxationGroupings,
+    dense::Val, verbose::Bool) where {Nc}
     @verbose_info("Incorporating constraints into set of exponents")
     # Note that in the complex-valued case there's no mixing - i.e., no real variables. And every monomial appears once in its
     # original form, once in its conjugate. We are only interested in the "original" (whichever it is), so we effectively treat
