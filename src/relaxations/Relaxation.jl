@@ -34,6 +34,47 @@ struct RelaxationGroupings{Nr,Nc,V<:SimpleVariable{Nr,Nc}}
     var_cliques::Vector{Vector{V}}
 end
 
+function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector})
+    lg = length(grouping)
+    println(io, lg, " block", isone(lg) ? "" : "s")
+    lensorted = sort(grouping, by=length, rev=true)
+    len = floor(Int, log10(length(first(lensorted)))) +1
+    for block in lensorted
+        # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
+        print(io, "  ", lpad(length(block), len, " "), " [")
+        show(io, "text/plain", first(block))
+        for x in Iterators.drop(block, 1)
+            print(io, ", ")
+            show(io, "text/plain", x)
+        end
+        println(io, "]")
+    end
+end
+
+function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
+    println(io, "Groupings for the relaxation of a polynomial optimization problem\nVariable cliques\n================")
+    for clique in groupings.var_cliques
+        print(io, "[")
+        show(stdout, "text/plain", first(clique))
+        for x in Iterators.drop(clique, 1)
+            print(io, ", ")
+            show(io, "text/plain", x)
+        end
+        println(io, "]")
+    end
+    print("\nBlock groupings\n===============\nObjective: ")
+    _show_groupings(io, groupings.obj)
+    for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
+        block = getproperty(groupings, f)::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
+        if !isempty(block)
+            for (i, constr) in enumerate(block)
+                print(io, name, " constraint #", i, ": ")
+                _show_groupings(io, constr)
+            end
+        end
+    end
+end
+
 @eval function Base.intersect(a::RG, b::RG) where {Nr,Nc,RG<:RelaxationGroupings{Nr,Nc}}
     (length(a.zeros) == length(b.zeros) && length(a.nonnegs) == length(b.nonnegs) && length(a.psds) == length(b.psds)) ||
         error("Cannot intersect two relaxation groupings for different optimization problems")

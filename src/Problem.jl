@@ -62,17 +62,29 @@ function Base.show(io::IO, m::MIME"text/plain", p::POProblem)
         show(io, m, p.prefactor)
     end
     ∑length = length(p.constr_zero) + length(p.constr_nonneg) + length(p.constr_psd)
+    matrix_io = io
+    if !haskey(matrix_io, :compact)
+        matrix_io = IOContext(matrix_io, :compact => true)
+    end
     if !iszero(∑length)
-        len = ceil(Int, log10(∑length))
+        len = floor(Int, log10(∑length)) +1
         i = 1
-        for (c, t, s) in ((p.constr_zero, "equality", "0 = "),
-                          (p.constr_nonneg, "nonnegative", "0 ≤ "),
-                          (p.constr_psd, "semidefinite", "0 ⪯ "))
+        for (c, t, s) in ((p.constr_zero, "equality", " = 0"),
+                          (p.constr_nonneg, "nonnegative", " ≥ 0"),
+                          (p.constr_psd, "semidefinite", "")) # we'll do it differently for the semidefinite case
             if !isempty(c)
                 print(io, "\n", length(c), " ", t, " constraint", isone(length(c)) ? "" : "s")
                 for constr in c
-                    print(io, "\n", lpad(i, len, "0"), ": ", s)
-                    show(io, m, constr)
+                    if constr isa AbstractArray
+                        # Do not simply show the array. This will print the whole eltype, which makes this completely
+                        # unreadable. Besides, we can do a nice indentation in this way.
+                        println(io)
+                        Base.print_matrix(matrix_io, constr, lpad(i, len, "0") * ": [", "  ", "] ⪰ 0")
+                    else
+                        print(io, "\n", lpad(i, len, "0"), ": ")
+                        show(io, m, constr)
+                        print(io, s)
+                    end
                     i += 1
                 end
             end
