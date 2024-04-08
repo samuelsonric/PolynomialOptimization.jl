@@ -14,7 +14,7 @@ testdir = dirname(pathof(MP)) * "/../test"
 include("$testdir/utils.jl")
 
 @testset "Exponents" begin
-    @testset "ExponentsAll" begin
+    @testset failfast=true "ExponentsAll" begin
         ea = ExponentsAll{5,Int32}()
         @test stack(Iterators.take(Iterators.drop(ea, 5), 7)) == Int[
             1  0  0  0  0  0  0
@@ -56,7 +56,7 @@ include("$testdir/utils.jl")
         end
         @test degree_from_index(ea, Int32(2000)) == 9
     end
-    @testset "ExponentsDegree" begin
+    @testset failfast=true "ExponentsDegree" begin
         ed = ExponentsDegree{5,Int32}(2:7)
         @test length(ed) == 786
         @test length(unsafe, ed) == 786
@@ -93,7 +93,7 @@ include("$testdir/utils.jl")
         @test degree_from_index(ed, Int32(786)) == 7
         @test degree_from_index(ed, Int32(787)) == 8
     end
-    @testset "ExponentsMultideg" begin
+    @testset failfast=true "ExponentsMultideg" begin
         emd = ExponentsMultideg{5,Int32}(3:7, [1, 0, 0, 1, 0], [5, 3, 6, 7, 2])
         @test length(emd) == 223
         @test length(unsafe, emd) == 223
@@ -189,7 +189,7 @@ include("$testdir/utils.jl")
             end
         end
     end
-    @testset "Comparison" begin
+    @testset failfast=true "Comparison" begin
         ea = ExponentsAll{4,Int}()
         function testexps(e₁, exps₁, e₂, exps₂)
             ie₁ = exponents_to_index(e₁, exps₁)

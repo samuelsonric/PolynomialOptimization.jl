@@ -6,9 +6,11 @@ include("./shared.jl")
         sp = RelaxationSparsityCorrelative(poly_problem(sum((x[i] + 10x[i+1])^2 + 5(x[i+2] - x[i+3])^2 +
                                                             (x[i+1] - 2x[i+2])^4 + 10(x[i] - 10x[i+3])^4 for i in 1:2:n-3)))
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0 atol = 6e-5 skip=solver==:COPTSOS
-            # COPT has numerical issues
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = 6e-5 skip=solver==:COPTSOS
+                # COPT has numerical issues
+            end
         end
     end
 end
@@ -21,8 +23,10 @@ end
                               sum(j == i ? 0 : (1 + x[j]) * x[j] for j in max(1, i - 5):min(n, i + 1)))^2 for i = 1:n))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == cl
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0 atol = 5e-8
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = 5e-8
+            end
         end
     end
 end
@@ -35,8 +39,10 @@ end
                 sum(((3 - 2x[i]) * x[i] - x[i-1] - 2x[i+1] + 1)^2 for i in 2:n-1) + ((3 - 2x[n]) * x[n] - x[n-1] + 1)^2)
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0 atol = 1e-5
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = 1e-5
+            end
         end
     end
 end
@@ -49,8 +55,10 @@ end
                 (1 - x[i+2])^2 + 10(x[i+1] + x[i+3] - 2)^2 + 0.1(x[i+1] - x[i+3])^2 for i in 1:2:n-3))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4
+            end
         end
     end
 end
@@ -62,8 +70,10 @@ end
             poly_problem(1 + sum(100((x[i] - x[i-1]^2)^2 + (1 - x[i])^2) for i in 2:n))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-5
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-5
+            end
         end
     end
 end
@@ -113,13 +123,15 @@ end
             )
             cliques, bound = results[(nx, ny, μ, M)]
             @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == cliques
-            μ != 0.5 && for solver in solvers # the largest 0.5 can take about 180s to solve
-                if solver == :MosekSOS
-                    parameters = ((Mosek.MSK_IPAR_PRESOLVE_USE, Mosek.MSK_PRESOLVE_MODE_OFF),)
-                else
-                    parameters = ()
+            if optimize && μ != 0.5
+                for solver in solvers # the largest 0.5 can take about 180s to solve
+                    if solver == :MosekSOS
+                        parameters = ((Mosek.MSK_IPAR_PRESOLVE_USE, Mosek.MSK_PRESOLVE_MODE_OFF),)
+                    else
+                        parameters = ()
+                    end
+                    @test poly_optimize(solver, sp; parameters).objective ≈ bound atol = 1e-4
                 end
-                @test poly_optimize(solver, sp; parameters).objective ≈ bound atol = 1e-4
             end
         end
     end
@@ -127,7 +139,7 @@ end
 
 @testset "Example 6.2 Problem (6.2) from correlative sparsity paper" begin
     for (M, result) in ((600, 0.00645), (700, 0.00553), (800, 0.00484), (900, 0.0043), (1000, 0.0038))
-        @polyvar x[1:M] y[2:M]
+        DynamicPolynomials.@polyvar x[1:M] y[2:M]
         Y(i) = isone(i) ? 1 : y[i-1]
         sp = RelaxationSparsityCorrelative(
             poly_problem(
@@ -136,8 +148,10 @@ end
             )
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => 1, 3 => M -2)
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ result atol = 1e-4
+        if optimize
+            for solver in solvers
+                @test poly_optimize(solver, sp).objective ≈ result atol = 1e-4
+            end
         end
     end
 end
@@ -277,7 +291,7 @@ PSD block sizes:
 end
 
 @testset "Example 6.1 from Josz, Molzahn" begin
-    @polyvar x[1:4]
+    DynamicPolynomials.@polyvar x[1:4]
     prob = poly_problem(x[1]*x[2] + x[1]*x[4], nonneg=[x[1]*x[2]+x[1]*x[3], x[1]*x[3]+x[1]*x[4]+x[1]*x[2]])
     @test strRep(groupings(RelaxationSparsityCorrelative(prob, 2, low_order_nonneg=[2], chordal_completion=false))) ==
         "Groupings for the relaxation of a polynomial optimization problem
