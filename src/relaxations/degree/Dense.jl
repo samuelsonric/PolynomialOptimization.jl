@@ -1,6 +1,6 @@
 export RelaxationDense
 
-struct RelaxationDense{P<:POProblem,MV<:LazyMonomials,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
+struct RelaxationDense{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
     problem::P
     degree::Int
     basis::MV
@@ -21,10 +21,8 @@ struct RelaxationDense{P<:POProblem,MV<:LazyMonomials,G<:RelaxationGroupings} <:
         degree::Integer=(@info("Automatically selecting minimal degree cutoff $(problem.mindegree)"); problem.mindegree)) where
         {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:POProblem{Poly}}
         degree < problem.mindegree && throw(ArgumentError("The minimally required degree is $(problem.mindegree)"))
-        maxexponent_T = SimplePolynomials.smallest_unsigned(2degree)
-        basis = LazyMonomials{Nr,Nc}(Base.zero(maxexponent_T):maxexponent_T(degree);
-                                     maxmultideg=[fill(maxexponent_T(degree), Nr + Nc); zeros(maxexponent_T, Nc)],
-                                     exponents=ownexponents)
+        basis = monomials(Val(Nr), Val(Nc), 0:degree, maxmultideg=[SimplePolynomials.ConstantVector(degree, Nr + Nc);
+                                                                   SimplePolynomials.ConstantVector(0, Nc)])
         gr = groupings(problem, basis, degree, nothing)
         new{P,typeof(basis),typeof(gr)}(problem, Int(degree), basis, gr)
     end

@@ -32,7 +32,7 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
     """
     function RelaxationSparsityCorrelative(relaxation::AbstractPORelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
-        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where {Nr,Nc,P<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}
+        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where {Nr,Nc,I<:Integer,P<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
             (!ismissing(high_order_psd) && !ismissing(lower_order_psd))) &&
@@ -47,11 +47,10 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
             error("Unknown constraint index specified")
 
         parent = groupings(relaxation)
-        T = SimplePolynomials._get_p(parent)
-        parentmaxobjdeg = T(maximum(maxdegree, parent.obj))
-        parentmaxzerodeg = T.(maximum.(maxdegree, parent.zeros, init=zero(T)))
-        parentmaxnonnegdeg = T.(maximum.(maxdegree, parent.nonnegs, init=zero(T)))
-        parentmaxpsddeg = T.(maximum.(maxdegree, parent.psds, init=zero(T)))
+        parentmaxobjdeg = maximum(maxdegree, parent.obj)
+        parentmaxzerodeg = maximum.(maxdegree, parent.zeros, init=0)
+        parentmaxnonnegdeg = maximum.(maxdegree, parent.nonnegs, init=0)
+        parentmaxpsddeg = maximum.(maxdegree, parent.psds, init=0)
 
         @verbose_info("Constructing correlative sparsity graph")
         g = Graphs.SimpleGraph(Nr + Nc)
@@ -90,8 +89,7 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
                     low_deg = i ∈ l
                 end
                 if !low_deg && isone(length(groupings))
-                    grouping_vars = effective_variables(first(groupings))
-                    low_deg = isempty(grouping_vars)
+                    low_deg = isempty(effective_variables(first(groupings)))
                 end
                 if low_deg
                     # we must make sure that the grouping only contains the constant, else mixing will occur
@@ -125,21 +123,21 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
             " seconds. Generating groupings.")
         # The correlative iterator could potentially be made even smaller by determining all the multideg boundaries, but would
         # this be worth the effort?
-        minmultideg = zeros(T, Nr + 2Nc)
-        newobj = Vector{LazyMonomials{Nr,Nc,T,MonomialIterator{Vector{T},T}}}(undef, length(cliques))
+        minmultideg = SimplePolynomials.ConstantVector(0, Nr + 2Nc)
+        newobj = Vector{SimpleMonomialVector{Nr,Nc,I,ExponentsMultideg{Nr+2Nc,I,typeof(minmultideg),Vector{Int}}}}(undef, length(cliques))
         newzero = [similar(newobj) for _ in 1:length(problem.constr_zero)]
         newnonneg = [similar(newobj) for _ in 1:length(problem.constr_nonneg)]
         newpsd = [similar(newobj) for _ in 1:length(problem.constr_psd)]
         @inbounds for (i, clique) in enumerate(cliques)
-            maxmultideg = zeros(T, Nr + 2Nc)
+            maxmultideg = zeros(Int, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
-            newobj[i] = LazyMonomials{Nr,Nc}(zero(T):parentmaxobjdeg; minmultideg, maxmultideg, exponents=ownexponents)
+            newobj[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
             for (parentdeg, news) in ((parentmaxzerodeg, newzero), (parentmaxnonnegdeg, newnonneg), (parentmaxpsddeg, newpsd))
                 for (maxdeg, newel) in zip(parentdeg, news)
-                    maxmultideg = zeros(T, Nr + 2Nc)
+                    maxmultideg = zeros(Int, Nr + 2Nc)
                     fill!(@view(maxmultideg[clique]), maxdeg)
-                    newel[i] = LazyMonomials{Nr,Nc}(zero(T):min(maxdeg, T(length(clique) * maxdeg)); minmultideg, maxmultideg,
-                        exponents=ownexponents)
+                    newel[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
+                        minmultideg, maxmultideg))
                 end
             end
         end

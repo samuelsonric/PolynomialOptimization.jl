@@ -24,47 +24,31 @@ Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
-struct RelaxationGroupings{Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc},MV,MVZ,MVN,MVP}
-    obj::Vector{MV}
-    zeros::Vector{Vector{MVZ}}
-    nonnegs::Vector{Vector{MVN}}
-    psds::Vector{Vector{MVP}}
+struct RelaxationGroupings{Nr,Nc,V<:SimpleVariable{Nr,Nc}}
+    # These can all be different types of monomial vectors, but we don't want to have a type explosion with nested relaxation
+    # groupings. Keep it dynamic.
+    obj::Vector{<:SimpleMonomialVector{Nr,Nc}}
+    zeros::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
+    nonnegs::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
+    psds::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
     var_cliques::Vector{Vector{V}}
-
-    RelaxationGroupings(obj::Vector{MV}, zeros::Vector{Vector{MVZ}}, nonnegs::Vector{Vector{MVN}},
-        psds::Vector{Vector{MVP}}, var_cliques::Vector{Vector{V}}) where {Nr,Nc,V<:SimpleVariable{Nr,Nc},MV,MVZ,MVN,MVP} =
-        new{Nr,Nc,_good_groupings(eltype(MV), eltype(MVZ), eltype(MVN), eltype(MVP), V),V,MV,MVZ,MVN,MVP}(obj, zeros, nonnegs,
-            psds, var_cliques)
 end
 
-if v"1.10" ≤ VERSION ≤ v"1.10.2"
-    # Julia issue #53371 - the "more correct" version will compile forever
-    _good_groupings(::Type{<:SimpleMonomial{Nr,Nc,P}}, _, _, _, _) where {Nr,Nc,P<:Unsigned} = P
-else
-    _good_groupings(::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleMonomial{Nr,Nc,P}},
-        ::Type{<:SimpleMonomial{Nr,Nc,P}}, ::Type{<:SimpleVariable{Nr,Nc}}) where {Nr,Nc,P<:Unsigned} = P
-end
-_good_groupings(_, _, _, _, _) = error("RelaxationGroupings must have elements from the same ring")
-
-SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:Any,P}}) where {P<:Unsigned} = P
-@eval function Base.intersect(a::RelaxationGroupings{Nr,Nc,P,V}, b::RelaxationGroupings{Nr,Nc,P,V}) where
-    {Nr,Nc,P<:Unsigned,V<:SimpleVariable{Nr,Nc}}
+@eval function Base.intersect(a::RG, b::RG) where {Nr,Nc,RG<:RelaxationGroupings{Nr,Nc}}
     (length(a.zeros) == length(b.zeros) && length(a.nonnegs) == length(b.nonnegs) && length(a.psds) == length(b.psds)) ||
         error("Cannot intersect two relaxation groupings for different optimization problems")
     # TODO: move from Iterators.product to something that is indexable, so that every loop can be parallelized
-    newobj = Vector{Base.promote_op(intersect, eltype(a.obj), eltype(b.obj))}(undef, length(a.obj) * length(b.obj))
+    newobj = Vector{SimpleMonomialVector{Nr,Nc}}(undef, length(a.obj) * length(b.obj))
     for (i, (obj_a, obj_b)) in enumerate(Iterators.product(a.obj, b.obj))
         @inbounds newobj[i] = intersect(obj_a, obj_b)
     end
     newobj = Base._groupedunique!(sort!(newobj))
 
     $((quote
-        $(Symbol(:new, name)) = Vector{Vector{Base.promote_op(intersect, eltype(eltype(a.$name)), eltype(eltype(b.$name)))}}(
-            undef, length(a.$name)
-        )
+        $(Symbol(:new, name)) = Vector{Vector{<:SimpleMonomialVector{Nr,Nc}}}(undef, length(a.$name))
         for k in 1:length(a.$name)
             @inbounds as, bs = a.$name[k], b.$name[k]
-            newₖ = eltype($(Symbol(:new, name)))(undef, length(as) * length(bs))
+            newₖ = Vector{SimpleMonomialVector{Nr,Nc}}(undef, length(as) * length(bs))
             for (i, (asᵢ, bsᵢ)) in enumerate(Iterators.product(as, bs))
                 @inbounds newₖ[i] = intersect(asᵢ, bsᵢ)
             end
@@ -72,13 +56,15 @@ SimplePolynomials._get_p(::SimplePolynomials.XorTX{RelaxationGroupings{<:Any,<:A
         end
     end for name in (:zeros, :nonnegs, :psds))...)
 
-    newcliques = Vector{Vector{V}}(undef, length(a.var_cliques) * length(b.var_cliques))
+    newcliques = Vector{Vector{SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr + 2Nc)}}}(
+        undef, length(a.var_cliques) * length(b.var_cliques)
+    )
     for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
         @inbounds newcliques[i] = sort!(intersect(clique_a, clique_b))
     end
     newcliques = Base._groupedunique!(sort!(newcliques, by=x -> (-length(x), x)))
 
-    return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, newcliques)
+    return RG(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end
 Base.intersect(a::RelaxationGroupings, ::Nothing) = a
 Base.intersect(::Nothing, b::RelaxationGroupings) = b

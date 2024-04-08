@@ -89,7 +89,6 @@ macro capture(firstarg, secondarg=nothing)
 end
 
 include("./helpers/Helpers.jl")
-using .SimplePolynomials: SimpleRealPolynomial, SimpleComplexPolynomial, SimpleRealMonomial
 
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")

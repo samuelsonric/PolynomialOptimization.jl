@@ -6,7 +6,7 @@ realtype(::Type{<:Union{R,Complex{R}}}) where {R<:Real} = R
 
 # For complex-valued problems, there are m and conj(m); all solvers require real-valued inputs.
 # Therefore, we first define the canonicalized monomial m̃ as the one of m, conj(m) that has the smaller index.
-iscanonical(::SimpleRealMonomial) = true
+iscanonical(::SimplePolynomials.SimpleRealMonomial) = true
 Base.@assume_effects :consistent iscanonical(m::SimpleMonomial) = m.exponents_complex ≤ m.exponents_conj
 canonicalize(m::SimpleMonomial) = iscanonical(m) ? m : conj(m)
 # Next, the real part of m̃ is stored in the index associated with m; the imaginary part of m̃ in the index associated with

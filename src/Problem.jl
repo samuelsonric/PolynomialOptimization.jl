@@ -39,8 +39,8 @@ See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions
 """
 MultivariatePolynomials.nvariables(::POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
 
-const RealPOProblem = POProblem{<:SimpleRealPolynomial}
-const ComplexPOProblem = POProblem{<:SimpleComplexPolynomial}
+const RealPOProblem = POProblem{<:SimplePolynomials.SimpleRealPolynomial}
+const ComplexPOProblem = POProblem{<:SimplePolynomials.SimpleComplexPolynomial}
 
 """
     isreal(problem::Union{POProblem,<:AbstractPORelaxation})
@@ -83,7 +83,7 @@ end
 @doc raw"""
     poly_problem(objective; zero=[], nonneg=[], psd=[], perturbation=0.,
         factor_coercive=1, perturbation_coefficient=0., perturbation_form=0,
-        noncompact=(0., 0), tighter=false, verbose=false, representation=:auto)
+        noncompact=(0., 0), tighter=false, verbose=false, monomial_index_type=UInt)
 
 Analyze a polynomial optimization problem and return a [`POProblem`](@ref) that can be used for sparse analysis and
 optimization.
@@ -98,10 +98,13 @@ optimization.
 - `psd::AbstractVector{<:AbstractMatrix{<:AbstractPolynomialLike}}`: a vector of matrices that should be constrainted to be
   positive semidefinite. The matrices must be symmetric/hermitian.
 ## Problem representation
-- `representation::Symbol`: internally, whatever interface of `MultivariatePolynomials` is used, the data is converted to the
-  efficient [`SimplePolynomial`](@ref) representation. There is a dense or a sparse version of this representation, and by
-  default, a heuristic will choose the optimal one for the objective, which will then be the one taken for all data, also
-  including the constraints. Setting this parameter to `:dense` or `:sparse` allows to overwrite the choice.
+- `monomial_index_type::Type{<:Integer}`: internally, whatever interface of `MultivariatePolynomials` is used, the data is
+  converted to the efficient [`SimplePolynomial`](@ref) representation. Every monomial is represented by a single number of the
+  type given for this keyword argument. The default is usually a good choice, allowing quite large problems. For very small
+  problems, the index type might be reduced (however, note that the index must be large enough to capture the monomial for
+  every desired relaxation, and there will be no warning on overflow!); if the problem is extremely large, it might also be
+  enlarged to `UInt128` or `BigInt`, the latter in particular with potentially severe performance and memory consumption
+  issues.
 ## Problem modification
 ### For unique solution extraction
 - `perturbation::Union{Float64, <:AbstractVector{Float64}}`: adds a random linear perturbation with an absolute value not
@@ -167,7 +170,7 @@ function poly_problem(objective::P;
     factor_coercive::AbstractPolynomialLike=one(P), perturbation_coefficient::Float64=0.,
     perturbation_form::AbstractPolynomialLike=Base.zero(P), noncompact::Tuple{Real,Integer}=(0.,0),
     tighter::Union{Bool,Symbol}=false, tighten::Union{Bool,Symbol}=false, verbose::Bool=false,
-    representation::Symbol=:auto, newton_args::Tuple=()) where {P<:AbstractPolynomialLike}
+    newton_args::Tuple=(), monomial_index_type::Type{<:Integer}=UInt) where {P<:AbstractPolynomialLike}
     if tighten !== false
         tighter = tighten
     end
@@ -266,7 +269,7 @@ function poly_problem(objective::P;
     degrees_nonnegs = maxhalfdegree.(nonneg)
     degrees_psds = convert.(Int, maxhalfdegree.(psd)) # somehow, this is the only expression that gives Any[] when empty
     mindeg = max(maxhalfdegree(objective), maximum(degrees_eqs, init=0), maximum(degrees_nonnegs, init=0),
-            maximum(degrees_psds, init=0))
+                 maximum(degrees_psds, init=0))
     #endregion
 
     #region Tightening and degree adjustment
@@ -280,33 +283,28 @@ function poly_problem(objective::P;
         @inbounds append!(degrees_eqs, maxhalfdegree.(@view(zero[zero_len+1:end])))
         @inbounds append!(degrees_nonnegs, maxhalfdegree.(@view(nonneg[nonneg_len+1:end])))
         mindeg = max(mindeg, maximum(@view(degrees_eqs[zero_len+1:end]), init=0),
-            maximum(@view(degrees_nonnegs[nonneg_len+1:end]), init=0))
+                     maximum(@view(degrees_nonnegs[nonneg_len+1:end]), init=0))
     end
     #endregion
 
     #region SimplePolynomial conversion
     @verbose_info("Converting data to simple polynomials")
     max_exponent = 2mindeg
-    sobj = SimplePolynomial(objective, T; max_exponent, vars, representation)
-    if sobj isa SimplePolynomials.SimpleDensePolynomial
-        representation = :dense
-    else
-        representation = :sparse
-    end
-    sprefactor = SimplePolynomial(factor_coercive, T; max_exponent, vars, representation)
+    sobj = SimplePolynomial{monomial_index_type}(objective, T; vars)
+    sprefactor = SimplePolynomial{monomial_index_type}(factor_coercive, T; vars)
     szero = FastVec{typeof(sobj)}(buffer=length(zero))
     for zeroᵢ in zero
-        unsafe_push!(szero, SimplePolynomial(zeroᵢ, T; max_exponent, representation, vars))
+        unsafe_push!(szero, SimplePolynomial{monomial_index_type}(zeroᵢ, T; vars))
     end
     snonneg = FastVec{typeof(sobj)}(buffer=length(nonneg))
     for nonnegᵢ in nonneg
-        unsafe_push!(snonneg, SimplePolynomial(nonnegᵢ, T; max_exponent, representation, vars))
+        unsafe_push!(snonneg, SimplePolynomial{monomial_index_type}(nonnegᵢ, T; vars))
     end
     spsd = FastVec{Matrix{typeof(sobj)}}(buffer=length(psd))
     for psdᵢ in psd
         m = Matrix{typeof(sobj)}(undef, size(psdᵢ)...)
         for j in eachindex(psdᵢ, m)
-            @inbounds m[j] = SimplePolynomial(psdᵢ[j], T; max_exponent, representation, vars)
+            @inbounds m[j] = SimplePolynomial{monomial_index_type}(psdᵢ[j], T; vars)
         end
         unsafe_push!(spsd, m)
     end

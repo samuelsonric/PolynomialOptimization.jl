@@ -16,13 +16,12 @@ end
 # sparse: filter(Base.Fix2(effective_variables_in, clique), a1)
 
 function groupings(problem::POProblem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
-    {Nr,Nc,P<:Unsigned,M<:SimpleMonomial{Nr,Nc,P},Prob<:SimplePolynomial{<:Any,Nr,Nc,P}}
-    outtype = Vector{Base.promote_op(truncate_basis, typeof(basis), Int)}
+    {Nr,Nc,M<:SimpleMonomial{Nr,Nc},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
     return intersect(RelaxationGroupings(
         [basis],
-        outtype[[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
-        outtype[[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
-        outtype[[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
+        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
+        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
+        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
     ), parent)
 end
@@ -48,9 +47,6 @@ function truncate_basis(v::AbstractVector{M} where {M<:SimpleMonomial}, maxdeg::
         return @view(v[1:idx])
     end
 end
-truncate_basis(v::LazyMonomials{Nr,Nc,P,<:MonomialIterator{V,P}}, maxdeg::Integer) where {Nr,Nc,P<:Unsigned,V} =
-    LazyMonomials{Nr,Nc}(P(mindegree(v)):P(min(maxdeg, maxdegree(v))); v.iter.minmultideg, v.iter.maxmultideg,
-        exponents=V === Nothing ? nothing : ownexponents)
 
 include("./Dense.jl")
 include("./Custom.jl")
