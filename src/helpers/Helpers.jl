@@ -9,6 +9,7 @@ include("./Allocations.jl")
 # we must load this before MatrixPolynomials (so that effective_variables_in is known), but after FastVector, which is required
 # by SimplePolynomials.
 include("../poly/SimplePolynomials.jl")
-using .SimplePolynomials
+using .SimplePolynomials, .SimplePolynomials.MultivariateExponents
+import .SimplePolynomials.MultivariateExponents: iterate! # be careful to avoid duplication of methods; let's reuse this one
 
 include("./MatrixPolynomials.jl")
