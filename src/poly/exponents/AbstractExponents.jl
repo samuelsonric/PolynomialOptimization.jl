@@ -1,5 +1,5 @@
 export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBounded,
-    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices
+    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices, exponents_sum
 
 """
     AbstractExponents{N,I}
@@ -15,6 +15,13 @@ abstract type AbstractExponents{N,I<:Integer} end
 
 Base.IteratorEltype(::Type{<:AbstractExponents}) = Base.HasEltype()
 Base.eltype(::Type{E}) where {I<:Integer,E<:AbstractExponents{<:Any,I}} = ExponentIndices{I,E}
+
+"""
+    indextype(e)
+
+Returns the index type of an instance or subtype of [`AbstractExponents`](@ref). This function is not exported.
+"""
+indextype(::Union{<:AbstractExponents{<:Any,I},<:Type{<:AbstractExponents{<:Any,I}}}) where {I<:Integer} = I
 
 """
     AbstractExponentsUnbounded{N,I} <: AbstractExponents{N,I}
@@ -131,15 +138,19 @@ end
 
 Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsUnbounded}}) = Base.IsInfinite()
 Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:ExponentsVectorIterator}) = Base.HasEltype()
 Base.length(ei::ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}) = length(unsafe, ei.e)
+Base.eltype(::Type{<:ExponentsVectorIterator{Nothing}}) = Vector{Int}
+Base.eltype(::Type{<:ExponentsVectorIterator{V}}) where {V} = V
 # AbstractExponents are never empty
-Base.iterate(ei::ExponentsVectorIterator{<:AbstractVector{Int}}) = copyto!(ei.v, first(ei.e)), ei.v
+Base.iterate(ei::ExponentsVectorIterator{<:AbstractVector{Int}}) = @inbounds copyto!(ei.v, first(ei.e)), ei.v
 function Base.iterate(ei::ExponentsVectorIterator{Nothing})
-    v = collect(first(ei.e))
+    @inbounds v = collect(first(ei.e))
     return v, v
 end
 Base.iterate(ei::ExponentsVectorIterator, state::AbstractVector{Int}) =
-    iterate!(unsafe, state, ei.e) ? (state, state) : nothing
+    @inbounds iterate!(unsafe, state, ei.e) ? (state, state) : nothing
+Base.parent(v::ExponentsVectorIterator) = v.e
 
 """
     veciter(e::AbstractExponents[, v::AbstractVector{Int}])
@@ -437,4 +448,39 @@ end
     deg₁ = degree_from_index(e₁, index₁)
     deg₂ = degree_from_index(e₂, index₂)
     return deg₁ == deg₂ ? compare_indices(unsafe, e₁, index₁, op, e₂, index₂, deg₁) : op(deg₁, deg₂)
+end
+
+struct ExponentsSum{N,T<:Tuple}
+    e::T
+
+    ExponentsSum{N}(e...) where {N} = new{N,typeof(e)}(e)
+end
+
+Base.IteratorSize(::Type{<:ExponentsSum}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:ExponentsSum}) = Base.HasEltype()
+Base.length(s::ExponentsSum{N}) where {N} = N
+Base.eltype(::Type{<:ExponentsSum}) = Int
+Base.iterate(s::ExponentsSum{<:Any,T}) where {C,T<:NTuple{C,Any}} = iterate(s, ntuple(i -> iterate(s.e[i])::Tuple, Val(C)))
+@generated function Base.iterate(s::ExponentsSum, state)
+    items = fieldcount(state)
+    quote
+        total = +($((:(state[$i][1]) for i in 1:items)...))
+        $((:(isnothing($(Expr(:(=), Symbol(:nextstate, i), :(iterate(s.e[$i], state[$i][2]))))) &&
+            return nothing) for i in 1:items)...)
+        return total, ($(((Symbol(:nextstate, i)) for i in 1:items)...),)
+    end
+end
+
+"""
+    exponents_sum(e::AbstractExponents{N,I}, exponents...) -> Tuple{I,Int}
+
+Calculates the index of the sum of all `exponents` within `e`. If the result cannot be found in `e`, the function will return
+zero. Returns the total degree as second entry in the tuple
+"""
+Base.@assume_effects :consistent @generated function exponents_sum(e::AbstractExponents{N}, exponents...) where {N}
+    items = length(exponents)
+    quote
+        d = +($((:(sum(exponents[$i])) for i in 1:items)...))
+        return exponents_to_index(e, ExponentsSum{N}($((:(exponents[$i]) for i in 1:items)...)), d), d
+    end
 end

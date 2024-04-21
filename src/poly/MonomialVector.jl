@@ -174,6 +174,9 @@ end
 
 Base.IndexStyle(::Type{<:SimpleMonomialVector}) = IndexLinear()
 Base.size(x::SimpleMonomialVector) = (Int(length(x.indices)),)
+Base.isempty(::SimpleMonomialVectorComplete) = false # AbstractExponents must not be empty
+Base.copy(x::SimpleMonomialVectorComplete) = x
+Base.copy(x::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} = SimpleMonomialVector{Nr,Nc}(unsafe, x.e, copy(x.indices))
 
 @inline function Base.getindex(x::SimpleMonomialVector{Nr,Nc}, i::Integer) where {Nr,Nc}
     @boundscheck checkbounds(x, i)
@@ -187,6 +190,128 @@ end
     @boundscheck checkbounds(x, i)
     @inbounds return SimpleMonomialVector{Nr,Nc}(unsafe, x.e, view(x.indices, i))
 end
+"""
+    keepat!!(x::SimpleMonomialVector, i::AbstractVector{Bool})
+
+Keeps the `j`ᵗʰ monomial in `x` only if `i[j]` is `true`. This will mutate `x` if possible (i.e., if it was already indexed by
+a vector before), but it might also create a new vector if required (i.e., if a whole range of exponents was covered). Always
+use the return value, never rely on `x`.
+This function is not exported.
+"""
+Base.@propagate_inbounds keepat!!(x::SimpleMonomialVector{Nr,Nc}, i::AbstractVector{Bool}) where {Nr,Nc} =
+    SimpleMonomialVector{Nr,Nc}(unsafe, x.e, keepat!!(x.indices, i))
+Base.@propagate_inbounds keepat!!(x::Vector, i) = keepat!(x, i)
+@inline function keepat!!(r::AbstractRange{T}, i::AbstractVector{Bool}) where {T}
+    @boundscheck checkbounds(r, length(i))
+    len = count(i)
+    result = Vector{T}(undef, len)
+    j = 1
+    for (rᵢ, take) in zip(r, i)
+        if take
+            @inbounds result[j] = rᵢ
+            j += 1
+        end
+    end
+    return result
+end
+
+struct SimpleMonomialVectorIterator{Indexed,V,MV,Iterate}
+    v::V
+    mv::MV
+
+    function SimpleMonomialVectorIterator{Indexed}(v::V, mv::MV) where {Indexed,V<:AbstractVector{Int},Nr,Nc,MV<:SimpleMonomialVector{Nr,Nc}}
+        Indexed isa Bool || throw(MethodError(SimpleMonomialVectorIterator{Indexed}, (v, mv)))
+        length(v) == Nr + 2Nc || throw(DimensionMismatch("Vector length does not match variable count"))
+        # iteration is always better if we have a complete covering of the exponents or at least an assuredly continuous one
+        new{Indexed,V,MV,
+            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
+            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
+            isempty(mv) || 2length(mv) ≥ (last(mv.indices) - first(mv.indices) +1)
+           }(v, mv)
+    end
+
+    function SimpleMonomialVectorIterator{Indexed}(mv::MV) where {Indexed,Nr,Nc,MV<:SimpleMonomialVector{Nr,Nc}}
+        Indexed isa Bool || throw(MethodError(SimpleMonomialVectorIterator{Indexed}, (mv,)))
+        new{Indexed,Nothing,MV,
+            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
+            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
+            isempty(mv) || 2length(mv) ≥ (last(mv.indices) - first(mv.indices) +1)
+           }(nothing, mv)
+    end
+end
+
+Base.IteratorSize(::Type{<:SimpleMonomialVectorIterator}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:SimpleMonomialVectorIterator}) = Base.HasEltype()
+Base.length(mi::SimpleMonomialVectorIterator) = length(mi.mv)
+Base.eltype(::Type{<:SimpleMonomialVectorIterator{<:Any,Nothing}}) = Vector{Int}
+Base.eltype(::Type{<:SimpleMonomialVectorIterator{<:Any,V}}) where {V} = V
+
+function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed,V,<:SimpleMonomialVector{<:Any,<:Any,I,E},Iterate}) where {Indexed,V,I<:Integer,E,Iterate}
+    isempty(mi.mv) && return nothing
+    if V <: AbstractVector{Int}
+        @inbounds v = copyto!(mi.v, exponents(first(mi.mv)))
+    else
+        @assert(V === Nothing)
+        @inbounds v = collect(exponents(first(mi.mv)))
+    end
+    if E <: AbstractExponents
+        return Indexed ? ((one(I), v), (one(I), v)) : (v, v)
+    elseif E <: Tuple{AbstractExponents,AbstractUnitRange}
+        return Indexed ? ((first(mi.mv.indices), v), (first(mi.mv.indices), v, length(mi.mv) -1)) : (v, (v, length(mi.mv) -1))
+    elseif Iterate
+        return (Indexed ? (first(mi.mv.indices), v) : v), (v, I(2), 1, length(mi.mv) -1)
+    else
+        return Indexed ? ((first(mi.mv.indices), v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
+    end
+end
+Base.iterate(mi::SimpleMonomialVectorIterator{false}, state::AbstractVector{Int}) =
+    @inbounds iterate!(unsafe, state, mi.mv.e) ? (state, state) : nothing
+Base.iterate(mi::SimpleMonomialVectorIterator{true}, (index, state)::Tuple{Integer,AbstractVector{Int}}) =
+    @inbounds iterate!(unsafe, state, mi.mv.e) ? ((index + one(index), state), (index + one(index), state)) : nothing
+function Base.iterate(mi::SimpleMonomialVectorIterator{false}, (state, remaining)::Tuple{AbstractVector{Int},Int})
+    iszero(remaining) && return nothing
+    success = iterate!(unsafe, state, mi.mv.e)
+    @assert(success)
+    return state, (state, remaining -1)
+end
+function Base.iterate(mi::SimpleMonomialVectorIterator{true}, (index, state, remaining)::Tuple{Integer,AbstractVector{Int},Int})
+    iszero(remaining) && return nothing
+    success = iterate!(unsafe, state, mi.mv.e)
+    @assert(success)
+    return (index + one(index), state), (index + one(index), state, remaining -1)
+end
+function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, index, internal, remaining)::Tuple{AbstractVector{Int},Integer,Int,Int}) where {Indexed}
+    iszero(remaining) && return nothing
+    @inbounds while true
+        internal += 1
+        success = iterate!(unsafe, state, mi.mv.e)
+        @assert(success)
+        mi.mv.indices[internal] < index || break
+    end
+    index = mi.mv.indices[internal]
+    return (Indexed ? (index, state) : state), (state, index + one(index), internal, remaining -1)
+end
+function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, index, remaining)::Tuple{AbstractVector{Int},Int,Int}) where {Indexed}
+    iszero(remaining) && return nothing
+    result = copyto!(state, exponents(mi.mv[index]))
+    @inbounds return (Indexed ? (mi.mv.indices[index], result) : result), (state, index +1, remaining -1)
+end
+Base.parent(mi::SimpleMonomialVectorIterator) = mi.mv
+
+"""
+    veciter(mv::SimpleMonomialVector[, v::AbstractVector{Int}], indexed::Bool=false)
+
+Creates an iterator over all exponents present in `mv` (see [`veciter`](veciter(::AbstractExponents, ::AbstractVector{Int}))
+for `AbstractExponents`). By setting `indexed` to `true`, this iterator will instead give a tuple similar to `enumerate`, where
+the first index corresponds to the index of the monomial in the exponent set (so it does not necessarily start at `1` or have
+unit step).
+For type stability, `indexed` may instead be `Val(false)` or `Val(true)`.
+"""
+veciter(mv::SimpleMonomialVector, v::AbstractVector{Int}, ::Val{indexed}=Val(false)) where {indexed} =
+    SimpleMonomialVectorIterator{indexed}(v, mv)
+veciter(mv::SimpleMonomialVector, v::AbstractVector{Int}, indexed::Bool) = veciter(mv, v, Val(indexed))
+veciter(mv::SimpleMonomialVector, ::Val{indexed}=Val(false)) where {indexed} = SimpleMonomialVectorIterator{indexed}(mv)
+veciter(mv::SimpleMonomialVector, indexed::Bool) = veciter(mv, Val(indexed))
 
 MultivariatePolynomials.mindegree(x::SimpleMonomialVectorComplete) = x.e.mindeg
 MultivariatePolynomials.mindegree(x::SimpleMonomialVectorSubset) =

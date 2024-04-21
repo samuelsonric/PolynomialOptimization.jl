@@ -1,10 +1,8 @@
 module Newton
 
-using MultivariatePolynomials, ..SimplePolynomials, ..FastVector, SparseArrays, Printf
+using MultivariatePolynomials, ..SimplePolynomials, ..SimplePolynomials.MultivariateExponents, ..FastVector, Printf
 import BufferedStreams
-using ..SimplePolynomials: smallest_unsigned
-using ..PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, matrix_delete_end!, resizable_array, resizable_copy,
-    keepcol!, FastKey, RelaxationGroupings
+using ..PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, FastKey, RelaxationGroupings
 
 export halfpolytope, halfpolytope_from_file
 
@@ -79,16 +77,12 @@ The `parameters` will be passed on to the linear solver in every case (preproces
 
 See also [`halfpolytope_from_file`](@ref).
 """
-function halfpolytope(method::Symbol, poly::SimplePolynomial; kwargs...)
-    P = typeof(poly)
-    mhd = maxhalfdegree(poly)
-    T = smallest_unsigned(2mhd)
-    mons = LazyMonomials{_effective_nvars(poly),0}(zero(T):T(mhd), exponents=ownexponents)
-    MV = typeof(mons)
-    return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=P[], nonneg=P[], psd=Matrix{P}[],
-        groupings=RelaxationGroupings(
-            [mons], Vector{MV}[], Vector{MV}[], Vector{MV}[], Vector{variable_union_type(poly)}[]
-        ), kwargs...)
+function halfpolytope(method::Symbol, poly::SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}; kwargs...) where {Nr,I<:Integer}
+    mons = SimpleMonomialVector{Nr,0}(ExponentsDegree{Nr,I}(0, maxhalfdegree(poly)))
+    noconstr = typeof(poly)[]
+    nogroup = Vector{<:SimpleMonomialVector{Nr,0,I}}[]
+    return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=noconstr, nonneg=noconstr, psd=Matrix{typeof(poly)}[],
+        groupings=RelaxationGroupings([mons], nogroup, nogroup, nogroup, Vector{variable_union_type(poly)}[]), kwargs...)
 end
 function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
     out = halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)
@@ -120,23 +114,19 @@ halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
 function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepath::Union{<:AbstractString,Nothing}=nothing,
     zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}},
     groupings::RelaxationGroupings, kwargs...) where {Nr,P<:SimplePolynomial{<:Any,Nr,0}}
-    parameters, coeffs = preproc(V, objective; verbose, zero, nonneg, psd, groupings, kwargs...)
-    newton_time = @elapsed candidates = let
-        analysis = analyze(coeffs)
-        # We don't construct the monomials using monomials(). First, it's not the most efficient implementation underlying,
-        # and we also don't want to create a huge list that is then filtered (what if there's no space for the huge list?).
-        # However, since we implement the monomial iteration by ourselves, we must make some assumptions about the
-        # variables - this is commuting only.
-        iter = MonomialIterator(analysis..., ownexponents)
-        num = length(iter)
+    parameters, vertexmons = preproc(V, objective; verbose, zero, nonneg, psd, groupings, kwargs...)
+    newton_time = @elapsed begin
+        e = analyze(vertexmons)::ExponentsMultideg{Nr,UInt}
+        innermons = SimpleMonomialVector{Nr,0}(e)
+        num = length(innermons)
         @verbose_info("Starting point selection among ", num, " possible monomials")
-        nthreads, task, secondtask = prepare(V, coeffs, num, verbose; parameters...)
-        execute(V, size(coeffs, 1), verbose, iter, num, nthreads, task, secondtask, filepath)
+        nthreads, task, secondtask = prepare(V, vertexmons, num, verbose; parameters...)
+        candidates = execute(V, verbose, innermons, nthreads, task, secondtask, filepath)
     end
 
     if isnothing(filepath)
         @verbose_info("Found ", length(candidates), " elements in the Newton halfpolytope in ", newton_time, " seconds")
-        return candidates
+        return SimpleMonomialVector{Nr,0}(e, candidates)
     else
         @verbose_info("Found ", candidates[2], " elements in the Newton halfpolytope in ", newton_time,
             " seconds and stored the results to the given file")
@@ -153,22 +143,13 @@ function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false,
     # So we just have to look at the exponents_complex, ignoring exponents_conj, of each monomial, and if it is present, then
     # this monomial needs to be in the basis. This simple construction is the reason why this method is neither parallelized
     # nor has a distributed version.
-    nv = Nc
     newton_time = @elapsed begin
-        if isempty(zero) && isempty(nonneg) && isempty(psd)
-            @verbose_info("Complex-valued Newton polytope without constraints: copying exponents")
-            exps = unique(monomials(objective).exponents_complex, dims=2)
-        else
-            @verbose_info("Complex-valued Newton polytope: merging constraints")
-            exps = merge_constraints(
-                degree, SimplePolynomials.smallest_unsigned(monomial_count(2degree, nv)), objective, zero, nonneg, psd,
-                Val(monomials(objective).exponents_real isa DenseMatrix), verbose
-            )
-        end
+        @verbose_info("Complex-valued Newton polytope: merging constraints")
+        result = merge_constraints(degree, objective, zero, nonneg, psd, verbose)
     end
-    @verbose_info("Found ", size(exps, 2), " elements in the complex-valued \"Newton halfpolytope\" in ", newton_time,
+    @verbose_info("Found ", length(result), " elements in the complex-valued \"Newton halfpolytope\" in ", newton_time,
         " seconds")
-    return SimpleMonomialVector{0,nv}(exps, convert(typeof(exps), spzeros(eltype(exps), size(exps)...)))
+    return result
 end
 
 const newton_methods = Symbol[]
@@ -179,10 +160,7 @@ function default_newton_method()
     return first(newton_methods)
 end
 
-include("./helpers/Utils.jl")
-include("./helpers/Sampling.jl")
-include("./helpers/InitialStateIterator.jl")
-include("./helpers/FakeMonomialVector.jl")
+include("./helpers/Helpers.jl")
 include("./Interface.jl")
 include("./Constraints.jl")
 include("./Preprocessing.jl")

@@ -1,11 +1,11 @@
 module PolynomialOptimizationMPI
 
-using MultivariatePolynomials, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.FastVector, Printf
+using MultivariatePolynomials, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.FastVector,
+    PolynomialOptimization.SimplePolynomials.MultivariateExponents, Printf
 import MPI, Random
-import PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI
+using PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, RelaxationGroupings
 import PolynomialOptimization.Newton: execute_taskfun, execute, verbose_worker, halfpolytope
-using PolynomialOptimization.Newton: preproc, analyze, prepare, alloc_global, alloc_local, clonetask, work, step_callback,
-    isless_degree
+using PolynomialOptimization.Newton: preproc, analyze, prepare, alloc_global, alloc_local, clonetask, work, step_callback
 
 __init__() = haveMPI[] = true
 

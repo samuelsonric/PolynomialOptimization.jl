@@ -1,29 +1,26 @@
 """
-    preproc_quick(V, coeffs::AbstractMatrix{<:Integer}, vertexindices::Vector{Int},
-        verbose::Bool; parameters...)
+    preproc(V, mons::SimpleMonomialVector, vertexindices, verbose::Bool, singlethread::Bool;
+        parameters...) -> AbstractVector{Bool}
 
-Eliminate all the coefficients that by the Akl-Toussaint heuristic cannot be part of the convex hull anyway. The implementation
-has to return a `Vector{Bool}` that for every column in `coeffs` indicates whether this particular column can be obtained as
-the convex combinations of the columns indexed by `vertexindices` (`true` if the answer is yes).
+Checks for convex dependencies of exponents from the list of monomials.
+`vertexindices` might either be a `Vector{Int}` that indexes `mons` or is it `Val(:all)`.
+In the former case, the convex polytope is spanned by the exponents of all monomials in `mons[vertexindices]` (and it can be
+assumed that those are independent, and that `vertexindices` is fairly short compared to `mons`); in the latter case, the
+convex polytope is potentially spanned by the exponents of all monomials in `mons`.
+The implementation has to return an `AbstractVector{Bool}` that for every monomial in `mons` indicates whether the convex hull
+spanned by the elements just described (excluding the monomial in question) already contains the monomial. An entry must be
+`false` if and only if this is possible, i.e., it is redundant.
+`singlethread` will be `true` if this function will be called in parallel by multiple threads, so that the linear solver itself
+should be single-threaded.
 """
-function preproc_quick end
-
-"""
-    preproc_remove(V, nv::Int, nc::Int, getvarcon::Function, verbose::Bool,
-        singlethread::Bool; parameters...)
-
-Removes all convex dependencies from the list of coefficients. There are `nc` coefficients, each with `nv` entries of Integer
-type. The `AbstractVector` representing the `i`th coefficient (`1 ≤ i ≤ nc`) can be obtained by calling `getvarcon(i)`.
-The implementation has to return a `Vector{Bool}` of length `nc` that for every coefficient contains `false` if and only if the
-convex hull spanned by all coefficients is invariant under removal of this coefficient.
-"""
-function preproc_remove end
+function preproc end
 
 """
-    prepare(V, coeffs::AbstractMatrix{<:Integer}, num::Int, verbose::Bool; parameters...)
+    prepare(V, vertices::SimpleMonomialVector, num::Int, verbose::Bool; parameters...) ->
+        (nthreads::Int, userdata, userdata_clone)
 
 This function is responsible for creating an optimization task that can be used to check membership in the Newton halfpolytope.
-The vertices of the polytope are given by the column of `coeffs`. The total number of monomials that have to be checked is
+The vertices of the polytope are given by the exponents of `mons`. The total number of monomials that have to be checked is
 given by `num`.
 The function must return the number of threads that will be used to carry out the optimization (which is not the number of
 threads that the optimizer uses internally, but determines how `PolynomialOptimization` will distribute the jobs), an internal
@@ -62,14 +59,15 @@ This function must create a copy of the optimization task `t` that can run in pa
 function clonetask end
 
 """
-    work(V, task, data_global, data_local, moniter::MonomialIterator,
+    work(V, task, data_global, data_local, expiter::SimpleMonomialVectorIterator{true},
         Δprogress::Ref{Int}, Δacceptance::Ref{Int}, add_callback::Function,
         iteration_callback::Union{Nothing,Function})
 
-Iterates through `moniter` and for every monomial checks whether this set of exponents can be reached by a convex combination
-of the coefficients as they are set up in `task`. If yes, `add_callback` must be called with the exponents as a parameter, and
-`Δacceptance` should be incremented. In any case, `Δprogress` should be incremented. Additionally, after every check,
-`iteration_callback` should be called with the exponents of the iteration as a parameter, if it is a function.
+Iterates through `expiter` (which gives a tuple consisting of the index and the exponents) and for every exponent checks
+whether this it can be obtained by a convex combination of the coefficients as they are set up in `task`. If yes,
+`add_callback` must be called with the exponent index as a parameter, and `Δacceptance` should be incremented. In any case,
+`Δprogress` should be incremented. Additionally, after every check, `iteration_callback` should be called with no parameters,
+if it is a function.
 The `data` parameters contain the custom data that was previously generated using [`alloc_global`](@ref) and
 [`alloc_local`](@ref). Only `data_local` may be mutated.
 """

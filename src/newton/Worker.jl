@@ -17,7 +17,7 @@ end
 
 function step_callback(verbose, ::Nothing, lastinfo, candidates, progress, acceptance)
     if verbose
-        return _ -> let nextinfo=time_ns()
+        return () -> let nextinfo=time_ns()
             if nextinfo - lastinfo[] > 1_000_000_000
                 yield()
                 lastinfo[] = nextinfo
@@ -28,7 +28,7 @@ function step_callback(verbose, ::Nothing, lastinfo, candidates, progress, accep
     end
 end
 
-step_callback(verbose, (fileprogress, fileout), lastinfo, candidates, progress, acceptance) = (_) -> let nextinfo=time_ns()
+step_callback(verbose, (fileprogress, fileout), lastinfo, candidates, progress, acceptance) = () -> let nextinfo=time_ns()
     if nextinfo - lastinfo[] > 1_000_000_000
         write(fileout, candidates)
         flush(fileout)
@@ -44,12 +44,12 @@ end
 function execute_taskfun(V, tid, task, iter, nv, data_global, cond, progresses, acceptances, allcandidates, verbose, filestuff)
     lastinfo = Ref(time_ns())
     data_local = alloc_local(V, nv)
-    candidates = FastVec{eltype(allcandidates)}()
+    candidates = FastVec{UInt}()
     progress = Ref(progresses, tid)
     acceptance = Ref(acceptances, tid)
     cb = step_callback(verbose, filestuff, lastinfo, candidates, progress, acceptance)
     try
-        work(V, task, data_global, data_local, iter, progress, acceptance, @capture(p -> append!($candidates, p)), cb)
+        work(V, task, data_global, data_local, iter, progress, acceptance, @capture(idx -> push!($candidates, idx)), cb)
         if isnothing(filestuff)
             lock(cond)
             try
@@ -70,18 +70,21 @@ function execute_taskfun(V, tid, task, iter, nv, data_global, cond, progresses, 
     end
 end
 
-function execute(V, nv, verbose, iter, num, task, filepath)
+function execute(V, verbose, mons, task, filepath)
     @verbose_info("Preparing to determine Newton polytope (single-threaded)")
+    nv = nvariables(mons)
+    num = length(mons)
 
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{eltype(eltype(iter))}()
+    candidates = FastVec{UInt}()
 
     progress = Ref(0)
     acceptance = Ref(0)
     if isnothing(filepath)
         filestuff = nothing
+        iter = veciter(mons, Val(true))
     else
         fileprogress = open("$filepath.prog", read=true, write=true, create=true, lock=false)
         fs = filesize(fileprogress)
@@ -91,7 +94,7 @@ function execute(V, nv, verbose, iter, num, task, filepath)
         elseif !iszero(fs)
             error("Unknown progress file format - please delete existing files.")
         end
-        iter = Iterators.drop(iter, progress[], copy=false)
+        iter = veciter(@view(mons[progress[]+1:end]), Val(true))
         if isempty(iter)
             close(fileprogress)
             return progress[], acceptance[]
@@ -106,9 +109,9 @@ function execute(V, nv, verbose, iter, num, task, filepath)
     cb = step_callback(verbose, filestuff, lastinfo, candidates, progress, acceptance)
     try
         work(V, task, alloc_global(V, nv), alloc_local(V, nv), iter, progress, acceptance,
-            @capture(p -> append!($candidates, p)), cb)
+            @capture(idx -> push!($candidates, idx)), cb)
         verbose && print("\33[2K")
-        if !isnothing(filestuff)
+        if !isnothing(filepath)
             write(fileout, candidates)
             seekstart(fileprogress)
             write(fileprogress, progress[], acceptance[])
@@ -118,24 +121,26 @@ function execute(V, nv, verbose, iter, num, task, filepath)
             self_running[] = false
         end
         finalize(task)
-        if !isnothing(filestuff)
+        if !isnothing(filepath)
             close(fileout)
             close(fileprogress)
         end
     end
-    if isnothing(filestuff)
-        return SimpleMonomialVector{nv,0}(reshape(finish!(candidates), nv, length(candidates)÷nv))
+    if isnothing(filepath)
+        return finish!(candidates)
     else
         return progress[], acceptance[]
     end
 end
 
-function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask, filepath)
+function execute(V, verbose, mons, nthreads::Integer, task, secondtask, filepath)
     if isone(nthreads)
         @assert(isnothing(secondtask))
-        return execute(V, nv, verbose, iter, num, task, filepath)
+        return execute(V, verbose, mons, task, filepath)
     end
 
+    nv = nvariables(mons)
+    num = length(mons)
     threadsize = div(num, nthreads, RoundUp)
     @verbose_info("Preparing to determine Newton polytope using ", nthreads, " threads, each checking about ", threadsize,
         " candidates")
@@ -143,12 +148,11 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{eltype(eltype(iter))}()
-    iterators = Vector{Base.promote_op(Core.kwcall, @NamedTuple{copy::Bool}, Type{RangedMonomialIterator}, typeof(iter), Int,
-                                       Int)}(undef, nthreads)
+    candidates = FastVec{UInt}()
+    iterators = Vector{Base.promote_op(veciter, typeof(@view(mons[begin:end])), Val{true})}(undef, nthreads)
     let start=1
         for i in 1:nthreads
-            @inbounds iterators[i] = RangedMonomialIterator(iter, start, threadsize, copy=true)
+            @inbounds iterators[i] = veciter(@view(mons[start:min(num, start+threadsize-1)]), Val(true))
             start += threadsize
         end
     end
@@ -167,7 +171,7 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
                     seekstart(fileprogress)
                     threadprogress[i] = prog = read(fileprogress, Int)
                     threadacceptance[i] = read(fileprogress, Int)
-                    iterators[i] = Iterators.drop(iterators[i], prog, copy=false)
+                    iterators[i] = veciter(@view(parent(iterators[i])[prog+1:end]), Val(true))
                 elseif !iszero(fs)
                     error("Unknown progress file format - please delete existing files.")
                 end
@@ -225,8 +229,7 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
     # completely, we have ordered slices of varying length, but does this help?).
     # TODO: Maybe defer appending to the main thread, then we can already do it in the correct order...
     if isnothing(filepath)
-        return SimpleMonomialVector{nv,0}(sortslices(reshape(finish!(candidates), nv, length(candidates)÷nv), dims=2,
-            lt=isless_degree))
+        return finish!(candidates)
     else
         return sum(threadprogress, init=0), sum(threadacceptance, init=0)
     end

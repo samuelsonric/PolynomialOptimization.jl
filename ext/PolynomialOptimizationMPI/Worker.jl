@@ -1,18 +1,18 @@
-function verbose_worker(num, progress, acceptance, init_time, comm, ::RootRank, threadprogress=missing,
-    threadacceptance=missing)
-    init_progress = progress[]
-    ismissing(threadprogress) || (init_progress += sum(threadprogress, init=0))
+function verbose_worker(num, (otherprogress, otheracceptance), init_time, comm, ::RootRank, threadprogress, threadacceptance)
+    init_progress = otherprogress + sum(threadprogress, init=0)
     self_running = Ref(true)
     # We take care of the gathering of information in a separate task that must run on the main thread (due to MPI funneling).
     # This requires the other tasks (and the main one) to yield regularly.
     workers = Ref(MPI.Comm_size(comm) -1)
-    Δprogress_acceptances = [Vector{Int}(undef, 2) for _ in 1:workers[]]
-    Δbuffers = MPI.Buffer.(Δprogress_acceptances)
+    progress_acceptances = [Vector{Int}(undef, 2) for _ in 1:workers[]]
+    buffers = MPI.Buffer.(progress_acceptances)
     reqs = MPI.MultiRequest(workers[])
-    for (worker, (req, Δbuffer)) in enumerate(zip(reqs, Δbuffers))
+    for (worker, (req, Δbuffer)) in enumerate(zip(reqs, buffers))
         MPI.Irecv!(Δbuffer, comm, req, tag=1, source=worker)
     end
-    check = @capture(() -> let
+    curotherprogress = Ref(otherprogress)
+    curotheracceptance = Ref(otheracceptance)
+    check = @capture(print -> let
         δprogress = 0
         δacceptance = 0
         # We need to give MPI some time to collect all the data; but we don't want to completely block using Waitall for
@@ -24,62 +24,57 @@ function verbose_worker(num, progress, acceptance, init_time, comm, ::RootRank, 
         @inbounds while time_ns() - init_wait < 10_000_000
             _, idx = MPI.Testany($reqs)
             if !isnothing(idx)
-                Δprogress_acceptance = $Δprogress_acceptances[idx]
-                if Δprogress_acceptance[1] < 0
+                progress_acceptance = $progress_acceptances[idx]
+                if progress_acceptance[1] < 0
                     $workers[] -= 1
                 else
-                    δprogress += Δprogress_acceptance[1]
-                    δacceptance += Δprogress_acceptance[2]
-                    MPI.Irecv!($Δbuffers[idx], $comm, reqs[idx], tag=1, source=idx)
+                    δprogress += progress_acceptance[1]
+                    δacceptance += progress_acceptance[2]
+                    MPI.Irecv!($buffers[idx], $comm, reqs[idx], tag=1, source=idx)
                 end
             end
         end
-        # no need to lock here, in the multithreaded case, progress = workerprogress, which is only changed here
-        prog = ($progress[] += δprogress)
-        acc = ($acceptance[] += δacceptance)
-        ismissing($threadacceptance) || (acc += sum(threadacceptance, init=0))
-        ismissing($threadprogress) || (prog += sum(threadprogress, init=0))
-        iszero(prog) && (prog = 1) # we divide, so if this task runs too early, we might be in trouble
-        Δt = prog == $init_progress ? 1 : prog - init_progress # if a finished job is started, this might happen
-        rem_sec = round(Int, ((time_ns() - $init_time) / 1_000_000_000Δt) * ($num - prog))
+        $curotherprogress[] += δprogress
+        $curotheracceptance[] += δacceptance
+        print || return
+        allprogress = sum(threadprogress, init=0) + curotherprogress[]
+        allacceptance = sum(threadacceptance, init=0) + curotheracceptance[]
+        #println(string("Root: others ", curotherprogress[], ", this ", threadprogress, ", total ", allprogress))
+        # no need to lock, we only modify this here
+        iszero(allprogress) && (allprogress = 1) # we divide, so if this task runs too early, we might be in trouble
+        Δt = allprogress == $init_progress ? 1 : allprogress - $init_progress # if a finished job is started, this might happen
+        rem_sec = round(Int, ((time_ns() - $init_time) / 1_000_000_000Δt) * ($num - allprogress))
         @printf("\33[2KStatus update: %.2f%%, acceptance: %.2f%%, remaining time: %02d:%02dmin\r",
-            100prog / num, 100acc / prog, rem_sec ÷ 60, rem_sec % 60)
+            100allprogress / num, 100allacceptance / allprogress, rem_sec ÷ 60, rem_sec % 60)
         flush(stdout)
     end)
     Threads.@spawn(:interactive, begin
         while !iszero($workers[]) || $self_running[]
-            $check()
+            $check(true)
             sleep(1)
         end
-        $check() # make sure to have a final report
+        $check(false) # make sure to empty all messages, but no need to print again, we are done anyway
     end)
     return self_running
 end
 
-function verbose_worker(num, progress, acceptance, init_time, comm, ::OtherRank, threadprogress=missing,
-    threadacceptance=missing)
+function verbose_worker(num, (initprogress, initacceptance), init_time, comm, rank::OtherRank, threadprogress, threadacceptance)
     self_running = Ref(true)
-    Δprogress_acceptance = Vector{Int}(undef, 2)
-    Δbuffer = MPI.Buffer(Δprogress_acceptance)
+    progress_acceptance = Array{Int}(undef, 2)
+    lastprogress = Ref(initprogress)
+    lastacceptance = Ref(initacceptance)
+    buffer = MPI.Buffer(progress_acceptance)
     # We take care of the gathering of information in a separate task that must run on the main thread (due to MPI funneling).
     # This requires the other tasks (and the main one) to yield regularly.
     check = @capture(() -> begin
-        if ismissing($threadprogress)
-            @inbounds $Δprogress_acceptance[1] = $progress[]
-            @inbounds Δprogress_acceptance[2] = $acceptance[]
-            progress[] = 0
-            acceptance[] = 0
-        else
-            # in the multithreaded case, progress contains the total progress that we sent so far, which allows us to skip any
-            # locking here
-            Σacceptance = sum(threadacceptance, init=0)
-            Σprogress = sum(threadprogress, init=0)
-            @inbounds Δprogress_acceptance[1] = Σprogress - progress[]
-            @inbounds Δprogress_acceptance[2] = Σacceptance - acceptance[]
-            progress[] = Σprogress
-            acceptance[] = Σacceptance
-        end
-        MPI.Send($Δbuffer, $comm, dest=root, tag=1)
+        newprogress = sum($threadprogress, init=0)
+        @inbounds $progress_acceptance[1] = newprogress - $lastprogress[]
+        lastprogress[] = newprogress
+        newacceptance = sum($threadacceptance, init=0)
+        @inbounds progress_acceptance[2] = newacceptance - $lastacceptance[]
+        lastacceptance[] = newacceptance
+        #println(string("Worker ", convert(Int, rank), ": ", threadprogress, " delta ", progress_acceptance[1]))
+        MPI.Send($buffer, $comm, dest=root, tag=1)
     end)
     Threads.@spawn(:interactive, begin
         while $self_running[]
@@ -88,13 +83,15 @@ function verbose_worker(num, progress, acceptance, init_time, comm, ::OtherRank,
         end
         $check() # make sure to have a final report
         # and then signal that we are done
-        $Δprogress_acceptance[1] = -1
-        MPI.Send($Δbuffer, $comm, dest=root, tag=1)
+        $progress_acceptance[1] = -1
+        MPI.Send($buffer, $comm, dest=root, tag=1)
     end)
     return self_running
 end
 
-function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
+function execute(V, verbose, mons, task, filepath, comm, rank::MPIRank)
+    nv = nvariables(mons)
+    num = length(mons)
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
     isroot(rank) && @verbose_info("Preparing to determine Newton polytope using ", nworkers,
@@ -103,13 +100,18 @@ function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{eltype(eltype(iter))}()
-    iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)
+    candidates = FastVec{UInt}()
 
-    progress = Ref(0)
-    acceptance = Ref(0)
+    workerprogress = Ref(0)
+    workeracceptance = Ref(0)
+    if isroot(rank)
+        otherprogress = otheracceptance = 0
+    end
     if isnothing(filepath)
         filestuff = nothing
+        iter = let start=convert(Int, rank) * workersize +1
+            veciter(@view(mons[start:min(num, start+workersize-1)]), Val(true))
+        end
     else
         prefix = "$filepath-n$(convert(Int, rank))"
         fileprogress = open("$prefix.prog", read=true, write=true, create=true, lock=false)
@@ -117,8 +119,8 @@ function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
         try
             fs = filesize(fileprogress)
             if fs == 2sizeof(Int)
-                progress[] = read(fileprogress, Int)
-                acceptance[] = read(fileprogress, Int)
+                workerprogress[] = read(fileprogress, Int)
+                workeracceptance[] = read(fileprogress, Int)
             elseif !iszero(fs)
                 error()
             end
@@ -135,69 +137,81 @@ function execute(V, nv, verbose, iter, num, task, filepath, comm, rank::MPIRank)
             isroot(rank) && error("Unknown progress file format - please delete existing files.")
             return
         end
-        iter = Iterators.drop(iter, progress[], copy=false)
+        iter = let start=convert(Int, rank) * workersize +1
+            veciter(@view(mons[start+workerprogress[]:min(num, start+workersize-1)]), Val(true))
+        end
+        if isroot(rank)
+            worker_pas = Vector{Int}(undef, 2nworkers)
+            MPI.Gather!(MPI.IN_PLACE, MPI.UBuffer(worker_pas, 2), comm; root)
+            otherprogress = sum(@view(worker_pas[3:2:end]), init=0)
+            otheracceptance = sum(@view(worker_pas[4:2:end]), init=0)
+        else
+            MPI.Gather!([workerprogress[], workeracceptance[]], nothing, comm; root)
+        end
         fileout = open("$prefix.out", append=true, lock=false)
         filestuff = (fileprogress, fileout)
     end
     if verbose
-        self_running = verbose_worker(num, progress, acceptance, time_ns(), comm, rank)
+        self_running = verbose_worker(num,
+            isroot(rank) ? (otherprogress, otheracceptance) : (workerprogress[], workeracceptance[]), time_ns(), comm, rank,
+            workerprogress, workeracceptance)
     end
     lastinfo = Ref(time_ns())
-    cb = step_callback(verbose, filestuff, lastinfo, candidates, progress, acceptance)
+    cb = step_callback(verbose, filestuff, lastinfo, candidates, workerprogress, workeracceptance)
     try
-        work(V, task, alloc_global(V, nv), alloc_local(V, nv), iter, progress, acceptance,
-            @capture(p -> append!($candidates, p)), cb)
-        if !isnothing(filestuff)
+        work(V, task, alloc_global(V, nv), alloc_local(V, nv), iter, workerprogress, workeracceptance,
+            @capture(idx -> push!($candidates, idx)), cb)
+        if !isnothing(filepath)
             write(fileout, candidates)
             seekstart(fileprogress)
-            write(fileprogress, progress[], acceptance[])
+            write(fileprogress, workerprogress[], workeracceptance[])
         end
     finally
         if verbose
             self_running[] = false
         end
         finalize(task)
-        if !isnothing(filestuff)
+        if !isnothing(filepath)
             close(fileout)
             close(fileprogress)
         end
     end
-    return isnothing(filestuff) ? candidates : nothing
+    return isnothing(filepath) ? finish!(candidates) : nothing
 end
 
-function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask, filepath, comm, rank::MPIRank)
+function execute(V, verbose, mons, nthreads::Integer, task, secondtask, filepath, comm, rank::MPIRank)
     if isone(nthreads)
         @assert(isnothing(secondtask))
-        return execute(V, nv, verbose, iter, num, task, filepath, comm, rank)
+        return execute(V, verbose, mons, task, filepath, comm, rank)
     end
+
+    nv = nvariables(mons)
+    num = length(mons)
     nworkers = MPI.Comm_size(comm)
     workersize = div(num, nworkers, RoundUp)
     threadsize = div(workersize, nthreads, RoundUp)
     if threadsize == workersize
         finalize(secondtask)
-        return execute(V, nv, verbose, iter, num, task, filepath, comm, rank)
+        return execute(V, verbose, mons, task, filepath, comm, rank)
     end
     isroot(rank) && @verbose_info("Preparing to determine Newton polytope using ", nworkers, " workers, each with ", nthreads,
         " threads checking about ", threadsize, " candidates")
-
     data_global = alloc_global(V, nv)
     # While we precalculate the size of the list exactly, we don't pre-allocate the output candidates - we hope to eliminate a
     # lot of exponents by the polytope containment, so we might overallocate so much memory that we hit a resource constraint
     # here. If instead, we grow the list dynamically, we pay the price in speed, but the impossible might become feasible.
-    candidates = FastVec{eltype(eltype(iter))}()
-    iter = RangedMonomialIterator(iter, convert(Int, rank) * workersize +1, workersize, copy=false)
-    iterators = Vector{typeof(iter)}(undef, nthreads)
-    let start=1
+    candidates = FastVec{UInt}()
+    iterators = Vector{Base.promote_op(veciter, typeof(@view(mons[begin:end])), Val{true})}(undef, nthreads)
+    let start=convert(Int, rank) * workersize +1, stop=min(num, start+workersize-1)
         for i in 1:nthreads
-            @inbounds iterators[i] = RangedMonomialIterator(iter, start, threadsize, copy=true)
+            @inbounds iterators[i] = veciter(@view(mons[start:min(stop, start+threadsize-1)]), Val(true))
             start += threadsize
         end
     end
 
     threadprogress = zeros(Int, nthreads)
     threadacceptance = zeros(Int, nthreads)
-    workerprogress = Ref(0)
-    workeracceptance = Ref(0)
+    otherprogress = otheracceptance = 0
     if !isnothing(filepath)
         prefix = "$filepath-n$(convert(Int, rank))"
         fileprogresses = Vector{IOStream}(undef, nthreads)
@@ -209,12 +223,12 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
                 fileouts[i] = open("$prefix-$i.out", append=true, lock=false)
                 fs = filesize(fileprogress)
                 if fs == 2sizeof(Int)
-                    threadprogress[i] = read(fileprogress, Int)
+                    threadprogress[i] = prog = read(fileprogress, Int)
                     threadacceptance[i] = read(fileprogress, Int)
+                    iterators[i] = veciter(@view(parent(iterators[i])[prog+1:end]), Val(true))
                 elseif !iszero(fs)
                     error()
                 end
-                iterators[i] = Iterators.drop(iterators[i], threadprogress[i], copy=false)
             end
         catch
             for i in 1:nthreads
@@ -239,18 +253,18 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
         if isroot(rank)
             worker_pas = Vector{Int}(undef, 2nworkers)
             MPI.Gather!(MPI.IN_PLACE, MPI.UBuffer(worker_pas, 2), comm; root)
-            workerprogress[] = sum(@view(worker_pas[3:2:end]), init=0)
-            workeracceptance[] = sum(@view(worker_pas[4:2:end]), init=0)
+            otherprogress = sum(@view(worker_pas[3:2:end]), init=0)
+            otheracceptance = sum(@view(worker_pas[4:2:end]), init=0)
         else
-            workerprogress[] = sum(threadprogress, init=0)
-            workeracceptance[] = sum(threadacceptance, init=0)
-            MPI.Gather!([workerprogress[], workeracceptance[]], nothing, comm; root)
+            otherprogress = sum(threadprogress, init=0)
+            otheracceptance = sum(threadacceptance, init=0)
+            MPI.Gather!([otherprogress, otheracceptance], nothing, comm; root)
         end
     end
     cond = Threads.SpinLock()
 
     if verbose
-        self_running = verbose_worker(num, workerprogress, workeracceptance, time_ns(), comm, rank, threadprogress,
+        self_running = verbose_worker(num, (otherprogress, otheracceptance), time_ns(), comm, rank, threadprogress,
             threadacceptance)
     end
     ccall(:jl_enter_threaded_region, Cvoid, ())
@@ -287,5 +301,5 @@ function execute(V, nv, verbose, iter, num, nthreads::Integer, task, secondtask,
         end
         ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    return isnothing(filestuff) ? candidates : nothing
+    return isnothing(filepath) ? finish!(candidates) : nothing
 end

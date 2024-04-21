@@ -1,12 +1,31 @@
-function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero, nonneg, psd, groupings::RelaxationGroupings,
-    dense::Val, verbose::Bool) where {Nr}
+# We only accept ExponentsAll; else, we cannot guarantee that all the resulting exponents will in fact be possible. In this
+# way, we don't have to check for equality of the exponents sets (or form the largest cover), which is also beneficial.
+# And converting polynomials from the MP interface will yield ExponentsAll anyway.
+function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}},
+    nonneg::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}},
+    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,0}}}, groupings::RelaxationGroupings{Nr,0},
+    verbose::Bool, need_copy::Bool) where {Nr}
     @verbose_info("Incorporating constraints into set of exponents")
-    mons_idx_set = sizehint!(Set{FastKey{Int}}(), length(objective))
-    # we start by storing the indices of the monomials only, which is the most efficient way for eliminating duplicates
-    # afterwards
+    e = ExponentsAll{Nr,UInt}()
+
+    if isempty(zero) && isempty(nonneg) && isempty(psd)
+        # short path: just directly add the stuff from the objective. While we can get duplicates (due to the elimination of
+        # conjugates), we have a clear and manageable upper bound to the size, so no need to determine duplicates on-the-fly.
+        @verbose_info("No constraints found, adding all objective monomials")
+        mons = monomials(objective)
+        if monomials(objective).e == e
+            @verbose_info("Aliasing monomial indices")
+            return need_copy ? copy(mons) : mons
+        else
+            @verbose_info("Converting monomial indices")
+            return SimpleMonomialVector{Nr,0}(e, monomial_index.((e,), mons))
+        end
+    end
+
+    mons_idx_set = sizehint!(Set{FastKey{UInt}}(), length(objective))
     @verbose_info("├ objective")
     for mon in monomials(objective)
-        push!(mons_idx_set, FastKey(monomial_index(mon)))
+        push!(mons_idx_set, FastKey(monomial_index(e, mon)))
     end
     # If there are constraints present, things are not so simple. We assume a Putinar certificate:
     # f ≥ 0 on {zero == 0, nonneg ≥ 0, psd ⪰ 0} ⇐ f = σ₀ + ∑ᵢ nonnegᵢ σᵢ + ∑ⱼ ⟨psdⱼ, Mⱼ⟩ + ∑ₖ zeroₖ pₖ
@@ -32,12 +51,11 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero, nonneg
             for t in constrᵢ
                 monₜ = monomial(t)
                 for grouping in groupings
-                    grouping₂ = lazy_unalias(grouping)
                     for (i, g₁) in enumerate(grouping)
-                        for g₂ in @view(grouping₂[i:end])
+                        for g₂ in @view(grouping[i:end])
                             push!(mons_idx_set,
-                                FastKey(monomial_index(g₁, monₜ, conj(g₂))),
-                                FastKey(monomial_index(g₂, monₜ, conj(g₁)))
+                                FastKey(monomial_index(e, g₁, monₜ, g₂)),
+                                FastKey(monomial_index(e, g₂, monₜ, g₁))
                             )
                         end
                     end
@@ -61,12 +79,11 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero, nonneg
             for t in psdᵢ[i, j]
                 monₜ = monomial(t)
                 for grouping in groupings
-                    grouping₂ = lazy_unalias(grouping)
                     for (i, g₁) in enumerate(grouping)
                         for g₂ in @view(grouping₂[i:end])
                             push!(mons_idx_set,
-                                FastKey(monomial_index(g₁, monₜ, conj(g₂))),
-                                FastKey(monomial_index(g₂, monₜ, conj(g₁)))
+                                FastKey(monomial_index(e, g₁, monₜ, g₂)),
+                                FastKey(monomial_index(e, g₂, monₜ, g₁))
                             )
                         end
                     end
@@ -78,24 +95,38 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,0}, zero, nonneg
     # now we need to re-cast the indices into the exponent-representations
     @verbose_info("├ Total number of coefficients: ", length(mons_idx_set),
         "\nConverting back from intermediate to exponent representation")
-    return exponents_from_indices(P, Nr, mons_idx_set, dense)
+    return exponents_from_indices(P, Nr, mons_idx_set)
 end
 
-_realify(m::SimpleMonomial{0,Nc,P,V}) where {Nc,P<:Unsigned,V<:AbstractVector{P}} =
-    SimpleMonomial{Nc,0,P,V}(m.exponents_complex, SimplePolynomials.absent, SimplePolynomials.absent)
-
-function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg, psd, groupings::RelaxationGroupings,
-    dense::Val, verbose::Bool) where {Nc}
+function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero::AbstractVector{<:SimplePolynomial{<:Any,0,Nc}},
+    nonneg::AbstractVector{<:SimplePolynomial{<:Any,0,Nc}},
+    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,0,Nc}}}, groupings::RelaxationGroupings{0,Nc},
+    verbose::Bool) where {Nc}
     @verbose_info("Incorporating constraints into set of exponents")
     # Note that in the complex-valued case there's no mixing - i.e., no real variables. And every monomial appears once in its
     # original form, once in its conjugate. We are only interested in the "original" (whichever it is), so we effectively treat
     # every monomial as real, discarding the conjugate part. (It would be possible to do it differently, but then in the end
     # when we reduce everything to the complex part dropping the conjugates, deleting duplicates would be necessary - in this
     # way, we don't even generate duplicates.)
-    mons_idx_set = sizehint!(Set{FastKey{Int}}(), length(objective))
+    e = ExponentsAll{2Nc,UInt}()
+
+    if isempty(zero) && isempty(nonneg) && isempty(psd)
+        # short path: just directly add the stuff from the objective. While we can get duplicates (due to the elimination of
+        # conjugates), we have a clear and manageable upper bound to the size, so no need to determine duplicates on-the-fly.
+        @verbose_info("No constraints found, adding all objective monomials")
+        mons = monomials(objective)
+        candidates = FastVec{UInt}(buffer=length(mons))
+        for mon in mons
+            @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates(exponents(mon))))
+        end
+        @verbose_info("Sorting and removing duplicates")
+        return SimpleMonomialVector{0,Nc}(e, Base._groupedunique(sort!(finish!(candidates))))
+    end
+
+    mons_idx_set = sizehint!(Set{FastKey{UInt}}(), length(objective))
     @verbose_info("├ objective")
     for mon in monomials(objective)
-        push!(mons_idx_set, FastKey(monomial_index(_realify(mon))))
+        push!(mons_idx_set, FastKey(exponents_to_index(ea, KillConjugates(exponents(mon)))))
     end
 
     # 1. zero constraints
@@ -104,12 +135,16 @@ function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg
         sizehint!(mons_idx_set, length(mons_idx_set) + 4length(zeroₖ) * length(grouping))
         for t in zeroₖ
             monₜ = monomial(t)
+            monₜe = KillConjugates(exponents(monₜ))
+            monₜec = KillConjugates(exponents(SimpleConjMonomial(monₜ)))
             for g in grouping
+                ge = KillConjugates(exponents(g))
+                gec = KillConjugates(exponents(SimpleConjMonomial(g)))
                 push!(mons_idx_set,
-                    FastKey(monomial_index(_realify(g), _realify(monₜ))),
-                    FastKey(monomial_index(_realify(g), _realify(conj(monₜ)))),
-                    FastKey(monomial_index(_realify(conj(g)), _realify(monₜ))),
-                    FastKey(monomial_index(_realify(conj(g)), _realify(conj(monₜ))))
+                    FastKey(exponents_sum(ea, ge, monₜe)),
+                    FastKey(exponents_sum(ea, ge, monₜec)),
+                    FastKey(exponents_sum(ea, gec, monₜe)),
+                    FastKey(exponents_sum(ea, gec, monₜec))
                 )
             end
         end
@@ -123,7 +158,7 @@ function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg
             monₜ = monomial(t)
             for grouping in groupings, g in grouping
                 push!(mons_idx_set,
-                    FastKey(monomial_index(_realify(g), _realify(monₜ)))
+                    FastKey(exponents_sum(ea, KillConjugates(exponents(g)), KillConjugates(exponents(monₜ))))
                     # the monomial will appear conjugated anyway
                 )
             end
@@ -139,8 +174,10 @@ function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg
             for t in psdᵢ[i, j]
                 monₜ = monomial(t)
                 for grouping in groupings, g in grouping
-                    push!(mons_idx_set, FastKey(monomial_index(_realify(g), _realify(monₜ))))
-                    i != j && push!(mons_idx_set, FastKey(monomial_index(_realify(g), _realify(conj(monₜ)))))
+                    push!(mons_idx_set, FastKey(exponents_sum(ea, KillConjugates(exponents(g)), KillConjugates(exponents(monₜ)))))
+                    i != j &&
+                        push!(mons_idx_set, FastKey(exponents_sum(ea, KillConjugates(exponents(g)),
+                                                                      KillConjugates(exponents(SimpleConjMonomial(monₜ))))))
                 end
             end
         end
@@ -149,5 +186,5 @@ function merge_constraints(objective::SimplePolynomial{<:Any,0,Nc}, zero, nonneg
     # now we need to re-cast the indices into the exponent-representations
     @verbose_info("├ Total number of coefficients: ", length(mons_idx_set),
         "\nConverting back from intermediate to exponent representation")
-    return exponents_from_indices(P, Nc, mons_idx_set, dense)
+    return SimpleMonomialVector{0,Nc}(e, sort!(convert.(UInt, mons_idx_set)))
 end

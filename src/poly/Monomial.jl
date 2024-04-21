@@ -379,49 +379,20 @@ Base.hash(m::SimpleMonomialOrConj, h::UInt) = hash(m.index, h)
 
 effective_variables_in(m::SimpleMonomial, in) = all(vp -> ordinary_variable(vp[1]) ∈ in, m)
 
-struct ExponentsSum{N,T<:Tuple}
-    e::T
-
-    ExponentsSum{N}(e...) where {N} = new{N,typeof(e)}(e)
-end
-
-Base.IteratorSize(::Type{<:ExponentsSum}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:ExponentsSum}) = Base.HasEltype()
-Base.length(s::ExponentsSum{N}) where {N} = N
-Base.eltype(::Type{<:ExponentsSum}) = Int
-Base.iterate(s::ExponentsSum{<:Any,T}) where {C,T<:NTuple{C,Any}} = iterate(s, ntuple(i -> iterate(s.e[i])::Tuple, Val(C)))
-@generated function Base.iterate(s::ExponentsSum, state)
-    items = fieldcount(state)
-    quote
-        total = +($((:(state[$i][1]) for i in 1:items)...))
-        $((:(isnothing($(Expr(:(=), Symbol(:nextstate, i), :(iterate(s.e[$i], state[$i][2]))))) &&
-            return nothing) for i in 1:items)...)
-        return total, ($(((Symbol(:nextstate, i)) for i in 1:items)...),)
-    end
-end
-
 """
     monomial_product(e::AbstractExponents, m...)
 
 Calculates the product of all monomials (or conjugates, or variables) `m`. The result must be part of the exponent set `e`.
 If the default multiplication `*` is used instead, `e` will always be `ExponentsAll` with the jointly promoted index type.
 """
-Base.@assume_effects :consistent @generated function monomial_product(e::AbstractExponents{N},
-                                                                      m::Union{<:SimpleMonomialOrConj{Nr,Nc},
-                                                                               <:SimpleVariable{Nr,Nc}}...) where {N,Nr,Nc}
+Base.@assume_effects :consistent function monomial_product(e::AbstractExponents{N},
+                                                           m::Union{<:SimpleMonomialOrConj{Nr,Nc},
+                                                                    <:SimpleVariable{Nr,Nc}}...) where {N,Nr,Nc}
     N == Nr + 2Nc || throw(MethodError(monomial_product, (e, m...)))
-    items = length(m)
-    quote
-        d = +($((:(degree(m[$i])) for i in 1:items)...))
-        index = exponents_to_index(
-            e,
-            ExponentsSum{Nr+2Nc}($((:(exponents(m[$i])) for i in 1:items)...)),
-            d
-        )
-        e isa ExponentsAll ||
-            (iszero(index) && throw(ArgumentError("The given product is not present in the required exponent range")))
-        return SimpleMonomial{Nr,Nc}(unsafe, e, index, d)
-    end
+    index, d = exponents_sum(e, exponents.(m)...)
+    e isa ExponentsAll ||
+        (iszero(index) && throw(ArgumentError("The given product is not present in the required exponent range")))
+    return SimpleMonomial{Nr,Nc}(unsafe, e, index, d)
 end
 
 _get_I(::Type{<:SimpleMonomial{<:Any,<:Any,I}}) where {I<:Integer} = I
