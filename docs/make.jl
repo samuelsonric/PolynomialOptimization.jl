@@ -9,6 +9,7 @@ makedocs(sitename="PolynomialOptimization.jl", modules=[PolynomialOptimization],
         "index.md",
         "guide.md",
         "reference.md",
+        "solverreference.md",
         "simplepolynomials.md"
     ],
     warnonly=:missing_docs)

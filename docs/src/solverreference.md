@@ -73,26 +73,31 @@ sos_solver_fix_constraints!
 Once a solver has been implemented, it should add its solver symbol to the vector `PolynomialOptimization.solver_methods`,
 which enables this solver to be chosen automatically.
 
-## [`newton_halfpolynomial`](@ref)
-Finding the Newton halfpolynomial requires a linear solver that supports problem modification for quick reoptimization.
+## [[`Newton.halfpolytope`](@ref)](@id solvers_newton)
+```@meta
+CurrentModule = PolynomialOptimization.Newton
+```
+Finding the Newton halfpolytope requires a linear solver that supports problem modification for quick reoptimization.
 
 ### Solver interface
-The following functions need to be implemented so that a solver is available via [`newton_halfpolytope`](@ref). The
+The following functions need to be implemented so that a solver is available via [`Newton.halfpolytope`](@ref). The
 preprocessing functions can be omitted if no preprocessing capabilities should be provided.
 ```@docs
-newton_polytope_preproc_quick
-newton_polytope_preproc_remove
-newton_halfpolytope_alloc_global
-newton_halfpolytope_alloc_local
-newton_halfpolytope_clonetask
-newton_polytope_do_worker
-newton_halfpolytope_do_prepare
+preproc
+prepare
+alloc_global
+alloc_local
+clonetask
+work
 ```
 
 Once a solver has been implemented, it should add its solver symbol to the vector `PolynomialOptimization.newton_methods`,
 which enables this solver to be chosen automatically.
 
-## Automatic tightening
+## [Automatic tightening](@id solvers_tighten)
+```@meta
+CurrentModule = PolynomialOptimization
+```
 Automatic tightening of a polynomial optimization problem requires a linear solver that finds a solution to a system of linear
 equations that minimizes the ℓ₁-norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
 number of rows is smaller than the number of columns; else, the solution is calculated using SPQR's direct solver.

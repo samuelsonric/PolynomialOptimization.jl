@@ -301,10 +301,10 @@ Base.parent(mi::SimpleMonomialVectorIterator) = mi.mv
 """
     veciter(mv::SimpleMonomialVector[, v::AbstractVector{Int}], indexed::Bool=false)
 
-Creates an iterator over all exponents present in `mv` (see [`veciter`](veciter(::AbstractExponents, ::AbstractVector{Int}))
-for `AbstractExponents`). By setting `indexed` to `true`, this iterator will instead give a tuple similar to `enumerate`, where
-the first index corresponds to the index of the monomial in the exponent set (so it does not necessarily start at `1` or have
-unit step).
+Creates an iterator over all exponents present in `mv` (see
+[`veciter`](@ref veciter(::AbstractExponents, ::AbstractVector{Int})) for `AbstractExponents`). By setting `indexed` to `true`,
+this iterator will instead give a tuple similar to `enumerate`, where the first index corresponds to the index of the monomial
+in the exponent set (so it does not necessarily start at `1` or have unit step).
 For type stability, `indexed` may instead be `Val(false)` or `Val(true)`.
 """
 veciter(mv::SimpleMonomialVector, v::AbstractVector{Int}, ::Val{indexed}=Val(false)) where {indexed} =

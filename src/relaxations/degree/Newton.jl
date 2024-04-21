@@ -23,7 +23,7 @@ struct RelaxationNewton{P<:POProblem,MV<:SimpleMonomialVector,G} <: AbstractRela
 
     The `method` determines which solver to use for determining the Newton polytope. If omitted, this will be the default
     solver (in the complex case, it must be `:complex`).
-    The `parameters` are passed on to [`halfpolytope`](@ref).
+    The `parameters` are passed on to [`Newton.halfpolytope`](@ref).
     """
     function RelaxationNewton(relaxation::AbstractPORelaxation{P};
         method::Symbol=iszero(Nc) ? Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:POProblem{Poly}}

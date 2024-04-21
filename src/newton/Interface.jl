@@ -29,7 +29,7 @@ threads is greater than one, else `nothing`. More copies will be created as requ
 that setting up the task will potentially require more resources than cloning a task allows the function to estimate the
 required memory (and therefore a sensible number of threads) better by already performing one clone.
 
-See also [`@allocdiff`](@ref).
+See also [`@allocdiff`](@ref var"@allocdiff").
 """
 function prepare end
 

@@ -2,7 +2,7 @@ module Newton
 
 using MultivariatePolynomials, ..SimplePolynomials, ..SimplePolynomials.MultivariateExponents, ..FastVector, Printf
 import BufferedStreams
-using ..PolynomialOptimization: @assert, @verbose_info, @capture, haveMPI, FastKey, RelaxationGroupings
+using ..PolynomialOptimization: @assert, @verbose_info, @capture, @allocdiff, haveMPI, FastKey, RelaxationGroupings
 
 export halfpolytope, halfpolytope_from_file
 
@@ -17,7 +17,7 @@ _effective_nvars(::SimplePolynomial) = error("Mixing real- and complex-valued va
 
 Calculates the Newton polytope for the sum of squares optimization of a given objective, which is half the Newton polytope of
 the objective itself. This requires the availability of a linear solver. For a list of supported solvers, see
-[the solver reference](@ref solvers_poly_optimize).
+[the solver reference](@ref solvers_newton).
 
 There are three preprocessing methods which can be turned on individually or collectively using `preprocess`; depending on the
 problem, they may reduce the amount of time that is required to construct the convex hull of the full Newton polytope:
@@ -32,7 +32,7 @@ problem, they may reduce the amount of time that is required to construct the co
   monomial will be checked against a linear program that scales as the number of monomials in the objective (though it might
   become more efficient when monomials are ruled out).
 After preprocessing is done, the monomials in the half Newton polytope are constructed efficiently subject to a simple
-min/max-degree constraint using [`MonomialIterator`](@ref) and taken over into the basis if they are contained in the convex
+min/max-degree constraint using [`ExponentsMultideg`](@ref) and taken over into the basis if they are contained in the convex
 polytope whose vertices were determined based on the objective and preprocessing; this is done by performing a linear program
 for each candidate monomial.
 

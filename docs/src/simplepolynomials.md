@@ -31,21 +31,24 @@ AbstractExponentsDegreeBounded
 ExponentsAll
 ExponentsDegree
 ExponentsMultideg
+indextype
 ```
 
 ## Working with exponents
 Exponent sets can be indexed and iterated. If consecutive elements are required, iteration is slightly faster, as indexing
 requires to determine the degree for every operation. However, in this case it is fastest to preallocate a vector that can hold
-the exponents and [`iterate!`](@ref) with mutation of this vector, use the [`veciter`](@ref) wrapper for this task:
+the exponents and [`iterate!`](@ref iterate!(::AbstractVector{Int}, ::AbstractExponents)) with mutation of this vector, use the
+[`veciter`](@ref) wrapper for this task:
 ```@docs
-iterate!
-veciter
+iterate!(::AbstractVector{Int}, ::AbstractExponents)
+veciter(::AbstractExponents, ::AbstractVector{Int})
 ```
 
 When working with individual indices or exponents, conversion functions are provided.
 ```@docs
 exponents_to_index
 exponents_from_index(::AbstractExponents{<:Any,I}, ::I) where {I<:Integer}
+exponents_sum
 ```
 Note that `exponents_from_index` returns a lazy implementation of an `AbstractVector{Int}`; if the same exponents must be
 accessed multple times, it might be beneficial to `collect` the result or copy it to a pre-allocated vector.
@@ -78,7 +81,7 @@ Base.length(::Unsafe, ::AbstractExponentsDegreeBounded)
 Note that the `unsafe` singleton is not exported on purpose.
 
 ```@meta
-CurrentModule = PolynomialOptimization.SimplePolynomials
+CurrentModule = PolynomialOptimization
 ```
 ## Limitations
 Monomials do not support a lot of operations once they are constructed (hence the "simple"); however, they of course allow to
@@ -87,14 +90,17 @@ zero cost) and can be multiplied with each other. Polynomials can be evaluated a
 
 This makes `SimplePolynomials` very specialized for the particular needs of `PolynomialOptimization`; however, all the
 functionality is wrapped in its own subpackage and can be loaded independently of the main package. Don't do the conversion
-manually and then pass the converted polynomials to [`poly_problem`](@ref) - when the polynomial problem is initialized,
-depending on the keyword arguments, some operations still need to be carried out using the full interface of
-`MultivariatePolynomials`, not just the restricted subset that `SimplePolynomials` provides.
+manually and then pass the converted polynomials to [`poly_problem`](@ref poly_problem) - when the
+polynomial problem is initialized, depending on the keyword arguments, some operations still need to be carried out using the
+full interface of `MultivariatePolynomials`, not just the restricted subset that `SimplePolynomials` provides.
 
 Handling the exponents without the `MultivariatePolynomials` machinery is also deferred to subpackage of `SimplePolynomials`,
 `MultivariateExponents`. Note that these exponents and their indices always refer to the graded lexicographic order, which is
 the default in `DynamicPolynomials`.
 
+```@meta
+CurrentModule = PolynomialOptimization.SimplePolynomials
+```
 ## The MultivariatePolynomials interface
 ```@docs
 SimpleVariable
@@ -118,4 +124,6 @@ MultivariatePolynomials.monomials(::Val{Nr}, ::Val{Nc}, ::AbstractUnitRange{<:In
 Base.intersect(::SimpleMonomialVector{Nr,Nc}, ::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
 MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, ::AbstractExponents{N,I}, ::AbstractVector) where {Nr,Nc,N,I<:Integer}
 MultivariatePolynomials.merge_monomial_vectors(::AbstractVector{<:SimpleMonomialVector})
+veciter(::SimpleMonomialVector, ::AbstractVector{Int}, ::Val{indexed}) where {indexed}
+keepat!!
 ```

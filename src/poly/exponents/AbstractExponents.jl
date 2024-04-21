@@ -5,7 +5,8 @@ export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBou
     AbstractExponents{N,I}
 
 Abstract supertype for all collections of multivariate exponents in `N` variables (`N > 0`). Every collection is iterable (both
-using a default lazy iteration and a mutable iteration into a vector by means of [`iterate!`](@ref) or [`veciter`](@ref)) and
+using a default lazy iteration and a mutable iteration into a vector by means of
+[`iterate!`](@ref iterate!(::AbstractVector{Int}, ::AbstractExponents)) or [`veciter`](@ref)) and
 indexable (return a lazy collection of exponents) with index type `I`. The collection has a length if it is finite; it is never
 empty.
 """
@@ -265,7 +266,7 @@ degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
 Unsafe variant of [`convert_index`](@ref convert_index(::AbstractExponents{N,I}, ::AbstractExponents{N,IS}, ::IS, ::Int) where {N,I<:Integer,IS<:Integer}):
 assumes that caches for both the source and the target are set up as required for `degree`. If `degree` is omitted, it is
 calculated using the unsafe variant of
-[`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).`
+[`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).
 """
 @inline function convert_index(::Unsafe, target::AbstractExponents{N,I}, source::AbstractExponents{N,IS}, index::IS,
     degree::Int) where {N,I<:Integer,IS<:Integer}

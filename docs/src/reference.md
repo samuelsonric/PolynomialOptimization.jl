@@ -6,16 +6,10 @@ CurrentModule = PolynomialOptimization
 
 ## Problem definition
 ```@docs
-PolyOptProblem
+POProblem
 poly_problem
-newton_halfpolytope
-newton_halfpolytope_from_file
-MonomialIterator
-EqualityMethod
 variables
 nvariables
-degree
-length
 isreal
 ```
 
@@ -38,28 +32,35 @@ last_moments
 last_objective
 ```
 
-## Sparsity
+## Relaxations
 ```@docs
-SparseAnalysisState
-SparsityNone
-SparsityCorrelative
-SparsityTerm
-SparsityTermBlock
-SparsityTermCliques
-SparsityCorrelativeTerm
-sparse_iterate!
-sparse_groupings
-sparse_problem
-TermMode
+AbstractPORelaxation
+degree
+basis
+groupings
+iterate!(::AbstractPORelaxation)
+Core.Type(::POProblem, ::Tuple{Vararg{Any}})
+RelaxationGroupings
+AbstractRelaxationDegree
+RelaxationDense
+RelaxationNewton
+RelaxationCustom
+AbstractRelaxationSparse
+RelaxationSparsityCorrelative
 ```
 
-## Chordal graphs
+## Helper functions used for some relaxations
 ```@docs
+Newton.halfpolytope
+Newton.halfpolytope_from_file
 chordal_completion!
 chordal_cliques!
+@allocdiff
 ```
 
-
+```@meta
+CurrentModule = PolynomialOptimization.FastVector
+```
 ## FastVector
 To improve the speed in some implementation details, `PolynomialOptimization` provides a "fast" vector type. This is basically
 just a wrapper around the stdlib `Vector`; however, it actually takes proper advantage of sizehints. The fact that Julia does
@@ -78,5 +79,6 @@ unsafe_append!
 Base.prepend!(::FastVec{V}, ::AbstractVector) where {V}
 unsafe_prepend!
 Base.similar(::FastVec{V}) where {V}
+Base.copyto!(::FastVec, ::Integer, ::FastVec, ::Integer, ::Integer)
 finish!
 ```

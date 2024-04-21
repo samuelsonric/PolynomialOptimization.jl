@@ -10,17 +10,19 @@ See also [`poly_problem`](@ref), [`POProblem`](@ref), [`poly_optimize`](@ref).
 """
 abstract type AbstractPORelaxation{Prob<:POProblem} end
 
-"""
+@doc raw"""
     RelaxationGroupings
 
 Contains information about how the elements in a certain (sparse) polynomial optimization problem combine.
 Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
-- `∑ᵢ transpose(objᵢ) * σᵢ * conj(objᵢ)` is the SOS representation of the objective with `σᵢ` PSD
-- `∑ᵢ transpose(zeroₖᵢ) * fₖ * conj(zeroₖᵢ)` is the prefactor for the kᵗʰ equality constraint with `fₖ` a free matrix
-- `∑ᵢ transpose(nonnegₖᵢ) * σₖᵢ * conj(nonnegₖᵢ)` is the SOS representation of the prefactor of the kᵗʰ nonnegative constraint
-  with `σₖᵢ` PSD
-- `∑ᵢ (transpose(psdₖᵢ) ⊗ 𝟙) * Zₖᵢ * (conj(psdₖᵢ) ⊗ 𝟙)` is the SOS matrix representation of the prefactor of the kᵗʰ PSD
-  constraint with Zₖᵢ PSD
+- ``\sum_i \mathit{obj}_i^\top \sigma_i \operatorname{conj}(\mathit{obj}_i)`` is the SOS representation of the objective with
+  ``\sigma_i \succeq 0``
+- ``\sum_i \mathit{zero}_{k, i}^\top f_k \operatorname{conj}(\mathit{zero}_{k, i})`` is the prefactor for the kᵗʰ equality
+  constraint with ``f_k`` a free matrix
+- ``\sum_i \mathit{nonneg}_{k, i}^\top \sigma_{k, i} \operatorname{conj}(\mathit{nonneg}_{k, i})`` is the SOS representation of
+  the prefactor of the kᵗʰ nonnegative constraint with ``\sigma_{k, i} \succeq 0``
+- ``\sum_i (\mathit{psd}_{k, i}^\top \otimes \mathbb1) Z_{k, i} (\operatorname{conj}(\mathit{psd}_{k, i}) \otimes \mathbb1)``
+  is the SOS matrix representation of the prefactor of the kᵗʰ PSD constraint with ``Z_{k, i} \succeq 0``
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
@@ -97,7 +99,7 @@ end
         end
     end for name in (:zeros, :nonnegs, :psds))...)
 
-    newcliques = Vector{Vector{SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr + 2Nc)}}}(
+    newcliques = Vector{Vector{variable_union_type(SimpleVariable{Nr,Nc})}}(
         undef, length(a.var_cliques) * length(b.var_cliques)
     )
     for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
@@ -200,9 +202,9 @@ Base.propertynames(relaxation::AbstractPORelaxation{P}) where {P<:POProblem} =
 MultivariatePolynomials.variables(relaxation::AbstractPORelaxation) = variables(relaxation.problem)
 MultivariatePolynomials.nvariables(relaxation::AbstractPORelaxation) = nvariables(relaxation.problem)
 """
-    degree(problem::AbstractPOProblem)
+    degree(problem::AbstractPORelaxation)
 
-Returns the degree associated with a polynomial optimization problem.
+Returns the degree associated with the relaxation of a polynomial optimization problem.
 
 See also [`poly_problem`](@ref).
 """

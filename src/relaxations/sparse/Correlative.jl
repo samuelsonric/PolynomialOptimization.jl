@@ -5,8 +5,9 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
     groupings::G
 
     @doc """
-        RelaxationSparsityCorrelative(relaxation::AbstractPORelaxation; [high_order_zero,] [high_order_nonneg,]
-        [high_order_psd,] [low_order_zero,] [low_order_nonneg,] [low_order_psd,] chordal_completion=true, verbose::Bool=false)
+        RelaxationSparsityCorrelative(relaxation::AbstractPORelaxation; [high_order_zero,]
+            [high_order_nonneg,] [high_order_psd,] [low_order_zero,] [low_order_nonneg,]
+            [low_order_psd,] chordal_completion=true, verbose::Bool=false)
 
     Analyze the correlative sparsity of a problem.
     Correlative sparsity is a variable-based sparsity analysis. It was first defined by
