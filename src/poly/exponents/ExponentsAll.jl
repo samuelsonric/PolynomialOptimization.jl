@@ -64,7 +64,7 @@ function _exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int, repor
     @assert(success)
     index::I = @inbounds counts[degree+1, 1]
     lastexp = -1
-    for (i, vardeg) in zip(2:(isnothing(report_lastexp) ? N : report_lastexp+1), exponents)
+    @inbounds for (i, vardeg) in zip(2:(isnothing(report_lastexp) ? N : report_lastexp+1), exponents)
         lastexp = vardeg
         i == N +1 && break # just for report_lastexp, where we must visit the last exponent also.
 
@@ -151,7 +151,7 @@ function Base.iterate(efi::ExponentIndices{I,ExponentsAll{N,I}}, (degree, i, ind
         index -= tmp - counts[remainingdeg+1, i]
         return degᵢ₋₁, (remainingdeg, i +1, index)
     elseif i == N +1
-        return degree, (degree, i +1, zero(index))
+        return degree, (0, i +1, zero(index))
     else
         return nothing
     end

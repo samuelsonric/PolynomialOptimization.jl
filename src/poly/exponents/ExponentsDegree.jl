@@ -109,7 +109,7 @@ function Base.iterate(efi::ExponentIndices{I,ExponentsDegree{N,I}}, (degree, i, 
         index -= tmp - counts[remainingdeg+1, i]
         return degᵢ₋₁, (remainingdeg, i +1, index)
     elseif i == N +1
-        return degree, (degree, i +1, zero(index))
+        return degree, (0, i +1, zero(index))
     else
         return nothing
     end

@@ -235,7 +235,7 @@ function. No validity check is performed on `degree`.
     If `report_lastexp` is set, the result will be a 2-tuple whose first entry is the index and whose second entry is the value
     of the last considered exponent, i.e. `exponents[report_lastexp]` if `exponents` is indexable.
 """
-exponents_to_index(e::AbstractExponents, exponents, degree::Int=sum(exponents, init=0), report_lastexp=nothing) =
+exponents_to_index(e::AbstractExponents, exponents, degree::Int=Int(sum(exponents, init=0)), report_lastexp=nothing) =
     _exponents_to_index(e, exponents, degree, report_lastexp)
 function _exponents_to_index end
 # implement this worker for all concrete AbstractExponents types with four mandatory args
