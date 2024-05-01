@@ -21,8 +21,19 @@ struct RelaxationDense{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupi
         degree::Integer=(@info("Automatically selecting minimal degree cutoff $(problem.mindegree)"); problem.mindegree)) where
         {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:POProblem{Poly}}
         degree < problem.mindegree && throw(ArgumentError("The minimally required degree is $(problem.mindegree)"))
-        basis = monomials(Val(Nr), Val(Nc), 0:degree, maxmultideg=[SimplePolynomials.ConstantVector(degree, Nr + Nc);
-                                                                   SimplePolynomials.ConstantVector(0, Nc)])
+        if iszero(Nc)
+            basis = monomials(Val(Nr), Val(Nc), 0:degree)
+        else
+            maxmultideg = Vector{Int}(undef, Nr + 2Nc)
+            @inbounds fill!(@view(maxmultideg[1:Nr]), degree)
+            idx = Nr +1
+            @inbounds for i in 1:Nc
+                maxmultideg[idx] = degree
+                maxmultideg[idx+1] = 0
+                idx += 2
+            end
+            basis = monomials(Val(Nr), Val(Nc), 0:degree; maxmultideg)
+        end
         gr = groupings(problem, basis, degree, nothing)
         new{P,typeof(basis),typeof(gr)}(problem, Int(degree), basis, gr)
     end
