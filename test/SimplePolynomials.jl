@@ -339,6 +339,7 @@ end
     @test adjoint(x) === x
     @test transpose(m) === m
     @test adjoint(m) === m
+    @test isreal(m)
 
     @testset "Effective variables" begin
         x = SimpleRealVariable{8,0}(1)
@@ -372,6 +373,8 @@ end
     @test nterms(SimpleMonomial{0,1}([2], [0])) == 1
     @test collect(m) == [(SimpleComplexVariable{0,7}(1), 1), (SimpleComplexVariable{0,7}(3, true), 1),
                          (SimpleComplexVariable{0,7}(5), 1), (SimpleComplexVariable{0,7}(7), 1)]
+    @test collect(SimpleConjMonomial(m)) == [(SimpleComplexVariable{0,7}(1, true), 1), (SimpleComplexVariable{0,7}(3), 1),
+                         (SimpleComplexVariable{0,7}(5, true), 1), (SimpleComplexVariable{0,7}(7, true), 1)]
     @test collect(SimpleMonomial{0,7}([0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
                         [(SimpleComplexVariable{0,7}(2), 1), (SimpleComplexVariable{0,7}(4, true), 2),
                          (SimpleComplexVariable{0,7}(6), 3)]
@@ -408,6 +411,8 @@ end
     @test adjoint(z) === conj(z)
     @test transpose(m) === m
     @test adjoint(m) === conj(m) == SimpleMonomial{0,7}(UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
+    @test !isreal(m)
+    @test isreal(SimpleMonomial{0,7}(UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
 
     @testset "Effective variables" begin
         y = ntuple(i -> SimpleComplexVariable{0,8}(i, true), Val(7))
@@ -450,6 +455,9 @@ end
     @test collect(m) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
                          (SimpleComplexVariable{2,7}(1), 1), (SimpleComplexVariable{2,7}(3, true), 1),
                          (SimpleComplexVariable{2,7}(5), 1), (SimpleComplexVariable{2,7}(7), 1)]
+    @test collect(SimpleConjMonomial(m)) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
+                         (SimpleComplexVariable{2,7}(1), 1, true), (SimpleComplexVariable{2,7}(3), 1),
+                         (SimpleComplexVariable{2,7}(5), 1, true), (SimpleComplexVariable{2,7}(7, true), 1)]
     @test collect(SimpleMonomial{2,7}([0, 4], [0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
                          [(SimpleRealVariable{2,7}(2), 4),
                           (SimpleComplexVariable{2,7}(2), 1), (SimpleComplexVariable{2,7}(4, true), 2),
@@ -502,6 +510,8 @@ end
     @test adjoint(z) === conj(z)
     @test transpose(m) === m
     @test adjoint(m) === conj(m) == SimpleMonomial{2,7}(UInt8[2, 3], UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
+    @test !isreal(m)
+    @test isreal(SimpleMonomial{2,7}(UInt8[2, 3], UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
 
     @testset "Effective variables" begin
         x = SimpleRealVariable{3,5}(2)

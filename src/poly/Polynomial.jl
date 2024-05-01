@@ -19,6 +19,12 @@ MultivariatePolynomials.variables(p::XorTX{SimplePolynomial}) = variables(monomi
 
 MultivariatePolynomials.coefficients(p::SimplePolynomial) = p.coeffs
 
+function MultivariatePolynomials.coefficient(p::SimplePolynomial{C,Nr,Nc}, m::SimpleMonomial{Nr,Nc}) where {C,Nr,Nc}
+    pos = searchsortedlast(p.monomials, m)
+    iszero(pos) && return zero(C)
+    @inbounds return p.coeffs[pos]
+end
+
 MultivariatePolynomials.monomials(p::SimplePolynomial) = p.monomials
 
 MultivariatePolynomials.terms(p::SimplePolynomial) = collect(p)
@@ -67,16 +73,8 @@ end
 Base.isreal(p::SimplePolynomial{<:Any,<:Any,0}) = all(∘(iszero, imag), p.coeffs)
 function Base.isreal(p::SimplePolynomial)
     # the monomial vector is sorted and unique
-    @inbounds for i in 1:length(p)
-        mon = p.monomials[i]
-        coeff = p.coeffs[i]
-        conmon = conj(mon)
-        if monidx.index == conmon.index
-            isreal(coeff) ? continue : return false
-        end
-        conpos = searchsortedlast(p, conmon)
-        iszero(conpos) && return false
-        coeff == conj(p.coeffs[j]) || return false
+    for t in p
+        coefficient(t) == conj(coefficient(p, SimpleConjMonomial(monomial(t)))) || return false
     end
     return true
 end

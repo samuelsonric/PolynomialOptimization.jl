@@ -536,7 +536,8 @@ effective_nvariables(x::SimpleMonomialVectorComplete) = length(effective_variabl
         else
             push!(result.args, quote
                 $xef = effective_variables.(x[$k])
-                $iter = iterate.($xef)
+                $iter = similar($xef, Base.promote_op(iterate, eltype($xef))) # necessary so that broadcasting doesn't
+                $iter .= iterate.($xef)                                       # remove the Nothing capability
             end)
             push!(varloop.args, quote
                 for (i, item) in enumerate($xef)

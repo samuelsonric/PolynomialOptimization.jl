@@ -168,7 +168,7 @@ function Base.:(==)(x::SimpleMonomialOrConj{Nr,Nc}, y::SimpleMonomialOrConj{Nr,N
     if (x isa SimpleMonomial && y isa SimpleMonomial) || (x isa SimpleConjMonomial && y isa SimpleConjMonomial)
         return compare_indices(unsafe, x.e, x.index, ==, y.e, y.index, degree(x))
     else
-        return all(==, zip(exponents(x), exponents(y)))
+        return all(splat(==), zip(exponents(x), exponents(y)))
     end
 end
 
@@ -253,28 +253,32 @@ Base.iterate(sme::SimpleMonomialExponents{<:Any,<:Any,false}, args...) = iterate
 function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,true}) where {Nr,Nc}
     @assert(!iszero(Nc))
     next = iterate(sme.ei)::Tuple
+    # We want to keep the internal interface that the first entry in the iterator state is the remaining degree, so a little
+    # bit of unpacking is necessary.
     if iszero(Nr)
         second = iterate(sme.ei, next[2])::Tuple
-        return second[1], (second[2], next[1])
+        return second[1], (second[2]..., next[1])
     else
-        return next[1], (next[2], -1)
+        return next[1], (next[2]..., -1)
     end
 end
-function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,true}, (state, prev)) where {Nr,Nc}
+function Base.iterate(sme::SimpleMonomialExponents{Nr,Nc,true}, allstate) where {Nr,Nc}
+    state = allstate[1:end-1]
+    prev = last(allstate)
     # we know that Nc ≠ 0, for it is not possible to create a real-valued SimpleConjMonomial
     @assert(!iszero(Nc))
     i = state[2] # standardized part of state
     if i ≤ Nr +1
         next = iterate(sme.ei, state)::Tuple
-        return next[1], (next[2], -1)
+        return next[1], (next[2]..., -1)
     elseif prev == -1
         next = iterate(sme.ei, state)
         isnothing(next) && return nothing # might happen when we are at the end
         second = iterate(sme.ei, next[2])::Tuple # but then this cannot happen
-        return second[1], (second[2], next[1])
+        return second[1], (second[2]..., next[1])
     else
         # everything was already calculated previously, just yield it and go on
-        return prev, (state, -1)
+        return prev, (state..., -1)
     end
 end
 # iteration is faster than indexed access, so let's fall back to the generic iterator-based functions
@@ -306,19 +310,22 @@ function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     iter = iterate(sme)::Tuple
     exponent, state = iter
     if iszero(exponent)
-        return iterate(m, (sme, state))
+        return iterate(m, (sme, 1, state))
     else
-        return (SimpleVariable{Nr,Nc}(1), exponent), (sme, state)
+        return (SimpleVariable{Nr,Nc}(1), exponent), (sme, 1, state)
     end
 end
-function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}, (sme, state)) where {Nr,Nc}
-    # state[1]: remaining degree, state[2]: index of next variable
+function Base.iterate(m::SimpleMonomialOrConj{Nr,Nc}, (sme, lastvar, state)) where {Nr,Nc}
+    # state[1]: remaining degree
     while true
-        iszero(state[1]) && return nothing # fast-path: if the remaining degree is already zero, we can finish
+        iszero(state[1]) && (!(m isa SimpleConjMonomial) || last(state) < 1) && return nothing
+        # ^ fast-path: if the remaining degree is already zero, we can finish; but note that for the conj monomial, this will
+        # be the remaining degree after the current ordinary variable and its conjugate have been traveled.
         iter = iterate(sme, state)
         isnothing(iter) && return nothing
+        lastvar += 1
         exponent, state = iter
-        iszero(exponent) || return (SimpleVariable{Nr,Nc}(state[2] -2), exponent), (sme, state)
+        iszero(exponent) || return (SimpleVariable{Nr,Nc}(lastvar), exponent), (sme, lastvar, state)
         # index of next variable after iteration -> current variable is -2
     end
 end
@@ -361,8 +368,7 @@ Base.@assume_effects :consistent function Base.isreal(m::SimpleMonomial{Nr,Nc}) 
     for _ in 1:Nc
         isnothing(iter) && return true
         complexdeg = iter[1]
-        iter = iterate(exps, iter[2])
-        isnothing(iter) && return false
+        iter = iterate(exps, iter[2])::Tuple
         iter[1] == complexdeg || return false
         iszero(iter[2][1]) && return true # short-circuit if the remaining degree is zero
         isodd(iter[2][1]) && return false # short-circuit if an odd number of complex variables remain, they can never be
@@ -395,7 +401,7 @@ Base.@assume_effects :consistent function monomial_product(e::AbstractExponents{
     return SimpleMonomial{Nr,Nc}(unsafe, e, index, d)
 end
 
-_get_I(::Type{<:SimpleMonomial{<:Any,<:Any,I}}) where {I<:Integer} = I
+_get_I(::Type{<:SimpleMonomialOrConj{<:Any,<:Any,I}}) where {I<:Integer} = I
 _get_I(::Type{<:SimpleVariable}) = missing
 @generated function _get_I(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc}
     I = missing
