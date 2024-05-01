@@ -1,3 +1,4 @@
+include("./Macros.jl")
 include("./Mutation.jl")
 include("./FastVector.jl")
 using .FastVector
@@ -10,6 +11,7 @@ include("./Allocations.jl")
 # by SimplePolynomials.
 include("../poly/SimplePolynomials.jl")
 using .SimplePolynomials, .SimplePolynomials.MultivariateExponents
+using .SimplePolynomials: SimpleMonomialOrConj
 import .SimplePolynomials.MultivariateExponents: iterate! # be careful to avoid duplication of methods; let's reuse this one
 
 include("./MatrixPolynomials.jl")

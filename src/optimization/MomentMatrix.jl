@@ -1,10 +1,12 @@
 export moment_matrix
 
-moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:symmetric}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:symmetric}, rows, cols,
+    prefix::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
     V[i ≤ j ? get(moments, let n=V(NaN); () -> n end, rows[i], cols[j], prefix...) : V(NaN)
       for i in 1:length(rows), j in 1:length(cols)]
 
-moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:throw}, rows, cols, prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:throw}, rows, cols,
+    prefix::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
     V[get(moments, () -> throw(MonomialMissing()), rows[i], cols[j], prefix...)
       for i in 1:length(rows), j in 1:length(cols)]
 
@@ -18,7 +20,7 @@ Note that `prefix` has to be a valid `SimpleMonomial` or `SimpleVariable` of app
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref).
 """
 function moment_matrix(result::POResult{R}; max_deg=Inf,
-    prefix::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,R<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}}
+    prefix::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,R<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}}
     relaxation = result.relaxation
     b = basis(relaxation)
     if max_deg < Inf

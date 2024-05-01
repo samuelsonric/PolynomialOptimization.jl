@@ -3,7 +3,7 @@ mutable struct StateSOS
     num_vars::Int32
     num_bar_vars::Int32
     num_constrs::Int32
-    const constr_map::Dict{FastKey{Int},Int32}
+    const constr_map::Dict{FastKey{UInt},Int32}
 end
 
 function append_constrs!(state, monidx, conjmonidx)
@@ -29,19 +29,18 @@ function append_constrs!(state, monidx, conjmonidx)
     end
 end
 
-@inline function PolynomialOptimization.sos_solver_mindex(state::StateSOS, monomials::SimpleMonomial...)
+@inline function Solver.mindex(state::StateSOS, monomials::SimpleMonomialOrConj...)
     idx = monomial_index(monomials...)
     dictidx = Base.ht_keyindex(state.constr_map, FastKey(idx))
     if dictidx < 0
         # split this into its own function so that we can inline the good part and call the more complicated appending
-        return append_constrs!(state, idx, monomial_index(conj.(reverse(monomials))...))
+        return append_constrs!(state, idx, monomial_index(SimpleConjMonomial.(reverse(monomials))...))
     else
         @inbounds return state.constr_map.vals[dictidx]
     end
 end
 
-function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices::AbstractVector{Int32},
-    values::AbstractVector{Float64})
+function Solver.add_nonnegative!(state::StateSOS, indices::AbstractVector{Int32}, values::AbstractVector{Float64})
     @assert(length(indices) == length(values))
     task = state.task.task
     Mosek.@MSK_appendvars(task, 1)
@@ -51,8 +50,7 @@ function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices:
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, index₊::Int32, value₊::Float64,
-    rest_free::Tuple{Int32,Float64}...)
+function Solver.add_quadratic!(state::StateSOS, index₊::Int32, value₊::Float64, rest_free::Tuple{Int32,Float64}...)
     task = state.task.task
     frdim = length(rest_free)
     Mosek.@MSK_appendvars(task, 1 + frdim)
@@ -69,8 +67,8 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, index
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₊::AbstractVector{Int32},
-    values₊::AbstractVector{Float64}, rest_free::Tuple{AbstractVector{Int32},AbstractVector{Float64}}...)
+function Solver.add_quadratic!(state::StateSOS, indices₊::AbstractVector{Int32}, values₊::AbstractVector{Float64},
+    rest_free::Tuple{AbstractVector{Int32},AbstractVector{Float64}}...)
     task = state.task.task
     frdim = length(rest_free)
     Mosek.@MSK_appendvars(task, 1 + frdim)
@@ -87,8 +85,8 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indic
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, index₁::Int32, value₁::Float64, index₂::Int32,
-    value₂::Float64, rest::Tuple{Int32,Float64}...)
+function Solver.add_quadratic!(state::StateSOS, index₁::Int32, value₁::Float64, index₂::Int32, value₂::Float64,
+    rest::Tuple{Int32,Float64}...)
     task = state.task.task
     rhsdim = length(rest)
     conedim = 2 + rhsdim
@@ -106,8 +104,8 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, index
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₁::AbstractVector{Int32},
-    values₁::AbstractVector{Float64}, indices₂::AbstractVector{Int32}, values₂::AbstractVector{Float64},
+function Solver.add_quadratic!(state::StateSOS, indices₁::AbstractVector{Int32}, values₁::AbstractVector{Float64},
+    indices₂::AbstractVector{Int32}, values₂::AbstractVector{Float64},
     rest::Tuple{AbstractVector{Int32},AbstractVector{Float64}}...)
     @assert(length(indices₁) == length(values₁) && length(indices₂) == length(values₂) &&
         all(x -> length(x[1]) == length(x[2]), rest))
@@ -133,9 +131,9 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indic
     return
 end
 
-PolynomialOptimization.sos_solver_supports_quadratic(::StateSOS) = true
+Solver.supports_quadratic(::StateSOS) = true
 
-function PolynomialOptimization.sos_solver_add_psd!(state::StateSOS, dim::Int,
+function Solver.add_psd!(state::StateSOS, dim::Int,
     data::Dict{FastKey{Int32},<:Tuple{AbstractVector{Int32},AbstractVector{Int32},AbstractVector{Float64}}})
     task = state.task.task
     Mosek.@MSK_appendbarvars(task, 1, Ref(Int32(dim)))
@@ -215,9 +213,9 @@ function PolynomialOptimization.sos_solver_add_psd!(state::StateSOS, dim::Int,
     return
 end
 
-PolynomialOptimization.sos_solver_psd_indextype(::StateSOS) = Tuple{Int32,Int32}, :L, zero(Int32)
+Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(Int32, :L, zero(Int32))
 
-function PolynomialOptimization.sos_solver_add_free_prepare!(state::StateSOS, num::Int)
+function Solver.add_free_prepare!(state::StateSOS, num::Int)
     task = state.task.task
     Mosek.@MSK_appendvars(task, num)
     Mosek.@MSK_putvarboundsliceconst(task, state.num_vars, state.num_vars + num, MSK_BK_FR.value, -Inf, Inf)
@@ -226,15 +224,15 @@ function PolynomialOptimization.sos_solver_add_free_prepare!(state::StateSOS, nu
     return prev
 end
 
-function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::Int32, indices::AbstractVector{Int32},
-    values::AbstractVector{Float64}, obj::Bool)
+function Solver.add_free!(state::StateSOS, eqstate::Int32, indices::AbstractVector{Int32}, values::AbstractVector{Float64},
+    obj::Bool)
     @assert(length(indices) == length(values))
     Mosek.@MSK_putacol(state.task.task, eqstate, length(indices), indices, values)
     obj && Mosek.@MSK_putcj(state.task.task, eqstate, 1.)
     return eqstate + one(Int32)
 end
 
-function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, eqstate::Int32)
+function Solver.add_free_finalize!(state::StateSOS, eqstate::Int32)
     rem = Int32(eqstate):state.num_vars-one(Int32)
     if !isempty(rem)
         Mosek.@MSK_removevars(state.task.task, length(rem), collect(rem))
@@ -243,7 +241,7 @@ function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, e
     return
 end
 
-function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int32}, values::Vector{Float64})
+function Solver.fix_constraints!(state::StateSOS, indices::Vector{Int32}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))
     Mosek.@MSK_putconboundsliceconst(state.task.task, 0, length(state.constr_map), MSK_BK_FX, 0., 0.)
@@ -251,7 +249,7 @@ function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, ind
     return
 end
 
-function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
     task = Mosek.Task(msk_global_env::Env)
     try
@@ -268,13 +266,9 @@ function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::Abst
                     putstrparam(task, k, string(v))
                 end
             end
-
             putobjsense(task, MSK_OBJECTIVE_SENSE_MAXIMIZE)
-
-
             state = StateSOS(task, zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{Int32},Int32}())
-
-            PolynomialOptimization.sos_setup!(state, relaxation, groupings)
+            sos_setup!(state, relaxation, groupings)
         end
         @verbose_info("Setup complete in ", setup_time, " seconds")
 
@@ -284,8 +278,8 @@ function PolynomialOptimization.poly_optimize(::Val{:MosekSOS}, relaxation::Abst
                        # would make solution extraction much harder.
         @verbose_info("Optimization complete, extracting solution")
 
-        max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
-        mon_pos = convert.(Int, keys(state.constr_map))
+        max_mons = monomial_count(nvariables(relaxation.objective), 2degree(relaxation))
+        mon_pos = convert.(UInt, keys(state.constr_map))
         mon_val = resize!(gety(task, MSK_SOL_ITR), length(mon_pos))
         sort_along!(mon_pos, mon_val) # we also sort in the dense case; this improves cache times in the assignment
         if 3length(mon_pos) < max_mons

@@ -27,17 +27,15 @@ mutable struct StateSOS
     num_psd_vars::Cint
     num_symmat::Cint
     linstart::Cint
-    constrs::Dict{FastKey{Int},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
-                                     Tuple{FastVec{Cint},FastVec{Cint}}}}
+    constrs::Dict{FastKey{UInt},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
+                                      Tuple{FastVec{Cint},FastVec{Cint}}}}
 end
 
-get_constr(state::StateSOS, constr::Int) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
-                                                       (FastVec{Cint}(), FastVec{Cint}())), state.constrs, FastKey(constr))
-get_constr(state::StateSOS, constr::FastKey{Int}) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
-                                                                (FastVec{Cint}(), FastVec{Cint}())), state.constrs, constr)
+get_constr(state::StateSOS, constr::UInt) = get_constr(state, FastKey(constr))
+get_constr(state::StateSOS, constr::FastKey{UInt}) = get!(() -> ((FastVec{Cint}(), FastVec{Cdouble}()),
+                                                                 (FastVec{Cint}(), FastVec{Cint}())), state.constrs, constr)
 
-function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices::AbstractVector{Int},
-    values::AbstractVector{Float64})
+function Solver.add_nonnegative!(state::StateSOS, indices::AbstractVector{UInt}, values::AbstractVector{Float64})
     @assert(length(indices) == length(values))
     @inbounds for (i, v) in zip(indices, values)
         (idx, val), _ = get_constr(state, i)
@@ -49,8 +47,8 @@ function PolynomialOptimization.sos_solver_add_scalar!(state::StateSOS, indices:
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₊::AbstractVector{Int},
-    values₊::AbstractVector{Float64}, rest_free::Tuple{AbstractVector{Int},AbstractVector{Float64}}...)
+function Solver.add_quadratic!(state::StateSOS, indices₊::AbstractVector{UInt}, values₊::AbstractVector{Float64},
+    rest_free::Tuple{AbstractVector{UInt},AbstractVector{Float64}}...)
     for (indices_free, values_free) in ((indices₊, values₊), rest_free...)
         for (i, v) in zip(indices_free, values_free)
             (idx, val), _ = get_constr(state, i)
@@ -64,9 +62,9 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indic
     return
 end
 
-function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indices₁::AbstractVector{Int},
-    values₁::AbstractVector{Float64}, indices₂::AbstractVector{Int}, values₂::AbstractVector{Float64},
-    rest::Tuple{AbstractVector{Int},AbstractVector{Float64}}...)
+function Solver.add_quadratic!(state::StateSOS, indices₁::AbstractVector{UInt}, values₁::AbstractVector{Float64},
+    indices₂::AbstractVector{UInt}, values₂::AbstractVector{Float64},
+    rest::Tuple{AbstractVector{UInt},AbstractVector{Float64}}...)
     @assert(length(indices₁) == length(values₁) && length(indices₂) == length(values₂) &&
         all(x -> length(x[1]) == length(x[2]), rest))
     @inbounds for (k, (indices, values)) in enumerate(((indices₁, values₁), (indices₂, values₂), rest...))
@@ -107,10 +105,10 @@ function PolynomialOptimization.sos_solver_add_quadratic!(state::StateSOS, indic
     return
 end
 
-PolynomialOptimization.sos_solver_supports_quadratic(::StateSOS) = true
+Solver.supports_quadratic(::StateSOS) = true
 
-function PolynomialOptimization.sos_solver_add_psd!(state::StateSOS, dim::Int,
-    data::Dict{FastKey{Int},<:Tuple{AbstractVector{Cint},AbstractVector{Cint},AbstractVector{Float64}}})
+function Solver.add_psd!(state::StateSOS, dim::Int,
+    data::Dict{FastKey{UInt},<:Tuple{AbstractVector{Cint},AbstractVector{Cint},AbstractVector{Float64}}})
     @inbounds for (i, matrixᵢ) in data
         _check_ret(copt_env, COPT_AddSymMat(state.problem, dim, length(matrixᵢ[1]), matrixᵢ[1], matrixᵢ[2], matrixᵢ[3]))
         _, (idx, val) = get_constr(state, i)
@@ -123,9 +121,9 @@ function PolynomialOptimization.sos_solver_add_psd!(state::StateSOS, dim::Int,
     return
 end
 
-PolynomialOptimization.sos_solver_psd_indextype(::StateSOS) = Tuple{Cint,Cint}, :L, zero(Cint)
+Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(Cint, :L, zero(Cint))
 
-function PolynomialOptimization.sos_solver_add_free_prepare!(state::StateSOS, num::Int)
+function Solver.add_free_prepare!(state::StateSOS, num::Int)
     _check_ret(copt_env, COPT_AddCols(state.problem, num, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
         fill(-COPT_INFINITY, num), C_NULL, C_NULL))
     prev = state.num_vars
@@ -133,8 +131,8 @@ function PolynomialOptimization.sos_solver_add_free_prepare!(state::StateSOS, nu
     return prev
 end
 
-function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::Cint, indices::AbstractVector{Int},
-    values::AbstractVector{Float64}, obj::Bool)
+function Solver.add_free!(state::StateSOS, eqstate::Cint, indices::AbstractVector{UInt}, values::AbstractVector{Float64},
+    obj::Bool)
     @inbounds for (i, v) in zip(indices, values)
         (idx, val), _ = get_constr(state, i)
         push!(idx, eqstate)
@@ -144,7 +142,7 @@ function PolynomialOptimization.sos_solver_add_free!(state::StateSOS, eqstate::C
     return eqstate + one(Cint)
 end
 
-function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, eqstate::Cint)
+function Solver.add_free_finalize!(state::StateSOS, eqstate::Cint)
     rem = Int32(eqstate):state.num_vars-one(Cint)
     if !isempty(rem)
         _check_ret(copt_env, COPT_DelCols(state.problem, length(rem), collect(rem)))
@@ -153,14 +151,14 @@ function PolynomialOptimization.sos_solver_add_free_finalize!(state::StateSOS, e
     return
 end
 
-function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, indices::Vector{Int}, values::Vector{Float64})
+function Solver.fix_constraints!(state::StateSOS, indices::Vector{UInt}, values::Vector{Float64})
     len = length(indices)
     @assert(len == length(values))
     # this is almost the end - we can now add all our PSD constraints
     sort_along!(indices, values)
     COPT_GetIntAttr(state.problem, COPT_INTATTR_ROWS, pointer_from_objref(state) + fieldoffset(typeof(state), 5))
     for (i, ((linidx, linval), (psdidx, psdval))) in state.constrs
-        constr_idx = searchsorted(indices, convert(Int, i))
+        constr_idx = searchsorted(indices, convert(UInt, i))
         if isempty(constr_idx)
             constr_val = 0.
         else
@@ -192,7 +190,7 @@ function PolynomialOptimization.sos_solver_fix_constraints!(state::StateSOS, ind
     return
 end
 
-function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+function Solver.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
     setup_time = @elapsed begin
         task = COPTProb(copt_env)
@@ -211,10 +209,9 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
 
         # Let's put some overestimate on the number of monomials
         state = StateSOS(task, zero(Cint), zero(Cint), zero(Cint), zero(Cint),
-            Dict{FastKey{Int},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
-                                    Tuple{FastVec{Cint},FastVec{Cint}}}}())
-
-        PolynomialOptimization.sos_setup!(state, relaxation, groupings)
+            Dict{FastKey{UInt},Tuple{Tuple{FastVec{Cint},FastVec{Cdouble}},
+                                     Tuple{FastVec{Cint},FastVec{Cint}}}}())
+        sos_setup!(state, relaxation, groupings)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
 
@@ -258,9 +255,9 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
                 )::Cint
             )
         end
-        max_mons = monomial_count(2degree(relaxation), nvariables(relaxation.objective))
+        max_mons = monomial_count(nvariables(relaxation.objective), 2degree(relaxation))
         if 3((linconstrs[] - state.linstart) + psdconstrs[]) < max_mons
-            inds = convert.(Int, keys(state.constrs))
+            inds = convert.(UInt, keys(state.constrs))
             vals = FastVec{Float64}(buffer=(linconstrs[] - state.linstart + psdconstrs[]))
             psdi = 1
             lini = state.linstart +1
@@ -281,10 +278,10 @@ function PolynomialOptimization.poly_optimize(::Val{:COPTSOS}, relaxation::Abstr
             lini = state.linstart +1
             for (i, (_, (havepsd, _))) in state.constrs
                 if isempty(havepsd)
-                    @inbounds solution[convert(Int, i)] = lin_duals[lini]
+                    @inbounds solution[convert(UInt, i)] = lin_duals[lini]
                     lini += 1
                 else
-                    @inbounds solution[convert(Int, i)] = psd_duals[psdi]
+                    @inbounds solution[convert(UInt, i)] = psd_duals[psdi]
                     psdi += 1
                 end
             end

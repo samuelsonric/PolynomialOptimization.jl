@@ -1,5 +1,12 @@
+export monomial_count, sos_add_matrix!, sos_add_equality!, sos_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
+"""
+    monomial_count(n, d)
+
+Short helper function that allows to determine the number of monomials in `n` variables up to degree `d`.
+"""
+monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
 
 trisize(n) = (n * (n +1)) >> 1
 realtype(::Type{<:Union{R,Complex{R}}}) where {R<:Real} = R
@@ -7,12 +14,12 @@ realtype(::Type{<:Union{R,Complex{R}}}) where {R<:Real} = R
 # For complex-valued problems, there are m and conj(m); all solvers require real-valued inputs.
 # Therefore, we first define the canonicalized monomial m̃ as the one of m, conj(m) that has the smaller index.
 iscanonical(::SimpleMonomial{<:Any,0}) = true
-Base.@assume_effects :consistent iscanonical(m::SimpleMonomial) = m.exponents_complex ≤ m.exponents_conj
-canonicalize(m::SimpleMonomial) = iscanonical(m) ? m : conj(m)
+Base.@assume_effects :consistent iscanonical(m::SimpleMonomialOrConj) = m ≤ SimpleConjMonomial(m)
+canonicalize(m::SimpleMonomialOrConj) = iscanonical(m) ? m : SimpleConjMonomial(m)
 # Next, the real part of m̃ is stored in the index associated with m; the imaginary part of m̃ in the index associated with
 # conj(m), unless those two are equal (then we don't store the imaginary part).
 # Note that Julia should be able to infer that the indices in the case of real-valued problems are the same and optimize a lot
-# away, as we marked monomial_index and conj to be :consistent.
+# away.
 
 # This is for the quadratic case, everything is preallocated
 @inline function pushorupdate!(idxvec::FastVec, index, valuevec::FastVec, value)
@@ -54,15 +61,15 @@ end
     end
 end
 
-@inline function getreonly(state, args::SimpleMonomial{Nr,Nc,P}...) where {Nr,Nc,P<:Unsigned}
-    idx₁ = sos_solver_mindex(state, args...)
-    @assert(idx₁ == sos_solver_mindex(state, conj.(reverse(args))...)) # reverse is rather unnecessary for the commuting case
+@inline function getreonly(state, args::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
+    idx₁ = mindex(state, args...)
+    @assert(idx₁ == mindex(state, SimpleConjMonomial.(reverse(args))...)) # reverse is rather unnecessary (commuting case)
     return idx₁
 end
 
-@inline function getreim(state, args::SimpleMonomial{Nr,Nc,P}...) where {Nr,Nc,P<:Unsigned}
-    idx₁ = sos_solver_mindex(state, args...)
-    idx₂ = sos_solver_mindex(state, conj.(reverse(args))...) # reverse is rather unnecessary for the commuting case
+@inline function getreim(state, args::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
+    idx₁ = mindex(state, args...)
+    idx₂ = mindex(state, SimpleConjMonomial.(reverse(args))...) # reverse is rather unnecessary (commuting)
     if idx₁ ≤ idx₂
         return idx₁, idx₂, true # make sure to test for equality whenever the imaginary part is involved
     else
@@ -78,7 +85,7 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, constraint::Simp
         # monomial has no imaginary part. But then, the coefficient must be real-valued as well.
         let term_constr=first(constraint), mon_constr=monomial(term_constr), coeff_constr=coefficient(term_constr)
             @assert(iszero(imag(coeff_constr)))
-            sos_solver_add_scalar!(state, getreonly(state, g, mon_constr, conj(g)), real(coeff_constr))
+            add_nonnegative!(state, getreonly(state, g, mon_constr, SimpleConjMonomial(g)), real(coeff_constr))
         end
     else
         # There are multiple terms in the constraint. Those may even be complex-valued: we know that in the construction of the
@@ -93,10 +100,10 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, constraint::Simp
                 imcoeff = imag(coeff_constr)
                 if isreal(mon_constr)
                     @assert(iszero(imcoeff))
-                    unsafe_push!(indices, getreonly(state, g, mon_constr, conj(g)))
+                    unsafe_push!(indices, getreonly(state, g, mon_constr, SimpleConjMonomial(g)))
                     unsafe_push!(values, recoeff)
                 elseif iscanonical(mon_constr)
-                    repart, impart, canonical = getreim(state, g, mon_constr, conj(g))
+                    repart, impart, canonical = getreim(state, g, mon_constr, SimpleConjMonomial(g))
                     @assert(canonical)
                     if !iszero(recoeff)
                         unsafe_push!(indices, repart)
@@ -108,7 +115,7 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, constraint::Simp
                     end
                 end
             end
-            sos_solver_add_scalar!(state, indices, values)
+            add_nonnegative!(state, indices, values)
         end
     end
     return
@@ -125,18 +132,18 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
             @assert(iszero(imag(coeff_constr)))
             recoeff = real(coeff_constr)
             if real_valued
-                sos_solver_add_quadratic!(
+                add_quadratic!(
                     state,
                     getreonly(state, g₁, mon_constr, g₁), recoeff,
                     getreonly(state, g₂, mon_constr, g₂), recoeff,
                     (getreonly(state, g₂, mon_constr, g₁), recoeff)
                 )
             else
-                offrepart, offimpart, offcanonical = getreim(state, g₁, mon_constr, conj(g₂))
-                sos_solver_add_quadratic!(
+                offrepart, offimpart, offcanonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
+                add_quadratic!(
                     state,
-                    getreonly(state, g₁, mon_constr, conj(g₁)), recoeff,
-                    getreonly(state, g₂, mon_constr, conj(g₂)), recoeff,
+                    getreonly(state, g₁, mon_constr, SimpleConjMonomial(g₁)), recoeff,
+                    getreonly(state, g₂, mon_constr, SimpleConjMonomial(g₂)), recoeff,
                     (offrepart, recoeff),
                     (offimpart, offcanonical ? recoeff : -recoeff)
                     # We don't really need this here as the sign is gobbled by the cone, but for consistency let's put it.
@@ -166,11 +173,11 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
                 imcoeff = imag(coeff_constr)
                 if isreal(mon_constr)
                     @assert(iszero(imcoeff)) # else the polynomial would not be real-valued
-                    unsafe_push!(indices₁, getreonly(state, g₁, mon_constr, conj(g₁)))
+                    unsafe_push!(indices₁, getreonly(state, g₁, mon_constr, SimpleConjMonomial(g₁)))
                     unsafe_push!(values₁, recoeff)
-                    unsafe_push!(indices₂, getreonly(state, g₂, mon_constr, conj(g₂)))
+                    unsafe_push!(indices₂, getreonly(state, g₂, mon_constr, SimpleConjMonomial(g₂)))
                     unsafe_push!(values₂, recoeff)
-                    offrepart, offimpart, offcanonical = getreim(state, g₁, mon_constr, conj(g₂))
+                    offrepart, offimpart, offcanonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
                     unsafe_push!(indices₃, offrepart)
                     unsafe_push!(values₃, recoeff)
                     if offrepart ≠ offimpart
@@ -186,8 +193,8 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
                     # On the diagonal, and also on the off-diagonal if `real_valued`, this means doubling the coefficients,
                     # as the exact same term will appear once again and lead to a real-valued contribution only.
                     # On the off-diagonal with `!real_valued`, we won't ever get an exact duplicate.
-                    repart₁, impart₁, canonical₁ = getreim(state, g₁, mon_constr, conj(g₁))
-                    repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, conj(g₂))
+                    repart₁, impart₁, canonical₁ = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₁))
+                    repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, SimpleConjMonomial(g₂))
                     @assert(canonical₁ && canonical₂)
                     @assert(repart₁ ≠ impart₁ && repart₂ ≠ impart₂)
                     if !iszero(recoeff)
@@ -206,7 +213,7 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
                     end
                     # We must be more careful on the off-diagonal, as now iscanonical(mon_constr) does not necessarily
                     # translate into iscanonical of the product.
-                    offrepart₁, offimpart₁, offcanonical₁ = getreim(state, g₁, mon_constr, conj(g₂))
+                    offrepart₁, offimpart₁, offcanonical₁ = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
                     if real_valued
                         if !iszero(recoeff)
                             unsafe_push!(indices₃, offrepart₁)
@@ -217,7 +224,7 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
                             unsafe_push!(values₃, offcanonical₁ ? -doubleim : doubleim)
                         end
                     else
-                        offrepart₂, offimpart₂, offcanonical₂ = getreim(state, g₁, conj(mon_constr), conj(g₂))
+                        offrepart₂, offimpart₂, offcanonical₂ = getreim(state, g₁, SimpleConjMonomial(mon_constr), SimpleConjMonomial(g₂))
                         @assert(offrepart₂ ≠ offrepart₁ && offimpart₂ ≠ offimpart₁)
                         if !iszero(recoeff)
                             unsafe_push!(indices₃, offrepart₁, offrepart₂)
@@ -247,9 +254,9 @@ function sos_add_matrix_helper!(state, T, V, g₁::M, g₂::M, constraint::Simpl
                 end
             end
             if real_valued || isempty(values₄)
-                sos_solver_add_quadratic!(state, indices₁, values₁, indices₂, values₂, (indices₃, values₃))
+                add_quadratic!(state, indices₁, values₁, indices₂, values₂, (indices₃, values₃))
             else
-                sos_solver_add_quadratic!(state, indices₁, values₁, indices₂, values₂, (indices₃, values₃),
+                add_quadratic!(state, indices₁, values₁, indices₂, values₂, (indices₃, values₃),
                     (indices₄, values₄))
             end
         end
@@ -267,71 +274,71 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, c₁₁::P, c₁
         let t₁₁=first(c₁₁), t₂₁=first(c₁₂), t₂₂=first(c₂₂)
             @assert(isreal(monomial(t₁₁)) && isreal(monomial(t₂₂)))
             @assert(iszero(imag(coefficient(t₁₁))) && iszero(imag(coefficient(t₂₂))))
-            offrepart, offimpart, offcanonical = getreim(state, g, monomial(t₂₁), conj(g))
+            offrepart, offimpart, offcanonical = getreim(state, g, monomial(t₂₁), SimpleConjMonomial(g))
             offrecoeff = real(coefficient(t₂₁))
             offimcoeff = imag(coefficient(t₂₁))
             if real_valued
                 @assert(offrepart == offimpart && iszero(offimcoeff))
-                sos_solver_add_quadratic!(
+                add_quadratic!(
                     Val(:check),
                     state,
-                    getreonly(state, g, monomial(t₁₁), conj(g)), real(coefficient(t₁₁)),
-                    getreonly(state, g, monomial(t₂₂), conj(g)), real(coefficient(t₂₂)),
+                    getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g)), real(coefficient(t₁₁)),
+                    getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g)), real(coefficient(t₂₂)),
                     (offrepart, offrecoeff)
                 )
             elseif offrepart == offimpart
                 # The off-diagonal monomial is real-valued, but the coefficient might still be complex.
                 if iszero(offimcoeff)
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        getreonly(state, g, monomial(t₁₁), conj(g)), real(coefficient(t₁₁)),
-                        getreonly(state, g, monomial(t₂₂), conj(g)), real(coefficient(t₂₂)),
+                        getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g)), real(coefficient(t₁₁)),
+                        getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g)), real(coefficient(t₂₂)),
                         (offrepart, offrecoeff)
                     )
                 elseif iszero(offrecoeff)
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        getreonly(state, g, monomial(t₁₁), conj(g)), real(coefficient(t₁₁)),
-                        getreonly(state, g, monomial(t₂₂), conj(g)), real(coefficient(t₂₂)),
+                        getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g)), real(coefficient(t₁₁)),
+                        getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g)), real(coefficient(t₂₂)),
                         (offrepart, offimcoeff)
                     )
                 else
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        StackVec(getreonly(state, g, monomial(t₁₁), conj(g))), StackVec(real(coefficient(t₁₁))),
-                        StackVec(getreonly(state, g, monomial(t₂₂), conj(g))), StackVec(real(coefficient(t₂₂))),
+                        StackVec(getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g))), StackVec(real(coefficient(t₁₁))),
+                        StackVec(getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g))), StackVec(real(coefficient(t₂₂))),
                         (offrepart, offrecoeff),
                         (offrepart, offimcoeff)
                     )
                 end
             else
                 if iszero(offimcoeff)
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        getreonly(state, g, monomial(t₁₁), conj(g)), real(coefficient(t₁₁)),
-                        getreonly(state, g, monomial(t₂₂), conj(g)), real(coefficient(t₂₂)),
+                        getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g)), real(coefficient(t₁₁)),
+                        getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g)), real(coefficient(t₂₂)),
                         (offrepart, offrecoeff),
                         (offimpart, offcanonical ? offrecoeff : -offrecoeff)
                     )
                 elseif iszero(offrecoeff)
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        getreonly(state, g, monomial(t₁₁), conj(g)), real(coefficient(t₁₁)),
-                        getreonly(state, g, monomial(t₂₂), conj(g)), real(coefficient(t₂₂)),
+                        getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g)), real(coefficient(t₁₁)),
+                        getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g)), real(coefficient(t₂₂)),
                         (offimpart, offcanonical ? -offimcoeff : offimcoeff),
                         (offrepart, offimcoeff)
                     )
                 else
-                    sos_solver_add_quadratic!(
+                    add_quadratic!(
                         Val(:check),
                         state,
-                        StackVec(getreonly(state, g, monomial(t₁₁), conj(g))), StackVec(real(coefficient(t₁₁))),
-                        StackVec(getreonly(state, g, monomial(t₂₂), conj(g))), StackVec(real(coefficient(t₂₂))),
+                        StackVec(getreonly(state, g, monomial(t₁₁), SimpleConjMonomial(g))), StackVec(real(coefficient(t₁₁))),
+                        StackVec(getreonly(state, g, monomial(t₂₂), SimpleConjMonomial(g))), StackVec(real(coefficient(t₂₂))),
                         (StackVec(offrepart, offimpart), StackVec(offrecoeff, offcanonical ? -offimcoeff : offimcoeff)),
                         (StackVec(offrepart, offimpart), StackVec(offimcoeff, offcanonical ? offrecoeff : -offrecoeff))
                     )
@@ -358,10 +365,10 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, c₁₁::P, c₁
                     imcoeff = imag(coeff_constr)
                     if isreal(mon_constr)
                         @assert(iszero(imcoeff)) # else the polynomial on the diagonal would not be real-valued
-                        unsafe_push!(ind, getreonly(state, g, mon_constr, conj(g)))
+                        unsafe_push!(ind, getreonly(state, g, mon_constr, SimpleConjMonomial(g)))
                         unsafe_push!(val, recoeff)
                     elseif iscanonical(mon_constr)
-                        repart, impart, canonical = getreim(state, g, mon_constr, conj(g))
+                        repart, impart, canonical = getreim(state, g, mon_constr, SimpleConjMonomial(g))
                         @assert(canonical)
                         @assert(repart ≠ impart)
                         if !iszero(recoeff)
@@ -376,7 +383,7 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, c₁₁::P, c₁
                 end
             end
             if real_valued
-                sos_solver_add_quadratic!(Val(:check), state, indices₁, values₁, indices₂, values₂, (indices₃, values₃))
+                add_quadratic!(Val(:check), state, indices₁, values₁, indices₂, values₂, (indices₃, values₃))
             else
                 indices₄ = similar(indices₃)
                 values₄ = similar(values₃)
@@ -388,7 +395,7 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, c₁₁::P, c₁
                     coeff_constr = coefficient(term_constr)
                     recoeff = real(coeff_constr)
                     imcoeff = imag(coeff_constr)
-                    repart, impart, canonical = getreim(state, g, mon_constr, conj(g))
+                    repart, impart, canonical = getreim(state, g, mon_constr, SimpleConjMonomial(g))
                     if !iszero(recoeff)
                         pushorupdate!(indices₃, repart, values₃, recoeff)
                         impart != repart && pushorupdate!(indices₄, impart, values₄, canonical ? recoeff : -recoeff)
@@ -400,7 +407,7 @@ function sos_add_matrix_helper!(state, T, V, g::SimpleMonomial, c₁₁::P, c₁
                         pushorupdate!(indices₄, repart, values₄, imcoeff)
                     end
                 end
-                sos_solver_add_quadratic!(Val(:check), state, indices₁, values₁, indices₂, values₂, (indices₃, values₃),
+                add_quadratic!(Val(:check), state, indices₁, values₁, indices₂, values₂, (indices₃, values₃),
                     (indices₄, values₄))
             end
         end
@@ -438,23 +445,15 @@ Base.iterate(::ScalarMatrix, ::Nothing) = nothing
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
 # Interface for getting values from a PSD variable (e.g., Mosek barvar, COPT PSDVar; none for the complex case).
 function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
-    constraint::AbstractMatrix{<:SimplePolynomial}, (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer},
-    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}})
-    @assert(Tidx <: Integer || Tidx <: Tuple{Integer,Integer})
-    @assert(tri ∈ (:L, :U))
+    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextypeMatrix{Tidx,Tri,Offset},
+    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}) where {Tidx<:Integer,Tri,Offset}
     complex = type isa Tuple{Val{false},Val{true}}
     Vtype = complex ? Complex{V} : V
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
     items = trisize(dim)
-    linear_indexing = Tidx <: Integer
-    if linear_indexing
-        Tl = Tidx
-    else
-        T1 = fieldtype(Tidx, 1)
-        T2 = fieldtype(Tidx, 2)
-    end
+    linear_indexing = indextype isa PSDIndextypeMatrixLinear
     # we use a sizehint to make avoid growing and re-hashing the dictionary. We don't want to compute the exact
     # number of distinct monomials that can occur by multiplying `grouping` with itself and `constraint`, but
     # we also don't want to overestimate too much (although it's not extremely costly).
@@ -473,36 +472,35 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
     data = let nvars=effective_nvariables(grouping, monomials.(constraint)), constrex=extdegree(constraint),
         groupingex=extdegree(grouping)
         sizehint!(
-            Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tl},FastVec{Vtype}} :
-                                              Tuple{FastVec{T1},FastVec{T2},FastVec{Vtype}}}(),
+            Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tidx},FastVec{Vtype}} :
+                                              Tuple{FastVec{Tidx},FastVec{Tidx},FastVec{Vtype}}}(),
             (complex ? 2 : 1) *
-                min(monomial_count(2groupingex[2] + constrex[2], nvars) - monomial_count(2groupingex[1] + constrex[1], nvars),
+                min(monomial_count(nvars, 2groupingex[2] + constrex[2]) - monomial_count(nvars, 2groupingex[1] + constrex[1]),
                     items * length(constraint))
         )
     end
     if linear_indexing
-        i = Tl(offset)
-        gen_new = @capture(() -> (FastVec{$Tl}(), FastVec{$Vtype}()))
+        i = Offset
+        gen_new = @capture(() -> (FastVec{$Tidx}(), FastVec{$Vtype}()))
     else
-        col = T2(offset)
-        gen_new = @capture(() -> (FastVec{$T1}(), FastVec{$T2}(), FastVec{$Vtype}()))
+        col = Offset
+        gen_new = @capture(() -> (FastVec{$Tidx}(), FastVec{$Tidx}(), FastVec{$Vtype}()))
     end
-    grouping₂ = lazy_unalias(grouping)
     @inbounds for (exp2, g₂) in enumerate(grouping)
         for block_j in 1:block_size
             if !linear_indexing
-                row = tri === :U ? T1(offset) : col
+                row = Tri === :U ? Offset : col
             end
-            exp1_range = (tri === :U ? (1:exp2) : (exp2:lg))
-            for (exp1, g₁) in zip(exp1_range, @view(grouping₂[exp1_range]))
-                for block_i in (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
+            exp1_range = (Tri === :U ? (1:exp2) : (exp2:lg))
+            for (exp1, g₁) in zip(exp1_range, @view(grouping[exp1_range]))
+                for block_i in (Tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
                                              ((exp1 == exp2 ? block_j : 1):block_size))
                     for term_constr in constraint[block_i, block_j]
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         recoeff = real(coeff_constr)
                         imcoeff = imag(coeff_constr)
-                        repart, impart, canonical = getreim(state, g₁, mon_constr, conj(g₂))
+                        repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
                         # Interpretation: repart is the constraint that defines the real part of the coefficient in front of
                         # g₁*mon_constr*ḡ₂, impart is the constraint that defines the imaginary part of the coefficient.
                         if !complex || (block_i == block_j && (exp1 == exp2 || (isreal(g₁) && isreal(g₂))))
@@ -572,18 +570,18 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                         end
                     end
                     if linear_indexing
-                        i += one(Tl)
+                        i += one(Tidx)
                     else
-                        row += one(T1)
+                        row += one(Tidx)
                     end
                 end
             end
             if !linear_indexing
-                col += one(T1)
+                col += one(Tidx)
             end
         end
     end
-    (complex ? sos_solver_add_psd_complex! : sos_solver_add_psd!)(state, dim, data)
+    (complex ? add_psd_complex! : add_psd!)(state, dim, data)
     return
 end
 
@@ -591,27 +589,20 @@ end
 # cones, so we'll have to rewrite everything in terms of a real PSD cone
 # Interface for getting values from a PSD variable (e.g., Mosek barvar, COPT PSDVar).
 function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
-    constraint::AbstractMatrix{<:SimplePolynomial}, (Tidx, tri, offset)::Tuple{Union{DataType,<:Tuple},Symbol,Integer},
-    ::Tuple{Val{false},Val{false}})
-    @assert(Tidx <: Integer || Tidx <: Tuple{Integer,Integer})
-    @assert(tri ∈ (:L, :U))
+    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextypeMatrix{Tidx,Tri,Offset},
+    ::Tuple{Val{false},Val{false}}) where {Tidx<:Integer,Tri,Offset}
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
     items = trisize(dim) # we still keep it at the trisize, although we now have dim^2 distinct elements
-    linear_indexing = Tidx <: Integer
-    if linear_indexing
-        Tl = Tidx
-    else
-        T1 = fieldtype(Tidx, 1)
-        T2 = fieldtype(Tidx, 2)
-    end
+    linear_indexing = indextype isa PSDIndextypeMatrixLinear
     # TODO: see previous methods
     data = let nvars=effective_nvariables(grouping, monomials.(constraint)), constrex=extdegree(constraint),
         groupingex=extdegree(grouping)
         sizehint!(
-            Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tl},FastVec{V}} : Tuple{FastVec{T1},FastVec{T2},FastVec{V}}}(),
-            2min(monomial_count(2groupingex[2] + constrex[2], nvars) - monomial_count(2groupingex[1] + constrex[1], nvars),
+            Dict{FastKey{T},linear_indexing ? Tuple{FastVec{Tidx},FastVec{V}} :
+                                              Tuple{FastVec{Tidx},FastVec{Tidx},FastVec{V}}}(),
+            2min(monomial_count(nvars, 2groupingex[2] + constrex[2]) - monomial_count(nvars, 2groupingex[1] + constrex[1]),
                 items * length(constraint))
         )
     end
@@ -635,35 +626,34 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
         # In the comment, we assume offset = 1, in the code, we deal with it appropriately.
         # X₁ starts from 1; in :U order, it just increases linearly. In :L order, after one column, we need to skip over dim
         # entries.
-        i1 = Tl(offset)
+        i1 = Offset
         # X₂ is always a dense matrix, but we still travel one triangle. We therefore need an upper and a lower index.
         # In :U order, the index starts at items+1; and after one column, we need to skip over dim entries for the upper index.
         # The lower index is given by items+rowidx+(colidx-1)*(colidx+2dim)÷2.
         # In :L order, we have access to X₃ᵀ. The index starts at dim+1 and we need to skip over dim entries after one column
         # for the lower index. The upper index is given by rowidx+colidx*(4dim+1-colidx)÷2-dim.
-        i2order = Tl((tri === :U ? items : dim) + offset)
+        i2order = Tidx((Tri === :U ? items : dim) + Offset)
         # X₃ starts at items+dim+1 in :U order and after one column, we need to skip dim entries. In :L order, it starts at
         # dim(3dim +1)÷2+1 and just increases linearly.
-        i3 = Tl((tri === :U ? items + dim : ((dim * (3dim +1)) >> 1)) + offset)
-        gen_new = @capture(() -> (FastVec{$Tl}(), FastVec{$V}()))
+        i3 = Tidx((Tri === :U ? items + dim : ((dim * (3dim +1)) >> 1)) + Offset)
+        gen_new = @capture(() -> (FastVec{$Tidx}(), FastVec{$V}()))
     else
-        gen_new = @capture(() -> (FastVec{$T1}(), FastVec{$T2}(), FastVec{$V}()))
+        gen_new = @capture(() -> (FastVec{$Tidx}(), FastVec{$Tidx}(), FastVec{$V}()))
     end
-    δ = offset -1
+    δ = Offset - 1
     col = 1
-    grouping₂ = lazy_unalias(grouping)
     # There's a lot of constant folding going on here; in particular, conditioning on linear_indexing or tri will be done at
     # compile time.
     @inbounds for (exp2, g₂) in enumerate(grouping)
         for block_j in 1:block_size
-            row = tri === :U ? 1 : col
-            exp1_range = (tri === :U ? (1:exp2) : (exp2:lg))
-            for (exp1, g₁) in zip(exp1_range, @view(grouping₂[exp1_range]))
-                for block_i in (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
+            row = Tri === :U ? 1 : col
+            exp1_range = (Tri === :U ? (1:exp2) : (exp2:lg))
+            for (exp1, g₁) in zip(exp1_range, @view(grouping[exp1_range]))
+                for block_i in (Tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
                                              ((exp1 == exp2 ? block_j : 1):block_size))
                     if linear_indexing
-                        i2other = Tl(tri === :U ? δ + items + col + ((row -1) * (row + 2dim)) >> 1 :
-                                                  offset + col + dim - row + ((row -1) * (4dim + 2 - row)) >> 1)
+                        i2other = Tidx(Tri === :U ? δ + items + col + ((row -1) * (row + 2dim)) >> 1 :
+                                                    Offset + col + dim - row + ((row -1) * (4dim + 2 - row)) >> 1)
                     end
                     for term_constr in constraint[block_i, block_j]
                         # This method is a bit different from the others. To exploit the advantages of Wang's reformulation,
@@ -674,7 +664,7 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                         coeff_constr = coefficient(term_constr)
                         recoeff = real(coeff_constr)
                         imcoeff = imag(coeff_constr)
-                        repart, impart, canonical = getreim(state, g₁, mon_constr, conj(g₂))
+                        repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
                         if block_i == block_j && (exp1 == exp2 || (isreal(g₁) && isreal(g₂)))
                             if canonical
                                 # this is bᵣ + i bᵢ = recoeff * real(H(row, col)) + i * imcoeff * real(H(row, col))
@@ -685,8 +675,8 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                                         push!(svre[1], i1, i3)
                                         push!(svre[2], recoeff, recoeff)
                                     else
-                                        push!(svre[1], T1(row + δ), T1(row + dim + δ))
-                                        push!(svre[2], T2(col + δ), T2(col + dim + δ))
+                                        push!(svre[1], Tidx(row + δ), Tidx(row + dim + δ))
+                                        push!(svre[2], Tidx(col + δ), Tidx(col + dim + δ))
                                         push!(svre[3], recoeff, recoeff)
                                     end
                                 end
@@ -700,8 +690,8 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                                         push!(svim[1], i1, i3)
                                         push!(svim[2], imcoeff, imcoeff)
                                     else
-                                        push!(svim[1], T1(row + δ), T1(row + dim + δ))
-                                        push!(svim[2], T2(col + δ), T2(col + dim + δ))
+                                        push!(svim[1], Tidx(row + δ), Tidx(row + dim + δ))
+                                        push!(svim[2], Tidx(col + δ), Tidx(col + dim + δ))
                                         push!(svim[3], imcoeff, imcoeff)
                                     end
                                 end
@@ -722,23 +712,27 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                                     pushorupdate!(svre, i1, recoeff)
                                     pushorupdate!(svre, i3, recoeff)
                                 else
-                                    pushorupdate!(svre, T1(row + δ), T2(col + δ), recoeff)
-                                    pushorupdate!(svre, T1(row + dim + δ), T2(col + dim + δ), recoeff)
+                                    pushorupdate!(svre, Tidx(row + δ), Tidx(col + δ), recoeff)
+                                    pushorupdate!(svre, Tidx(row + dim + δ), Tidx(col + dim + δ), recoeff)
                                 end
                                 # part 2a: Aᵣ(X₃ - X₃ᵀ)
                                 if repart != impart
                                     if linear_indexing
                                         if i2order != i2other
-                                            pushorupdate!(svim, tri === :U ? i2order : i2other, canonical ? recoeff : -recoeff)
-                                            pushorupdate!(svim, tri === :U ? i2other : i2order, canonical ? -recoeff : recoeff)
+                                            pushorupdate!(svim, Tri === :U ? i2order : i2other, canonical ? recoeff : -recoeff)
+                                            pushorupdate!(svim, Tri === :U ? i2other : i2order, canonical ? -recoeff : recoeff)
                                         end
                                     elseif row != col
-                                        if tri === :U
-                                            pushorupdate!(svim, T1(row + δ), T2(col + dim + δ), canonical ? recoeff : -recoeff)
-                                            pushorupdate!(svim, T1(col + δ), T2(row + dim + δ), canonical ? -recoeff : recoeff)
+                                        if Tri === :U
+                                            pushorupdate!(svim, Tidx(row + δ), Tidx(col + dim + δ),
+                                                canonical ? recoeff : -recoeff)
+                                            pushorupdate!(svim, Tidx(col + δ), Tidx(row + dim + δ),
+                                                canonical ? -recoeff : recoeff)
                                         else
-                                            pushorupdate!(svim, T1(col + dim + δ), T2(row + δ), canonical ? recoeff : -recoeff)
-                                            pushorupdate!(svim, T1(row + dim + δ), T2(col + δ), canonical ? -recoeff : recoeff)
+                                            pushorupdate!(svim, Tidx(col + dim + δ), Tidx(row + δ),
+                                                canonical ? recoeff : -recoeff)
+                                            pushorupdate!(svim, Tidx(row + dim + δ), Tidx(col + δ),
+                                                canonical ? -recoeff : recoeff)
                                         end
                                     end
                                 end
@@ -747,16 +741,16 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                                 # part 1b: -Aᵢ(X₃ - X₃ᵀ)
                                 if linear_indexing
                                     if i2order != i2other
-                                        pushorupdate!(svre, tri === :U ? i2order : i2other, -imcoeff)
-                                        pushorupdate!(svre, tri === :U ? i2other : i2order, imcoeff)
+                                        pushorupdate!(svre, Tri === :U ? i2order : i2other, -imcoeff)
+                                        pushorupdate!(svre, Tri === :U ? i2other : i2order, imcoeff)
                                     end
                                 elseif row != col
-                                    if tri === :U
-                                        pushorupdate!(svre, T1(row + δ), T2(col + dim + δ), -imcoeff)
-                                        pushorupdate!(svre, T1(col + δ), T2(row + dim + δ), imcoeff)
+                                    if Tri === :U
+                                        pushorupdate!(svre, Tidx(row + δ), Tidx(col + dim + δ), -imcoeff)
+                                        pushorupdate!(svre, Tidx(col + δ), Tidx(row + dim + δ), imcoeff)
                                     else
-                                        pushorupdate!(svre, T1(col + dim + δ), T2(row + δ), -imcoeff)
-                                        pushorupdate!(svre, T1(row + dim + δ), T2(col + δ), imcoeff)
+                                        pushorupdate!(svre, Tidx(col + dim + δ), Tidx(row + δ), -imcoeff)
+                                        pushorupdate!(svre, Tidx(row + dim + δ), Tidx(col + δ), imcoeff)
                                     end
                                 end
                                 # part 2b: Aᵢ(X₁ + X₂)
@@ -765,9 +759,9 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                                         pushorupdate!(svim, i1, canonical ? imcoeff : -imcoeff)
                                         pushorupdate!(svim, i3, canonical ? imcoeff : -imcoeff)
                                     else
-                                        pushorupdate!(svim, T1(row + δ), T2(col + δ),
+                                        pushorupdate!(svim, Tidx(row + δ), Tidx(col + δ),
                                                       canonical ? imcoeff : -imcoeff)
-                                        pushorupdate!(svim, T1(row + dim + δ), T2(col + dim + δ),
+                                        pushorupdate!(svim, Tidx(row + dim + δ), Tidx(col + dim + δ),
                                                       canonical ? imcoeff : -imcoeff)
                                     end
                                 end
@@ -775,28 +769,27 @@ function sos_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M
                         end
                     end
                     if linear_indexing
-                        i1 += one(Tl)
-                        i2order += one(Tl)
-                        i3 += one(Tl)
+                        i1 += one(Tidx)
+                        i2order += one(Tidx)
+                        i3 += one(Tidx)
                     end
                     row += 1
                 end
             end
             if linear_indexing
-                if tri === :U
-                    i3 += Tl(dim)
+                if Tri === :U
+                    i3 += Tidx(dim)
                 else
-                    i1 += Tl(dim)
+                    i1 += Tidx(dim)
                 end
-                i2order += Tl(dim)
+                i2order += Tidx(dim)
             end
             col += 1
         end
     end
-    sos_solver_add_psd!(state, 2dim, data)
+    add_psd!(state, 2dim, data)
     return
 end
-
 
 """
     sos_add_matrix!(state, grouping::SimpleMonomialVector,
@@ -807,11 +800,11 @@ Parses a SOS constraint with a basis given in `grouping` (this might also be a p
 problem structure.
 
 To make this function work for a solver, implement the following low-level primitives:
-- [`sos_solver_mindex`](@ref)
-- [`sos_solver_add_scalar!`](@ref)
-- [`sos_solver_add_quadratic!`](@ref) (optional)
-- [`sos_solver_add_psd!`](@ref)
-- [`sos_solver_psd_indextype`](@ref)
+- [`mindex`](@ref)
+- [`add_nonnegative!`](@ref)
+- [`add_quadratic!`](@ref) (optional)
+- [`add_psd!`](@ref)
+- [`psd_indextype`](@ref)
 
 Usually, this function does not have to be called explicitly; use [`sos_setup!`](@ref) instead.
 
@@ -819,15 +812,15 @@ See also [`sos_add_equality!`](@ref).
 """
 function sos_add_matrix!(state, grouping::AbstractVector{M} where M<:SimpleMonomial, constraint::SimplePolynomial)
     lg = length(grouping)
-    T = Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(constraint))
+    T = Base.promote_op(mindex, typeof(state), monomial_type(constraint))
     V = realtype(coefficient_type(constraint))
     if lg == 1
         @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], constraint)
-    elseif lg == 2 && sos_solver_supports_quadratic(state)
-        @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], lazy_unalias(grouping)[2], constraint)
+    elseif lg == 2 && supports_quadratic(state)
+        @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], grouping[2], constraint)
     else
-        sos_add_matrix_helper!(state, T, V, grouping, ScalarMatrix(constraint), sos_solver_psd_indextype(state),
-            (Val(isreal(grouping) && isreal(constraint)), Val(sos_solver_supports_complex_psd(state))))
+        sos_add_matrix_helper!(state, T, V, grouping, ScalarMatrix(constraint), psd_indextype(state),
+            (Val(isreal(grouping) && isreal(constraint)), Val(supports_complex_psd(state))))
     end
     return
 end
@@ -837,33 +830,34 @@ function sos_add_matrix!(state, grouping::AbstractVector{M} where M<:SimpleMonom
     block_size = LinearAlgebra.checksquare(constraint)
     isone(block_size) && @inbounds return sos_add_matrix!(state, grouping, constraint[1, 1])
     lg = length(grouping)
-    T = Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(eltype(constraint)))
+    T = Base.promote_op(mindex, typeof(state), monomial_type(eltype(constraint)))
     V = realtype(coefficient_type(eltype(constraint)))
-    if lg == 1 && block_size == 2 && sos_solver_supports_quadratic(state)
+    if lg == 1 && block_size == 2 && supports_quadratic(state)
         @inbounds sos_add_matrix_helper!(state, T, V, grouping[1], constraint[1, 1], constraint[1, 2], constraint[2, 2])
     else
-        sos_add_matrix_helper!(state, T, V, grouping, constraint, sos_solver_psd_indextype(state),
-            (Val(isreal(grouping) && isreal(constraint)), Val(sos_solver_supports_complex_psd(state))))
+        sos_add_matrix_helper!(state, T, V, grouping, constraint, psd_indextype(state),
+            (Val(isreal(grouping) && isreal(constraint)), Val(supports_complex_psd(state))))
     end
     return
 end
 
 """
-    sos_add_equality!(state, groupings::AbstractVector{M} where M<:SimpleMonomialVector, constraint::SimplePolynomial)
+    sos_add_equality!(state, groupings::SimpleMonomialVector, constraint::SimplePolynomial)
 
 Parses a polynomial equality constraint and calls the appropriate solver functions to set up the problem structure.
 `groupings` contains all the individual bases that will be squared in the process to generate the prefactor.
 
 To make this function work for a solver, implement the following low-level primitives:
-- [`sos_solver_add_free_prepare!`](@ref) (optional)
-- [`sos_solver_add_free!`](@ref) (required)
-- [`sos_solver_add_free_finalize!`](@ref) (optional)
+- [`add_free_prepare!`](@ref) (optional)
+- [`add_free!`](@ref) (required)
+- [`add_free_finalize!`](@ref) (optional)
 
 Usually, this function does not have to be called explicitly; use [`sos_setup!`](@ref) instead.
 
 See also [`sos_add_matrix!`](@ref).
 """
-function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:SimpleMonomial,MV<:AbstractVector{M}}, constraint::SimplePolynomial)
+function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:SimpleMonomial,MV<:AbstractVector{M}},
+    constraint::SimplePolynomial{<:Any,Nr}) where {Nr}
     real_constr = isreal(constraint)
     real_basis = true
     buffer = length(constraint)
@@ -882,14 +876,14 @@ function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:Simple
             end
         end
         maxbasisitems += trisize(real_grouping) + real_grouping * 2complex_grouping + complex_grouping^2
-        # only reals             mix a real with a complex or conj   only complexes
+        #                only reals               mix a real with a complex or conj   only complexes
     end
     # Now the prefactor is an arbitrary polynomial, and also constraint can be anything - there is no need that they be
     # real-valued any more. However, as we transfer everything to the objective, we then need to consider real and imaginary
     # part separately.
     # We will simply separate real and imaginary part in the constraint to give two separate constraints. Our prefactors will
     # in total always be real-valued.
-    eqstate = @inline sos_solver_add_free_prepare!(state, real_constr ? maxbasisitems : 2maxbasisitems)
+    eqstate = @inline add_free_prepare!(state, real_constr ? maxbasisitems : 2maxbasisitems)
     # Construct the basis for the zero constraints by considering the squares of all the elements in a given basis
     # If we were to multiply every item in grouping with every item in conj(grouping), for real-valued problems, this would
     # give rise to a large number of redundant constraints. Passing these linear dependencies to the optimizer might lead to
@@ -900,218 +894,229 @@ function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:Simple
     # - Switching off the presolver or PRESOLVE_LINDEP_USE gives the correct answer (which is lower!), 0.051707.
     # - Setting PRESOLVE_ELIMINATOR_MAX_NUM_TRIES to 0, 1, 2 gives 0.215861, 0.052381, 0.053533.
     # But in general, we want the presolver to work, so we'll have to take care that we don't generate all those duplicates.
-    # Unfortunately, this requires keeping track of everything we already did (unless we are in the specia case
+    # Unfortunately, this requires keeping track of everything we already did (unless we are in the special case
     # isone(length(groupings)) and first(groupings) is a LazyMonomials... Should we treat this separately? But then, our whole
     # two-loop must be transformed into a one-loop.)
-    zero_basis = sizehint!(Set{FastKey{Int}}(), maxbasisitems)
+    zero_basis = sizehint!(Set{FastKey{UInt}}(), maxbasisitems)
     for grouping in groupings
-        grouping₂ = lazy_unalias(grouping)
-    @inbounds let T=Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(constraint)),
-        V=realtype(coefficient_type(constraint)),
-        indices=FastVec{T}(buffer=real_constr && real_basis ? buffer : (real_constr || real_basis ? 2buffer : 4buffer)),
-        values=similar(indices, V)
-        if !real_constr || !real_basis
-            indices₂ = similar(indices)
-            values₂ = similar(values)
-            if !real_constr && !real_basis
-                indices₃ = similar(indices)
-                values₃ = similar(values)
-                indices₄ = similar(indices)
-                values₄ = similar(values)
+        @inbounds let T=Base.promote_op(mindex, typeof(state), monomial_type(constraint)),
+            V=realtype(coefficient_type(constraint)),
+            indices=FastVec{T}(buffer=real_constr && real_basis ? buffer : (real_constr || real_basis ? 2buffer : 4buffer)),
+            values=similar(indices, V)
+            if !real_constr || !real_basis
+                indices₂ = similar(indices)
+                values₂ = similar(values)
+                if !real_constr && !real_basis
+                    indices₃ = similar(indices)
+                    values₃ = similar(values)
+                    indices₄ = similar(indices)
+                    values₄ = similar(values)
+                end
             end
-        end
-        grouping₂ = lazy_unalias(grouping)
             for (exp2, g₂) in enumerate(grouping)
-                for g₁ in Iterators.drop(grouping₂, isreal(g₂) ? exp2 -1 : 0)
-                real_grouping = real_basis || g₁.exponents_complex == g₂.exponents_complex
-                # only canonical products g₁ * conj(g₂)
-                real_grouping || g₁.exponents_complex < g₂.exponents_complex || continue
+                for g₁ in Iterators.drop(grouping, isreal(g₂) ? exp2 -1 : 0)
+                    if real_basis
+                        real_grouping = true
+                    else
+                        eq = :equal
+                        for (e₁, e₂) in Iterators.drop(zip(exponents(g₁), exponents(g₂)), Nr)
+                            if e₁ > e₂
+                                eq = :greater
+                                break
+                            elseif e₁ < e₂
+                                eq = :smaller
+                                break
+                            end
+                        end
+                        eq === :greater && continue # only canonical products g₁ * conj(g₂)
+                        real_grouping = eq === :equal
+                    end
                     # no duplicates
-                    let grouping_idx=FastKey(monomial_index(g₁, conj(g₂)))
+                    let grouping_idx=FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
                         grouping_idx ∈ zero_basis ? continue : push!(zero_basis, grouping_idx)
                     end
-                for term_constr in constraint
-                    mon_constr = monomial(term_constr)
-                    coeff_constr = coefficient(term_constr)
-                    recoeff = real(coeff_constr)
-                    imcoeff = imag(coeff_constr)
-                    repart, impart, canonical = getreim(state, g₁, mon_constr, conj(g₂))
-                    if real_constr
-                        # Even here, it may happen that we get duplicates: this is if real_grouping is false, for then we also
-                        # might add something with the conjugate grouping; and a later (or earlier) term may, with the
-                        # canonical grouping, give rise to the same monomial.
-                        if isreal(mon_constr)
-                            @assert(iszero(imcoeff) && canonical)
-                            if !iszero(recoeff)
-                                pushorupdate!(indices, repart, values, recoeff)
-                                if repart != impart
-                                    @assert(!real_basis)
-                                    pushorupdate!(indices₂, impart, values₂, recoeff)
+                    for term_constr in constraint
+                        mon_constr = monomial(term_constr)
+                        coeff_constr = coefficient(term_constr)
+                        recoeff = real(coeff_constr)
+                        imcoeff = imag(coeff_constr)
+                        repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
+                        if real_constr
+                            # Even here, it may happen that we get duplicates: this is if real_grouping is false, for then we
+                            # also might add something with the conjugate grouping; and a later (or earlier) term may, with the
+                            # canonical grouping, give rise to the same monomial.
+                            if isreal(mon_constr)
+                                @assert(iszero(imcoeff) && canonical)
+                                if !iszero(recoeff)
+                                    pushorupdate!(indices, repart, values, recoeff)
+                                    if repart != impart
+                                        @assert(!real_basis)
+                                        pushorupdate!(indices₂, impart, values₂, recoeff)
+                                    end
+                                end
+                            elseif iscanonical(mon_constr)
+                                @assert(canonical)
+                                if real_grouping
+                                    @assert(repart != impart)
+                                    iszero(recoeff) || pushorupdate!(indices, repart, values, recoeff)
+                                    iszero(imcoeff) || pushorupdate!(indices, impart, values, imcoeff)
+                                else
+                                    repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, SimpleConjMonomial(g₁))
+                                    @assert(repart != repart₂ && impart != impart₂)
+                                    if !iszero(recoeff)
+                                        if repart == impart
+                                            @assert(repart₂ != impart₂)
+                                            # complex monomial, complex grouping, but real product
+                                            # -> will be very different for g₁*conj(mon_constr)*conj(g₂), but then, the
+                                            # conjugate grouping will have this.
+                                            pushorupdate!(indices, repart, values, recoeff + recoeff)
+                                            pushorupdate!(indices, repart₂, values, recoeff)
+                                            pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
+                                        elseif repart₂ == impart₂
+                                            @assert(repart != impart)
+                                            pushorupdate!(indices, repart, values, recoeff)
+                                            pushorupdate!(indices, repart₂, values, recoeff + recoeff)
+                                            pushorupdate!(indices₂, impart, values₂, recoeff)
+                                        else
+                                            pushorupdate!(indices, repart, values, recoeff)
+                                            pushorupdate!(indices, repart₂, values, recoeff)
+                                            pushorupdate!(indices₂, impart, values₂, recoeff)
+                                            pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
+                                        end
+                                    end
+                                    if !iszero(imcoeff)
+                                        if repart == impart
+                                            @assert(repart₂ != impart₂)
+                                            pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
+                                            pushorupdate!(indices₂, repart, values₂, -(imcoeff + imcoeff))
+                                            pushorupdate!(indices₂, repart₂, values₂, imcoeff)
+                                        elseif repart₂ == impart₂
+                                            @assert(repart != impart)
+                                            pushorupdate!(indices, impart, values, imcoeff)
+                                            pushorupdate!(indices₂, repart, values₂, -imcoeff)
+                                            pushorupdate!(indices₂, repart₂, values₂, imcoeff + imcoeff)
+                                        else
+                                            pushorupdate!(indices, impart, values, imcoeff)
+                                            pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
+                                            pushorupdate!(indices₂, repart, values₂, -imcoeff)
+                                            pushorupdate!(indices₂, repart₂, values₂, imcoeff)
+                                        end
+                                    end
                                 end
                             end
-                        elseif iscanonical(mon_constr)
+                        elseif isreal(mon_constr)
                             @assert(canonical)
+                            if !iszero(recoeff)
+                                pushorupdate!(indices, repart, values, recoeff)
+                                repart == impart || pushorupdate!(indices₃, impart, values₃, recoeff)
+                            end
+                            if !iszero(imcoeff)
+                                pushorupdate!(indices₂, repart, values₂, imcoeff)
+                                repart == impart || pushorupdate!(indices₄, impart, values₄, imcoeff)
+                            end
+                        else
+                            if repart != impart || !real_grouping
+                                recoeff *= 1//2
+                                imcoeff *= 1//2
+                            end
                             if real_grouping
-                                @assert(repart != impart)
-                                iszero(recoeff) || pushorupdate!(indices, repart, values, recoeff)
-                                iszero(imcoeff) || pushorupdate!(indices, impart, values, imcoeff)
+                                if !iszero(recoeff)
+                                    pushorupdate!(indices, repart, values, recoeff)
+                                    repart != impart &&
+                                        pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
+                                end
+                                if !iszero(imcoeff)
+                                    repart != impart && pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
+                                    pushorupdate!(indices₂, repart, values₂, imcoeff)
+                                end
                             else
-                                repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, conj(g₁))
+                                repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, SimpleConjMonomial(g₁))
                                 @assert(repart != repart₂ && impart != impart₂)
                                 if !iszero(recoeff)
                                     if repart == impart
+                                        # special: the scaling didn't happen, but it should
                                         @assert(repart₂ != impart₂)
-                                        # complex monomial, complex grouping, but real product
-                                        # -> will be very different for g₁*conj(mon_constr)*conj(g₂), but then, the
-                                        # conjugate grouping will have this.
                                         pushorupdate!(indices, repart, values, recoeff + recoeff)
+                                        pushorupdate!(indices₄, repart, values₄, recoeff + recoeff)
                                         pushorupdate!(indices, repart₂, values, recoeff)
+                                        pushorupdate!(indices₄, repart₂, values₄, -recoeff)
                                         pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
+                                        pushorupdate!(indices₃, impart₂, values₃, canonical₂ ? -recoeff : recoeff)
                                     elseif repart₂ == impart₂
                                         @assert(repart != impart)
                                         pushorupdate!(indices, repart, values, recoeff)
+                                        pushorupdate!(indices₄, repart, values₄, recoeff)
                                         pushorupdate!(indices, repart₂, values, recoeff + recoeff)
-                                        pushorupdate!(indices₂, impart, values₂, recoeff)
+                                        pushorupdate!(indices₄, repart₂, values₄, -(recoeff + recoeff))
+                                        pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
+                                        pushorupdate!(indices₃, impart, values₃, canonical ? recoeff : -recoeff)
                                     else
                                         pushorupdate!(indices, repart, values, recoeff)
+                                        pushorupdate!(indices₄, repart, values₄, recoeff)
                                         pushorupdate!(indices, repart₂, values, recoeff)
-                                        pushorupdate!(indices₂, impart, values₂, recoeff)
+                                        pushorupdate!(indices₄, repart₂, values₄, -recoeff)
+                                        pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
+                                        pushorupdate!(indices₃, impart, values₃, canonical ? recoeff : -recoeff)
                                         pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
+                                        pushorupdate!(indices₃, impart₂, values₃, canonical₂ ? -recoeff : recoeff)
                                     end
                                 end
                                 if !iszero(imcoeff)
                                     if repart == impart
-                                        @assert(repart₂ != impart₂)
-                                        pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
-                                        pushorupdate!(indices₂, repart, values₂, -(imcoeff + imcoeff))
+                                        pushorupdate!(indices₂, repart, values₂, imcoeff + imcoeff)
+                                        pushorupdate!(indices₃, repart, values₃, -(imcoeff + imcoeff))
                                         pushorupdate!(indices₂, repart₂, values₂, imcoeff)
+                                        pushorupdate!(indices₃, repart₂, values₃, imcoeff)
+                                        pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
+                                        pushorupdate!(indices₄, impart₂, values₄, canonical₂ ? -imcoeff : imcoeff)
                                     elseif repart₂ == impart₂
-                                        @assert(repart != impart)
-                                        pushorupdate!(indices, impart, values, imcoeff)
-                                        pushorupdate!(indices₂, repart, values₂, -imcoeff)
+                                        pushorupdate!(indices₂, repart, values₂, imcoeff)
+                                        pushorupdate!(indices₃, repart, values₃, -imcoeff)
                                         pushorupdate!(indices₂, repart₂, values₂, imcoeff + imcoeff)
+                                        pushorupdate!(indices₃, repart₂, values₃, imcoeff + imcoeff)
+                                        pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
+                                        pushorupdate!(indices₄, impart, values₄, canonical ? imcoeff : -imcoeff)
                                     else
-                                        pushorupdate!(indices, impart, values, imcoeff)
-                                        pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
-                                        pushorupdate!(indices₂, repart, values₂, -imcoeff)
+                                        pushorupdate!(indices₂, repart, values₂, imcoeff)
+                                        pushorupdate!(indices₃, repart, values₃, -imcoeff)
                                         pushorupdate!(indices₂, repart₂, values₂, imcoeff)
+                                        pushorupdate!(indices₃, repart₂, values₃, imcoeff)
+                                        pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
+                                        pushorupdate!(indices₄, impart, values₄, canonical ? imcoeff : -imcoeff)
+                                        pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
+                                        pushorupdate!(indices₄, impart₂, values₄, canonical₂ ? -imcoeff : imcoeff)
                                     end
                                 end
                             end
                         end
-                    elseif isreal(mon_constr)
-                        @assert(canonical)
-                        if !iszero(recoeff)
-                            pushorupdate!(indices, repart, values, recoeff)
-                            repart == impart || pushorupdate!(indices₃, impart, values₃, recoeff)
-                        end
-                        if !iszero(imcoeff)
-                            pushorupdate!(indices₂, repart, values₂, imcoeff)
-                            repart == impart || pushorupdate!(indices₄, impart, values₄, imcoeff)
-                        end
-                    else
-                        if repart != impart || !real_grouping
-                            recoeff *= 1//2
-                            imcoeff *= 1//2
-                        end
-                        if real_grouping
-                            if !iszero(recoeff)
-                                pushorupdate!(indices, repart, values, recoeff)
-                                repart != impart &&
-                                    pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
-                            end
-                            if !iszero(imcoeff)
-                                repart != impart && pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
-                                pushorupdate!(indices₂, repart, values₂, imcoeff)
-                            end
-                        else
-                            repart₂, impart₂, canonical₂ = getreim(state, g₂, mon_constr, conj(g₁))
-                            @assert(repart != repart₂ && impart != impart₂)
-                            if !iszero(recoeff)
-                                if repart == impart
-                                    # special: the scaling didn't happen, but it should
-                                    @assert(repart₂ != impart₂)
-                                    pushorupdate!(indices, repart, values, recoeff + recoeff)
-                                    pushorupdate!(indices₄, repart, values₄, recoeff + recoeff)
-                                    pushorupdate!(indices, repart₂, values, recoeff)
-                                    pushorupdate!(indices₄, repart₂, values₄, -recoeff)
-                                    pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
-                                    pushorupdate!(indices₃, impart₂, values₃, canonical₂ ? -recoeff : recoeff)
-                                elseif repart₂ == impart₂
-                                    @assert(repart != impart)
-                                    pushorupdate!(indices, repart, values, recoeff)
-                                    pushorupdate!(indices₄, repart, values₄, recoeff)
-                                    pushorupdate!(indices, repart₂, values, recoeff + recoeff)
-                                    pushorupdate!(indices₄, repart₂, values₄, -(recoeff + recoeff))
-                                    pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
-                                    pushorupdate!(indices₃, impart, values₃, canonical ? recoeff : -recoeff)
-                                else
-                                    pushorupdate!(indices, repart, values, recoeff)
-                                    pushorupdate!(indices₄, repart, values₄, recoeff)
-                                    pushorupdate!(indices, repart₂, values, recoeff)
-                                    pushorupdate!(indices₄, repart₂, values₄, -recoeff)
-                                    pushorupdate!(indices₂, impart, values₂, canonical ? -recoeff : recoeff)
-                                    pushorupdate!(indices₃, impart, values₃, canonical ? recoeff : -recoeff)
-                                    pushorupdate!(indices₂, impart₂, values₂, canonical₂ ? -recoeff : recoeff)
-                                    pushorupdate!(indices₃, impart₂, values₃, canonical₂ ? -recoeff : recoeff)
-                                end
-                            end
-                            if !iszero(imcoeff)
-                                if repart == impart
-                                    pushorupdate!(indices₂, repart, values₂, imcoeff + imcoeff)
-                                    pushorupdate!(indices₃, repart, values₃, -(imcoeff + imcoeff))
-                                    pushorupdate!(indices₂, repart₂, values₂, imcoeff)
-                                    pushorupdate!(indices₃, repart₂, values₃, imcoeff)
-                                    pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
-                                    pushorupdate!(indices₄, impart₂, values₄, canonical₂ ? -imcoeff : imcoeff)
-                                elseif repart₂ == impart₂
-                                    pushorupdate!(indices₂, repart, values₂, imcoeff)
-                                    pushorupdate!(indices₃, repart, values₃, -imcoeff)
-                                    pushorupdate!(indices₂, repart₂, values₂, imcoeff + imcoeff)
-                                    pushorupdate!(indices₃, repart₂, values₃, imcoeff + imcoeff)
-                                    pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
-                                    pushorupdate!(indices₄, impart, values₄, canonical ? imcoeff : -imcoeff)
-                                else
-                                    pushorupdate!(indices₂, repart, values₂, imcoeff)
-                                    pushorupdate!(indices₃, repart, values₃, -imcoeff)
-                                    pushorupdate!(indices₂, repart₂, values₂, imcoeff)
-                                    pushorupdate!(indices₃, repart₂, values₃, imcoeff)
-                                    pushorupdate!(indices, impart, values, canonical ? imcoeff : -imcoeff)
-                                    pushorupdate!(indices₄, impart, values₄, canonical ? imcoeff : -imcoeff)
-                                    pushorupdate!(indices, impart₂, values, canonical₂ ? imcoeff : -imcoeff)
-                                    pushorupdate!(indices₄, impart₂, values₄, canonical₂ ? -imcoeff : imcoeff)
-                                end
-                            end
-                        end
                     end
-                end
-                eqstate = @inline sos_solver_add_free!(state, eqstate, indices, values, false)
-                empty!(indices)
-                empty!(values)
-                if !real_constr || !real_basis
-                    if !isempty(indices₂)
-                        eqstate = @inline sos_solver_add_free!(state, eqstate, indices₂, values₂, false)
-                        empty!(indices₂)
-                        empty!(values₂)
-                    end
-                    if !real_constr && !real_basis
-                        if !isempty(indices₃)
-                            eqstate = @inline sos_solver_add_free!(state, eqstate, indices₃, values₃, false)
-                            empty!(indices₃)
-                            empty!(values₃)
+                    eqstate = @inline add_free!(state, eqstate, indices, values, false)
+                    empty!(indices)
+                    empty!(values)
+                    if !real_constr || !real_basis
+                        if !isempty(indices₂)
+                            eqstate = @inline add_free!(state, eqstate, indices₂, values₂, false)
+                            empty!(indices₂)
+                            empty!(values₂)
                         end
-                        if !isempty(indices₄)
-                            eqstate = @inline sos_solver_add_free!(state, eqstate, indices₄, values₄, false)
-                            empty!(indices₄)
-                            empty!(values₄)
+                        if !real_constr && !real_basis
+                            if !isempty(indices₃)
+                                eqstate = @inline add_free!(state, eqstate, indices₃, values₃, false)
+                                empty!(indices₃)
+                                empty!(values₃)
+                            end
+                            if !isempty(indices₄)
+                                eqstate = @inline add_free!(state, eqstate, indices₄, values₄, false)
+                                empty!(indices₄)
+                                empty!(values₄)
+                            end
                         end
                     end
                 end
             end
         end
     end
-    end
-    @inline sos_solver_add_free_finalize!(state, eqstate)
+    @inline add_free_finalize!(state, eqstate)
     return
 end
 
@@ -1126,19 +1131,19 @@ Sets up all the necessary SOS matrices, free variables, objective, and constrain
 second of the equality, the third of the inequality, and the fourth of the PSD constraints).
 
 The following methods must be implemented by a solver to make this function work:
-- [`sos_solver_mindex`](@ref)
-- [`sos_solver_add_scalar!`](@ref)
-- [`sos_solver_add_quadratic!`](@ref) (optional)
-- [`sos_solver_add_psd!`](@ref)
-- [`sos_solver_psd_indextype`](@ref)
-- [`sos_solver_add_free_prepare!`](@ref) (optional)
-- [`sos_solver_add_free!`](@ref)
-- [`sos_solver_add_free_finalize!`](@ref) (optional)
-- [`sos_solver_fix_constraints!`](@ref)
+- [`mindex`](@ref)
+- [`add_nonnegative!`](@ref)
+- [`add_quadratic!`](@ref) (optional)
+- [`add_psd!`](@ref)
+- [`psd_indextype`](@ref)
+- [`add_free_prepare!`](@ref) (optional)
+- [`add_free!`](@ref)
+- [`add_free_finalize!`](@ref) (optional)
+- [`fix_constraints!`](@ref)
 
 !!! warning "Indices"
     The constraint indices used in all solver functions directly correspond to the indices given back by
-    [`sos_solver_mindex`](@ref). However, in a sparse problem there may be far fewer indices present; therefore, when the
+    [`mindex`](@ref). However, in a sparse problem there may be far fewer indices present; therefore, when the
     problem is finally given to the solver, care must be taken to eliminate all unused indices.
 
 See also [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref).
@@ -1166,16 +1171,16 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
         end
     end
 
-    T = Base.promote_op(sos_solver_mindex, typeof(state), monomial_type(P))
+    T = Base.promote_op(mindex, typeof(state), monomial_type(P))
     V = realtype(coefficient_type(problem.objective))
     # add lower bound
     if isone(problem.prefactor)
-        @inline sos_solver_add_free_finalize!(
+        @inline add_free_finalize!(
             state,
-            sos_solver_add_free!(
+            add_free!(
                 state,
-                sos_solver_add_free_prepare!(state, 1),
-                StackVec(sos_solver_mindex(state, constant_monomial(P))),
+                add_free_prepare!(state, 1),
+                StackVec(mindex(state, constant_monomial(P))),
                 StackVec(one(V)),
                 true
             )
@@ -1205,9 +1210,9 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
                     end
                 end
             end
-            @inline sos_solver_add_free_finalize!(
+            @inline add_free_finalize!(
                 state,
-                sos_solver_add_free!(state, sos_solver_add_free_prepare!(state, 1), indices, values, true)
+                add_free!(state, add_free_prepare!(state, 1), indices, values, true)
             )
         end
     end
@@ -1237,7 +1242,7 @@ function sos_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, gro
                 end
             end
         end
-        sos_solver_fix_constraints!(state, finish!(indices), finish!(values))
+        fix_constraints!(state, finish!(indices), finish!(values))
     end
 
     return

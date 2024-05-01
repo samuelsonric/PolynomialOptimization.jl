@@ -4,12 +4,15 @@ include("./Result.jl")
 include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
+include("./solver/Solver.jl")
+using .Solver: default_solver_method
+import .Solver: poly_optimize
 
 """
-    poly_optimize(method, relaxation::AbstractPORelaxation; verbose=false, clique_merging=false, solutions::Bool=false,
-        certificate::Bool=false, kwargs...)
+    poly_optimize(method, relaxation::AbstractPORelaxation; verbose=false,
+        clique_merging=false, solutions::Bool=false, certificate::Bool=false, kwargs...)
 
-Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into a
+Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
 [`AbstractPORelaxation`](@ref). Returns a [`POResult`](@ref) object.
 
 Clique merging is a way to improve the performance of the solver in case a sparse analysis led to cliques with a lot of
@@ -22,17 +25,6 @@ of equality constraints that will be constructed by multiplying two elements fro
 Any additional keyword argument is passed on to the solver.
 
 For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize).
-
-
-    poly_optimize(relaxation::AbstractPORelaxation; kwargs...)
-
-Uses the default solver. Note that this depends on the loaded solver packages, and possibly also their loading order if no
-preferred solver has been loaded.
-
-
-    poly_optimize([method, ]problem::POProblem[, degree::Int]; kwargs...)
-
-Construct a [`RelaxationDense`](@ref) by default.
 """
 function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
@@ -70,11 +62,22 @@ function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Boo
     return POResult(relaxation, S, otime, result...)
 end
 
+"""
+    poly_optimize([method, ]problem::POProblem[, degree::Int]; kwargs...)
+
+Construct a [`RelaxationDense`](@ref) by default.
+"""
 poly_optimize(v::Val, problem::POProblem, degree=problem.mindegree; kwargs...) =
     poly_optimize(v, RelaxationDense(problem, degree); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 
+"""
+    poly_optimize(relaxation::AbstractPORelaxation; kwargs...)
+
+Uses the default solver. Note that this depends on the loaded solver packages, and possibly also their loading order if no
+preferred solver has been loaded.
+"""
 function poly_optimize(args...; kwargs...)
     if !isempty(args) && args[1] isa Val
         error("Unknown solver method specified. Are the required solver packages loaded?")
@@ -83,15 +86,5 @@ function poly_optimize(args...; kwargs...)
     @info("No solver method specified: choosing $method")
     poly_optimize(Val(method), args...; kwargs...)
 end
-
-const solver_methods = Symbol[]
-
-function default_solver_method()
-    isempty(solver_methods) && error("No solver method is available. Load a solver package that provides such a method (e.g., Mosek)")
-    return first(solver_methods)
-end
-
-include("./SOSInterface.jl")
-include("./SOSHelpers.jl")
 
 include("./SolutionExtraction.jl")

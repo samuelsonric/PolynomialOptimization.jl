@@ -15,21 +15,16 @@ isreal
 
 ## Optimization
 ```@docs
-sparse_optimize
 poly_optimize
 ```
 
 ## Working with problem solutions
 All functions listed here requires that the problem be optimized before.
 ```@docs
-poly_solutions
-poly_solutions_heuristic
-poly_all_solutions
-poly_solution_badness
+POResult
 optimality_certificate
 moment_matrix
-last_moments
-last_objective
+MomentVector
 ```
 
 ## Relaxations

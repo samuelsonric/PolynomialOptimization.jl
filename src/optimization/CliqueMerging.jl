@@ -69,49 +69,39 @@ function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     return [smallcliques; cliques[idx]]
 end
 
-_convert_clique(cl) = Set(monomial_index(x) for x in cl)
-function _reconvert_clique(::Type{SMV}, clset) where {Nr,Nc,P<:Unsigned,SMV<:SimpleMonomialVector{Nr,Nc,P}}
-    exponents_real, exponents_complex, exponents_conj =
-        exponents_from_indices(P, Nr, Nc, clset, Val(SMV <: SimplePolynomials.SimpleDenseMonomialVector))
-    return SMV(iszero(Nr) ? SimplePolynomials.absent : exponents_real, exponents_complex, exponents_conj)
+_get_e(::SimpleMonomialVector{<:Any,<:Any,<:Integer,E}) where {E<:AbstractExponents} = E
+_get_e(::SimpleMonomialVector{<:Any,<:Any,<:Integer,Tuple{E,<:Any}}) where {E<:AbstractExponents} = E
+function _convert_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc}}) where {Nr,Nc}
+    # best situation (which should always be the case: all vectors have the same set of exponents)
+    required_e = _get_e(first(cl))
+    for item in Iterators.drop(cl, 1)
+        if required_e != _get_e(item)
+            use_e = ExponentsAll{Nr+2Nc}()
+            return let E=ExponentsAll{Nr+2Nc}()
+                E, [_get_e(v) == use_e ? Set(v.indices) : Set(monomial_index.((E,), v)) for v in cl]
+            end
+        end
+    end
+    return required_e, Set.(getproperty.(cl, :indices))
 end
-function _reconvert_clique(::Type{SMV}, clset) where {Nr,P<:Unsigned,SMV<:SimpleMonomialVector{Nr,0,P}}
-    exponents_real = exponents_from_indices(P, Nr, clset, Val(SMV <: SimplePolynomials.SimpleDenseMonomialVector))
-    return SMV(exponents_real, SimplePolynomials.absent, SimplePolynomials.absent)
+function merge_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc}}) where {Nr,Nc}
+    converted = _convert_cliques(cl)
+    merged = merge_cliques!(converted[2])
+    if Base.IteratorSize(converted[1]) <: Base.HasLength && length(merged) == length(converted[1])
+        return SimpleMonomialVector{Nr,Nc}(converted[1])
+    else
+        return SimpleMonomialVector{Nr,Nc}(converted[1], collect(merged))
+    end
 end
 
-function merge_cliques(groupings::RelaxationGroupings{Nr,Nc,P,<:Any,MV}) where {Nr,Nc,P<:Unsigned,MV}
-    dense = !(MV <: SimplePolynomials.SimpleSparseMonomialVectorOrView)
-    M = dense ? Matrix{P} : SparseMatrixCSC{P,UInt}
-    outtype_part = SimpleMonomialVector{Nr,Nc,P,M}
-    outtype_full = outtype_part{iszero(Nr) ? SimplePolynomials.Absent : M,iszero(Nc) ? SimplePolynomials.Absent : M}
-    newobj = let obj_merged=merge_cliques!(_convert_clique.(groupings.obj))
-        newobj = similar(obj_merged, outtype_full)
-        for (i, objᵢ) in enumerate(obj_merged)
-            @inbounds newobj[i] = _reconvert_clique(outtype_part, objᵢ)
-        end
-        newobj
-    end
+function merge_cliques(groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
+    outtype_part = Vector{<:SimpleMonomialVector{Nr,Nc}}
+    # outtype_full = outtype_part{iszero(Nr) ? SimplePolynomials.Absent : M,iszero(Nc) ? SimplePolynomials.Absent : M}
+    newobj = merge_cliques(groupings.obj)
     # it does not make sense to merge the zero constraints, as every unique product corresponds to a separate variable anyway.
-    newnonnegs = similar(groupings.nonnegs, Vector{outtype_full})
-    @inbounds for (k, nonneg) in groupings.nonnegs
-        newnonnegs[k] = let nonneg_merged=merge_cliques!(_convert_clique.(nonneg))
-            newnonneg = similar(nonneg, outtype_full)
-            for (i, nonnegᵢ) in enumerate(nonneg_merged)
-                newnonneg[i] = _reconvert_clique(outtype_part, nonnegᵢ)
-            end
-            newnonneg
-        end
-    end
-    newpsds = similar(groupings.psds, Vector{outtype_full})
-    @inbounds for (k, psd) in groupings.psds
-        newpsds[k] = let psd_merged=merge_cliques!(_convert_clique.(psd))
-            newpsd = similar(psd, outtype_full)
-            for (i, psdᵢ) in enumerate(psd_merged)
-                newpsd[i] = _reconvert_clique(outtype_part, psdᵢ)
-            end
-            newpsd
-        end
-    end
+    newnonnegs = similar(groupings.nonnegs)
+    newnonnegs .= merge_cliques.(groupings.nonnegs)
+    newpsds = similar(groupings.psds)
+    newpsds .= merge_cliques.(groupings.psds)
     return RelaxationGroupings(newobj, groupings.zeros, newnonnegs, newpsds, groupings.var_cliques)
 end

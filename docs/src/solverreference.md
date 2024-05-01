@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = PolynomialOptimization
+CurrentModule = PolynomialOptimization.Solver
 ```
 
 # Solver reference
@@ -33,45 +33,59 @@ consists of just a few methods for the various functions.
     to waste time and memory in bookkeeping that is not really needed.
 
 ## [`poly_optimize`](@ref)
-The optimization of polynomial problems requires a solver that understands linear and semidefinite constraints.
+The optimization of polynomial problems requires a solver that understands linear and semidefinite constraints. All functions
+in this section are defined (and exported) in the submodule `PolynomialOptimization.Solver`.
 
 ### Solver interface
-_Note that none of the functions listed in this section are exported._
 In general, a solver implementation can do whatever it wants; it just needs to implement the [`poly_optimize`](@ref) method
 with the appropriate `Val`-wrapped solver method as its first parameter. However, it is very helpful to just do some basic
 setup such as creating the solver object in this function and delegate all the work of setting up the actual problem to
 [`sos_setup!`](@ref).
-The solution is contained in the dual variables of the constraints; it can be converted to a `FullMonomialVector` that is
-required by the solution extraction functions by [`sos_solution`](@ref).
+The solution is contained in the dual variables of the constraints; it can be converted to a
+[`MomentVector`](@ref PolynomialOptimization.MomentVector) that is required by the solution extraction functions by
+[`poly_solutions`](@ref).
 ```@docs
 sos_setup!
-sos_solution
+sos_add_matrix!
+sos_add_equality!
 ```
 
 There are some functions that should be implemented to tell the framework what kind of data the solver expects and which cones
 are supported; these should return constants. There is also a method that directly converts monomials to their constraint
 indices as required by the solver.
 ```@docs
-sos_solver_psd_indextype
-sos_solver_supports_quadratic
-sos_solver_supports_complex_psd
-sos_solver_mindex
+psd_indextype
+AbstractPSDIndextype
+AbstractPSDIndextypeMatrix
+PSDIndextypeMatrixLinear
+PSDIndextypeMatrixCartesian
+PSDIndextypeVector
+supports_quadratic
+supports_complex_psd
+mindex
 ```
 
 Then, to actually feed data to the solver, the following methods (or a subset as previously indicated) must be implemented.
 ```@docs
-sos_solver_add_scalar!
-sos_solver_add_quadratic!
-sos_solver_add_psd!
-sos_solver_add_psd_complex!
-sos_solver_add_free_prepare!
-sos_solver_add_free!
-sos_solver_add_free_finalize!
-sos_solver_fix_constraints!
+add_nonnegative!
+add_quadratic!
+add_psd!
+add_psd_complex!
+add_free_prepare!
+add_free!
+add_free_finalize!
+fix_constraints!
 ```
 
-Once a solver has been implemented, it should add its solver symbol to the vector `PolynomialOptimization.solver_methods`,
+Once a solver has been implemented, it should add its solver symbol to the vector `Solver.solver_methods`,
 which enables this solver to be chosen automatically.
+
+The solver exports the following helper function, which may be of use in implementations:
+```@docs
+monomial_count
+```
+By getting the monomial count for the full dense monomial vector and comparing it with the number of monomials actually used in
+the problem, the solver can decide whether a dense or sparse moment vector is to be returned.
 
 ## [[`Newton.halfpolytope`](@ref)](@id solvers_newton)
 ```@meta
@@ -105,7 +119,7 @@ number of rows is smaller than the number of columns; else, the solution is calc
 ### Solver interface
 The following function needs to be implemented so that a solver is available via automatic tightening.
 ```@docs
-tighten_minimize_l1
+#tighten_minimize_l1
 ```
 
 Once a solver has been implemented, it should add its solver symbol to the vector `PolynomialOptimization.tightening_methods`,

@@ -20,17 +20,17 @@ end
 
 Base.length(d::MomentVector) = length(d.values)
 Base.size(d::MomentVector) = (length(d.values),)
-Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
     monomial_index(keys...) ≤ length(d.values)
 Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc,<:AbstractSparseVector},
-    keys::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
     insorted(monomial_index(keys...), rowvals(d.values))
-Base.getindex(d::MomentVector{<:Any,V,Nr,Nc}, keys::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+Base.getindex(d::MomentVector{<:Any,V,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
     @inline get(d, () -> V(NaN), keys...)
 Base.@propagate_inbounds Base.getindex(d::MomentVector, i::Integer) = d.values[i]
 Base.@propagate_inbounds Base.setindex!(d::MomentVector, value, i::Integer) = setindex!(d.values, value, i)
 function Base.get(d::MomentVector{R,R,Nr,0} where {R}, not_found,
-    keys::Union{<:SimpleMonomial{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
     idx = monomial_index(keys...)
     if idx ≤ length(d.values)
         val = @inbounds d.values[idx]
@@ -39,14 +39,14 @@ function Base.get(d::MomentVector{R,R,Nr,0} where {R}, not_found,
     return not_found()
 end
 function Base.get(d::MomentVector{R,R,Nr,0,<:AbstractSparseVector} where {R}, not_found,
-    keys::Union{<:SimpleMonomial{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
     idx = monomial_index(keys...)
     ridx = searchsorted(rowvals(d.values), idx)
     isempty(ridx) && return not_found()
     @inbounds return nonzeros(d.values)[first(ridx)]
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
-    keys::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
     idx = monomial_index(keys...)
     idx > length(d.values) && return not_found()
     idx_c = monomial_index(conj.(keys)...)
@@ -61,7 +61,7 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
     end
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector}, not_found,
-    keys::Union{<:SimpleMonomial{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
     rv, nz = rowvals(d.values), nonzeros(d.values)
     idx = monomial_index(keys...)
     ridx = searchsorted(rv, idx)
@@ -92,8 +92,9 @@ A `POResult` struct `r` contains information about
 - the status of the solver (`r.status`), which also depends on the solver type
 - the returned primal value of the solver (`r.objective`), which, if the status was successful, is a lower bound to the true
   minimum
-- the moment information which allows to construct a [moment matrix](@ref moment_matrix), extract solutions
-  ([`poly_all_solutions`](@ref) or [`poly_solutions`](@ref)), and an [optimality certificate](@ref optimality_certificate).
+- the moment information in vector form (`r.moments`), which allows to construct a [moment matrix](@ref moment_matrix),
+  extract solutions ([`poly_all_solutions`](@ref) or [`poly_solutions`](@ref)), and an
+  [optimality certificate](@ref optimality_certificate).
 """
 struct POResult{R<:AbstractPORelaxation,V,M<:MomentVector{<:Any,V}}
     relaxation::R
