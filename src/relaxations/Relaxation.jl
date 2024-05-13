@@ -112,6 +112,9 @@ end
 Base.intersect(a::RelaxationGroupings, ::Nothing) = a
 Base.intersect(::Nothing, b::RelaxationGroupings) = b
 
+Base.:(==)(g₁::G, g₂::G) where {G<:RelaxationGroupings} = g₁.obj == g₂.obj && g₁.zeros == g₂.zeros &&
+    g₁.nonnegs == g₂.nonnegs && g₁.psds == g₂.psds && g₁.var_cliques == g₂.var_cliques
+
 """
     poly_problem(relaxation::AbstractPORelaxation)
 

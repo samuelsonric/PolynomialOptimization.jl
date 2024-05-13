@@ -8,3 +8,4 @@ abstract type AbstractRelaxationSparse{Prob<:POProblem} <: AbstractPORelaxation{
 
 include("./Chordal.jl")
 include("./Correlative.jl")
+include("./Term.jl")
