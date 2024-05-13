@@ -1,6 +1,7 @@
 function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     filepath::Union{<:AbstractString,Nothing}=nothing, zero::AbstractVector{P}, nonneg::AbstractVector{P},
-    psd::AbstractVector{<:AbstractMatrix{P}}, groupings::RelaxationGroupings, kwargs...) where {Nr,P<:SimplePolynomial{<:Any,Nr,0}}
+    psd::AbstractVector{<:AbstractMatrix{P}}, groupings::RelaxationGroupings, kwargs...) where
+    {Nr,I<:Integer,P<:SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}}
     nworkers = MPI.Comm_size(comm) # we don't need a master, everyone can do the same work
     # isone(nworkers) && return halfpolytope(V, objective, Val(false); verbose, filepath, zero, nonneg, psd, groupings,
     #     kwargs...)
@@ -16,7 +17,7 @@ function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     end
     parameters, vertexmons = preproc(V, objective; verbose=verbose && isroot(rank), warn_disable_randomization=isroot(rank),
         zero, nonneg, psd, groupings, kwargs...)
-    e = analyze(vertexmons)::ExponentsMultideg{Nr,UInt}
+    e = ExponentsMultideg{Nr,UInt}(analyze(vertexmons)...)
     innermons = SimpleMonomialVector{Nr,0}(e)
     num = length(innermons)
 

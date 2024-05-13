@@ -205,5 +205,5 @@ function analyze(mons)
 
     # let's just always go for UInt as the index type. We need to feed this to a linear solver after all, and we cannot expect
     # a linear solver to cope with more than typemax(UInt) constraints.
-    return ExponentsMultideg{nv,UInt}(mindeg, maxdeg, minmultideg, maxmultideg)
+    return mindeg, maxdeg, minmultideg, maxmultideg
 end
