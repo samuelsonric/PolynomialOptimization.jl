@@ -1,6 +1,21 @@
-MultivariatePolynomials.variables(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(variables.(m)...)
+for f in (:variables, :effective_variables)
+    @eval begin
+        function MultivariatePolynomials.$f(m::AbstractMatrix{<:AbstractPolynomialLike})
+            isempty(m) && return variable_union_type(eltype(m))[]
+            result = Set{variable_union_type(eltype(m))}()
+            for v in $f.(m)
+                union!(result, v)
+            end
+            return sort!(collect(result))
+        end
+    end
+end
 
-MultivariatePolynomials.monomials(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(monomials.(m)...)
+MultivariatePolynomials.monomials(m::AbstractMatrix{<:AbstractPolynomialLike}) = merge_monomial_vectors(monomials.(m))
+# For the type-stable implementation let's assume that if all of the polynomials share a common exponent type, then they'll
+# actually share the same exponents object.
+MultivariatePolynomials.monomials(m::AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,E}}}) where {Nr,Nc,E} =
+    merge_monomial_vectors(Val(Nr), Val(Nc), monomials(first(m)).e, monomials.(Iterators.flatten(m)))
 
 MultivariatePolynomials.coefficients(m::AbstractMatrix{<:AbstractPolynomialLike}) = coefficients.(m, (monomials(m),))
 MultivariatePolynomials.coefficients(m::AbstractMatrix{<:AbstractPolynomialLike}, X::AbstractVector) = coefficients.(m, (X,))
@@ -47,8 +62,6 @@ function MultivariatePolynomials.exthalfdegree(m::AbstractMatrix{<:AbstractPolyn
     end
     return l, u
 end
-
-MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:AbstractPolynomialLike}) = union(effective_variables.(m)...)
 
 SimplePolynomials.effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) =
     all(Base.Fix2(effective_variables_in, in), m)
