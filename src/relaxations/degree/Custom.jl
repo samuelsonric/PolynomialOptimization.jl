@@ -1,3 +1,5 @@
+export RelaxationCustom
+
 struct RelaxationCustom{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
     problem::P
     degree::Int
@@ -11,7 +13,6 @@ struct RelaxationCustom{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroup
     """
     function RelaxationCustom(problem::P,
         basis::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractVector{<:AbstractMonomialLike}}) where {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:POProblem{Poly}}
-        issorted(basis, by=degree) || throw(ArgumentError("Any custom basis must be sorted by degree"))
         if !(basis isa SimpleMonomialVector)
             basis = SimpleMonomialVector{I}(basis; vars=problem.original_variables)
             if !iszero(Nc)
