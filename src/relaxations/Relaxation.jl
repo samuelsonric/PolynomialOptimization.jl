@@ -38,18 +38,18 @@ end
 
 function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector})
     lg = length(grouping)
-    println(io, lg, " block", isone(lg) ? "" : "s")
+    print(io, lg, " block", isone(lg) ? "" : "s")
     lensorted = sort(grouping, by=length, rev=true)
     len = floor(Int, log10(length(first(lensorted)))) +1
     for block in lensorted
         # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
-        print(io, "  ", lpad(length(block), len, " "), " [")
+        print(io, "\n  ", lpad(length(block), len, " "), " [")
         show(io, "text/plain", first(block))
         for x in Iterators.drop(block, 1)
             print(io, ", ")
             show(io, "text/plain", x)
         end
-        println(io, "]")
+        print(io, "]")
     end
 end
 
@@ -57,20 +57,20 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     println(io, "Groupings for the relaxation of a polynomial optimization problem\nVariable cliques\n================")
     for clique in groupings.var_cliques
         print(io, "[")
-        show(stdout, "text/plain", first(clique))
+        show(io, "text/plain", first(clique))
         for x in Iterators.drop(clique, 1)
             print(io, ", ")
             show(io, "text/plain", x)
         end
         println(io, "]")
     end
-    print("\nBlock groupings\n===============\nObjective: ")
+    print(io, "\nBlock groupings\n===============\nObjective: ")
     _show_groupings(io, groupings.obj)
     for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
         block = getproperty(groupings, f)::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
         if !isempty(block)
             for (i, constr) in enumerate(block)
-                print(io, name, " constraint #", i, ": ")
+                print(io, "\n", name, " constraint #", i, ": ")
                 _show_groupings(io, constr)
             end
         end
