@@ -1,13 +1,18 @@
-# Here, we provide the helper function sort_along!, which allows to sort! a vector (the first argument) while at the same time
-# sorting various other vectors using the exact same permutation. Hence,
-#    sort_along!(v, a, b, c)
-# is equivalent to
-#    p = sortperm(v)
-#    permute!.((v, a, b, c), (p,))
-# but does not require any new intermediate allocations.
-# Note that the sorting functions are exactly identical to the ones used in Julia 1.8 (there was a big overhaul in 1.9 which
-# made everything extremely complicated; we don't reproduce the new behavior).
+"""
+    sort_along!(v::AbstractVector, along::AbstractVector...; lo=1, hi=length(v), o=Base.Order.Forward)
 
+This helper function sorts the vector `v` as `sort!` would do, but at the same time puts all vectors in `along` in the same
+order as `v`. Therefore, `sort_along!(v, a, b, c)` is equivalent to
+```julia
+p = sortperm(v)
+permute!.((v, a, b, c), (p,))
+```
+but does not require any new intermediate allocations.
+
+!!! info "Implementation"
+    Note that the sorting functions are exactly identical to the ones used in Julia 1.8 (there was a big overhaul in 1.9 which
+    made everything extremely complicated; we don't reproduce the new behavior).
+"""
 function sort_along!(v::AbstractVector, along::AbstractVector...; lo::Integer=1, hi::Integer=length(v),
     o::Base.Ordering=Base.Order.Forward)
     lv = length(v)

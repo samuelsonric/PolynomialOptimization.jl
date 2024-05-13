@@ -91,7 +91,8 @@ the problem, the solver can decide whether a dense or sparse moment vector is to
 ```@meta
 CurrentModule = PolynomialOptimization.Newton
 ```
-Finding the Newton halfpolytope requires a linear solver that supports problem modification for quick reoptimization.
+Finding the Newton halfpolytope requires a linear solver that supports problem modification for quick reoptimization.  All the
+functions here are defined in the submodule `PolynomialOptimization.Newton` and they are not exported.
 
 ### Solver interface
 The following functions need to be implemented so that a solver is available via [`Newton.halfpolytope`](@ref). The
