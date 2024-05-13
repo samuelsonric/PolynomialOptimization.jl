@@ -301,7 +301,6 @@ function poly_problem(objective::P;
 
     #region SimplePolynomial conversion
     @verbose_info("Converting data to simple polynomials")
-    max_exponent = 2mindeg
     sobj = SimplePolynomial{monomial_index_type}(objective, T; vars)
     sprefactor = SimplePolynomial{monomial_index_type}(factor_coercive, T; vars)
     szero = FastVec{typeof(sobj)}(buffer=length(zero))
@@ -327,43 +326,3 @@ function poly_problem(objective::P;
 end
 
 poly_problem(problem::POProblem) = problem
-
-function poly_structure_indices(problem::POProblem, objective::Bool, zero::Union{Bool,<:AbstractSet{<:Integer}},
-    nonneg::Union{Bool,<:AbstractSet{<:Integer}}, psd::Union{Bool,<:AbstractSet{<:Integer}})
-    len = objective ? 1 : 0
-    if zero === true
-        len += count(c -> c.type ∈ (pctEqualitySimple, pctEqualityGröbner, pctEqualityNonneg), problem.constraints)
-    elseif zero !== false
-        len += length(zero)
-    end
-    if nonneg === true
-        len += count(c -> c.type == pctNonneg, problem.constraints)
-    elseif nonneg !== false
-        len += length(nonneg)
-    end
-    if psd === true
-        len += count(c -> c.type == pctPSD, problem.constraints)
-    elseif psd !== false
-        len += length(psd)
-    end
-
-    indices = FastVec{Int}(buffer=len)
-    objective && unsafe_push!(indices, 1)
-    eq_idx = 1
-    nonneg_idx = 1
-    psd_idx = 1
-    for (i, constr) in enumerate(problem.constraints)
-        if constr.type == pctNonneg
-            (nonneg === true || nonneg_idx ∈ nonneg) && unsafe_push!(indices, i +1)
-            nonneg_idx += 1
-        elseif constr.type == pctPSD
-            (psd === true || psd_idx ∈ psd) && unsafe_push!(indices, i +1)
-            psd_idx += 1
-        else
-            (zero === true || eq_idx ∈ zero) && unsafe_push!(indices, i +1)
-            eq_idx += 1
-        end
-    end
-    @assert(len == length(indices))
-    return finish!(indices)
-end
