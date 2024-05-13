@@ -90,7 +90,7 @@ end
 
 @testset "Newton polytope (mutually unbiased bases)" begin
     function findmubs(d, n)
-        DynamicPolynomials.@polycvar x[1:d, 1:d, 1:n]
+        DynamicPolynomials.@complex_polyvar x[1:d, 1:d, 1:n]
         obj = zero(polynomialtype(x[1,1,1], Float64))
         # make it an ONB
         @views for i in 1:n

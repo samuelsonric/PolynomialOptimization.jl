@@ -38,7 +38,7 @@ end
 end
 
 @testset "Some complex-valued examples (equality)" begin
-    DynamicPolynomials.@polycvar z
+    DynamicPolynomials.@complex_polyvar z
     prob = poly_problem(z + conj(z), zero=[z * conj(z) - 1])
     if optimize
         for solver in solvers
@@ -48,7 +48,7 @@ end
 end
 
 @testset "Some complex-valued examples (inequalities)" begin
-    DynamicPolynomials.@polycvar z[1:2]
+    DynamicPolynomials.@complex_polyvar z[1:2]
     prob = poly_problem(3 - z[1] * conj(z[1]) - 0.5im * z[1] * conj(z[2])^2 + 0.5im * z[2]^2 * conj(z[1]),
                         zero=[z[1] * conj(z[1]) - 0.25z[1]^2 - 0.25conj(z[1])^2 - 1,
                               z[1] * conj(z[1]) + z[2] * conj(z[2]) - 3,
@@ -61,7 +61,7 @@ end
 end
 
 @testset "Some complex-valued examples (matrix)" begin
-    DynamicPolynomials.@polycvar x[1:2]
+    DynamicPolynomials.@complex_polyvar x[1:2]
     prob = poly_problem(-x[1] * conj(x[1]) - x[2] * conj(x[2]),
                         psd=[[1-2*(x[1]*x[2]+conj(x[1] * x[2])) x[1]; conj(x[1]) 4-x[1]*conj(x[1])-x[2]*conj(x[2])]],
                         perturbation=1e-4)

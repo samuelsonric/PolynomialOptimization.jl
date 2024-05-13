@@ -717,7 +717,7 @@ end
 
     @test term(SimplePolynomial(x + x^2 - x)) isa AbstractTerm
 
-    DynamicPolynomials.@polycvar y
+    DynamicPolynomials.@complex_polyvar y
     p = SimplePolynomial(3x^2 * y^4 + 2x)
     @test terms(p)[1] == Term(2, SimpleMonomial{1,1}([1], [0], [0]))
     @test terms(p)[end] == Term(3, SimpleMonomial{1,1}([2], [4], [0]))
