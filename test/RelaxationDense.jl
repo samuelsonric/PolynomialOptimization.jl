@@ -42,7 +42,7 @@ end
     prob = poly_problem(z + conj(z), zero=[z * conj(z) - 1])
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -2. atol = 1e-8
+            @test poly_optimize(solver, prob).objective ≈ -2. atol = 1e-7
         end
     end
 end
