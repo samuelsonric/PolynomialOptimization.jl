@@ -16,7 +16,7 @@ MultivariatePolynomials.term_type(::XorTX{<:SimplePolynomial{Cold,Nr,Nc,<:Simple
     ::Type{C}=Cold) where {Cold,C,Nr,Nc,I<:Integer,M<:SimpleMonomial{Nr,Nc,I}} =
     Term{C,monomial_type(M)}
 
-MultivariatePolynomials.polynomial_type(::XorTX{Term{C,SimpleMonomial{Nr,Nc,I,E}}}) where {C,Nr,Nc,I<:Integer,E<:AbstractExponents} =
+MultivariatePolynomials.polynomial_type(::XorTX{<:Term{C,<:SimpleMonomial{Nr,Nc,I}}}) where {C,Nr,Nc,I<:Integer} =
     SimplePolynomial{C,Nr,Nc,SimpleMonomialVector{Nr,Nc,I,Tuple{ExponentsAll{Nr+2Nc,I},Vector{I}}}}
 MultivariatePolynomials.polynomial_type(::XorTX{<:SimplePolynomial{<:Any,Nr,Nc,M}}, ::Type{C}) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} =
     SimplePolynomial{C,Nr,Nc,M}
@@ -37,18 +37,18 @@ function Base.promote_rule(::Type{<:Term{C1,<:SimpleMonomial{Nr1,Nc1,I1,E1}}}, :
     {C1,Nr1,Nc1,I1<:Integer,E1<:AbstractExponents,C2,Nr2,Nc2,I2<:Integer,E2<:AbstractExponents}
     # make sure this will always be an error and not recurse infinitely
     (Nr1 === Nr2 && Nc1 === Nc2) || throw(MethodError(promote, (SimpleMonomial{Nr1,Nc1}, SimpleMonomial{Nr2,Nc2})))
+    I = promote_type(I1, I2)
     return Term{promote_type(C1, C2),
-                <:SimpleMonomial{Nr1,Nc1,promote_type(I1, I2),
-                                 (E1 isa ExponentsAll && E2 isa ExponentsAll ? ExponentsAll{Nr+2Nc,I} :
-                                                                               <:AbstractExponents{Nr+2Nc,I})}}
+                <:(E1 isa ExponentsAll && E2 isa ExponentsAll ? SimpleMonomial{Nr1,Nc1,I,ExponentsAll{Nr1+2Nc1,I}} :
+                                                                SimpleMonomial{Nr1,Nc1,I,<:AbstractExponents{Nr1+2Nc1,I}})}
 end
 function Base.promote_rule(::Type{<:Term{C,<:SimpleMonomial{Nr1,Nc1,I1,E1}}}, ::Type{SimpleMonomial{Nr2,Nc2,I2,E2}}) where
     {C,Nr1,Nc1,I1<:Integer,E1<:AbstractExponents,Nr2,Nc2,I2<:Integer,E2<:AbstractExponents}
     # make sure this will always be an error and not recurse infinitely
     (Nr1 === Nr2 && Nc1 === Nc2) || throw(MethodError(promote, (SimpleMonomial{Nr1,Nc1}, SimpleMonomial{Nr2,Nc2})))
-    return Term{C,<:SimpleMonomial{Nr1,Nc1,promote_type(I1, I2),
-                                   (E1 isa ExponentsAll && E2 isa ExponentsAll ? ExponentsAll{Nr+2Nc,I} :
-                                                                                 <:AbstractExponents{Nr+2Nc,I})}}
+    I = promote_type(I1, I2)
+    return Term{C,<:(E1 isa ExponentsAll && E2 isa ExponentsAll ? SimpleMonomial{Nr1,Nc1,I,ExponentsAll{Nr1+2Nc1,I}} :
+                                                                  SimpleMonomial{Nr1,Nc1,I,<:AbstractExponents{Nr1+2Nc1,I}})}
 end
 function Base.promote_rule(::Type{<:Term{C,<:SimpleMonomial{Nr1,Nc1,I,E}}}, ::Type{<:SimpleVariable{Nr2,Nc2,<:Unsigned}}) where
     {C,Nr1,Nc1,I<:Integer,E<:AbstractExponents,Nr2,Nc2}
