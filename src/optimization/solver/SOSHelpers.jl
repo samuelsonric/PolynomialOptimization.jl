@@ -1,36 +1,6 @@
-export monomial_count, sos_add_matrix!, sos_add_equality!, sos_setup!
+export sos_add_matrix!, sos_add_equality!, sos_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
-"""
-    monomial_count(n, d)
-
-Short helper function that allows to determine the number of monomials in `n` variables up to degree `d`.
-"""
-monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
-
-trisize(n) = (n * (n +1)) >> 1
-realtype(::Type{<:Union{R,Complex{R}}}) where {R<:Real} = R
-
-# For complex-valued problems, there are m and conj(m); all solvers require real-valued inputs.
-# Therefore, we first define the canonicalized monomial m̃ as the one of m, conj(m) that has the smaller index.
-iscanonical(::SimpleMonomial{<:Any,0}) = true
-Base.@assume_effects :consistent iscanonical(m::SimpleMonomialOrConj) = m ≤ SimpleConjMonomial(m)
-canonicalize(m::SimpleMonomialOrConj) = iscanonical(m) ? m : SimpleConjMonomial(m)
-# Next, the real part of m̃ is stored in the index associated with m; the imaginary part of m̃ in the index associated with
-# conj(m), unless those two are equal (then we don't store the imaginary part).
-# Note that Julia should be able to infer that the indices in the case of real-valued problems are the same and optimize a lot
-# away.
-
-# This is for the quadratic case, everything is preallocated
-@inline function pushorupdate!(idxvec::FastVec, index, valuevec::FastVec, value)
-    i = findfirst(isequal(index), idxvec)
-    if isnothing(i)
-        unsafe_push!(idxvec, index)
-        unsafe_push!(valuevec, value)
-    else
-        @inbounds valuevec[i] += value
-    end
-end
 
 # In the PSD case, we might need to grow the list
 @inline function pushorupdate!((idxvec, valuevec)::NTuple{2,FastVec}, index, value)
@@ -58,22 +28,6 @@ end
         push!(valuevec, value)
     else
         @inbounds valuevec[i] += value
-    end
-end
-
-@inline function getreonly(state, args::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
-    idx₁ = mindex(state, args...)
-    @assert(idx₁ == mindex(state, SimpleConjMonomial.(reverse(args))...)) # reverse is rather unnecessary (commuting case)
-    return idx₁
-end
-
-@inline function getreim(state, args::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
-    idx₁ = mindex(state, args...)
-    idx₂ = mindex(state, SimpleConjMonomial.(reverse(args))...) # reverse is rather unnecessary (commuting)
-    if idx₁ ≤ idx₂
-        return idx₁, idx₂, true # make sure to test for equality whenever the imaginary part is involved
-    else
-        return idx₂, idx₁, false
     end
 end
 
@@ -1119,9 +1073,6 @@ function sos_add_equality!(state, groupings::AbstractVector{MV} where {M<:Simple
     @inline add_free_finalize!(state, eqstate)
     return
 end
-
-collect_grouping(g::AbstractVector{M} where M<:SimpleMonomial) = g
-collect_grouping(g) = collect(g)
 
 """
     sos_setup!(state, relaxation::AbstractPORelaxation, groupings::RelaxationGroupings)
