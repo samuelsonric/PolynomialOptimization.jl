@@ -34,6 +34,8 @@ Shorthand to create an empty FastVec with a certain buffer size.
 FastVec{V}(; buffer::Integer=0) where {V} = FastVec{V}(undef, 0; buffer)
 
 Base.size(v::FastVec) = (v.len,)
+Base.strides(v::FastVec) = strides(v.data)
+Base.elsize(v::FastVec) = Base.elsize(v.data)
 
 Base.@propagate_inbounds function Base.getindex(v::FastVec, i::Int)
     @boundscheck checkbounds(v, i)
@@ -112,7 +114,14 @@ it will lead to memory corruption. Call [`push!`](@ref) instead if you cannot gu
     return v
 end
 
-unsafe_push!(v::FastVec, els...) = unsafe_append!(v, els)
+@inline function unsafe_push!(v::FastVec{V}, els...) where {V}
+    # we don't need calls to copyto! here - the size of els is completely known and probably quite small, so let's inline
+    @assert(length(v.data) > v.len + length(els))
+    for el in els
+        @inbounds v.data[v.len += 1] = convert(V, el)
+    end
+    return v
+end
 
 """
     append!(v::FastVec, els)
@@ -289,8 +298,10 @@ finish!(v::FastVec) = resize!(v.data, v.len)
 #     maxsize += ((size_t)1 << (exp2 * 7 / 8)) * 4 + maxsize / 8;
 #     return maxsize;
 # }
-overallocation(maxsize) = maxsize < 8 ? 8 : let exp2 = 8sizeof(maxsize) - leading_zeros(maxsize)
-    return maxsize + 4(1 << (7exp2 ÷ 8)) + maxsize ÷ 8
+function overallocation(maxsize::I) where {I<:Integer}
+    maxsize < I(8) && return I(8)
+    exp2 = I(8) * sizeof(maxsize) - leading_zeros(maxsize)
+    return maxsize + I(4(1 << (7exp2 ÷ 8)) + maxsize ÷ 8)
 end
 
 end
