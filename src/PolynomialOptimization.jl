@@ -5,12 +5,11 @@ using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
 using Printf
-import Graphs
 import Combinatorics
 import MutableArithmetics
 import StatsBase
 
-export Newton
+export Newton, Relaxation
 
 const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
@@ -20,6 +19,8 @@ include("./helpers/Helpers.jl")
 
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")
+import .Relaxation
+using .Relaxation: AbstractPORelaxation
 include("./newton/Newton.jl")
 import .Newton
 include("./optimization/Optimization.jl")

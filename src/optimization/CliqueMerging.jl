@@ -94,7 +94,7 @@ function merge_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc}}) where {Nr,Nc}
     end
 end
 
-function merge_cliques(groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
+function merge_cliques(groupings::Relaxation.RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
     outtype_part = Vector{<:SimpleMonomialVector{Nr,Nc}}
     # outtype_full = outtype_part{iszero(Nr) ? SimplePolynomials.Absent : M,iszero(Nc) ? SimplePolynomials.Absent : M}
     newobj = merge_cliques(groupings.obj)
@@ -103,5 +103,5 @@ function merge_cliques(groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
     newnonnegs .= merge_cliques.(groupings.nonnegs)
     newpsds = similar(groupings.psds)
     newpsds .= merge_cliques.(groupings.psds)
-    return RelaxationGroupings(newobj, groupings.zeros, newnonnegs, newpsds, groupings.var_cliques)
+    return Relaxation.RelaxationGroupings(newobj, groupings.zeros, newnonnegs, newpsds, groupings.var_cliques)
 end

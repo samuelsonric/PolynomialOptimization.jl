@@ -1,3 +1,11 @@
+module Relaxation
+
+using ..SimplePolynomials, .SimplePolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
+    ..PolynomialOptimization.FastVector
+import StatsBase, Graphs
+using ..PolynomialOptimization: POProblem, @verbose_info
+import ..PolynomialOptimization: poly_problem, iterate!
+
 export AbstractPORelaxation, basis, groupings, iterate!
 
 """
@@ -225,3 +233,5 @@ Base.isreal(relaxation::AbstractPORelaxation) = isreal(relaxation.problem)
 
 include("./degree/Degree.jl")
 include("./sparse/Sparse.jl")
+
+end

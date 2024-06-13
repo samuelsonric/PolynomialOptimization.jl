@@ -1,11 +1,8 @@
 module PolynomialOptimizationCOPT
 
-using PolynomialOptimization, COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.FastVector,
-    PolynomialOptimization.Solver
-using PolynomialOptimization: @assert, @inbounds, POProblem, RelaxationGroupings, @verbose_info, MomentVector, StackVec,
-    FastKey, sort_along!
-using PolynomialOptimization.SimplePolynomials: monomial_index, _get_I
-using COPT: _check_ret, Env
+using COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.Solver
+using PolynomialOptimization: @assert, @inbounds
+using COPT: _check_ret, Env#, libcopt
 
 global copt_env::Env
 
@@ -35,8 +32,8 @@ include("./COPTMoment.jl")
 
 function __init__()
     global copt_env = Env()
-    push!(Solver.solver_methods, :COPTMoment)
-    # push!(Solver.solver_methods, :COPTSOS)
+    push!(solver_methods, :COPTMoment)
+    # push!(solver_methods, :COPTSOS)
 end
 
 end

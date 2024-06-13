@@ -1,10 +1,21 @@
 module Solver
 
-using ..SimplePolynomials, ..PolynomialOptimization, ..FastVector, MultivariatePolynomials, LinearAlgebra, SparseArrays
-using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial
-using ..PolynomialOptimization: @assert, @inbounds, @capture, FastKey, StackVec, POProblem, RelaxationGroupings, sort_along!
+using ..SimplePolynomials, ..PolynomialOptimization, MultivariatePolynomials, LinearAlgebra, SparseArrays, Reexport
+using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
+@reexport using ..FastVector
+using ..FastVector: overallocation
+using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, FastKey, MomentVector, StackVec, POProblem,
+    sort_along!
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, unsafe
-export SimpleMonomialOrConj, SimpleConjMonomial, FastKey
+using ..Relaxation: AbstractPORelaxation, RelaxationGroupings
+# We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
+# likely need
+export
+    poly_problem, POProblem, MomentVector, StackVec, FastKey, sort_along!, @verbose_info, @capture, # from PolynomialOptimization
+    AbstractPORelaxation, RelaxationGroupings, # from Relaxation
+    SimpleMonomialOrConj, SimpleConjMonomial, monomial_index, _get_I, # from SimplePolynomials
+    overallocation, # from FastVector (not exported)
+    solver_methods
 
 function poly_optimize end
 

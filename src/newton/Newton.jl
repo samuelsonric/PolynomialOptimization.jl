@@ -2,7 +2,8 @@ module Newton
 
 using MultivariatePolynomials, ..SimplePolynomials, ..SimplePolynomials.MultivariateExponents, ..FastVector, Printf
 import BufferedStreams
-using ..PolynomialOptimization: @assert, @verbose_info, @capture, @allocdiff, haveMPI, FastKey, RelaxationGroupings
+using ..PolynomialOptimization: @assert, @verbose_info, @capture, @allocdiff, haveMPI, FastKey
+using ..Relaxation: RelaxationGroupings
 
 export halfpolytope, halfpolytope_from_file
 

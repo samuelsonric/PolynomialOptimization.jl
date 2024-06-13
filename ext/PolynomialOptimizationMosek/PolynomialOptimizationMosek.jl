@@ -1,10 +1,9 @@
 module PolynomialOptimizationMosek
 
-using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.FastVector,
-    PolynomialOptimization.Solver
-using PolynomialOptimization: @assert, @inbounds, POProblem, RelaxationGroupings, @verbose_info, @capture, @allocdiff,
-    MomentVector, StackVec, FastKey, Newton, sort_along!
-using PolynomialOptimization.SimplePolynomials: monomial_index, veciter, _get_I
+using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
+    PolynomialOptimization.Newton
+using PolynomialOptimization: @assert, @inbounds, @allocdiff
+using PolynomialOptimization.SimplePolynomials: veciter
 using Mosek: msk_global_env, Env, deletetask
 
 printstream(msg::String) = (print(msg); flush(stdout))
@@ -16,8 +15,8 @@ include("./Newton.jl")
 include("./Tightening.jl")
 
 function __init__()
-    isdefined(Mosek, :appendafes) && pushfirst!(Solver.solver_methods, :MosekMoment)
-    # pushfirst!(Solver.solver_methods, :MosekSOS)
+    isdefined(Mosek, :appendafes) && pushfirst!(solver_methods, :MosekMoment)
+    # pushfirst!(solver_methods, :MosekSOS)
     pushfirst!(Newton.newton_methods, :Mosek)
     pushfirst!(PolynomialOptimization.tightening_methods, :Mosek)
 end

@@ -8,7 +8,7 @@ end
 
 function append_vars!(state::StateMoment, key)
     if state.num_used_vars == state.num_solver_vars
-        newnum = #=FastVector.overallocation=#(state.num_solver_vars + one(Cint))
+        newnum = overallocation(state.num_solver_vars + one(Cint))
         Δ = newnum - state.num_solver_vars
         _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
             fill(-COPT_INFINITY, Δ), C_NULL, C_NULL))
@@ -48,7 +48,7 @@ end
         # COPT does not support an arbitrary-content quadratic cone. Either we put the cone into the form <x, Qx> ≤ b or we
         # need to create more variables that wrap this functionality.
         if state.num_solver_vars < state.num_used_vars + $N
-            newnum = #=FastVector.overallocation=#(state.num_solver_vars + Cint($N))
+            newnum = overallocation(state.num_solver_vars + Cint($N))
             Δ = newnum - state.num_solver_vars
             lb = fill(-COPT_INFINITY, Δ)
             @inbounds lb[1] = 0.0

@@ -29,8 +29,8 @@ For a list of supported methods, see [the solver reference](@ref solvers_poly_op
 function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
-        groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation
-                                       # was constructed.
+        groups = Relaxation.groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the
+                                                  # relaxation was constructed.
         if clique_merging
             clique_merging && @verbose_info("Merging cliques...")
             t = @elapsed begin
@@ -68,7 +68,7 @@ end
 Construct a [`RelaxationDense`](@ref) by default.
 """
 poly_optimize(v::Val, problem::POProblem, degree=problem.mindegree; kwargs...) =
-    poly_optimize(v, RelaxationDense(problem, degree); kwargs...)
+    poly_optimize(v, Relaxation.RelaxationDense(problem, degree); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 
