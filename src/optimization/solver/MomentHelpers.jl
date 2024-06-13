@@ -6,7 +6,7 @@ export moment_add_matrix!, moment_add_equality!, moment_setup!
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
-function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
+function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextype{Tri},
     type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}) where {Tri}
     lg = length(grouping)
@@ -15,7 +15,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     if dim == 1 || (dim == 2 && supports_quadratic(state))
         matrix_indexing = false
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
-        sqrt2 = sqrt(V(2))
     elseif indextype isa PSDIndextypeMatrixCartesian
         Tri ∈ (:L, :U) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype, type)))
         matrix_indexing = true
@@ -27,7 +26,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             type)))
         matrix_indexing = false
         tri = Tri
-        sqrt2 = sqrt(V(2))
     end
     complex = type isa Tuple{Val{false},Val{true}}
     maxlen = maximum(length, constraint, init=0)
@@ -36,11 +34,25 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         rows = FastVec{T}(buffer=2maxlen * colcount)
         indices = similar(rows)
         values = similar(rows, complex ? Complex{V} : V)
-        i = zero(T)
     else
         lens = Vector{SimplePolynomials.smallest_unsigned(2maxlen)}(undef, colcount)
         indices = FastVec{T}(buffer=2maxlen * colcount)
         values = similar(indices, V)
+    end
+    # introduce a method barrier to fix the potentially unknown eltype of lens make sure "dynamic" constants can be folded
+    moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex), lg,
+        block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values))
+end
+
+function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where {M<:SimpleMonomial},
+    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
+    ::Val{complex}, lg, block_size, dim, data) where {Tri,tri,matrix_indexing,complex}
+    if matrix_indexing
+        rows, indices, values = data
+        i = zero(T)
+    else
+        sqrt2 = sqrt(V(2))
+        lens, indices, values = data
         i = 1
     end
     @inbounds for (exp2, g₂) in enumerate(grouping)
@@ -152,24 +164,25 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             values₁₁ = @view(values[range1])
             indicesₒᵣ = @view(indices[range2])
             valuesₒᵣ = @view(values[range2])
-            if complex
+            fourquads = complex
+            if fourquads
                 indicesₒᵢ = @view(indices[range3])
                 valuesₒᵢ = @view(values[range3])
                 range4 = last(range3)+1:last(range3)+lens[4]
                 indices₂₂ = @view(indices[range4])
                 values₂₂ = @view(values[range4])
                 if all(iszero, valuesₒᵢ)
-                    complex = false
+                    fourquads = false
                 elseif all(iszero(valuesₒᵣ))
                     indicesₒᵣ = indicesₒᵢ
                     valuesₒᵣ = valuesₒᵢ
-                    complex = false
+                    fourquads = false
                 end
             else
                 indices₂₂ = @view(indices[range3])
                 values₂₂ = @view(values[range3])
             end
-            if !complex
+            if !fourquads
                 add_constr_quadratic!(state, (indices₁₁, values₁₁), (indices₂₂, values₂₂), (indicesₒᵣ, valuesₒᵣ))
             else
                 add_constr_quadratic!(state, (indices₁₁, values₁₁), (indices₂₂, values₂₂), (indicesₒᵣ, valuesₒᵣ),
@@ -181,6 +194,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             )
         end
     end
+    return
 end
 
 # generic moment matrix constraint with complex-valued monomials involved in the grouping, but the solver does not support the
@@ -640,9 +654,9 @@ function moment_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, 
     end
 
     # SOS term for objective
+    constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
     for grouping in groupings.obj
-        moment_add_matrix!(state, collect_grouping(grouping),
-            SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective)))
+        moment_add_matrix!(state, collect_grouping(grouping), constantP)
     end
     # localizing matrices
     for (groupingsᵢ, constrᵢ) in zip(groupings.nonnegs, problem.constr_nonneg)

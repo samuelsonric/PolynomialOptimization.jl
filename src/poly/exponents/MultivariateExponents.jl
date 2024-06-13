@@ -1,6 +1,6 @@
 module MultivariateExponents
 
-using ...PolynomialOptimization: @assert
+using ...PolynomialOptimization: @assert, @inbounds
 
 export unsafe
 

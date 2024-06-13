@@ -1,14 +1,18 @@
 if debugging
     macro assert(args...)
-        :(Base.@assert($(esc.(args)...)))
+        :($Base.@assert($(esc.(args)...)))
+    end
+
+    macro inbounds(arg)
+        esc(arg)
     end
 else
     macro assert(args...)
     end
-end
 
-macro myinbounds(expr)
-    esc(expr)
+    macro inbounds(arg)
+        :($Base.@inbounds($(esc(arg))))
+    end
 end
 
 macro verbose_info(str...)

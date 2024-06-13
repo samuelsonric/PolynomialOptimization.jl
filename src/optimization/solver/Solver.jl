@@ -2,7 +2,7 @@ module Solver
 
 using ..SimplePolynomials, ..PolynomialOptimization, ..FastVector, MultivariatePolynomials, LinearAlgebra, SparseArrays
 using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial
-using ..PolynomialOptimization: @assert, @capture, FastKey, StackVec, POProblem, RelaxationGroupings, sort_along!
+using ..PolynomialOptimization: @assert, @inbounds, @capture, FastKey, StackVec, POProblem, RelaxationGroupings, sort_along!
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, unsafe
 export SimpleMonomialOrConj, SimpleConjMonomial, FastKey
 

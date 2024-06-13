@@ -291,6 +291,8 @@ Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src:
 Base.@propagate_inbounds Base.copyto!(dest::AbstractArray, dstart::Integer, src::SimpleMonomialExponents, sstart::Integer,
     n::Integer) = @invoke copyto!(dest::AbstractArray, dstart::Integer, src::Any, sstart::Integer, n::Integer)
 
+Base.sum(sme::SimpleMonomialExponents; init=0) = sum(sme.ei; init)
+
 MultivariatePolynomials._zip(t::Tuple, e::SimpleMonomialExponents) = zip(t, e)
 #endregion
 MultivariatePolynomials.exponents(m::SimpleMonomialOrConj{Nr,Nc,I}) where {Nr,Nc,I<:Integer} =

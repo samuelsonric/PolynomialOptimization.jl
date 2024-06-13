@@ -2,8 +2,8 @@ module PolynomialOptimizationCOPT
 
 using PolynomialOptimization, COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.FastVector,
     PolynomialOptimization.Solver
-using PolynomialOptimization: @assert, POProblem, RelaxationGroupings, @verbose_info, MomentVector, StackVec, FastKey,
-    sort_along!
+using PolynomialOptimization: @assert, @inbounds, POProblem, RelaxationGroupings, @verbose_info, MomentVector, StackVec,
+    FastKey, sort_along!
 using PolynomialOptimization.SimplePolynomials: monomial_index, _get_I
 using COPT: _check_ret, Env
 

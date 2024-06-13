@@ -1,7 +1,7 @@
 module SimplePolynomials
 
 using MultivariatePolynomials, ..FastVector
-using ..PolynomialOptimization: @assert, sort_along!
+using ..PolynomialOptimization: @assert, @inbounds, sort_along!
 
 include("./Utils.jl")
 include("./exponents/MultivariateExponents.jl")

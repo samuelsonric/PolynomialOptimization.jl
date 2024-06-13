@@ -12,7 +12,9 @@ function Base.iterate(k::KillConjugates)
     return result[1], (false, result[2])
 end
 function Base.iterate(k::KillConjugates, (use, state))
-    result = iterate(k, state)
+    result = iterate(k.parent, state)
     isnothing(result) && return nothing
     return (use ? result[1] : zero(result[1])), (!use, state)
 end
+
+Base.sum(k::KillConjugates) = sum(k.parent)
