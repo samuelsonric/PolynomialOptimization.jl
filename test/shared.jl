@@ -6,6 +6,16 @@ import DynamicPolynomials
 import COPT, #= COSMO, =# Hypatia, Mosek, SCS
 import StatsBase
 
+# allow COPT to fail: if no license is present, the larger tests won't work
+function Test.do_test(result::Test.Threw, orig_expr)
+    if result.exception isa ErrorException && result.exception.msg == "API call failed: invalid license"
+        testres = Test.Broken(:test, orig_expr)
+        Test.record(Test.get_testset(), testres)
+    else
+        @invoke Test.do_test(result::Test.ExecutionResult, orig_expr::Any)
+    end
+end
+
 if !@isdefined(solvers)
     optimize = true
 
