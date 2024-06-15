@@ -8,8 +8,8 @@ using Documenter: doctest;
     @testset "SimplePolynomials" begin
         include("SimplePolynomials.jl")
     end
-    @testset "SOS solver interface" begin
-        include("./SOSHelpers.jl")
+    @testset "Moment solver interface" begin
+        include("./MomentHelpers.jl")
     end
     @testset "no sparsity" begin
         include("./RelaxationDense.jl")
