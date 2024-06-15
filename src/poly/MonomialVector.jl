@@ -346,13 +346,14 @@ function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) whe
         maxmultideg = [@view(v.e.maxmultideg[1:Nr]); @view(v.e.maxmultideg[Nr+2:2:end]); @view(v.e.maxmultideg[Nr+1:2:end])]
     end
     minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg && return v
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(e.mindeg, e.maxdeg, minmultideg, maxmultideg))
+    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg))
 end
 function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, along::Tuple{Any,Vararg}) where {Nr,Nc,I<:Integer}
     # just to get along sorted correctly, we have to do all this extra work
     cmv = _conj(SimpleMonomialVector{Nr,Nc}(unsafe, v.e, collect(firstindex(v.e):lastindex(v.e)), along...))
     # but for the return value, we really don't need any indexing
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(cmv.mindeg, cmv.maxdeg, cmv.minmultideg, cmv.maxmultideg))
+    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(cmv.e.mindeg, cmv.e.maxdeg, cmv.e.minmultideg,
+        cmv.e.maxmultideg))
 end
 _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I}, along...) where {Nr,Nc,I<:Integer} =
     SimpleMonomialVector{Nr,Nc}(v.e, sort_along!(map(x -> conj(x).index, v), along...)[1])
@@ -368,7 +369,7 @@ function _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}) where {
         maxmultideg = [@view(v.e.maxmultideg[1:Nr]); @view(v.e.maxmultideg[Nr+2:2:end]); @view(v.e.maxmultideg[Nr+1:2:end])]
     end
     enew = minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg ? v.e :
-        ExponentsMultideg{Nr+2Nc,I}(e.mindeg, e.maxdeg, minmultideg, maxmultideg)
+        ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg)
     return SimpleMonomialVector{Nr,Nc}(
         enew,
         sort_along!(map(let enew=enew; x -> exponents_to_index(enew, exponents(SimpleConjMonomial(x)), degree(x)) end,
