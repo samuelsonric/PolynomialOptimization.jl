@@ -6,20 +6,10 @@ import DynamicPolynomials
 import COPT, #= COSMO, =# Hypatia, Mosek, SCS
 import StatsBase
 
-# allow COPT to fail: if no license is present, the larger tests won't work
-function Test.do_test(result::Test.Threw, orig_expr)
-    if result.exception isa ErrorException && result.exception.msg == "API call failed: invalid license"
-        testres = Test.Broken(:test, orig_expr)
-        Test.record(Test.get_testset(), testres)
-    else
-        @invoke Test.do_test(result::Test.ExecutionResult, orig_expr::Any)
-    end
-end
-
-if !@isdefined(solvers)
+if !@isdefined(optimize)
     optimize = true
 
-    solvers = copy(PolynomialOptimization.Solver.solver_methods)
+    const all_solvers = copy(PolynomialOptimization.Solver.solver_methods)
     # Mosek requires a license to work at all. COPT will work without a license for small problems.
     try
         Mosek.maketask() do t
@@ -27,9 +17,19 @@ if !@isdefined(solvers)
         end
     catch e
         if e isa Mosek.MosekError && Mosek.MSK_RES_ERR_LICENSE.value ≤ e.rcode ≤ Mosek.MSK_RES_ERR_LICENSE_NO_SERVER_LINE.value
-            filter!(s -> !occursin("Mosek", string(s)), solvers)
+            filter!(s -> !occursin("Mosek", string(s)), all_solvers)
         else
             rethrow(e)
+        end
+    end
+
+    # allow COPT to fail: if no license is present, the larger tests won't work
+    function Test.do_test(result::Test.Threw, orig_expr)
+        if result.exception isa ErrorException && result.exception.msg == "API call failed: invalid license"
+            testres = Test.Broken(:test, orig_expr)
+            Test.record(Test.get_testset(), testres)
+        else
+            @invoke Test.do_test(result::Test.ExecutionResult, orig_expr::Any)
         end
     end
 
@@ -39,3 +39,5 @@ if !@isdefined(solvers)
         return String(take!(io))
     end
 end
+
+solvers = copy(all_solvers)

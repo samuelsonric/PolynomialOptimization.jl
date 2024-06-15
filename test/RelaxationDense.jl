@@ -7,7 +7,9 @@ include("./shared.jl")
     if optimize
         for solver in solvers
             for (i, sol) in ((1, -3.), (2, -2.))
-                @test poly_optimize(solver, prob, i).objective ≈ sol atol = 2e-2
+                @testset let i=i, solver=solver
+                    @test poly_optimize(solver, prob, i).objective ≈ sol atol = 2e-2
+                end
             end
         end
     end
@@ -19,7 +21,9 @@ end
     if optimize
         for solver in solvers
             for i in 1:2
-                @test poly_optimize(solver, prob, i).objective ≈ -4. atol = 1e-3
+                @testset let i=i, solver=solver
+                    @test poly_optimize(solver, prob, i).objective ≈ -4. atol = 1e-3
+                end
             end
         end
     end
@@ -31,7 +35,9 @@ end
     if optimize
         for solver in solvers
             for (i, sol) in ((1, -4.), (2, -3.904891578336841))
-                @test poly_optimize(solver, prob, i).objective ≈ sol atol = 5e-3
+                @testset let i=i, solver=solver
+                    @test poly_optimize(solver, prob, i).objective ≈ sol atol = 5e-3
+                end
             end
         end
     end
@@ -42,7 +48,9 @@ end
     prob = poly_problem(z + conj(z), zero=[z * conj(z) - 1])
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -2. atol = 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -2. atol = 1e-7
+            end
         end
     end
 end
@@ -55,7 +63,9 @@ end
                               1im * z[2] - 1im * conj(z[2])], nonneg=[z[2] + conj(z[2])])
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob, 3).objective ≈ 0.42817465 atol = 1e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob, 3).objective ≈ 0.42817465 atol = 1e-5
+            end
         end
     end
 end
@@ -68,7 +78,9 @@ end
     if optimize
         for solver in solvers
             for i in 2:3
-                @test poly_optimize(solver, prob, i).objective ≈ -4. atol = 5e-3
+                @testset let i=i, solver=solver
+                    @test poly_optimize(solver, prob, i).objective ≈ -4. atol = 5e-3
+                end
             end
         end
     end

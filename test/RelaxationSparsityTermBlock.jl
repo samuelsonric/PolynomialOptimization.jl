@@ -1,5 +1,7 @@
 include("./shared.jl")
 
+filter!(s -> !occursin("SCS", string(s)), solvers) # precision issues
+
 @testset "Example 4.3" begin
     DynamicPolynomials.@polyvar x[1:3]
     sp = Relaxation.SparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2]), 2)
@@ -10,7 +12,9 @@ PSD block sizes:
   [6 => 1, 2 => 2]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.4752747 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.4752747 atol = 1e-6
+            end
         end
     end
 
@@ -21,7 +25,9 @@ PSD block sizes:
   [6 => 1, 4 => 1]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.4752747 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.4752747 atol = 1e-6
+            end
         end
     end
 
@@ -39,7 +45,9 @@ PSD block sizes:
   [5 => 1, 2 => 1, 1 => 3]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            end
         end
     end
 
@@ -50,7 +58,9 @@ PSD block sizes:
   [5 => 1, 2 => 2, 1 => 1]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            end
         end
     end
 
@@ -109,7 +119,9 @@ Semidefinite constraint #1: 1 block
   4 [1, x₃, x₂, x₁]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5355788 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.5355788 atol = 1e-6
+            end
         end
     end
 

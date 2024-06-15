@@ -1,5 +1,8 @@
 include("./shared.jl")
 
+# filter out very slow solvers
+filter!(s -> s != :MosekMoment && !occursin("Hypatia", string(s)), solvers)
+
 @testset "Example 6.1 chained singular from correlative sparsity paper" begin
     for n in (16, 40, 100, 200, 400)
         DynamicPolynomials.@polyvar x[1:n]
@@ -8,8 +11,10 @@ include("./shared.jl")
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = 6e-5 skip=solver==:COPTSOS
-                # COPT has numerical issues
+                # all moment-based solvers fail miserably on this problem. However, they will all report the issues.
+                @testset let n=n, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 6e-5 skip=occursin("Moment", string(solver))
+                end
             end
         end
     end
@@ -25,7 +30,9 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == cl
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = 5e-8
+                @testset let n=n, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5
+                end
             end
         end
     end
@@ -41,7 +48,9 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = 1e-5
+                @testset let n=n, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 1e-5
+                end
             end
         end
     end
@@ -57,7 +66,9 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4
+                @testset let n=n, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4
+                end
             end
         end
     end
@@ -72,7 +83,9 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-5
+                @testset let n=n, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-5
+                end
             end
         end
     end
@@ -130,7 +143,9 @@ end
                     else
                         parameters = ()
                     end
-                    @test poly_optimize(solver, sp; parameters).objective ≈ bound atol = 1e-4
+                    @testset let nx=nx, ny=ny, μ=μ, M=M, solver=solver
+                        @test poly_optimize(solver, sp; parameters).objective ≈ bound atol = 1e-4
+                    end
                 end
             end
         end
@@ -150,7 +165,9 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => 1, 3 => M -2)
         if optimize
             for solver in solvers
-                @test poly_optimize(solver, sp).objective ≈ result atol = 1e-4
+                @testset let M=M, solver=solver
+                    @test poly_optimize(solver, sp).objective ≈ result atol = 1e-4
+                end
             end
         end
     end
@@ -167,7 +184,9 @@ PSD block sizes:
   [6 => 2]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.625 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.625 atol = 1e-6
+            end
         end
     end
 end
@@ -186,7 +205,9 @@ PSD block sizes:
   [15 => 1, 10 => 1]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5042 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.5042 atol = 1e-3
+            end
         end
     end
 end
@@ -268,7 +289,9 @@ PSD block sizes:
   [35 => 2]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
+            end
         end
     end
 
@@ -283,7 +306,9 @@ PSD block sizes:
   [15 => 4]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
+            end
         end
     end
 

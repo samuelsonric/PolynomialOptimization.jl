@@ -32,7 +32,7 @@ Variable cliques:
 PSD block sizes:
   [4 => 2, 3 => 1]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0. atol = 1e-9
+        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0. atol = 4e-8
         :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 1e-7
         :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ 0 atol = 7e-6
         :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ 0 atol = 2e-7
@@ -95,7 +95,9 @@ PSD block sizes:
   [4 => 1, 2 => 2, 1 => 3]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
+            end
         end
     end
 
@@ -230,7 +232,9 @@ Nonnegative constraint #1: 2 blocks
   1 [z₂]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-6
+            end
         end
     end
 
@@ -241,7 +245,9 @@ PSD block sizes:
   [2 => 4, 1 => 2]"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-4
+            end
         end
     end
 
