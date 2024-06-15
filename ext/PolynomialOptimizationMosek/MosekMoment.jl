@@ -8,14 +8,14 @@ end
 
 function append_vars!(state::StateMoment, key)
     if state.num_vars == length(state.mon_to_mskvar)
-        newnum = FastVector.overallocation(state.num_vars + one(state.num_vars))
+        newnum = overallocation(state.num_vars + one(state.num_vars))
         appendvars(state.task, newnum - state.num_vars)
         state.num_vars = newnum
     end
     return state.mon_to_mskvar[FastKey(key)] = Int32(length(state.mon_to_mskvar))
 end
 
-@inline function Solver.mindex(state::StateMoment{K}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc}
+@inline function Solver.mindex(state::StateMoment, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
     idx = monomial_index(monomials...)
     dictidx = Base.ht_keyindex(state.mon_to_mskvar, FastKey(idx))
     @inbounds return (dictidx < 0 ?
@@ -80,16 +80,16 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     # most of the constraints will be zero, so we can save some calls if we all set them to zero and only change the few
     # nonzero ones
     Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + num, MSK_BK_FX, 0.0, 0.0)
-    return num
+    return
 end
 
-function Solver.add_constr_fix!(state::StateMoment, buffer::Int, indices::AbstractVector{Int32},
+function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indices::AbstractVector{Int32},
     values::AbstractVector{Float64}, rhs::Float64)
     @assert(length(indices) == length(values))
     Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indices), indices, values)
     iszero(rhs) || Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_FX, rhs, rhs)
     state.num_cons += 1
-    return buffer -1
+    return
 end
 
 Solver.fix_objective!(state::StateMoment, indices::AbstractVector{Int32}, values::AbstractVector{Float64}) =
