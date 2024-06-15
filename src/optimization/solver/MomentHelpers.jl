@@ -51,7 +51,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         rows, indices, values = data
         i = zero(T)
     else
-        sqrt2 = sqrt(V(2))
+        sqrt2 = (state isa SOSWrapper && !(dim == 2 && supports_quadratic(state))) ? inv(sqrt(V(2))) : sqrt(V(2))
         lens, indices, values = data
         i = 1
     end
@@ -212,7 +212,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false)))))
         tri = Tri
-        sqrt2 = sqrt(V(2))
+        sqrt2 = (state isa SOSWrapper && !(dim == 2 && supports_quadratic(state))) ? inv(sqrt(V(2))) : sqrt(V(2))
     end
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
@@ -428,7 +428,7 @@ moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     moment_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
 
 Parses a polynomial equality constraint for moments and calls the appropriate solver functions to set up the problem structure.
-`groupings` contains all the individual bases that will be squared in the process to generate the prefactor.
+`grouping` contains the basis that will be squared in the process to generate the prefactor.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`add_constr_fix_prepare!`](@ref) (optional)
@@ -585,18 +585,18 @@ The following methods must be implemented by a solver to make this function work
 - [`add_constr_fix_prepare!`](@ref) (optional)
 - [`add_constr_fix!`](@ref)
 - [`add_constr_fix_finalize!`](@ref) (optional)
-- [`fix_objective`](@ref)
+- [`fix_objective!`](@ref)
 
 !!! warning "Indices"
-    The variable indices used in all solver functions directly correspond to the indices given back by
-    [`mindex`](@ref). However, in a sparse problem there may be far fewer indices present; therefore, when the
-    problem is finally given to the solver, care must be taken to eliminate all unused indices.
+    The variable indices used in all solver functions directly correspond to the indices given back by [`mindex`](@ref).
+    However, in a sparse problem there may be far fewer indices present; therefore, when the problem is finally given to the
+    solver, care must be taken to eliminate all unused indices.
 
 !!! info "Order"
     This function is guaranteed to set up the fixed constraints first, then followed by all the others. However, the order of
     nonnegative, quadratic, and PSD constraints is undefined (depends on the problem).
 
-See also [`moment_add_matrix!`](@ref), [`moment_add_equality!`](@ref).
+See also [`sos_setup!`](@ref), [`moment_add_matrix!`](@ref), [`moment_add_equality!`](@ref).
 """
 function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings) where {P}
     problem = poly_problem(relaxation)

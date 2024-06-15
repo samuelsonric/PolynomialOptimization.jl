@@ -31,6 +31,6 @@ end
 include("./Helpers.jl")
 include("./Interface.jl")
 include("./MomentHelpers.jl")
-# include("./SOSHelpers.jl")
+include("./SOSHelpers.jl")
 
 end

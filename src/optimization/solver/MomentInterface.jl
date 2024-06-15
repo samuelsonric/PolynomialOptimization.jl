@@ -57,7 +57,6 @@ add_constr_psd!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Real})
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
 individual entries are 2-Tuples of an `AbstractVector` of decision variable indices, which are of the type returned by
 [`mindex`](@ref), and an `AbstractVector` of their coefficients.
-Note that if [`add_constr_quadratic!`](@ref) is not implemented, `dim` may also be `2`.
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 
 !!! hint "Complex-valued PSD variables"
@@ -135,7 +134,8 @@ add_constr_fix_finalize!(_, _) = nothing
 """
     fix_objective!(state, indices::Vector{T}, values::Vector{V}) where {T,V<:Real}
 
-Puts the variables indexed by `indices` into the objective (that is to be minimized) with coefficients `values`.
+Puts the variables indexed by `indices` into the objective (that is to be minimized) with coefficients `values`. The eltype of
+`indices` if the one returned by [`mindex`](@ref).
 This function will be called exactly once by [`moment_setup!`](@ref) after all variables and constraints have been set up.
 """
 function fix_objective! end

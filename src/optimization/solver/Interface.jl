@@ -144,7 +144,8 @@ The solver implements PSD matrix constraints by demanding that the matrixization
 If `triangle === :F`, the vector is formed by stacking all the columns of the matrix.
 If `triangle === :L`, the columns of the lower triangle are assumed to be stacked _and scaled_, i.e., off-diagonal variables
 that enter the cone are implicitly multiplied by ``1 / \\sqrt2`` in the matrix; so the coefficients will already be
-premultiplied by ``\\sqrt2``.
+premultiplied by ``\\sqrt2`` (for the [`add_constr_psd!`](@ref) case) or by ``1 / \\sqrt2`` (for the [`add_var_psd!`](@ref)
+case)).
 If `triangle === :U`, the columns of the upper triangle are assumed to be stacked and scaled.
 
 See also [`PSDVector`](@ref).
@@ -214,9 +215,9 @@ Base.index_lengths(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}) = p
 This function must indicate in which format the solver expects its data for PSD variables. The return type must be an instance
 of an [`AbstractPSDIndextype`](@ref) subtype.
 
-See also [`PSDIndextypeMatrixLinear`](@ref), [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
+See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
 """
 function psd_indextype end
 
-#include("./SOSInterface.jl")
 include("./MomentInterface.jl")
+include("./SOSInterface.jl")
