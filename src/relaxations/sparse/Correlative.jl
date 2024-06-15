@@ -1,11 +1,9 @@
-export RelaxationSparsityCorrelative
-
-struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
+struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
     problem::P
     groupings::G
 
     @doc """
-        RelaxationSparsityCorrelative(relaxation::AbstractPORelaxation; [high_order_zero,]
+        SparsityCorrelative(relaxation::AbstractRelaxation; [high_order_zero,]
             [high_order_nonneg,] [high_order_psd,] [low_order_zero,] [low_order_nonneg,]
             [low_order_psd,] chordal_completion=true, verbose::Bool=false)
 
@@ -28,12 +26,12 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
     guarantees that the maximal cliques can be determined quickly; however, this may degrade the sparsity and it may be
     favorable not to carry out the completion.
 
-    If correlative and term sparsity are to be used together, use [`RelaxationSparsityCorrelativeTerm`](@ref) instead of
+    If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) instead of
     nesting the sparsity objects.
     """
-    function RelaxationSparsityCorrelative(relaxation::AbstractPORelaxation{P}; high_order_zero=missing,
+    function SparsityCorrelative(relaxation::AbstractRelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
-        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where {Nr,Nc,I<:Integer,P<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
+        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
             (!ismissing(high_order_psd) && !ismissing(lower_order_psd))) &&
@@ -153,4 +151,4 @@ struct RelaxationSparsityCorrelative{P<:POProblem,G<:RelaxationGroupings} <: Abs
     end
 end
 
-default_solution_method(::RelaxationSparsityCorrelative) = :mvhankel
+default_solution_method(::SparsityCorrelative) = :mvhankel

@@ -153,7 +153,7 @@ function consolidate_vec(vec::AbstractVector, callback)
     return index -1 # return the count
 end
 
-function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractPORelaxation,
+function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
     groupings::RelaxationGroupings; verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor),
     customize::Function=_ -> nothing, linear_solver::Type{<:LinearSolver}=SCS.DirectSolver, parameters...)
     setup_time = @elapsed begin

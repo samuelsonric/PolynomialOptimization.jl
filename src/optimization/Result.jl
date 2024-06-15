@@ -1,7 +1,5 @@
-export POResult
-
 """
-    MomentVector(relaxation::AbstractPORelaxation, values::AbstractVector{R} where {R<:Real})
+    MomentVector(relaxation::AbstractRelaxation, values::AbstractVector{R} where {R<:Real})
 
 `MomentVector` is a representation of the result of a polynomial optimization. It contains all the values of the moments
 that were present in the optimization problem. This vector can be indexed in two ways:
@@ -14,7 +12,7 @@ This type is not exported.
 struct MomentVector{R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R}} <: AbstractVector{V}
     values::D
 
-    MomentVector(::AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}, values::D) where {Nr,Nc,R,D<:AbstractVector{R}} =
+    MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, values::D) where {Nr,Nc,R,D<:AbstractVector{R}} =
         new{R,iszero(Nc) ? R : Complex{R},Nr,Nc,D}(values)
 end
 
@@ -81,10 +79,10 @@ end
 Base.iterate(d::MomentVector, args...) = iterate(d.values, args...)
 
 """
-    POResult
+    Result
 
-Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractPORelaxation`](@ref).
-A `POResult` struct `r` contains information about
+Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractRelaxation`](@ref).
+A `Result` struct `r` contains information about
 - the relaxation employed for the optimization (`r.relaxation`)
 - the optimized problem (available via [`poly_problem`](@ref))
 - the used method (`r.method`)
@@ -95,8 +93,10 @@ A `POResult` struct `r` contains information about
 - the moment information in vector form (`r.moments`), which allows to construct a [moment matrix](@ref moment_matrix),
   extract solutions ([`poly_all_solutions`](@ref) or [`poly_solutions`](@ref)), and an
   [optimality certificate](@ref optimality_certificate).
+
+This type is not exported.
 """
-struct POResult{R<:AbstractPORelaxation,V,M<:MomentVector{<:Any,V}}
+struct Result{R<:AbstractRelaxation,V,M<:MomentVector{<:Any,V}}
     relaxation::R
     method::Symbol
     time::Float64
@@ -105,7 +105,7 @@ struct POResult{R<:AbstractPORelaxation,V,M<:MomentVector{<:Any,V}}
     moments::M
 end
 
-function Base.show(io::IO, ::MIME"text/plain", x::POResult)
+function Base.show(io::IO, ::MIME"text/plain", x::Result)
     println(io, "Polynomial optimization result")
     println(io, "Relaxation method: ", typeof(x.relaxation).name.name)
     println(io, "Used optimization method: ", x.method)
@@ -117,11 +117,11 @@ function Base.show(io::IO, ::MIME"text/plain", x::POResult)
     )
 end
 
-Base.eltype(::Type{<:(POResult{<:AbstractPORelaxation,V})}) where {V} = V
+Base.eltype(::Type{<:(Result{<:AbstractRelaxation,V})}) where {V} = V
 
 """
-    poly_problem(r::POResult)
+    poly_problem(r::Result)
 
 Returns the problem that was associated with the optimization result.
 """
-poly_problem(r::POResult) = poly_problem(r.relaxation)
+poly_problem(r::Result) = poly_problem(r.relaxation)

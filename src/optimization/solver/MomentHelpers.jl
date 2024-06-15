@@ -569,7 +569,7 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
 end
 
 """
-    moment_setup!(state, relaxation::AbstractPORelaxation, groupings::RelaxationGroupings)
+    moment_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings)
 
 Sets up all the necessary moment matrices, variables, constraints, and objective of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
@@ -598,7 +598,7 @@ The following methods must be implemented by a solver to make this function work
 
 See also [`moment_add_matrix!`](@ref), [`moment_add_equality!`](@ref).
 """
-function moment_setup!(state, relaxation::AbstractPORelaxation{<:POProblem{P}}, groupings::RelaxationGroupings) where {P}
+function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings) where {P}
     problem = poly_problem(relaxation)
     T = Base.promote_op(mindex, typeof(state), monomial_type(P))
     V = realtype(coefficient_type(problem.objective))

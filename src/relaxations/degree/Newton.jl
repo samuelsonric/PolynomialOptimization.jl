@@ -1,13 +1,11 @@
-export RelaxationNewton
-
-struct RelaxationNewton{P<:POProblem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationDegree{P}
+struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationDegree{P}
     problem::P
     degree::Int
     basis::MV
     groupings::G
 
     @doc """
-        RelaxationNewton(relaxation::AbstractPORelaxation; [method,] parameters...)
+        Newton(relaxation::AbstractRelaxation; [method,] parameters...)
 
     Constructs a relaxation based on the Newton halfpolytope applied to another relaxation of a polynomial optimization
     problem. This will be a superset of the largest possible representation for a given degree bound, with no negative
@@ -19,14 +17,14 @@ struct RelaxationNewton{P<:POProblem,MV<:SimpleMonomialVector,G} <: AbstractRela
 
     Note that for the complex-valued hierarchy, strictly speaking there is no "Newton polytope"; as the representation of
     complex-valued polynomials is unique, the process is much simpler there; still, the size reduction is accomplished by using
-    `RelaxationNewton`.
+    `Newton`.
 
     The `method` determines which solver to use for determining the Newton polytope. If omitted, this will be the default
     solver (in the complex case, it must be `:complex`).
     The `parameters` are passed on to [`Newton.halfpolytope`](@ref).
     """
-    function RelaxationNewton(relaxation::AbstractPORelaxation{P};
-        method::Symbol=iszero(Nc) ? Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:POProblem{Poly}}
+    function Newton(relaxation::AbstractRelaxation{P};
+        method::Symbol=iszero(Nc) ? Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:Problem{Poly}}
         if !iszero(Nr) && !iszero(Nc)
             # Well, we could do this. For a polynomial ∑ᵢⱼₖ αᵢⱼₖ xⁱ zʲ z̄ᵏ, we could factor the complex valued part and then
             # apply the Newton polytope to the real factor: ∑ⱼₖ NP(∑ᵢ αᵢⱼₖ xⁱ) zʲ z̄ᵏ; and then simplify the complex valued part.
@@ -48,4 +46,4 @@ end
 # All the parameters are only for choosing a different method, which might impact runtime behavior; but all methods valid for
 # a certain problem must always give the same result. So there's no use in doing the work all over, even if the parameters
 # have changed.
-RelaxationNewton(relaxation::RelaxationNewton; kwargs...) = relaxation
+Newton(relaxation::Newton; kwargs...) = relaxation

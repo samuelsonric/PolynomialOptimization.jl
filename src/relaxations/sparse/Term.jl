@@ -1,8 +1,6 @@
-export RelaxationSparsityTermBlock, RelaxationSparsityTermChordal
-
-mutable struct RelaxationSparsityTerm{
+mutable struct SparsityTerm{
     I<:Integer,
-    P<:POProblem{<:(SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}} where {Nr,Nc})},
+    P<:Problem{<:(SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}} where {Nr,Nc})},
     PG<:RelaxationGroupings,
     U<:AbstractSet{I},
     S<:SimpleMonomialVector,
@@ -16,9 +14,9 @@ mutable struct RelaxationSparsityTerm{
     groupings::G
     const method::Symbol
 
-    function RelaxationSparsityTerm(relaxation::AbstractPORelaxation{P},
+    function SparsityTerm(relaxation::AbstractRelaxation{P},
         support_union::AbstractSet{I}; method::Symbol, verbose::Bool=false) where
-        {Nr,Nc,I<:Integer,MV<:SimpleMonomialVector{Nr,Nc,I},P<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc,MV}}}
+        {Nr,Nc,I<:Integer,MV<:SimpleMonomialVector{Nr,Nc,I},P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,MV}}}
         problem = poly_problem(relaxation)
         @verbose_info("Generating localizing supports")
         localizing_supports = Vector{MV}(undef, 1 + length(problem.constr_zero) + length(problem.constr_nonneg) +
@@ -85,8 +83,8 @@ function Base.iterate(b::_SquareBasis{M}, state=missing) where {I<:Integer,M<:Si
     return monomial_index(parent_mon, parent_mon), parent_state
 end
 
-function RelaxationSparsityTerm(relaxation::AbstractPORelaxation{P}; method::Symbol, verbose::Bool=false) where
-    {Nr,Nc,I<:Integer,P<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
+function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Symbol, verbose::Bool=false) where
+    {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
     # Let 𝒜 = supp(obj) ∪ supp(constrs)
     # support_union corresponds to 𝒮. For real-valued problems, the initialization is
     # 𝒮 = 𝒜 ∪ 2grouping(obj), for complex-valued problems, only 𝒜. There is no good explanation given for why we even use
@@ -100,11 +98,11 @@ function RelaxationSparsityTerm(relaxation::AbstractPORelaxation{P}; method::Sym
     prob = poly_problem(relaxation)
     parent = groupings(relaxation)
     supptime = @elapsed begin
-        # When a POProblem is constructed using poly_problem, all polynomials are converted from MP interface; therefore, they
+        # When a Problem is constructed using poly_problem, all polynomials are converted from MP interface; therefore, they
         # will all internally use ExponentsAll as the exponents backend. We can therefore directly access the index.
-        # However, just to be on the very safe side (maybe someone somehow constructs a POProblem directly, or we want to
-        # change the implementation later?), we don't rely on this and use monomial_index instead. This will convert the index
-        # to ExponentsAll, but has a short path for recognizing when it already is given in this way, so it can be optimized to
+        # However, just to be on the very safe side (maybe someone somehow constructs a Problem directly, or we want to change
+        # the implementation later?), we don't rely on this and use monomial_index instead. This will convert the index to
+        # ExponentsAll, but has a short path for recognizing when it already is given in this way, so it can be optimized to
         # just grab the field value if everything is as it should be.
         support_union = Set{I}(Iterators.map(monomial_index, monomials(prob.objective)))
         union!(support_union, Iterators.map(monomial_index, monomials(prob.prefactor)))
@@ -121,7 +119,7 @@ function RelaxationSparsityTerm(relaxation::AbstractPORelaxation{P}; method::Sym
         end
     end
     @verbose_info("Generated support union in ", supptime, " seconds")
-    return RelaxationSparsityTerm(relaxation, support_union; method, verbose)
+    return SparsityTerm(relaxation, support_union; method, verbose)
 end
 
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
@@ -155,7 +153,7 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
     end
     return
 end
-_supports_to_graphs!(relaxation::RelaxationSparsityTerm, indices) = _supports_to_graphs!(relaxation.graphs,
+_supports_to_graphs!(relaxation::SparsityTerm, indices) = _supports_to_graphs!(relaxation.graphs,
     relaxation.support_union, relaxation.localizing_supports, relaxation.parentgroupings, indices)
 
 function _extend_graphs!(::Val{:block}, g::Graphs.SimpleGraph)
@@ -232,7 +230,7 @@ _extend_graphs!(::Val{:chordal_cliques}, g::Graphs.SimpleGraph) = chordal_clique
     return RelaxationGroupings(finish!(newobj), newzeros, newnonnegs, newpsds, parent.var_cliques)
 end
 
-function _extend_graphs!(relaxation::RelaxationSparsityTerm, method::Symbol, indices)
+function _extend_graphs!(relaxation::SparsityTerm, method::Symbol, indices)
     newgroupings = _extend_graphs!(Val(method), relaxation.parentgroupings, relaxation.graphs, indices)
     if newgroupings != relaxation.groupings
         relaxation.groupings = newgroupings
@@ -272,25 +270,26 @@ function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vec
     end
     return support_union
 end
-_iterate_supports!(relaxation::RelaxationSparsityTerm) = relaxation.support_union =
+_iterate_supports!(relaxation::SparsityTerm) = relaxation.support_union =
     _iterate_supports(relaxation.parentgroupings, relaxation.localizing_supports, relaxation.graphs)
 
 """
-    RelaxationSparsityTermBlock(relaxation::AbstractPOProblem; verbose::Bool=false)
+    SparsityTermBlock(relaxation::AbstractProblem; verbose::Bool=false)
 
 Analyze the term sparsity of the problem.
 [Term sparsity](https://doi.org/10.1137/19M1307871) is a recent iterative sparsity analysis that groups terms with shared
 supports. Its last iteration will give the same optimal value as the original problem, although it may still be smaller.
 Often, even the uniterated analysis already gives the same bound as the dense problem.
 The terms are grouped based on connected components of a graph; this can be improved by using the smallest chordal extension
-(see [`RelaxationSparsityTermChordal`](@ref)), which will lead to even smaller problem sizes, but typically also worse bounds.
+(see [`SparsityTermChordal`](@ref)), which will lead to even smaller problem sizes, but typically also worse bounds.
 
-If correlative and term sparsity are to be used together, use [`RelaxationSparsityCorrelativeTerm`](@ref) instead of
+If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) instead of
 nesting the sparsity objects.
 """
-RelaxationSparsityTermBlock(args...; kwargs...) = RelaxationSparsityTerm(args...; method=:block, kwargs...)
+SparsityTermBlock(args...; kwargs...) = SparsityTerm(args...; method=:block, kwargs...)
+
 """
-    RelaxationSparsityTermChordal(relaxation::AbstractPOProblem; chordal_completion=true, verbose=false)
+    SparsityTermChordal(relaxation::AbstractProblem; chordal_completion=true, verbose=false)
 
 Analyze the term sparsity of the problem using chordal cliques.
 [Chordal term sparsity](https://doi.org/10.1137/20M1323564) is a recent iterative sparsity analysis that groups terms
@@ -299,13 +298,13 @@ The basis elements are grouped in terms of chordal cliques of the term sparsity 
 maximal cliques of an arbitrary graph is not efficient, the graph is extended to a chordal graph if `chordal_completion` is
 `true` using a heuristic. Disabling the chordal completion can lead to smaller problem sizess.
 
-If correlative and term sparsity are to be used together, use [`RelaxationSparsityCorrelativeTerm`](@ref) instead of
+If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) instead of
 nesting the sparsity objects.
 """
-RelaxationSparsityTermChordal(args...; chordal_completion::Bool=true, kwargs...) =
-    RelaxationSparsityTerm(args...; method=chordal_completion ? :chordal_cliques : :cliques, kwargs...)
+SparsityTermChordal(args...; chordal_completion::Bool=true, kwargs...) =
+    SparsityTerm(args...; method=chordal_completion ? :chordal_cliques : :cliques, kwargs...)
 
-function _jointindices(problem::POProblem, objective::Bool, zero::Union{Bool,<:AbstractSet{<:Integer}},
+function _jointindices(problem::Problem, objective::Bool, zero::Union{Bool,<:AbstractSet{<:Integer}},
     nonneg::Union{Bool,<:AbstractSet{<:Integer}}, psd::Union{Bool,<:AbstractSet{<:Integer}})
     indices = Set{Int}()
     objective && push!(indices, 1)
@@ -329,7 +328,7 @@ function _jointindices(problem::POProblem, objective::Bool, zero::Union{Bool,<:A
     return indices
 end
 
-function iterate!(relaxation::RelaxationSparsityTerm; method::Symbol=relaxation.method, objective::Bool=true,
+function iterate!(relaxation::SparsityTerm; method::Symbol=relaxation.method, objective::Bool=true,
     zero::Union{Bool,<:AbstractSet{<:Integer}}=true, nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true,
     psd::Union{Bool,<:AbstractSet{<:Integer}}=true)
     problem = poly_problem(relaxation)
@@ -342,4 +341,4 @@ function iterate!(relaxation::RelaxationSparsityTerm; method::Symbol=relaxation.
     return _extend_graphs!(relaxation, method, indices)
 end
 
-default_solution_method(::RelaxationSparsityTerm) = :heuristic
+default_solution_method(::SparsityTerm) = :heuristic

@@ -166,7 +166,7 @@ function consolidate_vecs(vec₁::AbstractVector{I}, vec₂::AbstractVector{I}, 
     return index -1 # return the count
 end
 
-function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractPORelaxation,
+function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxation,
     groupings::RelaxationGroupings; verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor),
     customize::Function=_ -> nothing, parameters...)
     setup_time = @elapsed begin

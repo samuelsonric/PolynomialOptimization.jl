@@ -190,7 +190,7 @@ function Solver.fix_constraints!(state::StateSOS, indices::Vector{UInt}, values:
     return
 end
 
-function Solver.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+function Solver.poly_optimize(::Val{:COPTSOS}, relaxation::AbstractRelaxation{<:Problem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
     setup_time = @elapsed begin
         task = COPTProb(copt_env)

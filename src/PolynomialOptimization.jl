@@ -19,8 +19,7 @@ include("./helpers/Helpers.jl")
 
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")
-import .Relaxation
-using .Relaxation: AbstractPORelaxation
+using .Relaxation
 include("./newton/Newton.jl")
 import .Newton
 include("./optimization/Optimization.jl")

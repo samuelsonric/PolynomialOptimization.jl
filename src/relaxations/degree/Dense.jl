@@ -1,13 +1,11 @@
-export RelaxationDense
-
-struct RelaxationDense{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
+struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
     problem::P
     degree::Int
     basis::MV
     groupings::G
 
     @doc """
-        RelaxationDense(problem::POProblem[, degree])
+        Dense(problem::Problem[, degree])
 
     Constructs a full dense relaxation out of a polynomial optimization problem. This is the largest possible representation
     for a given degree bound, giving the best bounds. It is wastful at the same time, as a Newton relaxation gives equally good
@@ -17,9 +15,9 @@ struct RelaxationDense{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupi
     Specifying a degree larger than the minimal only makes sense if there are inequality or PSD constraints present, else it
     needlessly complicates calculations without any benefit.
     """
-    function RelaxationDense(problem::P,
+    function Dense(problem::P,
         degree::Integer=(@info("Automatically selecting minimal degree cutoff $(problem.mindegree)"); problem.mindegree)) where
-        {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:POProblem{Poly}}
+        {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
         degree < problem.mindegree && throw(ArgumentError("The minimally required degree is $(problem.mindegree)"))
         if iszero(Nc)
             basis = monomials(Val(Nr), Val(Nc), 0:degree; I)
@@ -39,4 +37,4 @@ struct RelaxationDense{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupi
     end
 end
 
-default_solution_method(::RelaxationDense) = :mvhankel
+default_solution_method(::Dense) = :mvhankel

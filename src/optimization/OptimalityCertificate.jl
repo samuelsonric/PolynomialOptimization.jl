@@ -1,7 +1,7 @@
 export optimality_certificate
 
 """
-    optimality_certificate(result::POResult, ϵ=1e-6)
+    optimality_certificate(result::Result, ϵ=1e-6)
 
 This function applies the flat extension/truncation criterion to determine whether the optimality of the given problem can be
 certified, in which case it returns `:Optimal`. If no such certificate is found, the function returns `:Unknown`. The criterion
@@ -11,7 +11,7 @@ eigenvalues are considered to be negative.
 
 See also [`poly_optimize`](@ref).
 """
-function optimality_certificate(result::POResult{<:AbstractPORelaxation{<:RealPOProblem}}, ϵ::R=1e-6) where {R<:Real}
+function optimality_certificate(result::Result{<:AbstractRelaxation{<:RealProblem}}, ϵ::R=1e-6) where {R<:Real}
     relaxation = result.relaxation
     deg = degree(relaxation)
     deg < 1 && return :CertificateUnavailable

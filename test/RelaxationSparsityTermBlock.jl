@@ -2,8 +2,8 @@ include("./shared.jl")
 
 @testset "Example 4.3" begin
     DynamicPolynomials.@polyvar x[1:3]
-    sp = RelaxationSparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2]), 2)
-    @test strRep(sp) == "RelaxationSparsityTerm of a polynomial optimization problem
+    sp = Relaxation.SparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2]), 2)
+    @test strRep(sp) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
@@ -14,7 +14,7 @@ PSD block sizes:
         end
     end
 
-    @test strRep(iterate!(sp)) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
@@ -30,9 +30,9 @@ end
 
 @testset "Example 4.5 from Zhen, Fantuzzi, Papachristodoulou review" begin
     DynamicPolynomials.@polyvar x[1:3]
-    sp = RelaxationSparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2 * x[2]^2 + x[1]^2 * x[3]^2 +
+    sp = Relaxation.SparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2 * x[2]^2 + x[1]^2 * x[3]^2 +
                                                   x[2]^2 * x[3]^2 + x[2] * x[3]), 2)
-    @test strRep(sp) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(sp) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
@@ -43,7 +43,7 @@ PSD block sizes:
         end
     end
 
-    @test strRep(iterate!(sp)) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
@@ -59,13 +59,13 @@ end
 
 @testset "Example 7.2" begin
     DynamicPolynomials.@polyvar x[1:3] y[1:3]
-    sp = RelaxationSparsityTermBlock(
+    sp = Relaxation.SparsityTermBlock(
       poly_problem(27 - ((x[1] - x[2])^2 + (y[1] - y[2])^2) * ((x[1] - x[3])^2 + (y[1] - y[3])^2) *
                         ((x[2] - x[3])^2 + (y[2] - y[3])^2),
                    zero=[x[1]^2 + y[1]^2 + x[2]^2 + y[2]^2 + x[3]^2 + y[3]^2 - 3]),
       3
     )
-    @test strRep(sp) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(sp) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6]
 PSD block sizes:
@@ -80,7 +80,7 @@ Free block sizes:
         :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 1e-6
     end
 
-    @test strRep(iterate!(sp)) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6]
 PSD block sizes:
@@ -93,7 +93,7 @@ end
 
 @testset "Something with matrices" begin
     DynamicPolynomials.@polyvar x[1:3]
-    sp = RelaxationSparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2],
+    sp = Relaxation.SparsityTermBlock(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2],
                                                   psd=[[x[1] x[2]; x[2] x[1]]]), 2)
     @test strRep(groupings(sp)) == "Groupings for the relaxation of a polynomial optimization problem
 Variable cliques
@@ -130,12 +130,12 @@ end
 @testset "Other example" begin
     n = 7
     DynamicPolynomials.@polyvar x[1:n]
-    sp = RelaxationSparsityTermBlock(poly_problem(
+    sp = Relaxation.SparsityTermBlock(poly_problem(
         sum((x[i] * (2 + 5x[i]^2) + 1 -
              sum((j != i) && (max(1, i - 5) ≤ j ≤ min(n, i + 1)) ? (1 + x[j]) * x[j] : 0
                  for j = 1:n))^2 for i = 1:n),
     ), 3)
-    @test strRep(sp) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(sp) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
@@ -148,7 +148,7 @@ PSD block sizes:
         :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 2e-7
     end
 
-    @test strRep(iterate!(sp)) == "RelaxationSparsityTerm of a polynomial optimization problem
+    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
@@ -157,7 +157,7 @@ end
 
 @testset "Complex-valued" begin
     DynamicPolynomials.@complex_polyvar z[1:2]
-    sp = RelaxationSparsityTermBlock(poly_problem(z[1] + conj(z[1]), nonneg=[1 - z[1] * conj(z[1]) - z[2] * conj(z[2])]), 2)
+    sp = Relaxation.SparsityTermBlock(poly_problem(z[1] + conj(z[1]), nonneg=[1 - z[1] * conj(z[1]) - z[2] * conj(z[2])]), 2)
     @test strRep(groupings(sp)) == "Groupings for the relaxation of a polynomial optimization problem
 Variable cliques
 ================

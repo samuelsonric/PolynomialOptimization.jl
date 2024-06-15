@@ -100,7 +100,7 @@ end
 Solver.fix_objective!(state::StateMoment, indices::AbstractVector{Cint}, values::AbstractVector{Float64}) =
     _check_ret(copt_env, COPT_ReplaceColObj(state.problem, length(indices), indices, values))
 
-function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractPORelaxation{<:POProblem{P}},
+function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation{<:Problem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=_ -> nothing, parameters=()) where {P}
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))

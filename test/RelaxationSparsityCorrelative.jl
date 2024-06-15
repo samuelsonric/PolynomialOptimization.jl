@@ -3,8 +3,8 @@ include("./shared.jl")
 @testset "Example 6.1 chained singular from correlative sparsity paper" begin
     for n in (16, 40, 100, 200, 400)
         DynamicPolynomials.@polyvar x[1:n]
-        sp = RelaxationSparsityCorrelative(poly_problem(sum((x[i] + 10x[i+1])^2 + 5(x[i+2] - x[i+3])^2 +
-                                                            (x[i+1] - 2x[i+2])^4 + 10(x[i] - 10x[i+3])^4 for i in 1:2:n-3)))
+        sp = Relaxation.SparsityCorrelative(poly_problem(sum((x[i] + 10x[i+1])^2 + 5(x[i+2] - x[i+3])^2 +
+                                                             (x[i+1] - 2x[i+2])^4 + 10(x[i] - 10x[i+3])^4 for i in 1:2:n-3)))
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
         if optimize
             for solver in solvers
@@ -18,7 +18,7 @@ end
 @testset "Example 6.1 Broyden banded function from correlative sparsity paper" begin
     for (n, cl) in ((6, Dict(6 => 1)), (7, Dict(7 => 1)), (8, Dict(7 => 2)), (9, Dict(7 => 3)), (10, Dict(7 => 4)))
         DynamicPolynomials.@polyvar x[1:n]
-        sp = RelaxationSparsityCorrelative(
+        sp = Relaxation.SparsityCorrelative(
             poly_problem(sum((x[i] * (2 + 5x[i]^2) + 1 -
                               sum(j == i ? 0 : (1 + x[j]) * x[j] for j in max(1, i - 5):min(n, i + 1)))^2 for i = 1:n))
         )
@@ -34,7 +34,7 @@ end
 @testset "Example 6.1 Broyden tridiagonal function from correlative sparsity paper" begin
     for n in 600:100:1000
         DynamicPolynomials.@polyvar x[1:n]
-        sp = RelaxationSparsityCorrelative(
+        sp = Relaxation.SparsityCorrelative(
             poly_problem(((3 - 2x[1]) * x[1] - 2x[2] + 1)^2 +
                 sum(((3 - 2x[i]) * x[i] - x[i-1] - 2x[i+1] + 1)^2 for i in 2:n-1) + ((3 - 2x[n]) * x[n] - x[n-1] + 1)^2)
         )
@@ -50,7 +50,7 @@ end
 @testset "Example 6.1 Chained Wood function from correlative sparsity paper" begin
     for n in 600:100:1000
         DynamicPolynomials.@polyvar x[1:n]
-        sp = RelaxationSparsityCorrelative(
+        sp = Relaxation.SparsityCorrelative(
             poly_problem(1 + sum(100(x[i+1] - x[i]^2)^2 + (1 - x[i])^2 + 90(x[i+3] - x[i+2]^2)^2 +
                 (1 - x[i+2])^2 + 10(x[i+1] + x[i+3] - 2)^2 + 0.1(x[i+1] - x[i+3])^2 for i in 1:2:n-3))
         )
@@ -66,7 +66,7 @@ end
 @testset "Example 6.1 Generalized Rosebrock function from correlative sparsity paper" begin
     for n in 600:100:1000
         DynamicPolynomials.@polyvar x[1:n]
-        sp = RelaxationSparsityCorrelative(
+        sp = Relaxation.SparsityCorrelative(
             poly_problem(1 + sum(100((x[i] - x[i-1]^2)^2 + (1 - x[i])^2) for i in 2:n))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
@@ -106,7 +106,7 @@ end
             DynamicPolynomials.@polyvar x[1:M-1, 1:nx] y[2:M, 1:ny]
             ninv = inv(ny + nx)
             Y(i, j) = isone(i) ? 0 : y[i-1, j]
-            sp = RelaxationSparsityCorrelative(
+            sp = Relaxation.SparsityCorrelative(
                 poly_problem(
                     sum(sum((Y(i, j) + .25)^4 for j in 1:ny) + sum((x[i, j] + .25)^4 for j in 1:nx)
                         for i in 1:M-1) +
@@ -141,7 +141,7 @@ end
     for (M, result) in ((600, 0.00645), (700, 0.00553), (800, 0.00484), (900, 0.0043), (1000, 0.0038))
         DynamicPolynomials.@polyvar x[1:M] y[2:M]
         Y(i) = isone(i) ? 1 : y[i-1]
-        sp = RelaxationSparsityCorrelative(
+        sp = Relaxation.SparsityCorrelative(
             poly_problem(
                 sum(Y(i)^2 + x[i]^2 for i in 1:M-1) / M,
                 zero=[Y(i) + (Y(i)^2 - x[i]) - Y(i+1) for i in 1:M-1]
@@ -158,8 +158,8 @@ end
 
 @testset "Example 3.1 from correlative term sparsity paper" begin
     DynamicPolynomials.@polyvar x[1:3]
-    sp = RelaxationSparsityCorrelative(poly_problem(1 + x[1]^2 + x[2]^2 + x[3]^2 + x[1] * x[2] + x[2] * x[3] + x[3]), 2)
-    @test strRep(sp) == "RelaxationSparsityCorrelative of a polynomial optimization problem
+    sp = Relaxation.SparsityCorrelative(poly_problem(1 + x[1]^2 + x[2]^2 + x[3]^2 + x[1] * x[2] + x[2] * x[3] + x[3]), 2)
+    @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
 Variable cliques:
   x[1], x[2]
   x[2], x[3]
@@ -174,11 +174,11 @@ end
 
 @testset "Example 3.4 from correlative term sparsity paper" begin
     DynamicPolynomials.@polyvar x[1:6]
-    sp = RelaxationSparsityCorrelative(
+    sp = Relaxation.SparsityCorrelative(
         poly_problem(1 + sum(x[i]^4 for i in 1:6) + x[1] * x[2] * x[3] + x[3] * x[4] * x[5] + x[3] * x[4] * x[6] +
                      x[3] * x[5] * x[6] + x[4] * x[5] * x[6], perturbation=1e-4), 2
     )
-    @test strRep(sp) == "RelaxationSparsityCorrelative of a polynomial optimization problem
+    @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
 Variable cliques:
   x[3], x[4], x[5], x[6]
   x[1], x[2], x[3]
@@ -193,10 +193,10 @@ end
 
 @testset "Example 4.1 from Zhen, Fantuzzi, Papachristodoulou review" begin
     DynamicPolynomials.@polyvar x[1:50]
-    sp = RelaxationSparsityCorrelative(
+    sp = Relaxation.SparsityCorrelative(
         poly_problem(sum((x[i-1] + x[i] + x[i+1])^4 for i in 2:49)), 2
     )
-    @test strRep(sp) == "RelaxationSparsityCorrelative of a polynomial optimization problem
+    @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
   x[2], x[3], x[4]
@@ -259,8 +259,8 @@ end
     prob = poly_problem(2 + x[1]^2 * x[4]^2 * (x[1]^2 * x[4]^2 - 1) - x[1]^2 + x[1]^4 +
                         sum((x[i]^2 * x[i-1]^2 * (x[i]^2 * x[i-1]^2 - 1) - x[i]^2 + x[i]^4 for i in 2:4)),
                         perturbation=1e-4)
-    sp = RelaxationSparsityCorrelative(prob, 4)
-    @test strRep(sp) == "RelaxationSparsityCorrelative of a polynomial optimization problem
+    sp = Relaxation.SparsityCorrelative(prob, 4)
+    @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[4]
   x[2], x[3], x[4]
@@ -272,8 +272,8 @@ PSD block sizes:
         end
     end
 
-    sp = RelaxationSparsityCorrelative(prob, 4, chordal_completion=false)
-    @test strRep(sp) == "RelaxationSparsityCorrelative of a polynomial optimization problem
+    sp = Relaxation.SparsityCorrelative(prob, 4, chordal_completion=false)
+    @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
 Variable cliques:
   x[1], x[2]
   x[1], x[4]
@@ -293,7 +293,7 @@ end
 @testset "Example 6.1 from Josz, Molzahn" begin
     DynamicPolynomials.@polyvar x[1:4]
     prob = poly_problem(x[1]*x[2] + x[1]*x[4], nonneg=[x[1]*x[2]+x[1]*x[3], x[1]*x[3]+x[1]*x[4]+x[1]*x[2]])
-    @test strRep(groupings(RelaxationSparsityCorrelative(prob, 2, low_order_nonneg=[2], chordal_completion=false))) ==
+    @test strRep(groupings(Relaxation.SparsityCorrelative(prob, 2, low_order_nonneg=[2], chordal_completion=false))) ==
         "Groupings for the relaxation of a polynomial optimization problem
 Variable cliques
 ================

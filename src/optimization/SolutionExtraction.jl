@@ -28,7 +28,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::PolynomialSolutions)
 end
 
 """
-    poly_solutions(result::POResult, ϵ=1e-6, δ=1e-3; verbose=false)
+    poly_solutions(result::Result, ϵ=1e-6, δ=1e-3; verbose=false)
 
 Performs a multivariate Hankel decomposition of the full moment matrix that was obtained via optimization of the problem, using
 the [best currently known algorithm](https://doi.org/10.1016/j.laa.2017.04.015). This method is not deterministic due to a
@@ -36,15 +36,15 @@ random sampling, hence negligible deviations are expected from run to run.
 The parameter `ϵ` controls the bound below which singular values are regarded as zero.
 The parameter `δ` controls up to which threshold supposedly identical numerical values for the same variables from different
 cliques must match.
-Note that for sparsity patterns different from no sparsity and [`RelaxationSparsityCorrelative`](@ref), this method not be able
-to deliver results, although it might give partial results for [`RelaxationSparsityCorrelativeTerm`](@ref) if some of the
+Note that for sparsity patterns different from no sparsity and [`SparsityCorrelative`](@ref), this method not be able
+to deliver results, although it might give partial results for [`SparsityCorrelativeTerm`](@ref) if some of the
 cliques did not have a term sparsity pattern. Consider using [`poly_solutions_heuristic`](@ref) in such a case.
 This function returns an iterator.
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
 """
-function poly_solutions(result::POResult{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000); verbose::Bool=false) where
-    {Nr,Nc,Rx<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}
+function poly_solutions(result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000); verbose::Bool=false) where
+    {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}
     @verbose_info("Preprocessing for decomposition")
     relaxation = result.relaxation
     moments = result.moments
@@ -233,7 +233,7 @@ function poly_solutions_scaled(moments::MomentVector{R,V}, a1, a2, variables, ϵ
 end
 
 """
-    poly_solution_badness(result::POResult, solution)
+    poly_solution_badness(result::Result, solution)
 
 Determines the badness of a solution by comparing the value of the objective with the value according to the optimization given
 in `result`, and also by checking the violation of the constraints.
@@ -242,7 +242,7 @@ with the actual solution.
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
 """
-function poly_solution_badness(result::POResult, solution::Vector)
+function poly_solution_badness(result::Result, solution::Vector)
     # check whether we can certify optimality
     any(isnan, solution) && return Inf
     problem = poly_problem(result)
@@ -262,10 +262,10 @@ function poly_solution_badness(result::POResult, solution::Vector)
     return violation
 end
 
-default_solution_method(result::POResult) = default_solution_method(result.relaxation)
+default_solution_method(result::Result) = default_solution_method(result.relaxation)
 
 """
-    poly_all_solutions(result::POResult, ϵ=1e-6, δ=1e-3; verbose=false, rel_threshold=100, abs_threshold=Inf, method::Symbol)
+    poly_all_solutions(result::Result, ϵ=1e-6, δ=1e-3; verbose=false, rel_threshold=100, abs_threshold=Inf, method::Symbol)
 
 Obtains a vector of all the solutions to a previously optimized problem; then iterates over all of them and grades and sorts
 them by their badness. Every solution of the returned vector is a tuple that first contains the optimal point and second the
@@ -279,7 +279,7 @@ The currently accepted methods are
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
 [`poly_solutions_heuristic`](@ref).
 """
-function poly_all_solutions(result::POResult, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
+function poly_all_solutions(result::Result, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
     rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=default_solution_method(result)) where {R<:Real}
     if method === :heuristic
         sol_itr = poly_solutions_heuristic(result; verbose)

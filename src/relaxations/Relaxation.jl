@@ -3,20 +3,20 @@ module Relaxation
 using ..SimplePolynomials, .SimplePolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector
 import StatsBase, Graphs
-using ..PolynomialOptimization: POProblem, @verbose_info
+using ..PolynomialOptimization: Problem, @verbose_info
 import ..PolynomialOptimization: poly_problem, iterate!
 
-export AbstractPORelaxation, basis, groupings, iterate!
+export AbstractRelaxation, basis, groupings, iterate!
 
 """
-    AbstractPORelaxation
+    AbstractRelaxation
 
 This is the general abstract type for any kind of relaxation of a polynomial optimization problem.
 Its concrete types can be used for analyzing and optimizing the problem.
 
-See also [`poly_problem`](@ref), [`POProblem`](@ref), [`poly_optimize`](@ref).
+See also [`poly_problem`](@ref), [`Problem`](@ref), [`poly_optimize`](@ref).
 """
-abstract type AbstractPORelaxation{Prob<:POProblem} end
+abstract type AbstractRelaxation{Prob<:Problem} end
 
 @doc raw"""
     RelaxationGroupings
@@ -124,14 +124,14 @@ Base.:(==)(g₁::G, g₂::G) where {G<:RelaxationGroupings} = g₁.obj == g₂.o
     g₁.nonnegs == g₂.nonnegs && g₁.psds == g₂.psds && g₁.var_cliques == g₂.var_cliques
 
 """
-    poly_problem(relaxation::AbstractPORelaxation)
+    poly_problem(relaxation::AbstractRelaxation)
 
 Returns the original problem associated with a relaxation.
 """
-poly_problem(relaxation::AbstractPORelaxation) = relaxation.problem
+poly_problem(relaxation::AbstractRelaxation) = relaxation.problem
 
 """
-    basis(relaxation::AbstractPORelaxation[, clique::Int]) -> SimpleMonomialVector
+    basis(relaxation::AbstractRelaxation[, clique::Int]) -> SimpleMonomialVector
 
 Constructs the basis that is associated with a given polynomial relaxation. If `clique` is given, only the monomials that are
 relevant for the given clique must be returned.
@@ -139,16 +139,16 @@ relevant for the given clique must be returned.
 function basis end
 
 """
-    groupings(relaxation::AbstractPORelaxation) -> RelaxationGroupings
+    groupings(relaxation::AbstractRelaxation) -> RelaxationGroupings
 
 Analyze the current state and return the bases and cliques as indicated by its relaxation in a [`RelaxationGroupings`](@ref)
 struct.
 """
-groupings(relaxation::AbstractPORelaxation) = relaxation.groupings
+groupings(relaxation::AbstractRelaxation) = relaxation.groupings
 groupings(::Nothing) = nothing
 
 """
-    iterate!(state::AbstractPORelaxation; objective=true, zero=true, nonneg=true, psd=true)
+    iterate!(state::AbstractRelaxation; objective=true, zero=true, nonneg=true, psd=true)
 
 Some sparse polynomial optimization relaxations allow to iterate their sparsity, which will lead to a more dense representation
 and might give better bounds at the expense of a more costly optimization. Return `nothing` if the iterations converged
@@ -159,31 +159,31 @@ associated to other elements will not change as well to keep consistency; but th
 The parameters `nonneg` and `psd` may either be `true` (to iterate all those constraints) or a set of integers that refer to
 the indices of the constraints, as they were originally given to [`poly_problem`](@ref).
 """
-iterate!(::AbstractPORelaxation; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
+iterate!(::AbstractRelaxation; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
     nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true, psd::Union{Bool,<:AbstractSet{<:Integer}}=true) = nothing
 
 """
-    RelaxationXXX(problem::POProblem[, degree]; kwargs...)
+    Relaxation.XXX(problem::Problem[, degree]; kwargs...)
 
-This is a convenience wrapper for `RelaxationXXX(RelaxationDense(problem, degree))` that works for any
-[`AbstractPORelaxation`](@ref) `RelaxationXXX`.
+This is a convenience wrapper for `Relaxation.XXX(Relaxation.Dense(problem, degree))` that works for any
+[`AbstractRelaxation`](@ref) `XXX`.
 `degree` is the degree of the Lasserre relaxation, which must be larger or equal to the halfdegree of all polynomials that are
 involved. If `degree` is omitted, the minimum required degree will be used.
 Specifying a degree larger than the minimal only makes sense if there are inequality or PSD constraints present, else it
 needlessly complicates calculations without any benefit.
 
-The keyword arguments will be passed on to the constructor of `RelaxationXXX`.
+The keyword arguments will be passed on to the constructor of `XXX`.
 """
-function (r::Type{<:AbstractPORelaxation})(problem::POProblem, args...; kwargs...)
-    r <: RelaxationDense && throw(MethodError(r, (problem, args...)))
+function (r::Type{<:AbstractRelaxation})(problem::Problem, args...; kwargs...)
+    r <: Dense && throw(MethodError(r, (problem, args...)))
     # to avoid infinite recursion if the arguments did not match
-    return r(RelaxationDense(problem, args...); kwargs...)
+    return r(Dense(problem, args...); kwargs...)
 end
 
-function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
+function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation)
     groups = groupings(x)
     # we don't want to print the fully parameterized type type
-    print(io, typeof(x).name.name, " of a polynomial optimization problem\nVariable cliques:")
+    print(io, "Relaxation.", typeof(x).name.name, " of a polynomial optimization problem\nVariable cliques:")
     for va in groups.var_cliques
         print(io, "\n  ", join(va, ", "))
     end
@@ -203,23 +203,23 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation)
     end
 end
 
-Base.show(io::IO, m::MIME"text/plain", x::AbstractPORelaxation) = _show(io, m, x)
+Base.show(io::IO, m::MIME"text/plain", x::AbstractRelaxation) = _show(io, m, x)
 
 # make working with the relaxation as simple as working with the problem itself
-Base.getproperty(relaxation::AbstractPORelaxation, f::Symbol) =
+Base.getproperty(relaxation::AbstractRelaxation, f::Symbol) =
     hasfield(typeof(relaxation), f) ? getfield(relaxation, f) : getproperty(getfield(relaxation, :problem), f)
-Base.propertynames(relaxation::AbstractPORelaxation{P}) where {P<:POProblem} =
+Base.propertynames(relaxation::AbstractRelaxation{P}) where {P<:Problem} =
     (fieldnames(typeof(relaxation))..., fieldnames(P)...)
-MultivariatePolynomials.variables(relaxation::AbstractPORelaxation) = variables(relaxation.problem)
-MultivariatePolynomials.nvariables(relaxation::AbstractPORelaxation) = nvariables(relaxation.problem)
+MultivariatePolynomials.variables(relaxation::AbstractRelaxation) = variables(relaxation.problem)
+MultivariatePolynomials.nvariables(relaxation::AbstractRelaxation) = nvariables(relaxation.problem)
 """
-    degree(problem::AbstractPORelaxation)
+    degree(problem::AbstractRelaxation)
 
 Returns the degree associated with the relaxation of a polynomial optimization problem.
 
 See also [`poly_problem`](@ref).
 """
-function MultivariatePolynomials.degree(relaxation::AbstractPORelaxation)
+function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
     gr = groupings(relaxation)
     subdegree = v -> maximum(maxdegree_complex, v)
     return max(
@@ -229,7 +229,7 @@ function MultivariatePolynomials.degree(relaxation::AbstractPORelaxation)
         maximum(subdegree, gr.psds, init=0)
     )
 end
-Base.isreal(relaxation::AbstractPORelaxation) = isreal(relaxation.problem)
+Base.isreal(relaxation::AbstractRelaxation) = isreal(relaxation.problem)
 
 include("./degree/Degree.jl")
 include("./sparse/Sparse.jl")

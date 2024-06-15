@@ -1,18 +1,16 @@
-export RelaxationCustom
-
-struct RelaxationCustom{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
+struct Custom{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
     problem::P
     degree::Int
     basis::MV
     groupings::G
 
     @doc """
-        RelaxationCustom(problem::POProblem, basis)
+        Custom(problem::Problem, basis)
 
     Constructs a relaxation out of a polynomial optimization problem for the case in which a suitable basis is already known.
     """
-    function RelaxationCustom(problem::P,
-        basis::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractVector{<:AbstractMonomialLike}}) where {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:POProblem{Poly}}
+    function Custom(problem::P,
+        basis::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractVector{<:AbstractMonomialLike}}) where {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
         if !(basis isa SimpleMonomialVector)
             basis = SimpleMonomialVector{I}(basis; vars=problem.original_variables)
             if !iszero(Nc)
@@ -27,4 +25,4 @@ struct RelaxationCustom{P<:POProblem,MV<:SimpleMonomialVector,G<:RelaxationGroup
     end
 end
 
-default_solution_method(::RelaxationCustom) = :heuristic
+default_solution_method(::Custom) = :heuristic

@@ -1,11 +1,11 @@
 """
-    AbstractRelaxationDegree{Prob} <: AbstractPORelaxation{Prob}
+    AbstractRelaxationDegree{Prob} <: AbstractRelaxation{Prob}
 
 An `AbstractRelaxationDegree` is a relaxation of a polynomial optimization problem that is built on a global maximal degree
 cutoff. The groupings for the individual elements will come from a degree truncation of the same shared basis for all
 constituents of the problem (intersected with a parent grouping).
 """
-abstract type AbstractRelaxationDegree{Prob<:POProblem} <: AbstractPORelaxation{Prob} end
+abstract type AbstractRelaxationDegree{Prob<:Problem} <: AbstractRelaxation{Prob} end
 
 basis(relaxation::AbstractRelaxationDegree) = relaxation.basis
 
@@ -15,7 +15,7 @@ function basis(relaxation::AbstractRelaxationDegree, i::Int)
 end
 # sparse: filter(Base.Fix2(effective_variables_in, clique), a1)
 
-function groupings(problem::POProblem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
+function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
     {Nr,Nc,M<:SimpleMonomial{Nr,Nc},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
     return intersect(RelaxationGroupings(
         [basis],

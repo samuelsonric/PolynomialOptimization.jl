@@ -11,7 +11,7 @@ moment_matrix(moments::MomentVector{<:Any,V,Nr,Nc}, ::Val{:throw}, rows, cols,
       for i in 1:length(rows), j in 1:length(cols)]
 
 """
-    moment_matrix(problem::POResult; max_deg=Inf, prefix=1)
+    moment_matrix(problem::Result; max_deg=Inf, prefix=1)
 
 After a problem has been optimized, this function assembles the associated moment matrix (possibly by imposing a degree bound
 `max_deg`, and possibly multiplying each monomial by the monomial or variable `prefix`, which does not add to `max_deg`).
@@ -19,8 +19,8 @@ Note that `prefix` has to be a valid `SimpleMonomial` or `SimpleVariable` of app
 
 See also [`poly_optimize`](@ref), [`poly_optimize`](@ref).
 """
-function moment_matrix(result::POResult{R}; max_deg=Inf,
-    prefix::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,R<:AbstractPORelaxation{<:POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}}}
+function moment_matrix(result::Result{R}; max_deg=Inf,
+    prefix::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc},Nothing}=nothing) where {Nr,Nc,R<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}}
     relaxation = result.relaxation
     b = basis(relaxation)
     if max_deg < Inf

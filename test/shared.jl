@@ -1,5 +1,5 @@
 using Test
-using PolynomialOptimization, PolynomialOptimization.SimplePolynomials
+using PolynomialOptimization, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.Relaxation
 # ^ we don't require SimplePolynomials in the namespace, but for printing we want the guarantee that it is there
 using MultivariatePolynomials
 import DynamicPolynomials

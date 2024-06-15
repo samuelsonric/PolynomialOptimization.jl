@@ -95,7 +95,7 @@ end
 Solver.fix_objective!(state::StateMoment, indices::AbstractVector{Int32}, values::AbstractVector{Float64}) =
     Mosek.@MSK_putclist(state.task.task, length(indices), indices, values)
 
-function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractPORelaxation,
+function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation,
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=_ -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     try

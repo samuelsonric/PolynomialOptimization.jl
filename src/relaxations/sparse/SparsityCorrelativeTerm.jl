@@ -13,13 +13,13 @@ Valid values are `tm_none` ([`SparsityNone`](@ref)), `tm_block` ([`SparsityTermB
 " TermMode
 
 struct SparsityCorrelativeTerm <: AbstractSPOProblem
-    problem::POProblem
+    problem::Problem
     cliques::Vector{AbstractSPOProblem}
     constraint_locations::Vector{Pair{Int,Int}}
     index_maps::Vector{Base.ImmutableDict{Int,Int}}
 
     @doc """
-        SparsityCorrelativeTerm(problem::POProblem; clique_chordal_completion=true, term_mode=tm_block)
+        SparsityCorrelativeTerm(problem::Problem; clique_chordal_completion=true, term_mode=tm_block)
 
     Analyze both the [correlative as well as the term sparsity](http://arxiv.org/abs/2005.02828v2) of the problem.
     This is the most versatile kind of sparsity analysis, combining the effects of correlative sparsity with term analysis per
@@ -149,7 +149,7 @@ struct SparsityCorrelativeTerm <: AbstractSPOProblem
     end
 end
 
-function SparsityCorrelativeTerm(problem::POProblem; clique_chordal_completion::Bool=true,
+function SparsityCorrelativeTerm(problem::Problem; clique_chordal_completion::Bool=true,
     term_mode::TermMode=tm_block, verbose::Bool=false)
     term_mode != tm_none || error("Term mode cannot be none; use SparsityCorrelative instead")
     return SparsityCorrelativeTerm(SparsityCorrelative(problem, chordal_completion=clique_chordal_completion);

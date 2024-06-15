@@ -1,16 +1,18 @@
 export poly_problem, poly_optimize
 
 """
-    POProblem
+    Problem
 
 The basic structure that describes a polynomial optimization problem. In order to perform optimizations on this problem,
-construct [`AbstractPORelaxation`](@ref)s from it.
-Note that the variables in a `POProblem` are rewritten to internal data types, i.e., they will probably not display in the same
+construct [`AbstractRelaxation`](@ref)s from it.
+Note that the variables in a `Problem` are rewritten to internal data types, i.e., they will probably not display in the same
 way as the original variables (they are simply numbered consecutively).
 
-See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`AbstractPORelaxation`](@ref).
+This type is not exported.
+
+See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`AbstractRelaxation`](@ref).
 """
-struct POProblem{P<:SimplePolynomial,OV}
+struct Problem{P<:SimplePolynomial,OV}
     objective::P
     prefactor::P
     mindegree::Int
@@ -21,39 +23,39 @@ struct POProblem{P<:SimplePolynomial,OV}
 end
 
 """
-    variables(problem::Union{POProblem,<:AbstractPORelaxation})
+    variables(problem::Union{Problem,<:AbstractRelaxation})
 
 Returns the original variables (not their internal rewrites) associated to a given polynomial optimization problem. This
 defines the order in which solutions are returned. In the complex case, they do not contain conjugates.
 
 See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
 """
-MultivariatePolynomials.variables(problem::POProblem) = problem.original_variables
+MultivariatePolynomials.variables(problem::Problem) = problem.original_variables
 """
-    nvariables(problem::Union{POProblem,<:AbstractPORelaxation})
+    nvariables(problem::Union{Problem,<:AbstractRelaxation})
 
 Returns the number of variables associated to a given polynomial optimization problem. This defines the order in which
 solutions are returned. In the complex case, conjugates are not counted.
 
 See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
 """
-MultivariatePolynomials.nvariables(::POProblem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
+MultivariatePolynomials.nvariables(::Problem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
 
-const RealPOProblem = POProblem{<:SimplePolynomial{<:Any,<:Any,0}}
-const ComplexPOProblem = POProblem{<:SimplePolynomial{<:Any,0}}
+const RealProblem = Problem{<:SimplePolynomial{<:Any,<:Any,0}}
+const ComplexProblem = Problem{<:SimplePolynomial{<:Any,0}}
 
 """
-    isreal(problem::Union{POProblem,<:AbstractPORelaxation})
+    isreal(problem::Union{Problem,<:AbstractRelaxation})
 
 Returns whether a given polynomial optimization problem contains only real-valued variables or also complex ones.
 """
-Base.isreal(::RealPOProblem) = true
-Base.isreal(::POProblem) = false
+Base.isreal(::RealProblem) = true
+Base.isreal(::Problem) = false
 
 
-function Base.show(io::IO, m::MIME"text/plain", p::POProblem)
+function Base.show(io::IO, m::MIME"text/plain", p::Problem)
     nv = nvariables(p)
-    type = isreal(p) ? "Real" : (p isa ComplexPOProblem ? "Complex" : "Real- and complex")
+    type = isreal(p) ? "Real" : (p isa ComplexProblem ? "Complex" : "Real- and complex")
     print(io, type, "-valued polynomial optimization problem in ", nv,
         " variable", isone(nv) ? "" : "s", "\nObjective: ")
     show(io, m, p.objective)
@@ -97,8 +99,7 @@ end
         factor_coercive=1, perturbation_coefficient=0., perturbation_form=0,
         noncompact=(0., 0), tighter=false, verbose=false, monomial_index_type=UInt)
 
-Analyze a polynomial optimization problem and return a [`POProblem`](@ref) that can be used for sparse analysis and
-optimization.
+Analyze a polynomial optimization problem and return a [`Problem`](@ref) that can be used for sparse analysis and optimization.
 
 # Arguments
 ## Problem formulation
@@ -172,7 +173,7 @@ lead to missing this minimum.
 - `verbose::Bool`: if set to true, information about the current state of the method is printed; this may be useful for large
   and complicated problems whose construction can take some time.
 
-See also [`POProblem`](@ref), [`poly_optimize`](@ref), [`AbstractPORelaxation`](@ref).
+See also [`Problem`](@ref), [`poly_optimize`](@ref), [`Relaxation.AbstractRelaxation`](@ref).
 """
 function poly_problem(objective::P;
     zero::AbstractVector{<:AbstractPolynomialLike}=P[],
@@ -321,8 +322,7 @@ function poly_problem(objective::P;
     end
     #endregion
 
-    return POProblem{typeof(sobj),eltype(vars)}(sobj, sprefactor, mindeg, finish!(szero), finish!(snonneg), finish!(spsd),
-        vars)
+    return Problem{typeof(sobj),eltype(vars)}(sobj, sprefactor, mindeg, finish!(szero), finish!(snonneg), finish!(spsd), vars)
 end
 
-poly_problem(problem::POProblem) = problem
+poly_problem(problem::Problem) = problem

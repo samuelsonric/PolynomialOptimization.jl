@@ -249,8 +249,8 @@ function Solver.fix_constraints!(state::StateSOS, indices::Vector{Int32}, values
     return
 end
 
-function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractPORelaxation{<:POProblem{P}},
-    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=()) where {P}
+function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation,
+    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters=())
     task = Mosek.Task(msk_global_env::Env)
     try
         setup_time = @elapsed begin

@@ -9,11 +9,11 @@ using .Solver: default_solver_method
 import .Solver: poly_optimize
 
 """
-    poly_optimize(method, relaxation::AbstractPORelaxation; verbose=false,
+    poly_optimize(method, relaxation::AbstractRelaxation; verbose=false,
         clique_merging=false, solutions::Bool=false, certificate::Bool=false, kwargs...)
 
 Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
-[`AbstractPORelaxation`](@ref). Returns a [`POResult`](@ref) object.
+[`AbstractRelaxation`](@ref). Returns a [`Result`](@ref) object.
 
 Clique merging is a way to improve the performance of the solver in case a sparse analysis led to cliques with a lot of
 overlap; however, the process itself may be time-consuming and is therefore disabled by default.
@@ -26,11 +26,11 @@ Any additional keyword argument is passed on to the solver.
 
 For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize).
 """
-function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
+function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
-        groups = Relaxation.groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the
-                                                  # relaxation was constructed.
+        groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation
+                                       # was constructed.
         if clique_merging
             clique_merging && @verbose_info("Merging cliques...")
             t = @elapsed begin
@@ -59,21 +59,21 @@ function poly_optimize(v::Val{S}, relaxation::AbstractPORelaxation; verbose::Boo
         end
         result = poly_optimize(v, relaxation, groups; verbose, kwargs...)
     end
-    return POResult(relaxation, S, otime, result...)
+    return Result(relaxation, S, otime, result...)
 end
 
 """
-    poly_optimize([method, ]problem::POProblem[, degree::Int]; kwargs...)
+    poly_optimize([method, ]problem::Problem[, degree::Int]; kwargs...)
 
-Construct a [`RelaxationDense`](@ref) by default.
+Construct a [`Relaxation.Dense`](@ref) by default.
 """
-poly_optimize(v::Val, problem::POProblem, degree=problem.mindegree; kwargs...) =
-    poly_optimize(v, Relaxation.RelaxationDense(problem, degree); kwargs...)
+poly_optimize(v::Val, problem::Problem, degree=problem.mindegree; kwargs...) =
+    poly_optimize(v, Relaxation.Dense(problem, degree); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 
 """
-    poly_optimize(relaxation::AbstractPORelaxation; kwargs...)
+    poly_optimize(relaxation::AbstractRelaxation; kwargs...)
 
 Uses the default solver. Note that this depends on the loaded solver packages, and possibly also their loading order if no
 preferred solver has been loaded.
