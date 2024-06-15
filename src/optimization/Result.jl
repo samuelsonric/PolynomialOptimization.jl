@@ -47,7 +47,7 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
     keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
     idx = monomial_index(keys...)
     idx > length(d.values) && return not_found()
-    idx_c = monomial_index(conj.(keys)...)
+    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
     if idx_c == idx
         val = @inbounds d.values[idx]
         return isnan(val) ? not_found() : Complex{R}(val)
@@ -64,7 +64,7 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector}, no
     idx = monomial_index(keys...)
     ridx = searchsorted(rv, idx)
     isempty(ridx) && return not_found()
-    idx_c = monomial_index(conj.(keys)...)
+    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
     if idx_c == idx
         val = @inbounds nz[first(ridx)]
         return isnan(val) ? not_found() : Complex{R}(val)

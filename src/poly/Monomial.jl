@@ -136,8 +136,13 @@ SimpleConjMonomial(m::SimpleConjMonomial) = parent(m)
 
 Converts a [`SimpleConjMonomial`](@ref) into a [`SimpleMonomial`](@ref). This performs the calculation of the conjugate index.
 """
-SimpleMonomial(c::SimpleConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc} =
-    SimpleMonomial{Nr,Nc}(unsafe, c.e, exponents_to_index(c.e, exponents(c), degree(c)), degree(c))
+function SimpleMonomial(c::SimpleConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc}
+    new_index = exponents_to_index(c.e, exponents(c), degree(c))
+    if c.e isa ExponentsMultideg && iszero(new_index) # this can only happen in the multideg case
+        throw(ArgumentError("The exponent set does not contain the conjugate monomial"))
+    end
+    SimpleMonomial{Nr,Nc}(unsafe, c.e, new_index, degree(c))
+end
 Base.convert(::Type{<:Union{SimpleMonomial,SimpleMonomial{Nr,Nc},SimpleMonomial{Nr,Nc,I},SimpleMonomial{Nr,Nc,I,E}}},
     c::SimpleConjMonomial{Nr,Nc,I,E}) where {Nr,Nc,I<:Integer,E<:AbstractExponents} = SimpleMonomial(c)
 

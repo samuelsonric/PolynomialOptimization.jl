@@ -19,6 +19,11 @@ end
 
 function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{<:Any,I}, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer}
     _sortedallunique(sort!(indices)) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    if !isempty(indices)
+        @boundscheck @inbounds first(indices) ≥ firstindex(e) || throw(BoundsError(e, first(indices)))
+        e isa AbstractExponentsDegreeBounded &&
+            (@boundscheck @inbounds last(indices) ≤ lastindex(e) || throw(BoundsError(e, last(indices))))
+    end
     return SimpleMonomialVector{Nr,Nc}(unsafe, e, indices)
 end
 
@@ -54,6 +59,11 @@ function SimpleMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    if !isempty(exps)
+        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        e isa AbstractExponentsDegreeBounded &&
+            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+    end
     return SimpleMonomialVector{Nr,0}(unsafe, e, exps)
 end
 
@@ -72,6 +82,11 @@ function SimpleMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    if !isempty(exps)
+        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        e isa AbstractExponentsDegreeBounded &&
+            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+    end
     return SimpleMonomialVector{0,Nc}(unsafe, e, exps)
 end
 
@@ -93,6 +108,11 @@ function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
+    if !isempty(exps)
+        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        e isa AbstractExponentsDegreeBounded &&
+            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+    end
     return SimpleMonomialVector{Nr,Nc}(unsafe, e, exps)
 end
 
