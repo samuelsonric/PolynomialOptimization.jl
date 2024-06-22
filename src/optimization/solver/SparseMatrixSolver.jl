@@ -89,22 +89,22 @@ Appends the data given in `psd` into successive rows in `coo`. Returns the index
     return v - one(I)
 end
 
-struct COO_to_CSC_callback{CC<:Tuple,CP<:Tuple,CV<:Tuple,DV<:Tuple,I<:Tuple}
+struct COO_to_CSC_callback{Offset,CC<:Tuple,CP<:Tuple,CV<:Tuple,DV<:Tuple,I<:Tuple}
     coo_columns::CC
     csc_colptrs::CP
     coo_vecs::CV
     dense_vecs::DV
     ivecs::I
 
-    function COO_to_CSC_callback(coo_columns::Tuple, csc_colptrs::Tuple, coo_vecs::Tuple, dense_vecs::Tuple)
+    function COO_to_CSC_callback{Offset}(coo_columns::Tuple, csc_colptrs::Tuple, coo_vecs::Tuple, dense_vecs::Tuple) where {Offset}
         ivecs = ntuple(_ -> Ref(1), length(coo_vecs))
-        new{typeof(coo_columns),typeof(csc_colptrs),typeof(coo_vecs),typeof(dense_vecs),typeof(ivecs)}(
+        new{Offset,typeof(coo_columns),typeof(csc_colptrs),typeof(coo_vecs),typeof(dense_vecs),typeof(ivecs)}(
             coo_columns, csc_colptrs, coo_vecs, dense_vecs, ivecs
         )
     end
 end
 
-function (ctc::COO_to_CSC_callback{<:Tuple{Any}})(index, i)
+function (ctc::COO_to_CSC_callback{Offset,<:Tuple{Any}})(index, i) where {Offset}
     @inbounds begin
         colidx = ctc.coo_columns[1][i]
         for (ivec, coo_vec, dense_vec) in zip(ctc.ivecs, ctc.coo_vecs, ctc.dense_vecs)
@@ -113,12 +113,12 @@ function (ctc::COO_to_CSC_callback{<:Tuple{Any}})(index, i)
                 ivec[] += 1
             end
         end
-        ctc.csc_colptrs[1][index+1] = i
+        ctc.csc_colptrs[1][index+1] = i + Offset
     end
     return
 end
 
-function (ctc::COO_to_CSC_callback{<:Tuple{Any,Any}})(index, i₁, i₂)
+function (ctc::COO_to_CSC_callback{Offset,<:Tuple{Any,Any}})(index, i₁, i₂) where {Offset}
     @inbounds begin
         colidx = ismissing(i₁) ? ctc.coo_columns[2][i₂] : ctc.coo_columns[1][i₁]
         for (ivec, coo_vec, dense_vec) in zip(ctc.ivecs, ctc.coo_vecs, ctc.dense_vecs)
@@ -127,8 +127,8 @@ function (ctc::COO_to_CSC_callback{<:Tuple{Any,Any}})(index, i₁, i₂)
                 ivec[] += 1
             end
         end
-        ctc.csc_colptrs[1][index+1] = ismissing(i₁) ? ctc.csc_colptrs[1][index] : i₁ +1
-        ctc.csc_colptrs[2][index+1] = ismissing(i₂) ? ctc.csc_colptrs[2][index] : i₂ +1
+        ctc.csc_colptrs[1][index+1] = ismissing(i₁) ? ctc.csc_colptrs[1][index] : i₁ + Offset
+        ctc.csc_colptrs[2][index+1] = ismissing(i₂) ? ctc.csc_colptrs[2][index] : i₂ + Offset
     end
     return
 end
@@ -173,7 +173,7 @@ The following values are returned:
     append!(result.args, (:($(Symbol(:vec, i)) = zeros(V, moncount)) for i in vecs))
     push!(result.args, :(count_uniques(
         $((:(coo[$i].moninds) for i in mats)...),
-        COO_to_CSC_callback(
+        COO_to_CSC_callback{Offset}(
             ($((:(coo[$i].moninds) for i in mats)...),),
             ($((Symbol(:colptr, i) for i in mats)...),),
             ($((:(coo[$i]) for i in vecs)...),),
