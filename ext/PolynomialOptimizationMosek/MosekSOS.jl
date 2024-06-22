@@ -1,46 +1,38 @@
-mutable struct StateSOS{K<:Integer}
+mutable struct StateSOS{K<:Integer} <: APISolver{K}
     const task::Mosek.Task
     num_vars::Int32
     num_bar_vars::Int32
     num_cons::Int32
-    const mon_to_mskcon::Dict{FastKey{K},Int32}
+    const mon_to_solver::Dict{FastKey{K},Int32}
+
+    StateSOS{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
+        task, zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}()
+    )
 end
 
-function append_cons!(state::StateSOS, key)
-    if state.num_cons == length(state.mon_to_mskcon)
+function Base.append!(state::StateSOS, key)
+    if state.num_cons == length(state.mon_to_solver)
         newcon = overallocation(state.num_cons + one(state.num_cons))
         appendcons(state.task, newcon - state.num_cons)
         state.num_cons = newcon
     end
-    return state.mon_to_mskcon[FastKey(key)] = Int32(length(state.mon_to_mskcon))
+    return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
 end
 
-@inline function Solver.mindex(state::StateSOS, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
-    idx = monomial_index(monomials...)
-    dictidx = Base.ht_keyindex(state.mon_to_mskcon, FastKey(idx))
-    @inbounds return (dictidx < 0 ?
-        # split this into its own function so that we can inline the good part and call the more complicated appending
-        append_cons!(state, idx) :
-        state.mon_to_mskcon.vals[dictidx]
-    )::Int32
-end
-
-Solver.supports_quadratic(::StateSOS) = true
+Solver.supports_quadratic(::StateSOS) = SOLVER_QUADRATIC_RSOC
 
 Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(:L, zero(Int32))
 
-function Solver.add_var_nonnegative!(state::StateSOS, indices::AbstractVector{Int32}, values::AbstractVector{Float64})
-    @assert(length(indices) == length(values))
+function Solver.add_var_nonnegative!(state::StateSOS, indvals::AbstractIndvals{Int32,Float64})
     task = state.task.task
     Mosek.@MSK_appendvars(task, 1)
     Mosek.@MSK_putvarbound(task, state.num_vars, MSK_BK_LO.value, 0., Inf)
-    Mosek.@MSK_putacol(task, state.num_vars, length(indices), indices, values)
+    Mosek.@MSK_putacol(task, state.num_vars, length(indvals), indvals.indices, indvals.values)
     state.num_vars += 1
     return
 end
 
-function Solver.add_var_quadratic!(state::StateSOS, indvals::Tuple{AbstractVector{Int32},AbstractVector{Float64}}...)
-    @assert(all(x -> length(x[1]) == length(x[2]), indvals))
+function Solver.add_var_quadratic!(state::StateSOS, indvals::AbstractIndvals{Int32,Float64}...)
     conedim = length(indvals)
     rhsdim = conedim -2
     appendvars(state.task, conedim)
@@ -52,8 +44,8 @@ function Solver.add_var_quadratic!(state::StateSOS, indvals::Tuple{AbstractVecto
                                 i -> Int32(nv + i)
                              end, Val(conedim)))
     Mosek.@MSK_appendcone(state.task.task, MSK_CT_RQUAD.value, 0., conedim, varidx)
-    for (indices, values) in indvals
-        Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indices), indices, values)
+    for indval in indvals
+        Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indval), indval.indices, indval.values)
         state.num_vars += 1
     end
     return
@@ -77,20 +69,18 @@ function Solver.add_var_free_prepare!(state::StateSOS, num::Int)
     return
 end
 
-function Solver.add_var_free!(state::StateSOS, ::Nothing, indices::AbstractVector{Int32}, values::AbstractVector{Float64},
-    obj::Float64)
-    @assert(length(indices) == length(values))
-    Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indices), indices, values)
+function Solver.add_var_free!(state::StateSOS, ::Nothing, indvals::AbstractIndvals{Int32}, obj::Float64)
+    Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indvals), indvals.indices, indvals.values)
     iszero(obj) || Mosek.@MSK_putcj(state.task.task, state.num_vars, obj)
     state.num_vars += 1
     return
 end
 
-function Solver.fix_constraints!(state::StateSOS, indices::Vector{Int32}, values::Vector{Float64})
-    len = length(indices)
-    @assert(len == length(values))
-    Mosek.@MSK_putconboundsliceconst(state.task.task, 0, length(state.mon_to_mskcon), MSK_BK_FX, 0., 0.)
-    Mosek.@MSK_putconboundlist(state.task.task, len, indices, fill(MSK_BK_FX.value, len), values, values)
+function Solver.fix_constraints!(state::StateSOS, indvals::AbstractIndvals{Int32,Float64})
+    len = length(indvals)
+    Mosek.@MSK_putconboundsliceconst(state.task.task, 0, length(state.mon_to_solver), MSK_BK_FX, 0., 0.)
+    Mosek.@MSK_putconboundlist(state.task.task, len, indvals.indices, fill(MSK_BK_FX.value, len), indvals.values,
+        indvals.values)
     return
 end
 
@@ -107,7 +97,7 @@ function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation,
             end
             putobjsense(task, MSK_OBJECTIVE_SENSE_MAXIMIZE)
 
-            state = StateSOS(task, zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}())
+            state = StateSOS{K}(task)
             sos_setup!(state, relaxation, groupings)
             customize(state)
         end
@@ -116,29 +106,9 @@ function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation,
         optimize(task)
         @verbose_info("Optimization complete, retrieving moments")
 
-        max_mons = monomial_count(nvariables(relaxation.objective), 2degree(relaxation))
-        y = Vector{Float64}(undef, length(state.mon_to_mskcon))
+        y = Vector{Float64}(undef, length(state.mon_to_solver))
         Mosek.@MSK_getyslice(task.task, MSK_SOL_ITR.value, 0, length(y), y)
-        # In any case, our variables will not be in the proper order. First figure this out.
-        # Dict does not preserve the insertion order. While we could use OrderedDict instead, we need to do lots of insertions
-        # and lookups and only once access the elements in the insertion order; so it is probably better to do the sorting
-        # once.
-        mon_pos = convert.(K, keys(state.mon_to_mskcon))
-        var_vals = collect(values(state.mon_to_mskcon))
-        sort_along!(var_vals, mon_pos)
-        # Now mon_pos is in insertion order, i.e., there is a 1:1 correspondence between x and mon_pos.
-        # However, we want the actual monomial order.
-        sort_along!(mon_pos, y)
-        # Finally, y is ordered!
-        if length(y) == max_mons # dense case
-            solution = y
-        elseif 3length(mon_pos) < max_mons
-            solution = SparseVector(max_mons, mon_pos, y)
-        else
-            solution = fill(NaN, max_mons)
-            copy!(@view(solution[mon_pos]), y)
-        end
-        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, solution)
+        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, y, state)
     finally
         deletetask(task)
     end

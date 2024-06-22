@@ -27,13 +27,11 @@ end
 
 Base.unsafe_convert(::Type{Ptr{copt_prob}}, problem::COPTProb) = problem.ptr
 
-# include("./COPTSOS.jl")
 include("./COPTMoment.jl")
 
 function __init__()
     global copt_env = Env()
-    push!(solver_methods, :COPTMoment)
-    # push!(solver_methods, :COPTSOS)
+    pushfirst!(solver_methods, :COPTMoment)
 end
 
 end

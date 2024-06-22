@@ -1,12 +1,16 @@
-mutable struct StateMoment{K<:Integer}
+mutable struct StateMoment{K<:Integer} <: APISolver{K}
     problem::COPTProb
     num_solver_vars::Cint # total number of variables available in the solver
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)
     num_symmat::Cint
-    const mon_to_coptvar::Dict{FastKey{K},Cint}
+    const mon_to_solver::Dict{FastKey{K},Cint}
+
+    StateMoment{K}(task::COPTProb) where {K<:Integer} = new{K}(
+        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}()
+    )
 end
 
-function append_vars!(state::StateMoment, key)
+function Base.append!(state::StateMoment, key)
     if state.num_used_vars == state.num_solver_vars
         newnum = overallocation(state.num_solver_vars + one(Cint))
         Δ = newnum - state.num_solver_vars
@@ -14,35 +18,24 @@ function append_vars!(state::StateMoment, key)
             fill(-COPT_INFINITY, Δ), C_NULL, C_NULL))
         state.num_solver_vars += Δ
     end
-    return state.mon_to_coptvar[FastKey(key)] = let uv=state.num_used_vars
+    return state.mon_to_solver[FastKey(key)] = let uv=state.num_used_vars
         state.num_used_vars += one(Cint)
         uv
     end
 end
 
-@inline function Solver.mindex(state::StateMoment{K}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc}
-    idx = monomial_index(monomials...)
-    dictidx = Base.ht_keyindex(state.mon_to_coptvar, FastKey(idx))
-    @inbounds return (dictidx < 0 ?
-        # split this into its own function so that we can inline the good part and call the more complicated appending
-        append_vars!(state, idx) :
-        state.mon_to_coptvar.vals[dictidx]
-    )::Cint
-end
+Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
 
-Solver.supports_quadratic(::StateMoment) = true
-
-Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, Cint(0))
+Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
 # While COPT expect the lower triangle, we calculate things with linear indexing, and the conversion is easier of upper tri.
 
-function Solver.add_constr_nonnegative!(state::StateMoment, indices::AbstractVector{Cint}, values::AbstractVector{Float64})
-    @assert(length(indices) == length(values))
-    _check_ret(copt_env, COPT_AddRow(state.problem, length(indices), indices, values, 0, 0., COPT_INFINITY, C_NULL))
+function Solver.add_constr_nonnegative!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64})
+    _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, 0., COPT_INFINITY,
+        C_NULL))
     return
 end
 
-@generated function Solver.add_constr_quadratic!(state::StateMoment,
-    indvals::Tuple{AbstractVector{Cint},AbstractVector{Float64}}...)
+@generated function Solver.add_constr_quadratic!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64}...)
     N = length(indvals)
     quote
         # COPT does not support an arbitrary-content quadratic cone. Either we put the cone into the form <x, Qx> ≤ b or we
@@ -57,10 +50,10 @@ end
                 lb, C_NULL, C_NULL))
             state.num_solver_vars += Δ
         end
-        rowMatCnt = StackVec($((:(Cint(length(indvals[$i][1]) +1)) for i in 1:N)...),)
+        rowMatCnt = StackVec($((:(Cint(length(indvals[$i].indices) +1)) for i in 1:N)...),)
         rowMatBeg = StackVec(zero(Cint), $((Expr(:call, :+, (:(rowMatCnt[$j]) for j in 1:i)...) for i in 1:N-1)...))
-        rowMatIdx = vcat($((x for i in 1:N for x in (:(indvals[$i][1]), :(state.num_used_vars + $(Cint(i -1)))))...),)
-        rowMatElem = vcat($((x for i in 1:N for x in (:(indvals[$i][2]), :(-1.0)))...),)
+        rowMatIdx = vcat($((x for i in 1:N for x in (:(indvals[$i].indices), :(state.num_used_vars + $(Cint(i -1)))))...),)
+        rowMatElem = vcat($((x for i in 1:N for x in (:(indvals[$i].values), :(-1.0)))...),)
         _check_ret(copt_env, COPT_AddRows(state.problem, $N, rowMatBeg, rowMatCnt, rowMatIdx, rowMatElem, C_NULL,
             StackVec($((:(0.0) for _ in 1:N)...),), StackVec($((:(0.0) for _ in 1:N)...),), C_NULL))
         _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(COPT_CONE_RQUAD)), Ref(Cint(0)), Ref(Cint($N)),
@@ -88,17 +81,18 @@ function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDMatrixCar
     # - creation of a one-element symmat with just a zero entry works; but as soon as a quadratic constraint is present, the
     #   solver fails with Invalid Data.
     _check_ret(copt_env, COPT_AddLMIConstr(state.problem, dim, j -1, colIdx, symMatIdx, Cint(-1), C_NULL))
-end
-
-function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indices::AbstractVector{Cint}, values::AbstractVector{Float64},
-    rhs::Float64)
-    @assert(length(indices) == length(values))
-    _check_ret(copt_env, COPT_AddRow(state.problem, length(indices), indices, values, 0, rhs, rhs, C_NULL))
     return
 end
 
-Solver.fix_objective!(state::StateMoment, indices::AbstractVector{Cint}, values::AbstractVector{Float64}) =
-    _check_ret(copt_env, COPT_ReplaceColObj(state.problem, length(indices), indices, values))
+function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::AbstractIndvals{Cint,Float64}, rhs::Float64)
+    _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, rhs, rhs, C_NULL))
+    return
+end
+
+function Solver.fix_objective!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64})
+    _check_ret(copt_env, COPT_ReplaceColObj(state.problem, length(indvals), indvals.indices, indvals.values))
+    return
+end
 
 function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation{<:Problem{P}},
     groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=_ -> nothing, parameters=()) where {P}
@@ -119,7 +113,7 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
 
         _check_ret(copt_env, COPT_SetObjSense(task, COPT_MINIMIZE))
 
-        state = StateMoment(task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}())
+        state = StateMoment{K}(task)
         moment_setup!(state, relaxation, groupings)
         customize(state)
     end
@@ -130,40 +124,12 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
     _check_ret(copt_env, COPT_GetIntAttr(task, COPT_INTATTR_LPSTATUS, status))
     value = Ref{Cdouble}()
     _check_ret(copt_env, COPT_GetDblAttr(task, COPT_DBLATTR_LPOBJVAL, value))
-    @verbose_info("Optimization complete, extracting solution")
+    @verbose_info("Optimization complete, retrieving moments")
 
     if status[] ∈ (COPT_LPSTATUS_OPTIMAL, COPT_LPSTATUS_IMPRECISE)
         x = Vector{Cdouble}(undef, state.num_solver_vars)
         _check_ret(copt_env, COPT_GetLpSolution(task, x, C_NULL, C_NULL, C_NULL))
-        x = resize!(x, state.num_used_vars)
-
-        max_mons = monomial_count(nvariables(relaxation.objective), 2degree(relaxation))
-        # In any case, our variables will not be in the proper order. First figure this out.
-        # Dict does not preserve the insertion order. While we could use OrderedDict instead, we need to do lots of insertions
-        # and lookups and only once access the elements in the insertion order; so it is probably better to do the sorting
-        # once.
-        mon_pos = convert.(K, keys(state.mon_to_coptvar))
-        var_vals = collect(values(state.mon_to_coptvar))
-        sort_along!(var_vals, mon_pos)
-        # Now mon_pos is in insertion order. There might still not be a 1:1 correspondence between x and mon_pos, as slack
-        # variables due to the quadratic constraints could be present.
-        if length(var_vals) < length(x)
-            var_vals .+= one(Cint)
-            @inbounds x = x[var_vals] # remove the slack
-        end
-        # Now we have the 1:1 correspondence, but we want the actual monomial order.
-        sort_along!(mon_pos, x)
-        # Finally, x is ordered!
-        if length(x) == max_mons # dense case
-            solution = x
-        elseif 3length(mon_pos) < max_mons
-            solution = SparseVector(max_mons, mon_pos, x)
-        else
-            solution = fill(NaN, max_mons)
-            copy!(@view(solution[mon_pos]), x)
-        end
-        @verbose_info("Solution data extraction complete")
-        return status[], value[], MomentVector(relaxation, solution)
+        return status[], value[], MomentVector(relaxation, resize!(x, state.num_used_vars), state)
     else
         @verbose_info("Solution data extraction complete")
         return status[], value[], MomentVector(relaxation, Cdouble[])
