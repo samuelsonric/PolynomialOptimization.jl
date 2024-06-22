@@ -476,59 +476,71 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
     # We need to traverse all unique elements in groupings * groupings†. For purely complex-valued groupings, this is the full
     # list; as soon as we have a real variable present, it is smaller.
     # To avoid rehashings, get an overestimator of the total grouping size first.
+    # TODO (maybe): In the first loop to populate unique_groupings, we determine whether the grouping is real-valued. So we
+    # could instead populate two sets, saving isreal and a lot of conditionals in the second loop.
     unique_groupings = sizehint!(Set{FastKey{I}}(), iszero(Nc) ? trisize(length(grouping)) : length(grouping)^2)
-    complex_groupings = 0
+    real_grouping = true
+    totalsize = 0
     for (i, g₁) in enumerate(grouping)
         if !iszero(Nc)
-            complex_groupings += !isreal(g₁)
+            g₁real = !iszero(Nr) && isreal(g₁)
+            # Consider the g₂ = ḡ₁ case separately in the complex case. Explanations below.
+            let g₂=g₁
+                prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+                indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
+                if indexug ≤ 0
+                    @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
+                    totalsize += 1
+                end
+            end
         end
         # In the real case, we can skip the first i-1 entries as they would lead to duplicates.
         # In the complex case, we can also skip the first i-1 entries, as they would lead to exact conjugates, which in the
         # end give rise to the same conditions.
-        for g₂ in Iterators.drop(grouping, i -1)
+        for g₂ in Iterators.drop(grouping, iszero(Nc) ? i -1 : i)
             # We don't use mindex, as this can have unintended side-effects on the solver state (such as creating a
             # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
             # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
             # will probably appear at some place).
-            push!(unique_groupings, FastKey(monomial_index(g₁, SimpleConjMonomial(g₂))))
+            prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+            # We need to add the product to the set if it does not exists; we also need to count the number of conditions that
+            # we get out of it.
+            indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
+            if indexug ≤ 0
+                # It does not exist.
+                @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
+                # Assume we have a grouping g = (gᵣ + im*gᵢ) and a polynomial p = pᵣ + im*pᵢ, where the individual parts are
+                # real-valued. Then, add_equality! means that g*p = 0 and ḡ*p = 0. Of course we can also conjugate everything.
+                # We must split each constraint into its real and imaginary parts:
+                # (I)   Re(g*p) = gᵣ*pᵣ - gᵢ*pᵢ
+                # (II)  Im(g*p) = gᵣ*pᵢ + gᵢ*pᵣ
+                # (III) Re(ḡ*p) = gᵣ*pᵣ + gᵢ*pᵢ
+                # (IV)  Im(ḡ*p) = gᵣ*pᵢ - gᵢ*pᵣ
+                # To analyze this (which would be easier if we added and subtracted the equalities, but in the
+                # SimplePolynomials setup, the given form is most easy to handle), let's consider linear dependencies.
+                # - If the constraint is real-valued, (III) is equal to (I) and (IV) is -(II), so we only take (I) and (II).
+                # - If the grouping is real-valued, (III) is equal to (I) and (IV) is equal to (II); we only take (I) and (II).
+                # - If both are real-valued, (III) is equal to (I) while (II) and (IV) are zero, so we only take (I).
+                # - If both are complex-valued, all constraints are linearly independent.
+                # Rearranging this, we always take (I); if at least one is complex-valued, we also take (II); if both are, we
+                # take all. Note that we don't have to consider the conjugates of the groupings separately, as they only yield
+                # a global sign in the zero-equality.
+                # For this loop, this means that we will only check whether g₁*ḡ₂ belongs to a real-valued monomial, in which
+                # case we add 1; or to a complex-valued monomial, in which case we add 2. After the loop, we multiply by 2 if
+                # the constraint was also complex-valued.
+                if iszero(Nc) || (!iszero(Nr) && g₁real && isreal(g₂)) # note that g₁ ≠ ḡ₂
+                    totalsize += 1
+                else
+                    totalsize += 2
+                    real_grouping = false
+                end
+            end
         end
     end
 
-    # Assume we have a grouping g = (gᵣ + im*gᵢ) and a polynomial p = pᵣ + im*pᵢ, where the individual parts are real-valued.
-    # Then, add_equality! means that g*p = 0 and ḡ*p = 0. Of course we can also conjugate everything. We must split each
-    # constraint into its real and imaginary parts:
-    # (I)   Re(g*p) = gᵣ*pᵣ - gᵢ*pᵢ
-    # (II)  Im(g*p) = gᵣ*pᵢ + gᵢ*pᵣ
-    # (III) Re(ḡ*p) = gᵣ*pᵣ + gᵢ*pᵢ
-    # (IV)  Im(ḡ*p) = gᵣ*pᵢ - gᵢ*pᵣ
-    # To analyze this (which would be easier if we added and subtracted the equalities, but in the SimplePolynomials setup, the
-    # given form is most easy to handle), let's consider linear dependencies.
-    # - If the constraint is real-valued, (III) is equal to (I) and (IV) is -(II), so we only take (I) and (II).
-    # - If the grouping is real-valued, (III) is equal to (I) and (IV) is equal to (II), so we only take (I) and (II).
-    # - If both are real-valued, (III) is equal to (I) while (II) and (IV) are zero, so we only take (I).
-    # - If both are complex-valued, all constraints are linearly independent.
-    # Rearranging this, we always take (I); if at least one is complex-valued, we also take (II); if both are, we take all.
-    # Note that we don't have to consider the conjugates of the groupings separately, as they only yield a global sign in the
-    # zero-equality.
-    real_groupings = length(grouping) - complex_groupings
     real_constr = isreal(constraint)
-
-    # now we can
-    # - combine real_grouping with real_grouping, getting trisize(real_grouping) purely real groupings
-    # - combine real_grouping with complex_grouping, getting real_grouping*complex_grouping complex-valued groupings up to
-    #   conjugation
-    # - combine complex_grouping with itself conjugated, getting complex_grouping purely real groupings
-    # - combine complex_grouping with all other entries conjugates, getting trisize(complex_groupings-1) complex-valued
-    #   grouping up to conjugation
-    totalsize = let groupings_re=trisize(real_groupings) + complex_groupings,
-        groupings_cp=real_groupings*complex_groupings + trisize(complex_groupings -1)
-        groupings_re + groupings_cp + # we always get (I)
-        groupings_cp + # complex-valued groupings give (II) for all constraints
-        (real_constr ? 0 :
-                       groupings_re + groupings_cp - # complex-valued constraints give (II) for all groupings
-                       groupings_cp +                # subtract the intersection that counted (II) twice
-                       groupings_cp + groupings_cp   # complex-valued constraints and groupings give (III) and (IV)
-        )
+    if !real_constr
+        totalsize *= 2
     end
 
     constrstate = @inline add_constr_fix_prepare!(state, totalsize)
@@ -538,9 +550,9 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
     # While we could conditionally define those variables only if the requirements are satisfied, the compiler might not be
     # able to infer that we only use them later on if the same conditions (potentially stricter) are met. So define them
     # always, but not using any memory.
-    indices₂ = similar(indices₁, 0, buffer=iszero(complex_groupings) && real_constr ? 0 : 2length(constraint))
+    indices₂ = similar(indices₁, 0, buffer=real_grouping && real_constr ? 0 : 2length(constraint))
     values₂ = similar(indices₂, V)
-    indices₃ = similar(indices₁, 0, buffer=iszero(complex_groupings) || real_constr ? 0 : 2length(constraint))
+    indices₃ = similar(indices₁, 0, buffer=real_grouping || real_constr ? 0 : 2length(constraint))
     values₃ = similar(indices₃, V)
     indices₄ = similar(indices₃)
     values₄ = similar(values₃)
