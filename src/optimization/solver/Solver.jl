@@ -4,8 +4,8 @@ using ..SimplePolynomials, ..PolynomialOptimization, MultivariatePolynomials, Li
 using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
 @reexport using ..FastVector
 using ..FastVector: overallocation
-using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, FastKey, MomentVector, StackVec, Problem,
-    sort_along!
+using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, FastKey, StackVec, Problem, sort_along!
+import ..PolynomialOptimization: MomentVector
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
@@ -32,5 +32,7 @@ include("./Helpers.jl")
 include("./Interface.jl")
 include("./MomentHelpers.jl")
 include("./SOSHelpers.jl")
+include("./APISolver.jl")
+include("./SparseMatrixSolver.jl")
 
 end

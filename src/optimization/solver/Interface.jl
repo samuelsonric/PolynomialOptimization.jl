@@ -1,5 +1,5 @@
-export mindex, supports_quadratic, supports_complex_psd, psd_indextype,
-    PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, PSDVector
+export mindex, SOLVER_QUADRATIC_NONE, SOLVER_QUADRATIC_SOC, SOLVER_QUADRATIC_RSOC, supports_quadratic, AbstractIndvals,
+    supports_complex_psd, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, PSDVector
 
 """
     mindex(state, monomials::SimpleMonomialOrConj...)
@@ -13,14 +13,127 @@ The returned index is arbitrary as long as it is unique for the total monomial.
     monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)
 
 """
+    enum SolverQuadratic
+
+Defines the level of support for quadratic cones in the solver:
+- `SOLVER_QUADRATIC_NONE`: no quadratic cone is explicitly supported
+- `SOLVER_QUADRATIC_SOC`: the second-order cone ``x_1 \\geq \\sum_{i \\geq 2} x_i^2`` is supported
+- `SOLVER_QUADRATIC_RSOC`: the rotated second-order cone ``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^3`` is supported
+Note that `SOLVER_QUADRATIC_RSOC` is preferred, i.e., specify the last value if both cones are supported.
+"""
+@enum SolverQuadratic SOLVER_QUADRATIC_NONE SOLVER_QUADRATIC_SOC SOLVER_QUADRATIC_RSOC
+
+"""
     supports_quadratic(state)
 
-Indicates whether the solver can deal with quadratic constraints of the form ``2x_1 x_2 \\geq \\sum_i y_i^2``.
+Indicates the solver support for quadratic cones. The return value should be a [`SolverQuadratic`](@ref).
 [`add_var_quadratic!`](@ref) or [`add_constr_quadratic!`](@ref) will only be called if this method returns `true`; else,
 quadratic constraints will also be modeled using the semidefinite cone.
 The default implementation returns `false`.
 """
-supports_quadratic(_) = false
+supports_quadratic(_) = SOLVER_QUADRATIC_NONE
+
+"""
+    AbstractIndvals{T,V<:Real}
+
+Supertype for an iterable that returns a `Tuple{T,V}` on iteration, where the first is a variable/constraint index and the
+second its coefficient in the constraint matrix. The type `T` is the type returned by [`mindex`](@ref).
+The properties `indices` and `values` can be accessed and will give `AbstractVector`s of the appropriate type. Note that the
+fields should only be used if an iterative approach is not feasible, as they might be constructed on-demand (this will only
+happen for the first two indvals in the standard quadratic cone).
+"""
+abstract type AbstractIndvals{T,V<:Real} end
+
+Base.IteratorSize(::Type{<:AbstractIndvals}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:AbstractIndvals}) = Base.HasEltype()
+Base.eltype(::Type{AbstractIndvals{T,V}}) where {T,V} = Tuple{T,V}
+
+struct Indvals{T,V<:Real,Z} <: AbstractIndvals{T,V}
+    z::Z
+
+    function Indvals(indices::AbstractVector{T}, values::AbstractVector{V}) where {T,V<:Real}
+        @assert(length(indices) == length(values))
+        z = zip(indices, values)
+        new{T,V,typeof(z)}(z)
+    end
+end
+
+function Base.getproperty(iv::Indvals, f::Symbol)
+    if f === :indices
+        return getfield(iv, :z).is[1]
+    elseif f === :values
+        return getfield(iv, :z).is[2]
+    else
+        return getfield(iv, f)
+    end
+end
+
+Base.length(iv::Indvals) = length(iv.z)
+Base.iterate(iv::Indvals, args...) = iterate(iv.z, args...)
+
+struct RSocToSocHelper{plus,T,I<:AbstractVector{T},V<:Real,VV<:AbstractVector{V}} <: AbstractIndvals{T,V}
+    indices₁₁::I
+    values₁₁::VV
+    indices₂₂::I
+    values₂₂::VV
+
+    function RSocToSocHelper{plus}(indices₁₁::I, values₁₁::VV, indices₂₂::I, values₂₂::VV) where {plus,T,I<:AbstractVector{T},V<:Real,VV<:AbstractVector{V}}
+        plus isa Bool || throw(MethodError(RSocToSocHelper{soc}, (indices₁₁, values₁₁, indices₂₂, values₂₂)))
+        @assert(length(indices₁₁) == length(values₁₁) && length(indices₂₂) == length(indices₂₂))
+        new{plus,T,I,V,VV}(sort_along!(indices₁₁, values₁₁)..., sort_along!(indices₂₂, values₂₂)...)
+    end
+end
+
+Base.length(rsi::RSocToSocHelper) = count_uniques(rsi.indices₁₁, rsi.indices₂₂)
+
+function Base.iterate(rsi::RSocToSocHelper{plus}, (i₁, l₁, i₂, l₂)=(firstindex(rsi.indices₁₁), length(rsi.indices₁₁),
+                                                                    firstindex(rsi.indices₂₂), length(rsi.indices₂₂))) where {plus}
+    @inbounds if l₁ > 0
+        if l₂ > 0
+            ind₁, ind₂ = rsi.indices₁₁[i₁], rsi.indices₂₂[i₂]
+            if ind₁ < ind₂
+                return (ind₁, rsi.values₁₁[i₁]), (i₁ + one(i₁), l₁ -1, i₂, l₂)
+            elseif ind₁ == ind₂
+                return (ind₁, plus ? rsi.values₁₁[i₁] + rsi.values₂₂[i₂] : rsi.values₁₁[i₁] - rsi.values₂₂[i₂]),
+                    (i₁ + one(i₁), l₁ -1, i₂ + one(i₂), l₂ -1)
+            else
+                return (ind₂, plus ? rsi.values₂₂[i₂] : -rsi.values₂₂[i₂]), (i₁, l₁, i₂ + one(i₂), l₂ -1)
+            end
+        else
+            return (rsi.indices₁₁[i₁], rsi.values₁₁[i₁]), (i₁ + one(i₁), l₁ -1, i₂, l₂)
+        end
+    elseif l₂ > 0
+        return (rsi.indices₂₂[i₂], plus ? rsi.values₂₂[i₂] : -rsi.values₂₂[i₂]), (i₁, l₁, i₂ + one(i₂), l₂ -1)
+    else
+        return nothing
+    end
+end
+
+function Base.getproperty(rsi::RSocToSocHelper{plus,T,<:AbstractVector{T},V}, f::Symbol) where {plus,T,V<:Real}
+    if f === :indices
+        tmp = Vector{T}(undef, length(rsi.indices₁₁) + length(rsi.indices₂₂))
+        return resize!(
+            tmp,
+            count_uniques(rsi.indices₁₁, rsi.indices₂₂, let tmp=tmp, indices₁₁=rsi.indices₁₁, indices₂₂=rsi.indices₂₂
+                (i, i₁, i₂) -> @inbounds tmp[i] = ismissing(i₁) ? indices₂₂[i₂] : indices₁₁[i₁]
+            end)
+        )
+    elseif f === :values
+        tmp = Vector{V}(undef, length(rsi.values₁₁) + length(rsi.values₂₂))
+        return resize!(
+            tmp,
+            count_uniques(rsi.indices₁₁, rsi.indices₂₂, let tmp=tmp, values₁₁=rsi.values₁₁, values₂₂=rsi.values₂₂
+                (i, i₁, i₂) -> @inbounds tmp[i] = ismissing(i₁) ?
+                    (plus ? values₂₂[i₂] : -values₂₂[i₂]) :
+                    (ismissing(i₂) ? values₁₁[i₁] :
+                        (plus ? values₁₁[i₁] + values₂₂[i₂] : values₁₁[i₁] - values₂₂[i₂])
+                    )
+            end)
+        )
+    else
+        return getfield(rsi, f)
+    end
+end
 
 @doc raw"""
     supports_complex_psd(state)

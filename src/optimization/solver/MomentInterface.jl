@@ -4,33 +4,38 @@ export add_constr_nonnegative!, add_constr_quadratic!, add_constr_psd!, add_cons
 function add_constr_nonnegative! end
 
 """
-    add_constr_nonnegative!(state, indices::AbstractVector{T},
-        values::AbstractVector{V}) where {T,V<:Real}
+    add_constr_nonnegative!(state, indvals::AbstractIndvals)
 
-Add a nonnegative constraint to the solver that contains the decision variables indexed by `indices` (columns in the linear
-constraint matrix), whose eltype is of the type returned by [`mindex`](@ref), with coefficients `values`.
+Add a nonnegative constraint to the solver that contains the decision variables (columns in the linear constraint matrix)
+indexed according to `indvals`.
+
+See also [`AbstractIndvals`](@ref).
 """
 add_constr_nonnegative!(::Any, ::AbstractVector{T}, ::AbstractVector{V}) where {T,V<:Real}
 
 function add_constr_quadratic! end
 
 @doc raw"""
-    add_constr_quadratic!(state, indvals::Tuple{AbstractVector{T},AbstractVector{V}}...) where {T,V<:Real}
+    add_constr_quadratic!(state, indvals::AbstractIndvals{T,V}...) where {T,V<:Real}
 
-Adds a (rotated) quadratic constraint to the three linear combinations of decision variables indexed by the indices (columns in
-the linear constraint matrix), whose eltypes are of the type returned by [`mindex`](@ref), with coefficients given by the
-values. This will read (where ``X_i`` is ``\mathit{indvals}_{i, 2} \cdot x_{\mathit{indvals}_{i, 1}}``) ``X_1, X_2 \geq 0``,
-``2X_1 X_2 \geq \sum_{i = 3} X_i^2``.
+Adds a (rotated) quadratic constraint to the three linear combinations of decision variables (columns in the linear constraint
+matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+``\mathit{indvals}_{i, 2} \cdot x_{\mathit{indvals}_{i, 1}}``) ``X_1, X_2 \geq 0``,
+``2X_1 X_2 \geq \sum_{i = 3} X_i^2`` if the solver supports the rotated quadratic cone, or ``X_1 \geq \sum_{i = 2} X_i^2`` if
+it only supports the standard quadratic cone.
+
+See also [`AbstractIndvals`](@ref).
 
 !!! note "Number of parameters"
     In the real-valued case, `indvals` is always of length three, in the complex case, it is of length four. No other lengths
     will occur.
 
 !!! warning
-    This function will only be called if [`supports_quadratic`](@ref) is defined to return `true` for the given state.
-    If not, a fallback to a 2x2 PSD constraint is used.
+    This function will only be called if [`supports_quadratic`](@ref) is defined not return
+    [`SOLVER_QUADRATIC_NONE`](@ref SolverQuadratic) for the given state.
+    If it does, a fallback to a 2x2 PSD constraint is used.
 """
-add_constr_quadratic!(::Any, ::Tuple{AbstractVector{T},AbstractVector{V}}...) where {T,V<:Real}
+add_constr_quadratic!(::Any, ::AbstractIndvals{T,V}...) where {T,V<:Real}
 
 function add_constr_psd! end
 
@@ -110,15 +115,16 @@ The default implementation does nothing.
 add_constr_fix_prepare!(_, _) = nothing
 
 """
-    add_constr_fix!(state, constrstate, indices::AbstractVector{T},
-        values::AbstractVector{V}, rhs::V) where {T,V<:Real}
+    add_constr_fix!(state, constrstate, indvals::AbstractIndvals, rhs::V) where {T,V<:Real}
 
-Add a constraint fixed to `rhs` to the solver that is composed of all variables given by indices (columns in the linear
-constraint matrix) `indices`, whose eltype is of the type returned by [`mindex`](@ref), and with coefficients `values`.
+Add a constraint fixed to `rhs` to the solver that is composed of all variables (columns in the linear constraint matrix)
+indexed according to `indvals`.
 The parameter `constrstate` is, upon first call, the value returned by [`add_constr_fix_prepare!`](@ref); and on all further
 calls, it will be the return value of the previous call.
 Note that `rhs` will almost always be zero, so if the right-hand side is represented by a sparse vector, it is worth checking
 for this value (the compiler will be able to remove the check).
+
+See also [`AbstractIndvals`](@ref).
 """
 function add_constr_fix! end
 
@@ -132,10 +138,11 @@ The default implementation does nothing.
 add_constr_fix_finalize!(_, _) = nothing
 
 """
-    fix_objective!(state, indices::Vector{T}, values::Vector{V}) where {T,V<:Real}
+    fix_objective!(state, indvals::AbstractIndvals)
 
-Puts the variables indexed by `indices` into the objective (that is to be minimized) with coefficients `values`. The eltype of
-`indices` if the one returned by [`mindex`](@ref).
+Puts the variables indexed according to `indvals` into the objective (that is to be minimized).
 This function will be called exactly once by [`moment_setup!`](@ref) after all variables and constraints have been set up.
+
+See also [`AbstractIndvals`](@ref).
 """
 function fix_objective! end

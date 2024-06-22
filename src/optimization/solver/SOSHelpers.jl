@@ -32,7 +32,8 @@ up the problem structure.
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
 - [`add_var_nonnegative!`](@ref)
-- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
+  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -72,7 +73,8 @@ second of the equality, the third of the inequality, and the fourth of the PSD c
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)
 - [`add_var_nonnegative!`](@ref)
-- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
+  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
