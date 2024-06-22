@@ -275,7 +275,7 @@ end
 
 An iterable that returns consecutive elements in a vectorized PSD cone.
 This type stores a vector of indices and values together with information about the length of the individual subsequences.
-Iterating through it will give 2-Tuples that contain views into the indices and the values.
+Iterating through it will give [`AbstractIndvals`](@ref) that contain views into the indices and the values.
 The vector of indices is available via `SparseArrays.rowvals`, the vector of values via `SparseArrays.nonzeros`, and the
 lengths of the subsequences via `Base.index_lengths`.
 
@@ -306,7 +306,7 @@ Base.length(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}) = length(p
 @inline function Base.iterate(psdi::PSDVector{<:Any,<:Any,<:Integer}, state=1)
     endpos = state + psdi.lens -1
     if endpos ≤ length(psdi.indices)
-        @inbounds return (view(psdi.indices, state:endpos), view(psdi.values, state:endpos)), endpos +1
+        @inbounds return Indvals(view(psdi.indices, state:endpos), view(psdi.values, state:endpos)), endpos +1
     else
         return nothing
     end
@@ -315,7 +315,7 @@ end
     state[2] ≤ length(psdi.lens) || return nothing
     startpos = state[1]
     endpos = @inbounds(startpos + psdi.lens[state[2]] -1)
-    @inbounds return (view(psdi.indices, startpos:endpos), view(psdi.values, startpos:endpos)), (endpos +1, state[2] +1)
+    @inbounds return Indvals(view(psdi.indices, startpos:endpos), view(psdi.values, startpos:endpos)), (endpos +1, state[2] +1)
 end
 SparseArrays.rowvals(psdi::PSDVector) = psdi.indices
 SparseArrays.nonzeros(psdi::PSDVector) = psdi.values

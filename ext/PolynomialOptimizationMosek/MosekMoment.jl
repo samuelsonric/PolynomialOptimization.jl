@@ -54,8 +54,8 @@ function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDVector{In
     curafe = state.num_afes
     # putafefrowlist would require us to create collect(state.num_afes:state.num_afes+length(data)) for the afeidx parameter
     # and accumulate Base.index_lengths(data) for ptrrow
-    for (row, val) in data
-        @capture(Mosek.@MSK_putafefrow(state.task.task, $curafe, length(row), row, val))
+    for indvals in data
+        @capture(Mosek.@MSK_putafefrow(state.task.task, $curafe, length(indvals), indvals.indices, indvals.values))
         curafe += 1
     end
     # for sure, the number of PSD cones will not be the bottleneck, so let's save ourselves the trouble of caching already

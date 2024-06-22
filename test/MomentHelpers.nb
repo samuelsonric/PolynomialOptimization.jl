@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    790045,      14247]
-NotebookOptionsPosition[    784088,      14134]
-NotebookOutlinePosition[    784558,      14152]
-CellTagsIndexPosition[    784515,      14149]
+NotebookDataLength[    789897,      14270]
+NotebookOptionsPosition[    783969,      14158]
+NotebookOutlinePosition[    784410,      14175]
+CellTagsIndexPosition[    784367,      14172]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -50,11 +50,13 @@ Cell[BoxData[
             TagBox["List", "IconizedItem"]}]}, {
           RowBox[{
             TagBox["\"Dimensions: \"", "IconizedLabel"], "\[InvisibleSpace]", 
+            
             TagBox[
              RowBox[{"{", 
                RowBox[{"203490", ",", "8"}], "}"}], "IconizedItem"]}]}, {
           RowBox[{
             TagBox["\"Byte count: \"", "IconizedLabel"], "\[InvisibleSpace]", 
+            
             TagBox["48837680", "IconizedItem"]}]}}, 
         GridBoxAlignment -> {"Columns" -> {{Left}}}, DefaultBaseStyle -> 
         "Column", 
@@ -10894,7 +10896,8 @@ A4fX5g0=
     SelectWithContents->True,
     Selectable->False]}], ";"}]], "Input",
  InitializationCell->True,
- CellLabel->"In[1]:=",ExpressionUUID->"4ce9f604-e438-9a4b-98c4-025ae3d7d909"],
+ CellLabel->
+  "In[128]:=",ExpressionUUID->"4ce9f604-e438-9a4b-98c4-025ae3d7d909"],
 
 Cell[BoxData[{
  RowBox[{
@@ -10910,11 +10913,13 @@ Cell[BoxData[{
       OverscriptBox["z", "_"], "1"], ",", 
      SubscriptBox["z", "2"], ",", 
      SubscriptBox[
-      OverscriptBox["z", "_"], "2"]}], "}"}]}], ";"}], "\[IndentingNewLine]", 
+      OverscriptBox["z", "_"], "2"]}], "}"}]}], 
+  ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"mbeoffset", "=", "48"}], ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[2]:=",ExpressionUUID->"64426587-7237-b54d-b9f6-d61504a243d9"],
+ CellLabel->
+  "In[129]:=",ExpressionUUID->"64426587-7237-b54d-b9f6-d61504a243d9"],
 
 Cell[BoxData[{
  RowBox[{
@@ -10943,7 +10948,8 @@ Cell[BoxData[{
      RowBox[{"Values", "[", "mbmap", "]"}], ",", 
      RowBox[{"Keys", "[", "mbmap", "]"}]}], "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[4]:=",ExpressionUUID->"bb565efa-42d6-4be9-92e6-e3f8c80c767e"]
+ CellLabel->
+  "In[131]:=",ExpressionUUID->"bb565efa-42d6-4be9-92e6-e3f8c80c767e"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -10955,7 +10961,8 @@ Cell[BoxData[
   OverscriptBox[
    OverscriptBox["z_", "_"], "_"], ":=", "z"}]], "Input",
  InitializationCell->True,
- CellLabel->"In[7]:=",ExpressionUUID->"4330540d-71a3-41fb-b120-0daa2e22a6aa"],
+ CellLabel->
+  "In[134]:=",ExpressionUUID->"4330540d-71a3-41fb-b120-0daa2e22a6aa"],
 
 Cell[BoxData[
  RowBox[{
@@ -10968,7 +10975,8 @@ Cell[BoxData[
      RowBox[{"n_Complex", ":>", 
       RowBox[{"Conjugate", "[", "n", "]"}]}]}], "}"}]}]}]], "Input",
  InitializationCell->True,
- CellLabel->"In[8]:=",ExpressionUUID->"831e8066-1c19-4cb7-abd4-c627a261f3d8"],
+ CellLabel->
+  "In[135]:=",ExpressionUUID->"831e8066-1c19-4cb7-abd4-c627a261f3d8"],
 
 Cell[BoxData[{
  RowBox[{
@@ -10983,7 +10991,8 @@ Cell[BoxData[{
    RowBox[{"mbmap", "[", 
     RowBox[{"conj", "[", "mon", "]"}], "]"}]}]}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[9]:=",ExpressionUUID->"7ccd15c2-7997-c445-b907-0e14b139bd51"]
+ CellLabel->
+  "In[136]:=",ExpressionUUID->"7ccd15c2-7997-c445-b907-0e14b139bd51"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -11046,7 +11055,8 @@ Cell[BoxData[{
      RowBox[{"{", 
       RowBox[{"{", "constraint", "}"}], "}"}]}], "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[11]:=",ExpressionUUID->"f54d8b9d-727b-074d-90b4-6705d4c38357"],
+ CellLabel->
+  "In[138]:=",ExpressionUUID->"f54d8b9d-727b-074d-90b4-6705d4c38357"],
 
 Cell[BoxData[{
  RowBox[{
@@ -11166,7 +11176,8 @@ Cell[BoxData[{
      SelectWithContents->True,
      Selectable->False]}], "]"}]}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[14]:=",ExpressionUUID->"39bb633b-795f-c74f-8f87-0a9cd7b0dc02"],
+ CellLabel->
+  "In[141]:=",ExpressionUUID->"39bb633b-795f-c74f-8f87-0a9cd7b0dc02"],
 
 Cell[BoxData[{
  RowBox[{
@@ -11191,7 +11202,8 @@ Cell[BoxData[{
      "\[IndentingNewLine]", "expr"}]}], "\[IndentingNewLine]", 
    "]"}]}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[22]:=",ExpressionUUID->"2e85bca0-1ba1-184c-9237-1e0a720ee513"]
+ CellLabel->
+  "In[149]:=",ExpressionUUID->"2e85bca0-1ba1-184c-9237-1e0a720ee513"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -11202,7 +11214,8 @@ Cell[BoxData[
  RowBox[{
   RowBox[{"ClearAll", "@", "makeConstraint"}], ";"}]], "Input",
  InitializationCell->True,
- CellLabel->"In[24]:=",ExpressionUUID->"3a2e0910-5920-8849-9869-f2ac8e8b0056"],
+ CellLabel->
+  "In[151]:=",ExpressionUUID->"3a2e0910-5920-8849-9869-f2ac8e8b0056"],
 
 Cell[BoxData[{
  RowBox[{
@@ -11223,7 +11236,8 @@ Cell[BoxData[{
        RowBox[{"0.", ",", "0."}], "]"}]}], ",", "_String"}], "]"}], ":=", 
    "\"\<[]\>\""}], ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[25]:=",ExpressionUUID->"fb29d91c-81f1-e94b-823b-dcfdbd8d4672"],
+ CellLabel->
+  "In[152]:=",ExpressionUUID->"fb29d91c-81f1-e94b-823b-dcfdbd8d4672"],
 
 Cell[CellGroupData[{
 
@@ -11251,16 +11265,17 @@ Cell[BoxData[
      RowBox[{"\"\<linear\>\"", "->", 
       RowBox[{
        RowBox[{"++", "currentId"}], "->", 
-       RowBox[{"\"\<@test checkequality(indices, BigInt\>\"", "<>", 
+       RowBox[{"\"\<@test checkequality(indvals, BigInt\>\"", "<>", 
         RowBox[{"getnz", "[", 
          RowBox[{"inds", ",", "\"\<NonzeroPositions\>\""}], "]"}], "<>", 
-        "\"\<, values, BigFloat\>\"", "<>", 
+        "\"\<, BigFloat\>\"", "<>", 
         RowBox[{"getnz", "[", 
          RowBox[{"inds", ",", "\"\<NonzeroValues\>\""}], "]"}], "<>", 
         "\"\<, true)\>\""}]}]}]}], "\[IndentingNewLine]", "]"}]}], 
   ";"}]], "Input",
  InitializationCell->True,
- CellLabel->"In[28]:=",ExpressionUUID->"08f185fb-f008-7a45-a568-29201e3d8ddb"]
+ CellLabel->
+  "In[155]:=",ExpressionUUID->"08f185fb-f008-7a45-a568-29201e3d8ddb"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -11277,11 +11292,10 @@ Cell[BoxData[{
     RowBox[{"i_Integer", ",", "a_SparseArray"}], "]"}], ":=", 
    "\[IndentingNewLine]", 
    RowBox[{"\"\<@test checkequality(indvals[\>\"", "<>", 
-    RowBox[{"ToString", "[", "i", "]"}], "<>", "\"\<][1], BigInt\>\"", "<>", 
+    RowBox[{"ToString", "[", "i", "]"}], "<>", "\"\<], BigInt\>\"", "<>", 
     RowBox[{"getnz", "[", 
      RowBox[{"a", ",", "\"\<NonzeroPositions\>\""}], "]"}], "<>", 
-    "\[IndentingNewLine]", "\"\<, indvals[\>\"", "<>", 
-    RowBox[{"ToString", "[", "i", "]"}], "<>", "\"\<][2], BigFloat\>\"", "<>", 
+    "\[IndentingNewLine]", "\"\<, BigFloat\>\"", "<>", 
     RowBox[{"getnz", "[", 
      RowBox[{"a", ",", "\"\<NonzeroValues\>\""}], "]"}], "<>", 
     RowBox[{"If", "[", 
@@ -11294,10 +11308,11 @@ Cell[BoxData[{
     RowBox[{"i_Integer", ",", 
      RowBox[{"0", "|", "0."}]}], "]"}], ":=", 
    RowBox[{"\"\<@test iszero(norm(indvals[\>\"", "<>", 
-    RowBox[{"ToString", "[", "i", "]"}], "<>", "\"\<][2]))\>\""}]}], 
+    RowBox[{"ToString", "[", "i", "]"}], "<>", "\"\<].values))\>\""}]}], 
   ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[29]:=",ExpressionUUID->"a54642d2-4fbf-b24d-8adf-129be9c66957"],
+ CellLabel->
+  "In[156]:=",ExpressionUUID->"a54642d2-4fbf-b24d-8adf-129be9c66957"],
 
 Cell[BoxData[
  RowBox[{
@@ -11333,6 +11348,7 @@ Cell[BoxData[
         RowBox[{"++", "currentId"}], "->", 
         RowBox[{
         "\"\<@test length(indvals) == 3\\n\>\"", "<>", "\[IndentingNewLine]", 
+         
          RowBox[{"makeConstraintQhelper", "[", 
           RowBox[{"1", ",", 
            RowBox[{"inds", "[", 
@@ -11364,6 +11380,7 @@ Cell[BoxData[
         RowBox[{"++", "currentId"}], "->", 
         RowBox[{
         "\"\<@test length(indvals) == 3\\n\>\"", "<>", "\[IndentingNewLine]", 
+         
          RowBox[{"makeConstraintQhelper", "[", 
           RowBox[{"1", ",", 
            RowBox[{"inds", "[", 
@@ -11390,6 +11407,7 @@ Cell[BoxData[
         RowBox[{"++", "currentId"}], "->", 
         RowBox[{
         "\"\<@test length(indvals) == 4\\n\>\"", "<>", "\[IndentingNewLine]", 
+         
          RowBox[{"makeConstraintQhelper", "[", 
           RowBox[{"1", ",", 
            RowBox[{"inds", "[", 
@@ -11422,7 +11440,8 @@ Cell[BoxData[
           "]"}]}]}]}]}], "\[IndentingNewLine]", "]"}]}], 
    "\[IndentingNewLine]", "]"}]}]], "Input",
  InitializationCell->True,
- CellLabel->"In[32]:=",ExpressionUUID->"824ccdeb-ca81-694a-81a2-ca09eaaed7ff"]
+ CellLabel->
+  "In[159]:=",ExpressionUUID->"824ccdeb-ca81-694a-81a2-ca09eaaed7ff"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -11434,7 +11453,7 @@ Cell[BoxData[
   RowBox[{"psdmoffset", "=", "17"}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[312]:=",ExpressionUUID->"41987c2e-7f01-d246-8be1-a52a017f55f6"],
+  "In[160]:=",ExpressionUUID->"41987c2e-7f01-d246-8be1-a52a017f55f6"],
 
 Cell[BoxData[{
  RowBox[{
@@ -11666,7 +11685,7 @@ Cell[BoxData[{
      "]"}], "<>", "\"\<\\n@test isnothing(iter)\>\""}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[353]:=",ExpressionUUID->"d9c2485f-132d-c340-8935-052c0c6794da"],
+  "In[161]:=",ExpressionUUID->"d9c2485f-132d-c340-8935-052c0c6794da"],
 
 Cell[BoxData[
  RowBox[{
@@ -11697,7 +11716,7 @@ Cell[BoxData[
      "\[IndentingNewLine]", "}"}], "]"}]}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[329]:=",ExpressionUUID->"2102dd7a-6ade-c34e-93ca-756927c51725"],
+  "In[164]:=",ExpressionUUID->"2102dd7a-6ade-c34e-93ca-756927c51725"],
 
 Cell[BoxData[{
  RowBox[{
@@ -11744,8 +11763,9 @@ Cell[BoxData[{
    RowBox[{"Splice", "[", 
     RowBox[{"{", 
      RowBox[{"0.", ",", "0."}], "}"}], "]"}]}], ";"}]}], "Input",
- InitializationCell->
-  True,ExpressionUUID->"3fd20d78-45ae-5f4e-a4af-1a739dea9354"],
+ InitializationCell->True,
+ CellLabel->
+  "In[165]:=",ExpressionUUID->"3fd20d78-45ae-5f4e-a4af-1a739dea9354"],
 
 Cell[BoxData[{
  RowBox[{
@@ -12019,7 +12039,7 @@ Cell[BoxData[{
      "]"}], "<>", "\"\<\\n@test isnothing(iter)\>\""}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[365]:=",ExpressionUUID->"6ef190d7-56f3-8847-8a78-cc76373aefb7"],
+  "In[170]:=",ExpressionUUID->"6ef190d7-56f3-8847-8a78-cc76373aefb7"],
 
 Cell[BoxData[{
  RowBox[{
@@ -12066,7 +12086,7 @@ Cell[BoxData[{
      "\[IndentingNewLine]", "}"}], "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[330]:=",ExpressionUUID->"31455dfa-f0ed-7340-b98b-20d54623a7bb"],
+  "In[172]:=",ExpressionUUID->"31455dfa-f0ed-7340-b98b-20d54623a7bb"],
 
 Cell[BoxData[
  RowBox[{
@@ -12096,7 +12116,8 @@ Cell[BoxData[
            RowBox[{"Re", "[", "momentMatrix", "]"}]}
          }], ")"}], "]"}]}], ",", "\"\<PSDR\>\""}], "]"}]}], ";"}]], "Input",
  InitializationCell->True,
- CellLabel->"In[41]:=",ExpressionUUID->"e7881ef1-c252-164e-9dde-d25db64484c3"]
+ CellLabel->
+  "In[174]:=",ExpressionUUID->"e7881ef1-c252-164e-9dde-d25db64484c3"]
 }, Closed]]
 }, Closed]],
 
@@ -12165,19 +12186,20 @@ Cell[BoxData[
           RowBox[{"Array", "[", "\[IndentingNewLine]", 
            RowBox[{
             RowBox[{
-             RowBox[{"\"\<checkequality(indices, BigInt\>\"", "<>", 
+             RowBox[{"\"\<checkequality(indvals, BigInt\>\"", "<>", 
               RowBox[{"getnz", "[", 
                RowBox[{
                 RowBox[{"inds", "[", 
                  RowBox[{"[", "#", "]"}], "]"}], ",", 
                 "\"\<NonzeroPositions\>\""}], "]"}], "<>", 
-              "\"\<, values, BigFloat\>\"", "<>", 
+              "\"\<, BigFloat\>\"", "<>", 
               RowBox[{"getnz", "[", 
                RowBox[{
                 RowBox[{"inds", "[", 
                  RowBox[{"[", "#", "]"}], "]"}], ",", 
                 "\"\<NonzeroValues\>\""}], "]"}], "<>", 
               "\"\<, true)\n    pop!(state.fixed_available, UInt(\>\"", "<>", 
+              
               RowBox[{"ToString", "[", "#", "]"}], "<>", "\"\<))\>\""}], 
              "&"}], ",", 
             RowBox[{"Length", "@", "inds"}]}], "\[IndentingNewLine]", "]"}], 
@@ -12185,7 +12207,7 @@ Cell[BoxData[
     "\[IndentingNewLine]", "]"}]}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[137]:=",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19"]
+  "In[175]:=",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -12207,12 +12229,13 @@ minutes. The compilation cost is quite enormous, so not doing this would lead \
 to >10 minutes run time (which would not be better if we were to dispatch on \
 the test instances to different methods).\nusing \
 PolynomialOptimization.Solver: AbstractPSDIndextype\nusing \
-PolynomialOptimization: sort_along!\n\nfunction checkequality(indices, \
-supposed_indices, values, supposed_values, exact::Bool=false)\n    # we don't \
-have any guarantee that the indices are ordered\n    sort_along!(indices, \
-values)\n    # sometimes, cancellations may happen that will give rise to \
-explicit zeros, but the test code generation will have them dropped\n    \
-keeppos = findall(!iszero, values)\n    @views return indices[keeppos] == \
+PolynomialOptimization: sort_along!\n\nfunction checkequality(indvals, \
+supposed_indices, supposed_values, exact::Bool=false)\n    # we don't have \
+any guarantee that the indices are ordered\n    indices, values = \
+indvals.indices, indvals.values\n    sort_along!(indices, values)\n    # \
+sometimes, cancellations may happen that will give rise to explicit zeros, \
+but the test code generation will have them dropped\n    keeppos = \
+findall(!iszero, values)\n    @views return indices[keeppos] == \
 supposed_indices && (exact ? values[keeppos] == supposed_values : \
 isapprox(values[keeppos], supposed_values, atol=1e-13))\nend\n\nfunction \
 checkequality(rows, supposed_rows, cols, supposed_cols, values, \
@@ -12222,11 +12245,10 @@ keeppos = findall(!iszero, values)\n    @views return rows[keeppos] == \
 supposed_rows && cols[keeppos] == supposed_cols && values[keeppos] == \
 supposed_values\nend\n\nmacro checkequals(lowerind, lowerval, upperind, \
 upperval, fullind, fullval)\n    esc(quote\n        if tri === :L\n           \
- @test checkequality(iter[1][1], $lowerind, iter[1][2], $lowerval)\n        \
-elseif tri === :U\n            @test checkequality(iter[1][1], $upperind, \
-iter[1][2], $upperval)\n        else\n            @test \
-checkequality(iter[1][1], $fullind, iter[1][2], $fullval, true)\n        end\n\
-        iter = iterate(data, iter[2])\n    end)\nend\n\nmacro \
+ @test checkequality(iter[1], $lowerind, $lowerval)\n        elseif tri === \
+:U\n            @test checkequality(iter[1], $upperind, $upperval)\n        \
+else\n            @test checkequality(iter[1], $fullind, $fullval, true)\n    \
+    end\n        iter = iterate(data, iter[2])\n    end)\nend\n\nmacro \
 checkequals(ind, lowerrows, lowercols, lowervals)\n    esc(quote\n        # \
 it may rarely happen that we end up with a all-zeros entry, which would not \
 be present in the test\n        while iter[1].first < $ind && all(iszero, \
@@ -12237,21 +12259,21 @@ iter[1].second[3], $lowervals)\n        else\n            @test \
 checkequality(iter[1].second[1], $lowercols, iter[1].second[2], $lowerrows, \
 iter[1].second[3], conj.($lowervals))\n        end\n        iter = \
 iterate(data, iter[2])\n    end)\nend\n\nmacro checkequals(fullind, fullval)\n\
-    esc(quote\n        @test checkequality(iter[1][1], $fullind, iter[1][2], \
-$fullval, true)\n        iter = iterate(data, iter[2])\n    end)\nend\n\n\
-mutable struct SolverSetup{Linear,Quadratic,PSD,SupportsComplexPSD,Fixed}\n   \
- const instance::Int\n    lastcall::Symbol\n    const \
-fixed_available::Set{UInt}\n\n    function SolverSetup(instance::Int; \
-linear::Bool=false, quadratic::Bool=false,\n        \
+    esc(quote\n        @test checkequality(iter[1], $fullind, $fullval, true)\
+\n        iter = iterate(data, iter[2])\n    end)\nend\n\nmutable struct \
+SolverSetup{Linear,Quadratic,PSD,SupportsComplexPSD,Fixed}\n    const \
+instance::Int\n    lastcall::Symbol\n    const fixed_available::Set{UInt}\n\n \
+   function SolverSetup(instance::Int; linear::Bool=false, \
+quadratic::Bool=false,\n        \
 psd::Union{Bool,<:AbstractPSDIndextype}=false, complex_psd::Bool=false, \
 fixed::Bool=false)\n        @assert psd !== true\n        \
 new{linear,quadratic,psd,complex_psd,fixed}(instance, :none, Set{UInt}())\n   \
  end\nend\n\nSolver.mindex(::SolverSetup, monomials::SimpleMonomialOrConj...) \
 = BigInt(monomial_index(monomials...) + \>\"", "<>", 
     RowBox[{"ToString", "[", "mbeoffset", "]"}], "<>", 
-    "\"\<)\nSolver.supports_quadratic(::SolverSetup{<:Any,true}) = true\n\
-Solver.psd_indextype(::SolverSetup{<:Any,<:Any,psd}) where {psd} = psd\n\
-Solver.psd_indextype(::SolverSetup{<:Any,<:Any,false}) = \
+    "\"\<)\nSolver.supports_quadratic(::SolverSetup{<:Any,true}) = \
+SOLVER_QUADRATIC_RSOC\nSolver.psd_indextype(::SolverSetup{<:Any,<:Any,psd}) \
+where {psd} = psd\nSolver.psd_indextype(::SolverSetup{<:Any,<:Any,false}) = \
 PSDIndextypeMatrixCartesian(:U, typemin(Int)) # should only be triggered for \
 linear/quadratic case, and then the offset is ignored\n\
 Solver.supports_complex_psd(::SolverSetup{<:Any,<:Any,<:Any,true}) = true\n\n\
@@ -12283,8 +12305,8 @@ constraint)\n        @test state.lastcall === type\n    end\n    return\nend\n\
 \n\>\""}]}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[467]:=",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25"]
-}, Open  ]],
+  "In[239]:=",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25"]
+}, Closed]],
 
 Cell[CellGroupData[{
 
@@ -12364,6 +12386,7 @@ Cell[BoxData[{
              RowBox[{"makeConstraint", "[", 
               RowBox[{"mm", ",", "\"\<PSDR\>\""}], "]"}], ",", "grouping", 
              ",", "constraint"}], "]"}]}], "]"}], ";", "\[IndentingNewLine]", 
+         
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"!", 
@@ -12392,7 +12415,7 @@ Cell[BoxData[{
   ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[294]:=",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a"]
+  "In[177]:=",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a"]
 }, Closed]],
 
 Cell[CellGroupData[{
@@ -12441,14 +12464,13 @@ Cell[BoxData[{
             RowBox[{"file", ",", "\[IndentingNewLine]", 
              RowBox[{
              "\"\<Solver.add_constr_nonnegative!(state::SolverSetup{true,\
-false,false,false,false}, indices::AbstractVector{BigInt}, \
-values::AbstractVector{BigFloat}) =\n    \>\"", "<>", "interp", "<>", 
-              "\"\<add_constr_nonnegative_worker!(state, indices, values)\n\n\
-function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,\
-false,false}, indices::AbstractVector{BigInt}, \
-values::AbstractVector{BigFloat})\n    @test length(indices) == \
-length(values)\n    @test state.lastcall === :none\n    state.lastcall = \
-:linear\n    if \>\"", "<>", "\[IndentingNewLine]", 
+false,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}) =\n    \
+\>\"", "<>", "interp", "<>", 
+              "\"\<add_constr_nonnegative_worker!(state, indvals)\n\nfunction \
+add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,false,\
+false}, indvals::AbstractIndvals{BigInt,BigFloat})\n    @test state.lastcall \
+=== :none\n    state.lastcall = :linear\n    if \>\"", "<>", 
+              "\[IndentingNewLine]", 
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
                RowBox[{
                 RowBox[{"Table", "[", 
@@ -12483,14 +12505,11 @@ length(values)\n    @test state.lastcall === :none\n    state.lastcall = \
             RowBox[{"file", ",", "\[IndentingNewLine]", 
              RowBox[{
              "\"\<Solver.add_constr_quadratic!(state::SolverSetup{false,true,\
-false,false,false}, \
-indvals::Tuple{AbstractVector{BigInt},AbstractVector{BigFloat}}...) =\n    \>\
-\"", "<>", "interp", "<>", 
+false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...) =\n    \
+\>\"", "<>", "interp", "<>", 
               "\"\<add_constr_quadratic_worker!(state, indvals...)\n\n\
 function Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,\
-false,false}, \
-indvals::Tuple{AbstractVector{BigInt},AbstractVector{BigFloat}}...)\n    \
-@test all(x -> length(x[1]) == length(x[2]), indvals)\n    @test \
+false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)\n    @test \
 state.lastcall === :none\n    state.lastcall = :quadratic\n    if \>\"", "<>",
                "\[IndentingNewLine]", 
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
@@ -12604,6 +12623,7 @@ add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,true,\
 false}, dim::Int, ::PSDIndextypeVector{tri}, \
 data::PSDVector{BigInt,BigFloat}) where {tri}\n    @test state.lastcall === \
 :none\n    state.lastcall = :psdc\n    if \>\"", "<>", "\[IndentingNewLine]", 
+              
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
                RowBox[{
                 RowBox[{"Table", "[", 
@@ -12678,14 +12698,13 @@ true}, constrstate::UInt)\n    @test state.lastcall === :add_constr_fix\n    \
 state.lastcall = :add_constr_fix_finalize\n    @test iszero(constrstate)\n    \
 @test isempty(state.fixed_available)\nend\n\n\
 Solver.add_constr_fix!(state::SolverSetup{false,false,false,false,true}, \
-constrstate::UInt, indices::AbstractVector{BigInt}, \
-values::AbstractVector{BigFloat}, rhs::BigFloat) =\n    @interpret \
-add_constr_fix_helper!(state, constrstate, indices, values, rhs)\n\nfunction \
-add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true}, \
-constrstate::UInt, indices::AbstractVector{BigInt}, \
-values::AbstractVector{BigFloat}, rhs::BigFloat)\n    @test \
-in(state.lastcall, (:add_constr_fix_prepare, :add_constr_fix))\n    \
-state.lastcall = :add_constr_fix\n    @test iszero(rhs)\n    if \>\"", "<>", 
+constrstate::UInt, indvals::AbstractIndvals{BigInt,BigFloat}, rhs::BigFloat) \
+=\n    @interpret add_constr_fix_helper!(state, constrstate, indvals, rhs)\n\n\
+function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,\
+true}, constrstate::UInt, indvals::AbstractIndvals{BigInt,BigFloat}, \
+rhs::BigFloat)\n    @test in(state.lastcall, (:add_constr_fix_prepare, \
+:add_constr_fix))\n    state.lastcall = :add_constr_fix\n    @test \
+iszero(rhs)\n    if \>\"", "<>", 
                RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
                 RowBox[{
                  RowBox[{"Table", "[", 
@@ -12758,6 +12777,7 @@ constrstate == length(state.fixed_available)\n    return constrstate\nend\n\n\
                     "\"\<, grouping, constraint, :\>\"", "<>", 
                     RowBox[{"test", "[", 
                     RowBox[{"[", "2", "]"}], "]"}], "<>", "\"\<)\>\""}], ",", 
+                    
                     RowBox[{"{", 
                     RowBox[{"test", ",", 
                     RowBox[{"DeleteCases", "[", 
@@ -12817,7 +12837,7 @@ constrstate == length(state.fixed_available)\n    return constrstate\nend\n\n\
     "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->
-  "In[401]:=",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d"],
+  "In[236]:=",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d"],
 
 Cell[BoxData[{
  RowBox[{
@@ -12956,7 +12976,8 @@ Cell[BoxData[{
          RowBox[{"{", "2", "}"}]}], "]"}]}], ",", "\"\<; \>\""}], "]"}], 
     "<>", "\"\<]\>\""}]}], ";"}]}], "Input",
  InitializationCell->True,
- CellLabel->"In[47]:=",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3"],
+ CellLabel->
+  "In[183]:=",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3"],
 
 Cell[BoxData[
  RowBox[{"With", "[", 
@@ -13012,13 +13033,16 @@ Cell[BoxData[
       RowBox[{
        RowBox[{
        "RegularExpression", "[", "\"\<OverBar\\\\[(.)\\\\]\>\"", "]"}], ":>", 
+       
        RowBox[{"\"\<$1\>\"", "<>", 
         RowBox[{"FromCharacterCode", "[", "16^^304", "]"}]}]}]}], 
-     "\[IndentingNewLine]", "]"}]}]}], "\[IndentingNewLine]", "]"}]], "Input",
+     "\[IndentingNewLine]", "]"}]}]}], "\[IndentingNewLine]", "]"}]], "Input",\
+
  InitializationCell->True,
- CellLabel->"In[54]:=",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e"]
+ CellLabel->
+  "In[190]:=",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e"]
 }, Closed]]
-}, Open  ]],
+}, Closed]],
 
 Cell[CellGroupData[{
 
@@ -14121,7 +14145,7 @@ Cell[BoxData[{
      RowBox[{"2", " ", 
       SubsuperscriptBox["z", "2", "2"]}]}]}], "]"}], ";"}]}], "Input",
  CellLabel->
-  "In[470]:=",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+  "In[191]:=",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
 
 Cell[BoxData[
  RowBox[{"finalize", "[", 
@@ -14129,12 +14153,11 @@ Cell[BoxData[
    RowBox[{"NotebookDirectory", "[", "]"}], "<>", 
    "\"\</MomentHelpers.jl\>\""}], "]"}]], "Input",
  CellLabel->
-  "In[509]:=",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+  "In[240]:=",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 },
-WindowSize->{900, 736.8},
-WindowMargins->{{
-  Automatic, -910.8000000000002}, {-199.19999999999993`, Automatic}},
+WindowSize->{888, 1365.75},
+WindowMargins->{{Automatic, -900}, {-145.5, Automatic}},
 Magnification:>1. Inherited,
 FrontEndVersion->"14.0 for Microsoft Windows (64-bit) (December 12, 2023)",
 StyleDefinitions->"Default.nb",
@@ -14155,99 +14178,99 @@ Cell[CellGroupData[{
 Cell[580, 22, 94, 0, 45, "Subsubsection",ExpressionUUID->"d2adc66b-9332-4297-80c4-829a104f5939"],
 Cell[677, 24, 212, 4, 81, "Text",ExpressionUUID->"7bcd1241-d3de-4dbb-9e28-a1d9ac19d3ba"],
 Cell[892, 30, 338, 8, 28, "Input",ExpressionUUID->"2efd62d2-d2b8-1e4e-9725-e257f2aa9009"],
-Cell[1233, 40, 661530, 10856, 51, "Input",ExpressionUUID->"4ce9f604-e438-9a4b-98c4-025ae3d7d909",
+Cell[1233, 40, 661561, 10859, 51, "Input",ExpressionUUID->"4ce9f604-e438-9a4b-98c4-025ae3d7d909",
  InitializationCell->True],
-Cell[662766, 10898, 620, 18, 64, "Input",ExpressionUUID->"64426587-7237-b54d-b9f6-d61504a243d9",
+Cell[662797, 10901, 628, 20, 64, "Input",ExpressionUUID->"64426587-7237-b54d-b9f6-d61504a243d9",
  InitializationCell->True],
-Cell[663389, 10918, 857, 27, 85, "Input",ExpressionUUID->"bb565efa-42d6-4be9-92e6-e3f8c80c767e",
+Cell[663428, 10923, 862, 28, 85, "Input",ExpressionUUID->"bb565efa-42d6-4be9-92e6-e3f8c80c767e",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[664283, 10950, 102, 0, 37, "Subsubsection",ExpressionUUID->"433c828a-0b3d-4517-a118-92c00fb255e9"],
-Cell[664388, 10952, 203, 5, 46, "Input",ExpressionUUID->"4330540d-71a3-41fb-b120-0daa2e22a6aa",
+Cell[664327, 10956, 102, 0, 37, "Subsubsection",ExpressionUUID->"433c828a-0b3d-4517-a118-92c00fb255e9"],
+Cell[664432, 10958, 208, 6, 46, "Input",ExpressionUUID->"4330540d-71a3-41fb-b120-0daa2e22a6aa",
  InitializationCell->True],
-Cell[664594, 10959, 400, 11, 44, "Input",ExpressionUUID->"831e8066-1c19-4cb7-abd4-c627a261f3d8",
+Cell[664643, 10966, 405, 12, 44, "Input",ExpressionUUID->"831e8066-1c19-4cb7-abd4-c627a261f3d8",
  InitializationCell->True],
-Cell[664997, 10972, 494, 13, 64, "Input",ExpressionUUID->"7ccd15c2-7997-c445-b907-0e14b139bd51",
+Cell[665051, 10980, 499, 14, 64, "Input",ExpressionUUID->"7ccd15c2-7997-c445-b907-0e14b139bd51",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[665528, 10990, 108, 0, 53, "Section",ExpressionUUID->"d2c206dc-e6ae-ad4c-a6a4-fd91bbdefea7"],
-Cell[665639, 10992, 2068, 56, 178, "Input",ExpressionUUID->"f54d8b9d-727b-074d-90b4-6705d4c38357",
+Cell[665587, 10999, 108, 0, 53, "Section",ExpressionUUID->"d2c206dc-e6ae-ad4c-a6a4-fd91bbdefea7"],
+Cell[665698, 11001, 2072, 57, 178, "Input",ExpressionUUID->"f54d8b9d-727b-074d-90b4-6705d4c38357",
  InitializationCell->True],
-Cell[667710, 11050, 4090, 118, 217, "Input",ExpressionUUID->"39bb633b-795f-c74f-8f87-0a9cd7b0dc02",
+Cell[667773, 11060, 4094, 119, 217, "Input",ExpressionUUID->"39bb633b-795f-c74f-8f87-0a9cd7b0dc02",
  InitializationCell->True],
-Cell[671803, 11170, 862, 23, 141, "Input",ExpressionUUID->"2e85bca0-1ba1-184c-9237-1e0a720ee513",
+Cell[671870, 11181, 866, 24, 141, "Input",ExpressionUUID->"2e85bca0-1ba1-184c-9237-1e0a720ee513",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[672702, 11198, 112, 0, 53, "Section",ExpressionUUID->"45967f5a-ffc5-b044-99e8-b0a2480699f4"],
-Cell[672817, 11200, 193, 4, 44, "Input",ExpressionUUID->"3a2e0910-5920-8849-9869-f2ac8e8b0056",
+Cell[672773, 11210, 112, 0, 53, "Section",ExpressionUUID->"45967f5a-ffc5-b044-99e8-b0a2480699f4"],
+Cell[672888, 11212, 197, 5, 44, "Input",ExpressionUUID->"3a2e0910-5920-8849-9869-f2ac8e8b0056",
  InitializationCell->True],
-Cell[673013, 11206, 678, 19, 84, "Input",ExpressionUUID->"fb29d91c-81f1-e94b-823b-dcfdbd8d4672",
+Cell[673088, 11219, 682, 20, 84, "Input",ExpressionUUID->"fb29d91c-81f1-e94b-823b-dcfdbd8d4672",
  InitializationCell->True],
 Cell[CellGroupData[{
-Cell[673716, 11229, 83, 0, 54, "Subsection",ExpressionUUID->"f84eb683-9a25-a345-8e5f-0bb6989b80a4"],
-Cell[673802, 11231, 1173, 31, 121, "Input",ExpressionUUID->"08f185fb-f008-7a45-a568-29201e3d8ddb",
+Cell[673795, 11243, 83, 0, 54, "Subsection",ExpressionUUID->"f84eb683-9a25-a345-8e5f-0bb6989b80a4"],
+Cell[673881, 11245, 1169, 32, 121, "Input",ExpressionUUID->"08f185fb-f008-7a45-a568-29201e3d8ddb",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[675012, 11267, 86, 0, 38, "Subsection",ExpressionUUID->"e49ce4b8-4e57-f54d-85d9-d7fb9422680f"],
-Cell[675101, 11269, 1299, 30, 141, "Input",ExpressionUUID->"a54642d2-4fbf-b24d-8adf-129be9c66957",
+Cell[675087, 11282, 86, 0, 38, "Subsection",ExpressionUUID->"e49ce4b8-4e57-f54d-85d9-d7fb9422680f"],
+Cell[675176, 11284, 1224, 30, 122, "Input",ExpressionUUID->"a54642d2-4fbf-b24d-8adf-129be9c66957",
  InitializationCell->True],
-Cell[676403, 11301, 4777, 123, 493, "Input",ExpressionUUID->"824ccdeb-ca81-694a-81a2-ca09eaaed7ff",
+Cell[676403, 11316, 4811, 127, 493, "Input",ExpressionUUID->"824ccdeb-ca81-694a-81a2-ca09eaaed7ff",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[681217, 11429, 80, 0, 38, "Subsection",ExpressionUUID->"be62fd88-e263-3443-a700-25834ab317af"],
-Cell[681300, 11431, 187, 5, 44, "Input",ExpressionUUID->"41987c2e-7f01-d246-8be1-a52a017f55f6",
+Cell[681251, 11448, 80, 0, 38, "Subsection",ExpressionUUID->"be62fd88-e263-3443-a700-25834ab317af"],
+Cell[681334, 11450, 187, 5, 44, "Input",ExpressionUUID->"41987c2e-7f01-d246-8be1-a52a017f55f6",
  InitializationCell->True],
-Cell[681490, 11438, 9536, 230, 946, "Input",ExpressionUUID->"d9c2485f-132d-c340-8935-052c0c6794da",
+Cell[681524, 11457, 9536, 230, 946, "Input",ExpressionUUID->"d9c2485f-132d-c340-8935-052c0c6794da",
  InitializationCell->True],
-Cell[691029, 11670, 1096, 29, 121, "Input",ExpressionUUID->"2102dd7a-6ade-c34e-93ca-756927c51725",
+Cell[691063, 11689, 1096, 29, 121, "Input",ExpressionUUID->"2102dd7a-6ade-c34e-93ca-756927c51725",
  InitializationCell->True],
-Cell[692128, 11701, 1482, 46, 141, "Input",ExpressionUUID->"3fd20d78-45ae-5f4e-a4af-1a739dea9354",
+Cell[692162, 11720, 1507, 47, 141, "Input",ExpressionUUID->"3fd20d78-45ae-5f4e-a4af-1a739dea9354",
  InitializationCell->True],
-Cell[693613, 11749, 11538, 272, 1125, "Input",ExpressionUUID->"6ef190d7-56f3-8847-8a78-cc76373aefb7",
+Cell[693672, 11769, 11538, 272, 1125, "Input",ExpressionUUID->"6ef190d7-56f3-8847-8a78-cc76373aefb7",
  InitializationCell->True],
-Cell[705154, 12023, 1659, 45, 178, "Input",ExpressionUUID->"31455dfa-f0ed-7340-b98b-20d54623a7bb",
+Cell[705213, 12043, 1659, 45, 178, "Input",ExpressionUUID->"31455dfa-f0ed-7340-b98b-20d54623a7bb",
  InitializationCell->True],
-Cell[706816, 12070, 1046, 28, 98, "Input",ExpressionUUID->"e7881ef1-c252-164e-9dde-d25db64484c3",
+Cell[706875, 12090, 1050, 29, 98, "Input",ExpressionUUID->"e7881ef1-c252-164e-9dde-d25db64484c3",
  InitializationCell->True]
 }, Closed]]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[707911, 12104, 114, 0, 53, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
-Cell[708028, 12106, 265, 4, 58, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
-Cell[708296, 12112, 3131, 75, 273, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
+Cell[707974, 12125, 114, 0, 53, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
+Cell[708091, 12127, 265, 4, 58, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
+Cell[708359, 12133, 3138, 76, 273, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[711464, 12192, 92, 0, 53, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
+Cell[711534, 12214, 92, 0, 53, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
 Cell[CellGroupData[{
-Cell[711581, 12196, 83, 0, 54, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
-Cell[711667, 12198, 5895, 87, 2328, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
- InitializationCell->True]
-}, Open  ]],
-Cell[CellGroupData[{
-Cell[717599, 12290, 84, 0, 54, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
-Cell[717686, 12292, 3765, 102, 368, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
+Cell[711651, 12218, 83, 0, 54, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
+Cell[711737, 12220, 5899, 87, 2347, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[721488, 12399, 89, 0, 38, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
-Cell[721580, 12401, 20701, 418, 3851, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
+Cell[717673, 12312, 84, 0, 38, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
+Cell[717760, 12314, 3775, 103, 368, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
+ InitializationCell->True]
+}, Closed]],
+Cell[CellGroupData[{
+Cell[721572, 12422, 89, 0, 38, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
+Cell[721664, 12424, 20480, 415, 3813, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
  InitializationCell->True],
-Cell[742284, 12821, 4791, 137, 407, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
+Cell[742147, 12841, 4795, 138, 407, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
  InitializationCell->True],
-Cell[747078, 12960, 2270, 58, 197, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
+Cell[746945, 12981, 2284, 61, 197, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
  InitializationCell->True]
 }, Closed]]
-}, Open  ]],
+}, Closed]],
 Cell[CellGroupData[{
-Cell[749397, 13024, 78, 0, 67, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
-Cell[749478, 13026, 34355, 1097, 1640, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
-Cell[783836, 14125, 236, 6, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+Cell[749278, 13048, 78, 0, 53, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
+Cell[749359, 13050, 34355, 1097, 1640, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+Cell[783717, 14149, 236, 6, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 }
 ]
