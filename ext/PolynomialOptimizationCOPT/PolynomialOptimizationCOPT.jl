@@ -31,7 +31,9 @@ include("./COPTMoment.jl")
 
 function __init__()
     global copt_env = Env()
-    pushfirst!(solver_methods, :COPTMoment)
+    pushfirst!(solver_methods, :COPT, :COPTMoment)
 end
+
+@solver_alias COPT COPTMoment
 
 end

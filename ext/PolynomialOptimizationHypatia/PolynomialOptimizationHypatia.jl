@@ -6,6 +6,8 @@ using Hypatia: Cones, Models, Solvers
 
 include("./HypatiaMoment.jl")
 
-__init__() = push!(solver_methods, :HypatiaMoment)
+__init__() = push!(solver_methods, :Hypatia, :HypatiaMoment)
+
+@solver_alias Hypatia HypatiaMoment
 
 end

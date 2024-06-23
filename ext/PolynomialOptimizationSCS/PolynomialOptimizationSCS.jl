@@ -7,6 +7,8 @@ using SCS: ScsCone, ScsData, ScsSettings, ScsSolution, ScsInfo, ScsMatrix, scsin
 
 include("./SCSMoment.jl")
 
-__init__() = push!(solver_methods, :SCSMoment)
+__init__() = push!(solver_methods, :SCS, :SCSMoment)
+
+@solver_alias SCS SCSMoment
 
 end

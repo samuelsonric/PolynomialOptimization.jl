@@ -5,6 +5,8 @@ using PolynomialOptimization: @assert, @inbounds
 
 include("./ClarabelMoment.jl")
 
-__init__() = push!(solver_methods, :ClarabelMoment)
+__init__() = push!(solver_methods, :Clarabel, :ClarabelMoment)
+
+@solver_alias Clarabel ClarabelMoment
 
 end

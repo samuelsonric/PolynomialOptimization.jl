@@ -16,9 +16,11 @@ include("./Tightening.jl")
 
 function __init__()
     isdefined(Mosek, :appendafes) && push!(solver_methods, :MosekMoment)
-    pushfirst!(solver_methods, :MosekSOS)
+    pushfirst!(solver_methods, :Mosek, :MosekSOS)
     pushfirst!(Newton.newton_methods, :Mosek)
     pushfirst!(PolynomialOptimization.tightening_methods, :Mosek)
 end
+
+@solver_alias Mosek MosekSOS
 
 end

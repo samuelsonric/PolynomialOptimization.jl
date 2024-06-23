@@ -15,7 +15,7 @@ export
     AbstractRelaxation, RelaxationGroupings, # from Relaxation
     SimpleMonomialOrConj, SimpleConjMonomial, monomial_index, _get_I, # from SimplePolynomials
     overallocation, # from FastVector (not exported)
-    solver_methods
+    poly_optimize, solver_methods, @solver_alias
 
 function poly_optimize end
 
@@ -25,6 +25,18 @@ function default_solver_method()
     isempty(solver_methods) &&
         error("No solver method is available. Load a solver package that provides such a method (e.g., Mosek)")
     return first(solver_methods)
+end
+
+"""
+    @solver_alias(alias, original)
+
+Defines the solver identifier `alias` to map to the same optimization routine as `original`.
+"""
+macro solver_alias(alias, original)
+    quote
+        $Solver.poly_optimize(::Val{$(QuoteNode(alias))}, relaxation::$AbstractRelaxation, args...; kwargs...) =
+            $poly_optimize(Val($(QuoteNode(original))), relaxation, args...; kwargs...)
+    end
 end
 
 
