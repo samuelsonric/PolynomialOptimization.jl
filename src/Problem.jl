@@ -183,7 +183,7 @@ function poly_problem(objective::P;
     factor_coercive::AbstractPolynomialLike=one(P), perturbation_coefficient::Float64=0.,
     perturbation_form::AbstractPolynomialLike=Base.zero(P), noncompact::Tuple{Real,Integer}=(0.,0),
     tighter::Union{Bool,Symbol}=false, tighten::Union{Bool,Symbol}=false, verbose::Bool=false,
-    newton_args::Tuple=(), monomial_index_type::Type{<:Integer}=UInt) where {P<:AbstractPolynomialLike}
+    monomial_index_type::Type{<:Integer}=UInt) where {P<:AbstractPolynomialLike}
     if tighten !== false
         tighter = tighten
     end
@@ -290,7 +290,7 @@ function poly_problem(objective::P;
         @verbose_info("Beginning tightening process: Constructing the matrix C out of the constraints")
         zero_len = length(zero)
         nonneg_len = length(nonneg)
-        tighten!(tighter, objective, vars, degree, zero, nonneg; verbose)
+        tighten!(tighter, objective, vars, zero, nonneg; verbose)
         # tightening will lead to new zero constraints (of type simple) and new inequality constraints.
         @verbose_info("Tightening completed")
         @inbounds append!(degrees_eqs, maxhalfdegree.(@view(zero[zero_len+1:end])))
