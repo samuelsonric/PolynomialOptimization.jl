@@ -35,7 +35,6 @@ function relaxation_bound(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:A
 end
 
 trisize(n) = (n * (n +1)) >> 1
-realtype(::Type{<:Union{R,Complex{R}}}) where {R<:Real} = R
 
 macro twice(symb::Symbol, condition, body)
     esc(quote

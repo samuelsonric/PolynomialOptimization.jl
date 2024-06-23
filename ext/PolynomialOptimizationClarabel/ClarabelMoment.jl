@@ -61,7 +61,7 @@ function Solver.poly_optimize(::Val{:ClarabelMoment}, relaxation::AbstractRelaxa
     customize::Function=_ -> nothing, parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
-        V = Solver.realtype(coefficient_type(poly_problem(relaxation).objective))
+        V = real(coefficient_type(poly_problem(relaxation).objective))
         state = StateMoment{K,V}()
 
         moment_setup!(state, relaxation, groupings)

@@ -448,7 +448,7 @@ moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     moment_add_matrix_helper!(
         state,
         Base.promote_op(mindex, typeof(state), monomial_type(P)),
-        realtype(coefficient_type(P)),
+        real(coefficient_type(P)),
         grouping,
         constraint isa AbstractMatrix ? constraint : ScalarMatrix(constraint),
         psd_indextype(state),
@@ -544,7 +544,7 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
     end
 
     constrstate = @inline add_constr_fix_prepare!(state, totalsize)
-    V = realtype(coefficient_type(P))
+    V = real(coefficient_type(P))
     indices₁ = FastVec{Base.promote_op(mindex, typeof(state), monomial_type(P))}(buffer=2length(constraint))
     values₁ = similar(indices₁, V)
     # While we could conditionally define those variables only if the requirements are satisfied, the compiler might not be
@@ -646,7 +646,7 @@ See also [`sos_setup!`](@ref), [`moment_add_matrix!`](@ref), [`moment_add_equali
 function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings) where {P}
     problem = poly_problem(relaxation)
     T = Base.promote_op(mindex, typeof(state), monomial_type(P))
-    V = realtype(coefficient_type(problem.objective))
+    V = real(coefficient_type(problem.objective))
 
     # fixed items
     # fix constant term to 1
