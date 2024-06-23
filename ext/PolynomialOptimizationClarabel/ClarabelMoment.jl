@@ -1,4 +1,4 @@
-struct StateMoment{K<:Integer,V<:Real} <: SparseMatrixSolver{Int,K,V}
+struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
     Acoo::SparseMatrixCOO{Int,K,V,1}
     b::Tuple{FastVec{Int},FastVec{V}}
     q::Ref{Tuple{Vector{K},Vector{V}}}

@@ -1,4 +1,4 @@
-mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: SparseMatrixSolver{I,K,Float64}
+mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrixSolver{I,K,Float64}
     const minusAcoo_zeropsd::SparseMatrixCOO{I,K,Float64,Offset}
     const minusAcoo_nonneg::SparseMatrixCOO{I,K,Float64,Offset}
     const minusAcoo_soc::SparseMatrixCOO{I,K,Float64,Offset}

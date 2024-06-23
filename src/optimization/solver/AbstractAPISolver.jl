@@ -1,24 +1,24 @@
-export APISolver
+export AbstractAPISolver
 
 """
-    APISolver{K<:Integer}
+    AbstractAPISolver{K<:Integer}
 
 Superclass for a solver that requires new variables/constraints to be added via API calls. Solvers that are of this type must
-implement [`append!`](@ref append(::APISolver{K}, ::K) where {K<:Integer}) in such a way that they directly add a variable
+implement [`append!`](@ref append(::AbstractAPISolver{K}, ::K) where {K<:Integer}) in such a way that they directly add a variable
 (moment-case) to or constraint (SOS-case) to the solver.
-Concrete types that inherit from `APISolver` must have a property `mon_to_solver::Dict{FastKey{K},solver indextype}`.
+Concrete types that inherit from `AbstractAPISolver` must have a property `mon_to_solver::Dict{FastKey{K},solver indextype}`.
 """
-abstract type APISolver{K<:Integer} end
+abstract type AbstractAPISolver{K<:Integer} end
 
 """
-    append!(solver::APISolver{K}, key::K)
+    append!(solver::AbstractAPISolver{K}, key::K)
 
 Appends at least one new variable (moment-case) or constraint (SOS-case) to the solver `state` that represents the monomial
 given by `key`.
 """
-append!(::APISolver{K}, ::K) where {K<:Integer}
+append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
 
-@inline function mindex(solver::APISolver, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
+@inline function mindex(solver::AbstractAPISolver, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
     idx = monomial_index(monomials...)
     dictidx = Base.ht_keyindex(solver.mon_to_solver, FastKey(idx))
     @inbounds return (dictidx < 0 ?
@@ -28,12 +28,13 @@ append!(::APISolver{K}, ::K) where {K<:Integer}
 end
 
 """
-    MomentVector(relaxation::AbstractRelaxation, moments::Vector{<:Real}, solver::APISolver)
+    MomentVector(relaxation::AbstractRelaxation, moments::Vector{<:Real},
+        solver::AbstractAPISolver)
 
-Given the moments vector as obtained from an [`APISolver`](@ref), convert it to a [`MomentVector`](@ref). Note that this
+Given the moments vector as obtained from an [`AbstractAPISolver`](@ref), convert it to a [`MomentVector`](@ref). Note that this
 function is not fully type-stable, as the result may be based either on a dense or sparse vector depending on the relaxation.
 """
-function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver::APISolver{K}) where {K<:Integer,V<:Real}
+function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver::AbstractAPISolver{K}) where {K<:Integer,V<:Real}
     @assert(length(moments) ≥ length(solver.mon_to_solver))
     max_mons = relaxation_bound(relaxation)
     @assert(length(solver.mon_to_solver) ≤ max_mons)

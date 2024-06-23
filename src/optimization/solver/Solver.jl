@@ -32,7 +32,7 @@ include("./Helpers.jl")
 include("./Interface.jl")
 include("./MomentHelpers.jl")
 include("./SOSHelpers.jl")
-include("./APISolver.jl")
-include("./SparseMatrixSolver.jl")
+include("./AbstractAPISolver.jl")
+include("./AbstractSparseMatrixSolver.jl")
 
 end

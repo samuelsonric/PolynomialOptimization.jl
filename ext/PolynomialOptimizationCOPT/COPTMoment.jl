@@ -1,4 +1,4 @@
-mutable struct StateMoment{K<:Integer} <: APISolver{K}
+mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K}
     problem::COPTProb
     num_solver_vars::Cint # total number of variables available in the solver
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)

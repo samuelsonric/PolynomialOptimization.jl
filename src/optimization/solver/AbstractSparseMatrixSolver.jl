@@ -1,18 +1,18 @@
-export SparseMatrixSolver, SparseMatrixCOO, coo_to_csc!
+export AbstractSparseMatrixSolver, SparseMatrixCOO, coo_to_csc!
 
 """
-    SparseMatrixSolver{I<:Integer,K<:Integer,V<:Real}
+    AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real}
 
 Superclass for a solver that requires its data in sparse matrix form. The data is aggregated in COO form using
-[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::Tuple{AbstractVector{K,AbstractVector{V}}...) where {I<:Integer,K<:Integer,V<:Real,Offset})
-and can be converted to CSC form. The type of the indices in final CSC form is `I`, where the monomials during construction
-will be represented by numbers of type `K`.
+[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset})
+and can be converted to CSC form using [`coo_to_csc!`](@ref). The type of the indices in final CSC form is `I`, where the
+monomials during construction will be represented by numbers of type `K`.
 
 See also [`SparseMatrixCOO`](@ref).
 """
-abstract type SparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} end
+abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} end
 
-Solver.mindex(::SparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
+Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
     monomial_index(monomials...)::K
 
 """
@@ -51,6 +51,8 @@ end
 
 Appends the data given in `indvals` into successive rows in `coo` (`indvals[1]` to the first rows, `indvals[2]` to the second,
 ...). Returns the index of the last row that was added.
+
+See also [`AbstractIndvals`](@ref).
 """
 @inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prep = 0
@@ -74,6 +76,8 @@ end
     append!(coo::SparseMatrixCOO, psd::PSDVector)
 
 Appends the data given in `psd` into successive rows in `coo`. Returns the index of the last row that was added.
+
+See also [`PSDVector`](@ref).
 """
 @inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prepare_push!(coo.rowinds, length(rowvals(psd)))
@@ -139,7 +143,7 @@ end
 Converts sparse COO matrix or vector representations, where the monomial indices of the `coo` matrices or the entries of the
 vectors can be arbitrarily sparse, to a CSC-based matrix representation with continuous columns, and the vectors are converted
 to dense ones. No more than two matrices may be supplied. The input data may be mutated; however, it is still usable to pass on
-to [`MomentVector`](@ref MomentVector(::AbstractRelaxation, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}).
+to [`MomentVector`](@ref MomentVector(::AbstractRelaxation, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}).
 The following values are returned:
 - number of distinct columns
 - for each input, if it is a matrix, a tuple containing the colptr, rowval, nzval vectors
@@ -193,12 +197,13 @@ The following values are returned:
 end
 
 """
-    MomentVector(relaxation::AbstractRelaxation, moments::Vector{<:Real}, coo::SparseMatrixCOO...)
+    MomentVector(relaxation::AbstractRelaxation, moments::Vector{<:Real},
+        coo::SparseMatrixCOO...)
 
-Given the moments vector as obtained from a [`SparseMatrixSolver`](@ref) solver, convert it to a [`MomentVector`](@ref). Note
-that this function is not fully type-stable, as the result may be based either on a dense or sparse vector depending on the
-relaxation. To establish the mapping between the solver output and the actual moments, the all COO data used in the problem
-construction needs to be passed on.
+Given the moments vector as obtained from a [`AbstractSparseMatrixSolver`](@ref) solver, convert it to a
+[`MomentVector`](@ref). Note that this function is not fully type-stable, as the result may be based either on a dense or
+sparse vector depending on the relaxation. To establish the mapping between the solver output and the actual moments, all the
+COO data used in the problem construction needs to be passed on.
 """
 function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset},
     cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}
