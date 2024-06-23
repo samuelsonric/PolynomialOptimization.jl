@@ -1,4 +1,4 @@
-export SimpleVariable, SimpleRealVariable, SimpleComplexVariable
+export SimpleVariable, SimpleRealVariable, SimpleComplexVariable, variable_index
 
 """
     SimpleVariable{Nr,Nc,I<:Unsigned} <: AbstractVariable
@@ -160,6 +160,16 @@ MultivariatePolynomials.isconj(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} = v.index
 MultivariatePolynomials.ordinary_variable(v::SimpleVariable{<:Any,0}) = v
 MultivariatePolynomials.ordinary_variable(v::SimpleVariable{Nr,Nc}) where {Nr,Nc} =
     SimpleVariable{Nr,Nc}(v.index ≤ Nr ? v.index : (Nr + ((v.index - Nr - one(Nr)) | one(v.index))))
+
+"""
+    variable_index(v::SimpleVariable{Nr,Nc})
+
+Returns the index of the variable `v`, where real-valued variables have indices between 1 and `Nr`, and complex-valued
+variables have indices between `Nr+1` and `Nr+Nc`. Conjugates have the same indices as their ordinary variables.
+"""
+variable_index(v::SimpleVariable{<:Any,0}) = v.index
+variable_index(v::SimpleVariable{Nr,<:Any,I}) where {Nr,I<:Integer} =
+    v.index ≤ Nr ? v.index : I(Nr + ((v.index - Nr -1) >> 1) + one(I))
 
 function monomial_index(::ExponentsAll{N,I}, v::SimpleVariable{Nr,Nc}) where {N,I<:Integer,Nr,Nc}
     N == Nr + 2Nc || throw(MethodError(monomial_index, (e, v)))

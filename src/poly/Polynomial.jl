@@ -120,12 +120,13 @@ function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr
     for t in p
         val = T(coefficient(t))
         for (var, pow) in monomial(t)
+            idx = variable_index(var)
             if isreal(var)
-                val *= real_values[var.index]^pow
+                val *= real_values[idx]^pow
             elseif isconj(var)
-                val *= conj(complex_values[var.index])^pow
+                val *= conj(complex_values[idx])^pow
             else
-                val *= complex_values[var.index]^pow
+                val *= complex_values[idx]^pow
             end
         end
         result += val

@@ -118,6 +118,7 @@ SimplePolynomial
 ## Implementation peculiarities
 ```@docs
 Base.conj(::SimpleMonomialOrConj)
+variable_index
 monomial_product
 monomial_index
 effective_nvariables
