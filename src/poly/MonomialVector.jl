@@ -358,42 +358,62 @@ function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) whe
     if @view(v.e.minmultideg[Nr+1:2:end]) == @view(v.e.minmultideg[Nr+2:2:end])
         minmultideg = v.e.minmultideg
     else
-        minmultideg = [@view(v.e.minmultideg[1:Nr]); @view(v.e.minmultideg[Nr+2:2:end]); @view(v.e.minmultideg[Nr+1:2:end])]
+        minmultideg = similar(v.e.minmultideg)
+        @inbounds copyto!(minmultideg, 1, v.e.minmultideg, 1, Nr)
+        @inbounds for i in Nr+1:2:Nr+2Nc
+            minmultideg[i] = v.e.minmultideg[i+1]
+            minmultideg[i+1] = v.e.minmultideg[i]
+        end
     end
     if @view(v.e.maxmultideg[Nr+1:2:end]) == @view(v.e.maxmultideg[Nr+2:2:end])
         maxmultideg = v.e.maxmultideg
     else
-        maxmultideg = [@view(v.e.maxmultideg[1:Nr]); @view(v.e.maxmultideg[Nr+2:2:end]); @view(v.e.maxmultideg[Nr+1:2:end])]
+        maxmultideg = similar(v.e.maxmultideg)
+        @inbounds copyto!(maxmultideg, 1, v.e.maxmultideg, 1, Nr)
+        @inbounds for i in Nr+1:2:Nr+2Nc
+            maxmultideg[i] = v.e.maxmultideg[i+1]
+            maxmultideg[i+1] = v.e.maxmultideg[i]
+        end
     end
     minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg && return v
     return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg))
 end
-function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, along::Tuple{Any,Vararg}) where {Nr,Nc,I<:Integer}
+function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, along₁, alongᵣ...) where {Nr,Nc,I<:Integer}
     # just to get along sorted correctly, we have to do all this extra work
-    cmv = _conj(SimpleMonomialVector{Nr,Nc}(unsafe, v.e, collect(firstindex(v.e):lastindex(v.e)), along...))
+    cmv = _conj(SimpleMonomialVector{Nr,Nc}(unsafe, v.e, collect(firstindex(v.e):lastindex(v.e)), along₁, alongᵣ...))
     # but for the return value, we really don't need any indexing
     return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(cmv.e.mindeg, cmv.e.maxdeg, cmv.e.minmultideg,
         cmv.e.maxmultideg))
 end
 _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I}, along...) where {Nr,Nc,I<:Integer} =
     SimpleMonomialVector{Nr,Nc}(v.e, sort_along!(map(x -> conj(x).index, v), along...)[1])
-function _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}) where {Nr,Nc,I<:Integer}
+function _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along...) where {Nr,Nc,I<:Integer}
     if @view(v.e.minmultideg[Nr+1:2:end]) == @view(v.e.minmultideg[Nr+2:2:end])
         minmultideg = v.e.minmultideg
     else
-        minmultideg = [@view(v.e.minmultideg[1:Nr]); @view(v.e.minmultideg[Nr+2:2:end]); @view(v.e.minmultideg[Nr+1:2:end])]
+        minmultideg = similar(v.e.minmultideg)
+        @inbounds copyto!(minmultideg, 1, v.e.minmultideg, 1, Nr)
+        @inbounds for i in Nr+1:2:Nr+2Nc
+            minmultideg[i] = v.e.minmultideg[i+1]
+            minmultideg[i+1] = v.e.minmultideg[i]
+        end
     end
     if @view(v.e.maxmultideg[Nr+1:2:end]) == @view(v.e.maxmultideg[Nr+2:2:end])
         maxmultideg = v.e.maxmultideg
     else
-        maxmultideg = [@view(v.e.maxmultideg[1:Nr]); @view(v.e.maxmultideg[Nr+2:2:end]); @view(v.e.maxmultideg[Nr+1:2:end])]
+        maxmultideg = similar(v.e.maxmultideg)
+        @inbounds copyto!(maxmultideg, 1, v.e.maxmultideg, 1, Nr)
+        @inbounds for i in Nr+1:2:Nr+2Nc
+            maxmultideg[i] = v.e.maxmultideg[i+1]
+            maxmultideg[i+1] = v.e.maxmultideg[i]
+        end
     end
     enew = minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg ? v.e :
         ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg)
     return SimpleMonomialVector{Nr,Nc}(
         enew,
-        sort_along!(map(let enew=enew; x -> exponents_to_index(enew, exponents(SimpleConjMonomial(x)), degree(x)) end,
-            v.indices), along...)[1]
+        sort_along!(map(let enew=enew; x -> exponents_to_index(enew, exponents(SimpleConjMonomial(x)), degree(x)) end, v),
+            along...)[1]
     )
 end
 
