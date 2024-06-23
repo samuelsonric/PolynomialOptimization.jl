@@ -36,8 +36,6 @@ function is not fully type-stable, as the result may be based either on a dense 
 """
 function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver::AbstractAPISolver{K}) where {K<:Integer,V<:Real}
     @assert(length(moments) ≥ length(solver.mon_to_solver))
-    max_mons = relaxation_bound(relaxation)
-    @assert(length(solver.mon_to_solver) ≤ max_mons)
     # In any case, our variables will not be in the proper order. First figure this out.
     # Dict does not preserve the insertion order. While we could use OrderedDict instead, we need to do lots of insertions and
     # lookups and only once access the elements in the insertion order; so it is probably better to do the sorting once.
@@ -52,8 +50,12 @@ function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver
     end
     # Now we have the 1:1 correspondence, but we want the actual monomial order.
     sort_along!(mon_pos, moments)
+    max_mons = mon_pos[end] # total number of monomials in ExponentsAll (which in the complex case can exceed even the length
+                            # of the dense relaxation significantly - because the exponents don't know anything about complex
+                            # structure)
+    @assert(length(moments) ≤ max_mons)
     # Finally, x is ordered!
-    if length(moments) == max_mons # dense case
+    if length(moments) == mon_pos # (real) dense case
         solution = moments
     elseif 3length(mon_pos) < max_mons
         solution = SparseVector(max_mons, mon_pos, moments)

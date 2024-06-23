@@ -142,8 +142,8 @@ end
 
 Converts sparse COO matrix or vector representations, where the monomial indices of the `coo` matrices or the entries of the
 vectors can be arbitrarily sparse, to a CSC-based matrix representation with continuous columns, and the vectors are converted
-to dense ones. No more than two matrices may be supplied. The input data may be mutated; however, it is still usable to pass on
-to [`MomentVector`](@ref MomentVector(::AbstractRelaxation, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}).
+to dense ones. No more than two matrices may be supplied. The input data may be mutated; and this mutated data must be passed
+on to [`MomentVector`](@ref MomentVector(::AbstractRelaxation, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}).
 The following values are returned:
 - number of distinct columns
 - for each input, if it is a matrix, a tuple containing the colptr, rowval, nzval vectors
@@ -203,14 +203,14 @@ end
 Given the moments vector as obtained from a [`AbstractSparseMatrixSolver`](@ref) solver, convert it to a
 [`MomentVector`](@ref). Note that this function is not fully type-stable, as the result may be based either on a dense or
 sparse vector depending on the relaxation. To establish the mapping between the solver output and the actual moments, all the
-COO data used in the problem construction needs to be passed on.
+column-sorted COO data (i.e., as returned by [`coo_to_csc`](@ref)) used in the problem construction needs to be passed on.
 """
 function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset},
     cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
-    max_mons = relaxation_bound(relaxation)
+    max_mons = max(coo₁.moninds[end], (coo.moninds[end] for coo in cooₙ)...) # the coos are sorted according to the columns
     @assert(length(moments) ≤ max_mons)
-    if length(moments) == max_mons # dense case
+    if length(moments) == max_mons # (real) dense case
         solution = moments
     else
         # We need to build the vector of monomial indices.

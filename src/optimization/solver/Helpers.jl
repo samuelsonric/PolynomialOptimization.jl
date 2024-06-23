@@ -8,33 +8,6 @@ Short helper function that allows to determine the number of monomials in `n` va
 """
 monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
 
-function relaxation_bound(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}) where {Nr,Nc}
-    d = degree(r)
-    iszero(Nc) && return monomial_count(Nr, 2d)
-    if iszero(Nr)
-        cpsmaller = monomial_count(Nc, d)
-        return cpsmaller^2 # combine every monomial with all possible conjugates
-    end
-    # When mixing, our total basis that is to be squared (which does not contain any conjugates) has degree d. We can split
-    # this into various partitions
-    result = zero(UInt)
-    for complex_deg in 0:d
-        # If the degree contribution due to the complex-valued variables should be exactly complex_deg, this can be achieved by
-        # having either the normal or the conjugated part with degree complex_deg, and the other anything not larger.
-        # (#monomials in Nc variables with degree exactly complex_deg)
-        # * (#monomials in Nc variables with degree not exceeding complex_deg)
-        # * 2 ; we can swap the order; this conveniently corresponds to the representation of both the real and imaginary part
-        # - (#monomials in Nc variables with degree exactly complex_deg) ; subtract the imaginary contributions of the purely
-        #                                                                  real-valued monomials
-        cpexact = isone(Nc) ? one(UInt) : monomial_count(Nc -1, complex_deg)
-        cpsmaller = monomial_count(Nc, complex_deg)
-        cpcontrib = 2cpexact * cpsmaller - cpexact
-        # We can combine the given complex_deg with all possible real-valued monomials that don't exceed the total degree
-        result += cpcontrib * monomial_count(Nr, 2(d - complex_deg))
-    end
-    return result
-end
-
 """
     trisize(n)
 

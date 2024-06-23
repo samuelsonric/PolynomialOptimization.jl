@@ -55,7 +55,7 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
         @assert(idx_c ≤ length(d.values))
         idx_re, idx_im = minmax(idx, idx_c)
         @inbounds val_re, val_im = d.values[idx_re], d.values[idx_im]
-        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_re : -val_re)
+        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_im : -val_im)
     end
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector}, not_found,
