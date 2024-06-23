@@ -20,8 +20,8 @@ function add_var_quadratic! end
 
 Adds decision variables in a (rotated) quadratic cone to the solver and put their values into the linear constraints (rows in
 the linear constraint matrix), indexed according to `indvals`. The variables will satisfy ``x_1, x_2 \geq 0``,
-``2x_1 x_2 \geq \sum_{i = 3} x_i^2`` if the solver supports the rotated quadratic cone or ``x_1 \geq \sum_{i = 2} x_i^2`` if it
-only supports the standard quadratic cone.
+``2x_1 x_2 \geq \sum_{i = 3} x_i^2`` if the solver supports the rotated quadratic cone or ``x_1 \geq 0``,
+``x_1^2 \geq \sum_{i = 2} x_i^2`` if it only supports the standard quadratic cone.
 
 See also [`AbstractIndvals`](@ref).
 
@@ -59,8 +59,7 @@ add_var_psd!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Real})
     add_var_psd!(state, dim::Int, data::PSDVector{T,V}) where {T,V<:Real}
 
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are 2-Tuples of an `AbstractVector` of constraint indices, which are of the type returned by
-[`mindex`](@ref), and an `AbstractVector` of their coefficients.
+individual entries are [`AbstractIndvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 
 !!! hint "Complex-valued PSD variables"
@@ -92,8 +91,7 @@ add_var_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex})
     add_var_psd_complex!(state, dim::Int, data::PSDVector{T,V}) where {T,V<:Real}
 
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are 2-Tuples of an `AbstractVector` of constraint indices, which are of the type returned by
-[`mindex`](@ref), and an `AbstractVector` of their weights.
+individual entries are [`AbstractIndvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 Regardless of the travelling order, for diagonal elements, there will be exactly one entry, which is the real part. For
 off-diagonal elements, the real part will be followed by the imaginary part. Therefore, the coefficients are real-valued.

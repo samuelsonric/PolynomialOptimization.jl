@@ -21,7 +21,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     constraints.
     Note that the order of the constraints is also influenced by the parent relaxation. If a correlative sparsity relaxation is
     applied to another relaxation that already limited the prefactor of a constraint to be of degree zero, it must necessarily
-    be of lower order.
+    be of low order.
 
     By default, the correlative sparsity graph is completed to a chordal graph before the cliques are determined, which
     guarantees that the maximal cliques can be determined quickly; however, this may degrade the sparsity and it may be

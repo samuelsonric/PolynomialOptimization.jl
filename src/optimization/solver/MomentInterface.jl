@@ -20,9 +20,9 @@ function add_constr_quadratic! end
 
 Adds a (rotated) quadratic constraint to the three linear combinations of decision variables (columns in the linear constraint
 matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
-``\mathit{indvals}_{i, 2} \cdot x_{\mathit{indvals}_{i, 1}}``) ``X_1, X_2 \geq 0``,
-``2X_1 X_2 \geq \sum_{i = 3} X_i^2`` if the solver supports the rotated quadratic cone, or ``X_1 \geq \sum_{i = 2} X_i^2`` if
-it only supports the standard quadratic cone.
+``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1, X_2 \geq 0``,
+``2X_1 X_2 \geq \sum_{i = 3} X_i^2`` if the solver supports the rotated quadratic cone, or ``X_1 \geq 0``,
+``X_1^2 \geq \sum_{i = 2} X_i^2`` if it only supports the standard quadratic cone.
 
 See also [`AbstractIndvals`](@ref).
 
@@ -60,8 +60,7 @@ add_constr_psd!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Real})
     add_constr_psd!(state, dim::Integer, data::PSDVector{T,V}) where {T,V<:Real}
 
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are 2-Tuples of an `AbstractVector` of decision variable indices, which are of the type returned by
-[`mindex`](@ref), and an `AbstractVector` of their coefficients.
+individual entries are [`AbstractIndvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 
 !!! hint "Complex-valued PSD variables"
@@ -93,8 +92,7 @@ add_constr_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex})
     add_constr_psd_complex!(state, dim::Int, data::PSDVector{T,V}) where {T,V<:Real}
 
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are 2-Tuples of an `AbstractVector` of decision variable indices, which are of the type returned by
-[`mindex`](@ref), and an `AbstractVector` of their weights.
+individual entries are [`AbstractIndvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 Regardless of the travelling order, for diagonal elements, there will be exactly one entry, which is the real part. For
 off-diagonal elements, the real part will be followed by the imaginary part. Therefore, the coefficients are real-valued.

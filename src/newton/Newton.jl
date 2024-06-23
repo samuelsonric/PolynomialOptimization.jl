@@ -65,14 +65,14 @@ The `parameters` will be passed on to the linear solver in every case (preproces
     be troublesome, the option `filepath` allows to instead write the output to a file. This is also useful if the process of
     determining the polytope is aborted, as it can be resumed from its current state (also in a multithreaded or
     multiprocessing context) if the same file name is passed to `filepath`, provided the Julia configuration (number of
-    threads, number of processes) was the same at any time. Make sure to always delete the output files if you compute the with
-    a different configuration or the results will probably be corrupt!
+    threads, number of processes) was the same at any time. Make sure to always delete the output files if you compute with a
+    different configuration or the results will probably be corrupt!
 
     Using this option will create one (or multiple, if multithreading/multiprocessing is used) file that has the file name
     `filepath` with the extension `.out`, and for every `.out` file also a corresponding `.prog` file that captures the current
     status. The `.out` file(s) will hold the resulting basis in a binary format, the `.prog` file is a small indicator required
     for resuming the operation after an abort.
-    This function will only `true` when it is finished and the data was stored to a file; it will _not_ load the actual data.
+    This function will return `true` when it is finished and the data was stored to a file; it will _not_ load the actual data.
     To do so, use [`halfpolytope_from_file`](@ref) in a separate step, which can also tell you exactly how much memory will be
     required for this operation.
 

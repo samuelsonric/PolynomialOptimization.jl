@@ -465,7 +465,7 @@ Parses a polynomial equality constraint for moments and calls the appropriate so
 To make this function work for a solver, implement the following low-level primitives:
 - [`add_constr_fix_prepare!`](@ref) (optional)
 - [`add_constr_fix!`](@ref)
-- [`add_constr_finalize_fix!`](@ref) (optional)
+- [`add_constr_fix_finalize!`](@ref) (optional)
 
 Usually, this function does not have to be called explicitly; use [`moment_setup!`](@ref) instead.
 
@@ -635,7 +635,8 @@ The following methods must be implemented by a solver to make this function work
 !!! warning "Indices"
     The variable indices used in all solver functions directly correspond to the indices given back by [`mindex`](@ref).
     However, in a sparse problem there may be far fewer indices present; therefore, when the problem is finally given to the
-    solver, care must be taken to eliminate all unused indices.
+    solver, care must be taken to eliminate all unused indices. The functionality provided by [`AbstractAPISolver`](@ref) and
+    [`AbstractSparseMatrixSolver`](@ref) already takes care of this.
 
 !!! info "Order"
     This function is guaranteed to set up the fixed constraints first, then followed by all the others. However, the order of

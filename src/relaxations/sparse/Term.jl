@@ -279,8 +279,8 @@ _iterate_supports!(relaxation::SparsityTerm) = relaxation.support_union =
 
 Analyze the term sparsity of the problem.
 [Term sparsity](https://doi.org/10.1137/19M1307871) is a recent iterative sparsity analysis that groups terms with shared
-supports. Its last iteration will give the same optimal value as the original problem, although it may still be smaller.
-Often, even the uniterated analysis already gives the same bound as the dense problem.
+supports. Its last iteration will give the same optimal value as the original problem, although it may still be of a smaller
+size. Often, even the uniterated analysis already gives the same bound as the dense problem.
 The terms are grouped based on connected components of a graph; this can be improved by using the smallest chordal extension
 (see [`SparsityTermChordal`](@ref)), which will lead to even smaller problem sizes, but typically also worse bounds.
 
@@ -297,7 +297,7 @@ Analyze the term sparsity of the problem using chordal cliques.
 with shared supports. Even in its last iteration, it may give strictly smaller values than the dense problem.
 The basis elements are grouped in terms of chordal cliques of the term sparsity graph. This uses maximal cliques; as obtaining
 maximal cliques of an arbitrary graph is not efficient, the graph is extended to a chordal graph if `chordal_completion` is
-`true` using a heuristic. Disabling the chordal completion can lead to smaller problem sizess.
+`true` using a heuristic. Disabling the chordal completion can lead to smaller problem sizes.
 
 If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) instead of
 nesting the sparsity objects.

@@ -84,7 +84,7 @@ Base.iterate(d::MomentVector, args...) = iterate(d.values, args...)
 Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractRelaxation`](@ref).
 A `Result` struct `r` contains information about
 - the relaxation employed for the optimization (`r.relaxation`)
-- the optimized problem (available via [`poly_problem`](@ref))
+- the optimized problem (available via [`poly_problem`](@ref poly_problem(::Result)))
 - the used method (`r.method`)
 - the time required for the optimization in seconds (`r.time`)
 - the status of the solver (`r.status`), which also depends on the solver type

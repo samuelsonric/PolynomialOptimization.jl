@@ -1,5 +1,6 @@
 """
-    sort_along!(v::AbstractVector, along::AbstractVector...; lo=1, hi=length(v), o=Base.Order.Forward, relevant=1)
+    sort_along!(v::AbstractVector, along::AbstractVector...; lo=1, hi=length(v),
+        o=Base.Order.Forward, relevant=1)
 
 This helper function sorts the vector `v` as `sort!` would do, but at the same time puts all vectors in `along` in the same
 order as `v`. Therefore, `sort_along!(v, a, b, c)` is equivalent to
@@ -13,7 +14,8 @@ when breaking ties in `v`.
 
 !!! info "Implementation"
     Note that the sorting functions are exactly identical to the ones used in Julia 1.8 (there was a big overhaul in 1.9 which
-    made everything extremely complicated; we don't reproduce the new behavior).
+    made everything extremely complicated; we don't reproduce the new behavior). This means that either InsertionSort or
+    QuickSort are used.
 """
 function sort_along!(v::AbstractVector, along::AbstractVector...; lo::Integer=1, hi::Integer=length(v),
     o::Base.Ordering=Base.Order.Forward, relevant::Integer=1)

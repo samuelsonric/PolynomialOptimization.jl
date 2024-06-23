@@ -79,14 +79,15 @@ The following methods must be implemented by a solver to make this function work
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_var_free_prepare!`](@ref) (optional)
-- [`add_var_free_fix!`](@ref)
+- [`add_var_free!`](@ref)
 - [`add_var_free_finalize!`](@ref) (optional)
 - [`fix_constraints!`](@ref)
 
 !!! warning "Indices"
     The constraint indices used in all solver functions directly correspond to the indices given back by [`mindex`](@ref).
     However, in a sparse problem there may be far fewer indices present; therefore, when the problem is finally given to the
-    solver, care must be taken to eliminate all unused indices.
+    solver, care must be taken to eliminate all unused indices. The functionality provided by [`AbstractAPISolver`](@ref) and
+    [`AbstractSparseMatrixSolver`](@ref) already takes care of this.
 
 !!! info "Order"
     This function is guaranteed to set up the free variables first, then followed by all the others. However, the order of

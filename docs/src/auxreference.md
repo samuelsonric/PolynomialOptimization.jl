@@ -9,14 +9,15 @@ optimization.
 
 ```@docs
 @allocdiff
+keepcol!
 ```
 
 ## Chordal graphs
 The functionality for chordal graphs is taken from the [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph) package
 (MIT license). Some features that we don't need were removed, inefficient implementations were improved.
 ```@docs
-chordal_completion!
-chordal_cliques!
+Relaxation.chordal_completion!
+Relaxation.chordal_cliques!
 ```
 
 ## Sorting of multiple vectors
@@ -40,6 +41,7 @@ CurrentModule = PolynomialOptimization.FastVector
 ```@docs
 FastVec
 Base.sizehint!(::FastVec, ::Integer)
+Base.resize!(::FastVec, ::Integer)
 Base.empty!(::FastVec)
 prepare_push!
 Base.push!(::FastVec{V}, el) where {V}

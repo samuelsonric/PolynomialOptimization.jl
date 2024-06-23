@@ -5,50 +5,66 @@ CurrentModule = PolynomialOptimization
 ```
 
 # Optimization reference
-This reference page lists all functions that are relevant for polynomial optimization. All functions listed here are exported
-by the package.
+This reference page lists all functions that are relevant for polynomial optimization.
 
 ## Problem definition
 ```@docs
-POProblem
-poly_problem
+Problem
+poly_problem(::P) where {P<:AbstractPolynomialLike}
 variables
 nvariables
 isreal
 ```
 
-## Optimization
+## Relaxations
+Types and functions related to relaxations of polynomial optimization problems are found in the submodule `Relaxation`. The
+types in this module are mostly not exported, so that a qualified name is required.
+```@meta
+CurrentModule = PolynomialOptimization.Relaxation
+```
 ```@docs
-poly_optimize
+AbstractRelaxation
+poly_problem(::AbstractRelaxation)
+basis
+MultivariatePolynomials.degree(::AbstractRelaxation)
+groupings
+iterate!(::AbstractRelaxation)
+Core.Type(::Problem, ::Tuple{Vararg{Any}})
+RelaxationGroupings
 ```
 
-## Working with problem solutions
-All functions listed here requires that the problem be optimized before.
+### Relaxations based on a global basis
 ```@docs
-POResult
+AbstractRelaxationBasis
+Dense
+Newton
+Custom
+```
+
+### Relaxations based on individual sparsity
+```@docs
+AbstractRelaxationSparse
+SparsityCorrelative
+SparsityTermBlock
+SparsityTermChordal
+#SparsityCorrelativeTerm
+```
+
+## Optimization and problem solutions
+```@meta
+CurrentModule = PolynomialOptimization
+```
+```@docs
+poly_optimize
+Result
+poly_problem(::Result)
 optimality_certificate
 moment_matrix
 MomentVector
 ```
 
-## Relaxations
-```@docs
-AbstractPORelaxation
-degree
-basis
-groupings
-iterate!(::AbstractPORelaxation)
-Core.Type(::POProblem, ::Tuple{Vararg{Any}})
-RelaxationGroupings
-AbstractRelaxationDegree
-RelaxationDense
-RelaxationNewton
-RelaxationCustom
-AbstractRelaxationSparse
-RelaxationSparsityCorrelative
-```
-
 ## Newton polytope construction (manually)
+Note that using these functions is usually not necessary; construct a [`Newton`](@ref Relaxation.Newton) relaxation instead.
 ```@docs
 Newton.halfpolytope
 Newton.halfpolytope_from_file

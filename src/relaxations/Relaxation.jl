@@ -23,13 +23,13 @@ abstract type AbstractRelaxation{Prob<:Problem} end
 
 Contains information about how the elements in a certain (sparse) polynomial optimization problem combine.
 Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
-- ``\sum_i \mathit{obj}_i^\top \sigma_i \operatorname{conj}(\mathit{obj}_i)`` is the SOS representation of the objective with
+- ``\sum_i \mathit{obj}_i^\top \sigma_i \overline{\mathit{obj}_i}`` is the SOS representation of the objective with
   ``\sigma_i \succeq 0``
-- ``\sum_i \mathit{zero}_{k, i}^\top f_k \operatorname{conj}(\mathit{zero}_{k, i})`` is the prefactor for the kᵗʰ equality
-  constraint with ``f_k`` a free matrix
-- ``\sum_i \mathit{nonneg}_{k, i}^\top \sigma_{k, i} \operatorname{conj}(\mathit{nonneg}_{k, i})`` is the SOS representation of
+- ``\sum_i \mathit{zero}_{k, i}^\top f_k`` is the prefactor for the kᵗʰ equality
+  constraint with ``f_k`` a free vector
+- ``\sum_i \mathit{nonneg}_{k, i}^\top \sigma_{k, i} \overline{\mathit{nonneg}_{k, i}}`` is the SOS representation of
   the prefactor of the kᵗʰ nonnegative constraint with ``\sigma_{k, i} \succeq 0``
-- ``\sum_i (\mathit{psd}_{k, i}^\top \otimes \mathbb1) Z_{k, i} (\operatorname{conj}(\mathit{psd}_{k, i}) \otimes \mathbb1)``
+- ``\sum_i (\mathit{psd}_{k, i}^\top \otimes \mathbb1) Z_{k, i} (\overline{\mathit{psd}_{k, i}} \otimes \mathbb1)``
   is the SOS matrix representation of the prefactor of the kᵗʰ PSD constraint with ``Z_{k, i} \succeq 0``
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.

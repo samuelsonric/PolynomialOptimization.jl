@@ -37,8 +37,8 @@ indextype
 ## Working with exponents
 Exponent sets can be indexed and iterated. If consecutive elements are required, iteration is slightly faster, as indexing
 requires to determine the degree for every operation. However, in this case it is fastest to preallocate a vector that can hold
-the exponents and [`iterate!`](@ref iterate!(::AbstractVector{Int}, ::AbstractExponents)) with mutation of this vector, use the
-[`veciter`](@ref) wrapper for this task:
+the exponents and [`iterate!`](@ref iterate!(::AbstractVector{Int}, ::AbstractExponents)) with mutation of this vector, or use
+the [`veciter`](@ref) wrapper for this task:
 ```@docs
 iterate!(::AbstractVector{Int}, ::AbstractExponents)
 veciter(::AbstractExponents, ::AbstractVector{Int})
@@ -49,6 +49,7 @@ When working with individual indices or exponents, conversion functions are prov
 exponents_to_index
 exponents_from_index(::AbstractExponents{<:Any,I}, ::I) where {I<:Integer}
 exponents_sum
+Base.union(::AbstractExponents{N}, ::AbstractExponents{N}) where {N}
 ```
 Note that `exponents_from_index` returns a lazy implementation of an `AbstractVector{Int}`; if the same exponents must be
 accessed multple times, it might be beneficial to `collect` the result or copy it to a pre-allocated vector.

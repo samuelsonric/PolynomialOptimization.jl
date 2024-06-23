@@ -4,8 +4,8 @@ export AbstractAPISolver
     AbstractAPISolver{K<:Integer}
 
 Superclass for a solver that requires new variables/constraints to be added via API calls. Solvers that are of this type must
-implement [`append!`](@ref append(::AbstractAPISolver{K}, ::K) where {K<:Integer}) in such a way that they directly add a variable
-(moment-case) to or constraint (SOS-case) to the solver.
+implement [`append!`](@ref append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}) in such a way that they directly add a
+variable (moment-case) to or constraint (SOS-case) to the solver.
 Concrete types that inherit from `AbstractAPISolver` must have a property `mon_to_solver::Dict{FastKey{K},solver indextype}`.
 """
 abstract type AbstractAPISolver{K<:Integer} end

@@ -5,11 +5,11 @@ include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
-using .Solver: default_solver_method
+using .Solver: default_solver_method, monomial_count
 import .Solver: poly_optimize
 
 """
-    poly_optimize(method, relaxation::AbstractRelaxation; verbose=false,
+    poly_optimize([method, ]relaxation::AbstractRelaxation; verbose=false,
         clique_merging=false, solutions::Bool=false, certificate::Bool=false, kwargs...)
 
 Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
@@ -24,7 +24,9 @@ variables and how many of these variables appear. The free block sizes are only 
 of equality constraints that will be constructed by multiplying two elements from a block, as duplicates will be ignored.
 Any additional keyword argument is passed on to the solver.
 
-For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize).
+For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize). If `method` is omitted, the default
+solver is used. Note that this depends on the loaded solver packages, and possibly also their loading order if no preferred
+solver has been loaded.
 """
 function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
@@ -72,12 +74,6 @@ poly_optimize(v::Val, problem::Problem, rest...; kwargs...) =
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 
-"""
-    poly_optimize(relaxation::AbstractRelaxation; kwargs...)
-
-Uses the default solver. Note that this depends on the loaded solver packages, and possibly also their loading order if no
-preferred solver has been loaded.
-"""
 function poly_optimize(args...; kwargs...)
     if !isempty(args) && args[1] isa Val
         error("Unknown solver method specified. Are the required solver packages loaded?")

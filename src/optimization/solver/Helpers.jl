@@ -3,7 +3,8 @@ export monomial_count, trisize, count_uniques
 """
     monomial_count(n, d)
 
-Short helper function that allows to determine the number of monomials in `n` variables up to degree `d`.
+Short helper function that allows to determine the number of monomials in `n` variables up to degree `d`,
+``\\binom{n + d}{n}``. Uses the underlying cache machinery provided by [`ExponentsDegree`](@ref).
 """
 monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
 
@@ -34,6 +35,11 @@ function relaxation_bound(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:A
     return result
 end
 
+"""
+    trisize(n)
+
+Returns the number of items in the triangle of a matrix of side dimension `n`, ``\\frac{n(n +1)}{2}``.
+"""
 trisize(n) = (n * (n +1)) >> 1
 
 macro twice(symb::Symbol, condition, body)
@@ -127,10 +133,11 @@ collect_grouping(g) = collect(g)
     count_uniques(vec::AbstractVector[, callback])
     count_uniques(vec₁::AbstractVector, vec₂::AbstractVector[, callback])
 
-Return the unique elements in the vector(s), which must be sorted but may possibly contain duplicates. The callback is invoked
-once for every unique entry. Its first parameter is the index of the element in the unique total vector, its second (and third)
-is the last index/indices correponding to the element in the input vector. In the second form which allows to check for two
-vectors jointly, one of the callback parameters can be `missing` if the element is present only in one of the two vectors.
+Return the number of unique elements in the vector(s), which must be sorted but may possibly contain duplicates. The callback
+is invoked once for every unique entry. Its first parameter is the index of the element in the unique total vector, its second
+(and third) is the last index/indices correponding to the element in the input vector(s). In the second form which allows to
+check for two vectors jointly, one of the callback parameters can be `missing` if the element is present only in one of the two
+vectors.
 """
 function count_uniques(vec::AbstractVector, callback::F=(_, _) -> nothing) where {F}
     @assert(issorted(vec))

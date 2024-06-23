@@ -42,7 +42,7 @@ Base.IteratorSize(::Type{<:AbstractExponentsUnbounded}) = Base.IsInfinite()
     AbstractExponentsDegreeBounded{N,I} <: AbstractExponents{N,I}
 
 Abstract supertype for finite collections of multivariate exponents, bounded by their degrees. These collections have a length;
-they also provide at least the fields `mindeg` and `maxdeg` that describe (a superset of) the described degree range. Their
+they also provide at least the fields `mindeg` and `maxdeg` that describe (a superset of) the covered degree range. Their
 cache is always initialized completely when required.
 """
 abstract type AbstractExponentsDegreeBounded{N,I<:Integer} <: AbstractExponents{N,I} end

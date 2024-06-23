@@ -17,7 +17,7 @@ The returned index is arbitrary as long as it is unique for the total monomial.
 
 Defines the level of support for quadratic cones in the solver:
 - `SOLVER_QUADRATIC_NONE`: no quadratic cone is explicitly supported
-- `SOLVER_QUADRATIC_SOC`: the second-order cone ``x_1 \\geq \\sum_{i \\geq 2} x_i^2`` is supported
+- `SOLVER_QUADRATIC_SOC`: the second-order cone ``x_1^2 \\geq \\sum_{i \\geq 2} x_i^2`` is supported
 - `SOLVER_QUADRATIC_RSOC`: the rotated second-order cone ``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^3`` is supported
 Note that `SOLVER_QUADRATIC_RSOC` is preferred, i.e., specify the last value if both cones are supported.
 """
@@ -40,7 +40,7 @@ Supertype for an iterable that returns a `Tuple{T,V}` on iteration, where the fi
 second its coefficient in the constraint matrix. The type `T` is the type returned by [`mindex`](@ref).
 The properties `indices` and `values` can be accessed and will give `AbstractVector`s of the appropriate type. Note that the
 fields should only be used if an iterative approach is not feasible, as they might be constructed on-demand (this will only
-happen for the first two indvals in the standard quadratic cone).
+happen for the first two indvals in the standard quadratic cone, all other elements can be accessed with zero cost).
 """
 abstract type AbstractIndvals{T,V<:Real} end
 
@@ -139,11 +139,8 @@ end
     supports_complex_psd(state)
 
 This function indicates whether the solver natively supports a complex-valued PSD cone. If it returns `false` (default), the
-complex-valued PSD constraints will be rewritten into real-valued PSD constraints (using the standard
-``\left(\begin{smallmatrix} \operatorname{Re} & -\operatorname{Im} \\ \operatorname{Im} & \operatorname{Re} \end{smallmatrix}\right)``
-form for the vector interface and the [double-dualization technique](https://doi.org/10.48550/arXiv.2307.11599) for the matrix
-interface, so no additional equality constraints are required in either case); this is completely transparent for the solver.
-If the function returns `true`, the solver must additionally implement [`add_var_psd_complex!`](@ref) and
+complex-valued PSD constraints will be rewritten into real-valued PSD constraints; this is completely transparent for the
+solver. If the function returns `true`, the solver must additionally implement [`add_var_psd_complex!`](@ref) and
 [`add_constr_psd_complex!`](@ref).
 """
 supports_complex_psd(_) = false
@@ -160,10 +157,10 @@ abstract type AbstractPSDIndextype{Tri} end
 """
     PSDIndextypeMatrixCartesian(triangle, offset) <: AbstractPSDIndextype
 
-The solver implements PSD matrix constraints by using a monolithic PSD matrix variable.
-Entries from the variable are obtained by using a cartesian index of two integers of the return type of [`mindex`](@ref). This
-index represents one triangle of the matrix (the lower if `triangle === :L`, the upper if `triangle === :U`). The first entry
-has the index `(offset, offset)`, typically either `0` or `1`.
+The solver implements PSD matrix constraints by using a monolithic PSD matrix variable or an LMI-style representation.
+Entries from the variable are obtained (or put into the LMI) by using a cartesian index of two integers of the return type of
+[`mindex`](@ref). This index represents one triangle of the matrix (the lower if `triangle === :L`, the upper if
+`triangle === :U`). The first entry has the index `(offset, offset)`, typically either `0` or `1`.
 
 !!! info
     Note that while only one triangle is indexed, it is assumed that the solver will by default populate the other triangle in
@@ -188,7 +185,7 @@ _get_offset(::PSDIndextypeMatrixCartesian{<:Any,Offset}) where {Offset} = Offset
 An iterable that returns matrix elements of a PSD cone.
 Iterating through it will give `Pair`s with keys that contain the [`mindex`](@ref) of the monomial, and a 3-Tuple of
 `AbstractVector`s as the values which contain the row and column indices together with their coefficients to describe where
-the monomial appears.
+the monomial appears. Note that the vectors will be reused in every iteration.
 
 See also [`PSDIndextypeMatrixCartesian`](@ref).
 """
@@ -254,11 +251,14 @@ end
     PSDIndextypeVector(triangle) <: AbstractPSDIndextype
 
 The solver implements PSD matrix constraints by demanding that the matrixization of a vector of decision variables be PSD.
+
 If `triangle === :F`, the vector is formed by stacking all the columns of the matrix.
+
 If `triangle === :L`, the columns of the lower triangle are assumed to be stacked _and scaled_, i.e., off-diagonal variables
 that enter the cone are implicitly multiplied by ``1 / \\sqrt2`` in the matrix; so the coefficients will already be
 premultiplied by ``\\sqrt2`` (for the [`add_constr_psd!`](@ref) case) or by ``1 / \\sqrt2`` (for the [`add_var_psd!`](@ref)
-case)).
+case).
+
 If `triangle === :U`, the columns of the upper triangle are assumed to be stacked and scaled.
 
 See also [`PSDVector`](@ref).

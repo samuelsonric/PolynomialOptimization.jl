@@ -270,6 +270,12 @@ end
     return dest
 end
 
+"""
+    resize!(v::FastVec, n::Integer)
+
+Ensures that the internal buffer can hold at least `n` items (meaning that larger buffers will not be shrunk, but smaller ones
+will be increased to exactly `n`) and sets the length of the vector to `n`.
+"""
 function Base.resize!(v::FastVec, n::Integer)
     n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
     v.len = n

@@ -1,7 +1,7 @@
 """
     chordal_completion!(G::Graphs.SimpleGraph)
 
-Augment G by a chordal completion using a greedy minimal fill-in, and also return a perfect elimination ordering.
+Augment `G` by a chordal completion using a greedy minimal fill-in, and also return a perfect elimination ordering.
 This is a more efficient implementation of `ChordalGraph.jl/GreedyOrder` (for the "MF" case).
 
 See also [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph)

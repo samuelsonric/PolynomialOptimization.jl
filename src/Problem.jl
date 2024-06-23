@@ -34,10 +34,10 @@ MultivariatePolynomials.variables(problem::Problem) = problem.original_variables
 """
     nvariables(problem::Union{Problem,<:AbstractRelaxation})
 
-Returns the number of variables associated to a given polynomial optimization problem. This defines the order in which
-solutions are returned. In the complex case, conjugates are not counted.
+Returns the number of variables associated to a given polynomial optimization problem. In the complex case, conjugates are not
+counted.
 
-See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
+See also [`variables`](@ref variables(::Problem)).
 """
 MultivariatePolynomials.nvariables(::Problem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
 
@@ -158,16 +158,14 @@ Note that when modifying a problem in such a way, all sparsity methods provided 
 [Nie](https://doi.org/10.1007/s10107-018-1276-2) provides a way to add additional constraints based on optimality conditions to
 the problems. This can speed up or make possible convergence at all. However, not every problem can be tightened in such a way,
 and sometimes, tightening might also increase the minimal degree required to optimize the problem.
-Note that the problem will end up with more equality and inequality constraints than originally entered. The augmentation not
-change the solution of the original problem in case the minimum is attained at a critical point; if it is not, tightening will
-lead to missing this minimum.
+Note that the problem will end up with more equality and inequality constraints than originally entered. The augmentation does
+not change the solution of the original problem in case the minimum is attained at a critical point; if it is not, tightening
+will lead to missing this minimum.
 - `tighter::Union{Bool,Symbol}`: if set to a valid solver or `true` (= choose default), tries to automatically construct
   constraints using Nie's method. Note that the algorithm internally needs to create lots of dense polynomials of appropriate
   degrees before solving for the coefficients. It is therefore possible that for larger problems, this can take a very long
   time.
   For a list of supported solvers, see [the solver reference](@ref solvers_tighten).
-  The automatic detection of the minimal degree may not work together with this procedure. It will only consider the degrees
-  required before tightning, not the increase in degree that may occur during the process.
   This parameter can also be called `tighten`; if any of those two is `true`, it is assumed that this was the intended value.
 ## Progress monitoring
 - `verbose::Bool`: if set to true, information about the current state of the method is printed; this may be useful for large
