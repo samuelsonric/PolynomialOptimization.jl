@@ -67,8 +67,8 @@ end
 
 Construct a [`Relaxation.Dense`](@ref) by default.
 """
-poly_optimize(v::Val, problem::Problem, degree=problem.mindegree; kwargs...) =
-    poly_optimize(v, Relaxation.Dense(problem, degree); kwargs...)
+poly_optimize(v::Val, problem::Problem, rest...; kwargs...) =
+    poly_optimize(v, Relaxation.Dense(problem, rest...); kwargs...)
 
 poly_optimize(s::Symbol, rest...; kwrest...) = poly_optimize(Val(s), rest...; kwrest...)
 
