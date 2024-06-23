@@ -27,6 +27,8 @@ function Base.show(io::IO, ::MIME"text/plain", s::PolynomialSolutions)
     end
 end
 
+absval(x) = isnan(x) ? zero(x) : abs(x)
+
 """
     poly_solutions(result::Result, ϵ=1e-6, δ=1e-3; verbose=false)
 
@@ -36,27 +38,32 @@ random sampling, hence negligible deviations are expected from run to run.
 The parameter `ϵ` controls the bound below which singular values are regarded as zero.
 The parameter `δ` controls up to which threshold supposedly identical numerical values for the same variables from different
 cliques must match.
-Note that for sparsity patterns different from no sparsity and [`SparsityCorrelative`](@ref), this method not be able
-to deliver results, although it might give partial results for [`SparsityCorrelativeTerm`](@ref) if some of the
-cliques did not have a term sparsity pattern. Consider using [`poly_solutions_heuristic`](@ref) in such a case.
+Note that for sparsity patterns different from no sparsity and [`SparsityCorrelative`](@ref Relaxation.SparsityCorrelative),
+this method not be able to deliver results, although it might give partial results for
+[`SparsityCorrelativeTerm`](@ref Relaxation.SparsityCorrelativeTerm) if some of the cliques did not have a term sparsity
+pattern. Consider using [`poly_solutions_heuristic`](@ref) in such a case.
 This function returns an iterator.
 
-See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
+See also [`poly_optimize`](@ref), [`poly_solutions_heuristic`](@ref).
 """
 function poly_solutions(result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000); verbose::Bool=false) where
     {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}
     @verbose_info("Preprocessing for decomposition")
     relaxation = result.relaxation
     moments = result.moments
-    nvars = Nr + Nc
+    nvars = Nr + 2Nc
     deg = 2degree(relaxation)
-    # potentially scale the moment matrix
-    λ = maximum(abs, @view(moments[monomial_count(deg -2, nvars)+1:monomial_count(deg -1, nvars)])) /
-        maximum(abs, @view(moments[monomial_count(deg -1, nvars)+1:end]))
+    @assert(deg > 1) # It is in principle possible to have deg = 0 - but only if the problem itself was to optimize zero over
+                     # the whole space. Let's ignore this.
+    # Potentially scale the moment matrix. Note that the vector of moments does not know about complex structure, so
+    # monomial_count is the correct function.
+    λ = maximum(absval, @view(moments[monomial_count(nvars, deg -2)+1:monomial_count(nvars, deg -1)])) /
+        maximum(absval, @view(moments[monomial_count(nvars, deg -1)+1:end]))
     if λ > ϵ
-        for d in 0:deg
-            rmul!(@view(moments[monomial_count(d -1, nvars)+1:monomial_count(d, nvars)]), λ^d)
+        for d in 1:deg-1
+            rmul!(@view(moments[monomial_count(nvars, d -1)+1:monomial_count(nvars, d)]), λ^d)
         end
+        rmul!(@view(moments[monomial_count(nvars, deg -1)+1:end]), λ^deg) # the last might be incomplete
     end
     # for each variable clique, we can perform the original decomposition algorithm
     cliques = groupings(result.relaxation).var_cliques
@@ -66,7 +73,7 @@ function poly_solutions(result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1
         for (i, clique) in enumerate(cliques)
             @verbose_info("Investigating clique ", clique)
             a1 = basis(relaxation, i)
-            a2 = truncate_basis(a1, relaxation.degree -1)
+            a2 = Relaxation.truncate_basis(a1, relaxation.degree -1)
             if !isreal(relaxation)
                 # this is the transpose of what we'd get with moment_matrix, but this is not important. Since the monomials
                 # in the matrix will be multiplied by variables (which are the un-conjugated ones), we must make sure that
@@ -91,9 +98,10 @@ function poly_solutions(result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1
     # undo the scaling
     if λ > ϵ
         λ = inv(λ)
-        for d in 0:deg
-            rmul!(@view(moments[monomial_count(d -1, nvars)+1:monomial_count(d, nvars)]), λ^d)
+        for d in 1:deg-1
+            rmul!(@view(moments[monomial_count(nvars, d -1)+1:monomial_count(nvars, d)]), λ^d)
         end
+        rmul!(@view(moments[monomial_count(nvars, deg -1)+1:end]), λ^deg) # the last might be incomplete
     end
     # now we combine all the solutions. In principle, this is Iterators.product, but we only look for compatible entries (as
     # variables in the cliques can overlap).
@@ -114,9 +122,6 @@ function Base.iterate(iter::PolynomialSolutions)
     @inbounds state[1] = 0
     return iterate(iter, state)
 end
-
-variable_index(v::SimpleVariable{<:Any,0}) = v.index
-variable_index(v::SimpleVariable{Nr}) where {Nr} = (@assert(!v.isconj); Nr + v.index)
 
 function Base.iterate(iter::PolynomialSolutions{R,V,Nr,Nc}, state::Vector{Int}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}
     verbose = iter.verbose
@@ -178,10 +183,11 @@ function poly_solutions_scaled(moments::MomentVector{R,V}, a1, a2, variables, ϵ
     UrSrVrbar = svd!(Hd1d2)
     ϵ *= UrSrVrbar.S[1]
     numEntries = findfirst(<(ϵ), UrSrVrbar.S)
-    if numEntries === nothing
+    if isnothing(numEntries)
         Ur, Sr, Vrbar = UrSrVrbar.U, UrSrVrbar.S, UrSrVrbar.V
     else
-        @inbounds Ur, Sr, Vrbar = UrSrVrbar.U[:, 1:numEntries-1], UrSrVrbar.S[1:numEntries-1], UrSrVrbar.V[:, 1:numEntries-1]
+        numEntries -= 1
+        @inbounds Ur, Sr, Vrbar = UrSrVrbar.U[:, 1:numEntries], UrSrVrbar.S[1:numEntries], UrSrVrbar.V[:, 1:numEntries]
     end
     Ms = Vector{Matrix{V}}(undef, length(variables))
     for i in 1:length(variables)
@@ -240,7 +246,7 @@ in `result`, and also by checking the violation of the constraints.
 The closer the return value is to zero, the better. If the return value is too large, `solution` probably has nothing to do
 with the actual solution.
 
-See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
+See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_all_solutions`](@ref).
 """
 function poly_solution_badness(result::Result, solution::Vector)
     # check whether we can certify optimality
@@ -262,25 +268,26 @@ function poly_solution_badness(result::Result, solution::Vector)
     return violation
 end
 
-default_solution_method(result::Result) = default_solution_method(result.relaxation)
+Relaxation.default_solution_method(result::Result) = Relaxation.default_solution_method(result.relaxation)
 
 """
-    poly_all_solutions(result::Result, ϵ=1e-6, δ=1e-3; verbose=false, rel_threshold=100, abs_threshold=Inf, method::Symbol)
+    poly_all_solutions(result::Result, ϵ=1e-6, δ=1e-3; verbose=false, rel_threshold=100,
+        abs_threshold=Inf, method::Symbol)
 
 Obtains a vector of all the solutions to a previously optimized problem; then iterates over all of them and grades and sorts
 them by their badness. Every solution of the returned vector is a tuple that first contains the optimal point and second the
 badness at this point. Solutions that are `rel_threshold` times worse than the best solution or worse than `abs_threshold` will
 be dropped from the result.
 The currently accepted methods are
-- `:mvhankel` to perform a multivariate Hankel decomposition as in [`poly_optimize`](@ref), default for dense problems and
+- `:mvhankel` to perform a multivariate Hankel decomposition as in [`poly_solutions`](@ref), default for dense problems and
   those with correlative sparsity only.
 - `:heuristic` to perform a heuristic method as in [`poly_solutions_heuristic`](@ref), default for problems with term sparsity.
 
-See also [`poly_optimize`](@ref), [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_solution_badness`](@ref),
-[`poly_solutions_heuristic`](@ref).
+See also [`poly_optimize`](@ref), [`poly_solutions`](@ref), [`poly_solutions_heuristic`](@ref),
+[`poly_solution_badness`](@ref).
 """
 function poly_all_solutions(result::Result, ϵ::R=1e-6, δ::R=1e-3; verbose::Bool=false,
-    rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=default_solution_method(result)) where {R<:Real}
+    rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=Relaxation.default_solution_method(result)) where {R<:Real}
     if method === :heuristic
         sol_itr = poly_solutions_heuristic(result; verbose)
     elseif method === :mvhankel

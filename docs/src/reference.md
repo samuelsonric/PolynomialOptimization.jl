@@ -59,6 +59,9 @@ poly_optimize
 Result
 poly_problem(::Result)
 optimality_certificate
+poly_all_solutions
+poly_solutions
+poly_solution_badness
 moment_matrix
 MomentVector
 ```
