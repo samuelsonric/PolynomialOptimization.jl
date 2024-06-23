@@ -767,21 +767,21 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
             while true
                 if nexta == nextb
                     unsafe_push!(indices, nexta)
+                    iszero(rema -= 1) && @goto done
+                    iszero(remb -= 1) && @goto done
                     ia += 1
                     nexta = convert_index(unsafe, newe, ae, indices_a[ia])
                     ib += 1
                     nextb = convert_index(unsafe, newe, be, indices_b[ib])
-                    iszero(rema -= 1) && @goto done
-                    iszero(remb -= 1) && @goto done
                 else
                     while nexta < nextb
-                        ia += 1
                         iszero(rema -= 1) && @goto done
+                        ia += 1
                         nexta = convert_index(unsafe, newe, ae, indices_a[ia])
                     end
                     while nextb < nexta
-                        ib += 1
                         iszero(remb -= 1) && @goto done
+                        ib += 1
                         nextb = convert_index(unsafe, newe, be, indices_b[ib])
                     end
                 end

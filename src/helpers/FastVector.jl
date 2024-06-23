@@ -271,12 +271,8 @@ end
 end
 
 function Base.resize!(v::FastVec, n::Integer)
-    if n ≤ v.len
-        v.len = n
-    else
-        resize!(v.data, n) # assume we know what we are doing, so no overallocation here
-        v.len = n
-    end
+    n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
+    v.len = n
     return v
 end
 
