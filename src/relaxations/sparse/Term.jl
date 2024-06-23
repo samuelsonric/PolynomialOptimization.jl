@@ -7,6 +7,7 @@ mutable struct SparsityTerm{
     G<:RelaxationGroupings,
 } <: AbstractRelaxationSparse{P}
     const problem::P
+    const parent # no specialization
     const parentgroupings::PG
     support_union::Set{I}
     const localizing_supports::Vector{S}
@@ -48,7 +49,7 @@ mutable struct SparsityTerm{
         @verbose_info("Obtained intersection in ", intersecttime, " seconds")
 
         new{I,P,typeof(parent),typeof(support_union),eltype(localizing_supports),typeof(gr)}(
-            problem, parent, support_union, localizing_supports, graphs, gr, method
+            problem, relaxation, parent, support_union, localizing_supports, graphs, gr, method
         )
     end
 end

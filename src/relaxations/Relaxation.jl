@@ -231,7 +231,7 @@ function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
 end
 Base.isreal(relaxation::AbstractRelaxation) = isreal(relaxation.problem)
 
-include("./degree/Degree.jl")
+include("./basis/Basis.jl")
 include("./sparse/Sparse.jl")
 
 end

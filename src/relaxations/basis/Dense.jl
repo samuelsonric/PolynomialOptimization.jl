@@ -1,4 +1,4 @@
-struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
+struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV
@@ -8,8 +8,8 @@ struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: Abst
         Dense(problem::Problem[, degree])
 
     Constructs a full dense relaxation out of a polynomial optimization problem. This is the largest possible representation
-    for a given degree bound, giving the best bounds. It is wastful at the same time, as a Newton relaxation gives equally good
-    bounds; but contrary to the Newton one, solution reconstruction works much better with a dense basis.
+    for a given degree bound, giving the best bounds. It is wasteful at the same time, as a Newton relaxation gives equally
+    good bounds; but contrary to the Newton one, solution reconstruction works much better with a dense basis.
     `degree` is the degree of the Lasserre relaxation, which must be larger or equal to the halfdegree of all polynomials that
     are involved. If `degree` is omitted, the minimum required degree will be used.
     Specifying a degree larger than the minimal only makes sense if there are inequality or PSD constraints present, else it

@@ -1,4 +1,4 @@
-struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationDegree{P}
+struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV
@@ -21,10 +21,10 @@ struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationDegree
 
     The `method` determines which solver to use for determining the Newton polytope. If omitted, this will be the default
     solver (in the complex case, it must be `:complex`).
-    The `parameters` are passed on to [`Newton.halfpolytope`](@ref).
+    The `parameters` are passed on to [`Newton.halfpolytope`](@ref PolynomialOptimization.Newton.halfpolytope).
     """
     function Newton(relaxation::AbstractRelaxation{P};
-        method::Symbol=iszero(Nc) ? Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:Problem{Poly}}
+        method::Symbol=iszero(Nc) ? PolynomialOptimization.Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:Problem{Poly}}
         if !iszero(Nr) && !iszero(Nc)
             # Well, we could do this. For a polynomial ∑ᵢⱼₖ αᵢⱼₖ xⁱ zʲ z̄ᵏ, we could factor the complex valued part and then
             # apply the Newton polytope to the real factor: ∑ⱼₖ NP(∑ᵢ αᵢⱼₖ xⁱ) zʲ z̄ᵏ; and then simplify the complex valued part.
@@ -34,8 +34,8 @@ struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationDegree
         iszero(Nc) || newton_method === :complex || throw(ArgumentError("Complex-valued problems require the :complex method"))
         problem = poly_problem(relaxation)
         parent = groupings(relaxation)
-        basis = Newton.halfpolytope(method, problem.objective; zero=problem.constr_zero, nonneg=problem.constr_nonneg,
-            psd=problem.constr_psd, groupings=parent, parameters...)
+        basis = PolynomialOptimization.Newton.halfpolytope(method, problem.objective; zero=problem.constr_zero,
+            nonneg=problem.constr_nonneg, psd=problem.constr_psd, groupings=parent, parameters...)
         basis isa SimpleMonomialVector ||
             error("Newton polytope calculation did not give results. Were the results written to a file?")
         gr = groupings(problem, basis, maxdegree(basis), parent)

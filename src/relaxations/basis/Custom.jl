@@ -1,4 +1,4 @@
-struct Custom{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationDegree{P}
+struct Custom{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV

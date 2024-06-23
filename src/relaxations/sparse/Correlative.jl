@@ -1,5 +1,6 @@
 struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
     problem::P
+    parent::AbstractRelaxation{P} # no specialization
     groupings::G
 
     @doc """
@@ -147,7 +148,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         ))
         @verbose_info("Obtained intersection in ", gentime, " seconds")
 
-        return new{P,typeof(gr)}(problem, gr)
+        return new{P,typeof(gr)}(problem, relaxation, gr)
     end
 end
 

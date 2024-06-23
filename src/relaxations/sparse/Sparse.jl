@@ -6,6 +6,13 @@ size of the associated problem, possibly at the expense of lowering the objectiv
 """
 abstract type AbstractRelaxationSparse{Prob<:Problem} <: AbstractRelaxation{Prob} end
 
+basis(relaxation::AbstractRelaxationSparse) = basis(relaxation.parent)
+
+function basis(relaxation::AbstractRelaxationSparse, i::Int)
+    1 ≤ i ≤ length(relaxation.groupings.var_cliques) || throw(ArgumentError("Unknown clique index: $i"))
+    return filter(Base.Fix2(effective_variables_in, Set(relaxation.groupings.var_cliques[i])), basis(relaxation))
+end
+
 include("./Chordal.jl")
 include("./Correlative.jl")
 include("./Term.jl")

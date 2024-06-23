@@ -1,19 +1,18 @@
 """
-    AbstractRelaxationDegree{Prob} <: AbstractRelaxation{Prob}
+    AbstractRelaxationBasis{Prob} <: AbstractRelaxation{Prob}
 
-An `AbstractRelaxationDegree` is a relaxation of a polynomial optimization problem that is built on a global maximal degree
-cutoff. The groupings for the individual elements will come from a degree truncation of the same shared basis for all
-constituents of the problem (intersected with a parent grouping).
+An `AbstractRelaxationBasis` is a relaxation of a polynomial optimization problem that is built using a single basis for
+everything (objective and constraints). The groupings for the individual elements will come from a degree truncation of the
+same shared basis for all constituents of the problem (intersected with a parent grouping).
 """
-abstract type AbstractRelaxationDegree{Prob<:Problem} <: AbstractRelaxation{Prob} end
+abstract type AbstractRelaxationBasis{Prob<:Problem} <: AbstractRelaxation{Prob} end
 
-basis(relaxation::AbstractRelaxationDegree) = relaxation.basis
+basis(relaxation::AbstractRelaxationBasis) = relaxation.basis
 
-function basis(relaxation::AbstractRelaxationDegree, i::Int)
+function basis(relaxation::AbstractRelaxationBasis, i::Int)
     i == 1 || throw(ArgumentError("Unknown clique index: $i"))
     return relaxation.basis
 end
-# sparse: filter(Base.Fix2(effective_variables_in, clique), a1)
 
 function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
     {Nr,Nc,M<:SimpleMonomial{Nr,Nc},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
@@ -26,9 +25,9 @@ function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Int
     ), parent)
 end
 
-MultivariatePolynomials.degree(relaxation::AbstractRelaxationDegree) = relaxation.degree
+MultivariatePolynomials.degree(relaxation::AbstractRelaxationBasis) = relaxation.degree
 
-function Base.show(io::IO, m::MIME"text/plain", relaxation::AbstractRelaxationDegree)
+function Base.show(io::IO, m::MIME"text/plain", relaxation::AbstractRelaxationBasis)
     _show(io, m, relaxation)
     print(io, "\nRelaxation degree: ", relaxation.degree)
 end
