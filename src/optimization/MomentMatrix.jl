@@ -24,7 +24,7 @@ function moment_matrix(result::Result{R}; max_deg=Inf,
     relaxation = result.relaxation
     b = basis(relaxation)
     if max_deg < Inf
-        b = truncate_basis(b, max_deg)
+        b = Relaxation.truncate_basis(b, max_deg)
     end
     return (isreal(relaxation) ? Symmetric : Hermitian)(
         isnothing(prefix) ? moment_matrix(result.moments, Val(:symmetric), b, conj(b)) :
