@@ -14,6 +14,12 @@ with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 [Hypatia](https://github.com/chriscoey/Hypatia.jl), and [COPT](https://www.shanshu.ai/copt) without using `JuMP`. Despite
 `JuMP` being very performant for a modelling framework, it introduces a significant overhead that is omitted in this way.
 
+## About this branch
+This branch is a huge internal rewrite. The internal representations of the polynomials are changed to a custom format for
+efficiency. Modularization is improved. Solvers can be written much more easily by providing a generic efficient translation
+framework. The interaction between different relaxations is changed completely. Gröbner bases are removed (they make
+optimizations much harder and from experience are not very beneficial for speed).
+
 
 ## Compatibility notice
 Currently, the required complex-valued functionality is merged into `MultivariatePolynomials`, but a new release has not been
