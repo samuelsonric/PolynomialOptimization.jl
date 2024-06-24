@@ -138,7 +138,7 @@ function (ctc::COO_to_CSC_callback{Offset,<:Tuple{Any,Any}})(index, i₁, i₂) 
 end
 
 """
-    coo_to_csc(coo::Union{SparseMatrixCOO{I,K,V}},Tuple{FastVec{K},FastVec{V}}}...)
+    coo_to_csc!(coo::Union{SparseMatrixCOO{I,K,V}},Tuple{FastVec{K},FastVec{V}}}...)
 
 Converts sparse COO matrix or vector representations, where the monomial indices of the `coo` matrices or the entries of the
 vectors can be arbitrarily sparse, to a CSC-based matrix representation with continuous columns, and the vectors are converted
@@ -203,10 +203,10 @@ end
 Given the moments vector as obtained from a [`AbstractSparseMatrixSolver`](@ref) solver, convert it to a
 [`MomentVector`](@ref). Note that this function is not fully type-stable, as the result may be based either on a dense or
 sparse vector depending on the relaxation. To establish the mapping between the solver output and the actual moments, all the
-column-sorted COO data (i.e., as returned by [`coo_to_csc`](@ref)) used in the problem construction needs to be passed on.
+column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the problem construction needs to be passed on.
 """
-function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset},
-    cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
+    coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
     max_mons = max(coo₁.moninds[end], (coo.moninds[end] for coo in cooₙ)...) # the coos are sorted according to the columns
     @assert(length(moments) ≤ max_mons)
@@ -233,5 +233,5 @@ function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, coo₁
             copy!(@view(solution[mon_pos]), moments)
         end
     end
-    return MomentVector(relaxation, solution)
+    return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end

@@ -122,7 +122,7 @@ SparseMatrixCOO
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
-MomentVector(::AbstractRelaxation, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {K<:Integer,V<:Real,Offset}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
 #### [`AbstractAPISolver`](@ref)
@@ -135,7 +135,7 @@ constraint duals for SOS optimization) can be constructed using [`MomentVector`]
 ```@docs
 AbstractAPISolver
 append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
-MomentVector(::AbstractRelaxation, ::Vector{V}, ::AbstractAPISolver{K}) where {K<:Integer,V<:Real}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::AbstractAPISolver{K}) where {Nr,Nc,K<:Integer,V<:Real}
 ```
 
 #### Defining solver capabilities

@@ -34,7 +34,8 @@ end
 Given the moments vector as obtained from an [`AbstractAPISolver`](@ref), convert it to a [`MomentVector`](@ref). Note that this
 function is not fully type-stable, as the result may be based either on a dense or sparse vector depending on the relaxation.
 """
-function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver::AbstractAPISolver{K}) where {K<:Integer,V<:Real}
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
+    solver::AbstractAPISolver{K}) where {Nr,Nc,K<:Integer,V<:Real}
     @assert(length(moments) ≥ length(solver.mon_to_solver))
     # In any case, our variables will not be in the proper order. First figure this out.
     # Dict does not preserve the insertion order. While we could use OrderedDict instead, we need to do lots of insertions and
@@ -63,5 +64,5 @@ function MomentVector(relaxation::AbstractRelaxation, moments::Vector{V}, solver
         solution = fill(NaN, max_mons)
         copy!(@view(solution[mon_pos]), moments)
     end
-    return MomentVector(relaxation, solution)
+    return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end
