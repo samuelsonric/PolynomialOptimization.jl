@@ -1,5 +1,6 @@
 export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBounded,
-    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices, exponents_sum
+    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices, exponents_sum,
+    exponents_product
 
 """
     AbstractExponents{N,I}
@@ -476,7 +477,7 @@ end
     exponents_sum(e::AbstractExponents{N,I}, exponents...) -> Tuple{I,Int}
 
 Calculates the index of the sum of all `exponents` within `e`. If the result cannot be found in `e`, the function will return
-zero. Returns the total degree as second entry in the tuple
+zero. Returns the total degree as second entry in the tuple.
 """
 Base.@assume_effects :consistent @generated function exponents_sum(e::AbstractExponents{N}, exponents...) where {N}
     items = length(exponents)
@@ -484,4 +485,30 @@ Base.@assume_effects :consistent @generated function exponents_sum(e::AbstractEx
         d = +($((:(sum(exponents[$i])) for i in 1:items)...))
         return exponents_to_index(e, ExponentsSum{N}($((:(exponents[$i]) for i in 1:items)...)), d), d
     end
+end
+
+struct ExponentsProduct{N,E}
+    e::E
+    p::Int
+end
+
+Base.IteratorSize(::Type{<:ExponentsProduct}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:ExponentsProduct}) = Base.HasEltype()
+Base.length(p::ExponentsProduct{N}) where {N} = N
+Base.eltype(::Type{<:ExponentsProduct}) = Int
+function Base.iterate(p::ExponentsProduct, state...)
+    it = iterate(p.e, state...)
+    isnothing(it) && return nothing
+    return it[1] * p.p, it[2]
+end
+
+"""
+    exponents_product(e::AbstractExponents{N,I}, exponents, p::Integer) -> Tuple{I,Int}
+
+Calculates the index of the product of the `exponents` with the number `p`. If the result cannot be found in `e`, the function
+will return zero. Returns the total degree as second entry in the tuple.
+"""
+Base.@assume_effects :consistent function exponents_product(e::AbstractExponents{N}, exponents, p::Integer) where {N}
+    d = sum(exponents) * p
+    return exponents_to_index(e, ExponentsProduct{N,typeof(exponents)}(exponents, Int(p)), d), d
 end

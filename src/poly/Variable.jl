@@ -176,3 +176,8 @@ function monomial_index(::ExponentsAll{N,I}, v::SimpleVariable{Nr,Nc}) where {N,
     return I(N - v.index +2)
 end
 monomial_index(e::AbstractExponents, v::SimpleVariable) = exponents_to_index(e, exponents(v), 1)
+
+function Base.:^(v::SimpleVariable{Nr,Nc}, p::Integer) where {Nr,Nc}
+    e = ExponentsAll{Nr+2Nc,UInt}()
+    return SimpleMonomial{Nr,Nc}(unsafe, e, exponents_product(e, exponents(v), p)...)
+end

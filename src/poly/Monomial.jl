@@ -110,6 +110,30 @@ SimpleMonomial{Nr,Nc}(args::AbstractVector...) where {Nr,Nc} = SimpleMonomial{Nr
 SimpleMonomial{Nr,Nc,I}(args::AbstractVector...) where {Nr,Nc,I<:Integer} =
     SimpleMonomial{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), args...)
 
+@inline function SimpleMonomial(e::AbstractExponents{N,I}, v::SimpleVariable{Nr,Nc}) where {N,I<:Integer,Nr,Nc}
+    N == Nr + 2Nc || throw(MethodError(SimpleMonomial, (e, v)))
+    @boundscheck e isa AbstractExponentsDegreeBounded && (e.mindeg > 1 || e.maxdeg < 1) && throw(BoundsError(e, (v,)))
+    index_counts(e, 1) # populate the cache
+    if e isa ExponentsAll
+        return SimpleMonomial{Nr,Nc}(unsafe, e, I(Nr + 2Nc - v.index +2), 1)
+    elseif e isa ExponentsDegree
+        i = I(Nr + 2Nc - v.index +1)
+        iszero(e.mindeg) && (i += one(I))
+        return SimpleMonomial{Nr,Nc}(unsafe, e, i, 1)
+    else
+        @boundscheck @inbounds begin
+            (iszero(e.maxmultideg[v.index]) || (e.mindeg > 1) || (isone(e.mindeg) && iszero(e.minmultideg[v.index]))) &&
+                throw(BoundsError(e, (v,)))
+        end
+        isone(e.mindeg) && return SimpleMonomial{Nr,Nc}(unsafe, e, one(I), 1)
+        i = I(Nr + 2Nc - v.index +2)
+        @inbounds for j in v.index+1:Nr+2Nc
+            iszero(e.maxmultideg[j]) && (i -= one(I))
+        end
+        return SimpleMonomial{Nr,Nc}(unsafe, e, i, 1)
+    end
+end
+
 """
     SimpleConjMonomial(m::SimpleMonomial) <: AbstractMonomial
 
@@ -430,6 +454,12 @@ end
 
 Base.:*(m::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
     monomial_product(ExponentsAll{Nr+2Nc,_get_I(m...)}(), m...)
+
+function Base.:^(m::SimpleMonomialOrConj{Nr,Nc}, p::Integer) where {Nr,Nc}
+    idx, deg = exponents_product(m.e, exponents(m), p)
+    @boundscheck !(m.e isa ExponentsAll) && iszero(idx) && throw(BoundsError(m.e, idx))
+    SimpleMonomial{Nr,Nc}(unsafe, m.e, idx, deg)
+end
 
 """
     monomial_index([e::AbstractExponents,] m...)
