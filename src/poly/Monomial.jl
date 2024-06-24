@@ -44,7 +44,9 @@ SimpleMonomial{Nr,Nc}(::AbstractExponents, ::AbstractVector{<:Integer}...) where
 function SimpleMonomial{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractVector{<:Integer}) where {Nr,I<:Integer}
     length(exponents_real) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(length(exponents_real))"))
     degree = sum(exponents_real, init=0)
-    return SimpleMonomial{Nr,0}(unsafe, e, exponents_to_index(e, exponents_real, degree), degree)
+    idx = exponents_to_index(e, exponents_real, degree)
+    @boundscheck iszero(idx) && throw(BoundsError(e, exponents_real))
+    return SimpleMonomial{Nr,0}(unsafe, e, idx, degree)
 end
 
 function SimpleMonomial{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::AbstractVector{<:Integer},
@@ -55,9 +57,9 @@ function SimpleMonomial{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::Abst
     length(exponents_complex) == Nc ||
         throw(ArgumentError("Requested $Nc complex variables, but got $(length(exponents_complex))"))
     degree = sum(exponents_complex, init=0) + sum(exponents_conj, init=0)
-    return SimpleMonomial{0,Nc}(unsafe, e, exponents_to_index(
-        e, (x[i] for i in 1:Nc for x in (exponents_complex, exponents_conj)), degree
-    ), degree)
+    idx = exponents_to_index(e, (x[i] for i in 1:Nc for x in (exponents_complex, exponents_conj)), degree)
+    @boundscheck iszero(idx) && throw(BoundsError(e, (exponents_complex, exponents_conj)))
+    return SimpleMonomial{0,Nc}(unsafe, e, idx, degree)
 end
 
 struct OrderedExponents{T,R,C,Cj}
@@ -99,11 +101,9 @@ function SimpleMonomial{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::Abstra
     length(exponents_complex) == Nc ||
         throw(ArgumentError("Requested $Nc complex variables, but got $(length(exponents_complex))"))
     degree = sum(exponents_real, init=0) + sum(exponents_complex, init=0) + sum(exponents_conj, init=0)
-    return SimpleMonomial{Nr,Nc}(unsafe, e, exponents_to_index(
-        e,
-        OrderedExponents(exponents_real, exponents_complex, exponents_conj),
-        degree
-    ), degree)
+    idx = exponents_to_index(e, OrderedExponents(exponents_real, exponents_complex, exponents_conj), degree)
+    @boundscheck iszero(idx) && throw(BoundsError(e, (exponents_real, exponents_complex, exponents_conj)))
+    return SimpleMonomial{Nr,Nc}(unsafe, e, idx, degree)
 end
 
 SimpleMonomial{Nr,Nc}(args::AbstractVector...) where {Nr,Nc} = SimpleMonomial{Nr,Nc,UInt}(args...)
