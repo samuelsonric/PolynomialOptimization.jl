@@ -82,5 +82,3 @@ function poly_optimize(args...; kwargs...)
     @info("No solver method specified: choosing $method")
     poly_optimize(Val(method), args...; kwargs...)
 end
-
-include("./SolutionExtraction.jl")

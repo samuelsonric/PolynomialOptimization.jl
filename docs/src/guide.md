@@ -71,11 +71,11 @@ The function [`poly_solutions`](@ref) gives an iterator that delivers all the (p
 arbitrary order.
 Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solutions and grades them according to how much they
 violate the bound or constraints, if any were given. The solutions are then returned in a best-to-worst order.
-```Julia
+```jldoctest walkthrough
 julia> poly_all_solutions(res)
 2-element Vector{Tuple{Vector{Float64}, Float64}}:
- ([1.3671260442406477e-18, -0.4082623317562886, 0.4082623317563946], 1.86909017152459e-8)
- ([1.966291165382928e-18, 0.40826233175628873, -0.40826233175639476], 1.8690901937290505e-8)
+ ([-5.352664236306117e-20, -0.40824265804856064, 0.40824266064547876], 5.266275193704928e-10)
+ ([-1.1700613807653978e-18, 0.40824265804855975, -0.40824266064547793], 5.266276303927953e-10)
 ```
 Every element in the vector is a tuple, where the first entry corresponds to the optimal variables, and the second term is the
 badness of this solution (which can also be calculated manually using [`poly_solution_badness`](@ref)). Since here, the badness
@@ -208,8 +208,13 @@ Lower bound to optimum (in case of good status): 0.9166666718972408
 Time required for optimization: 0.00306 seconds
 ```
 Again, we get the same optimal value, so introducing the sparsity did not make our relaxation worse (which is _per se_ not
-guaranteed).
-
+guaranteed), and we are still able to get the same optimal solutions:
+```jldoctest walkthrough
+julia> poly_all_solutions(ans)
+2-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([0.0, 0.4082661947158492, -0.408266194715714], 4.589421509493263e-9)
+ ([0.0, -0.4082661947158492, 0.408266194715714], 4.589421509493263e-9)
+```
 Note that perhaps surprisingly, `PolynomialOptimization` can still deliver good optimal points despite the fact that term
 sparsity was in effect. The usual extraction algorithms will fail, as for every moment $m$, they also require the moment $m x$
 to be present for all variables $x$ - term sparsity will fail to provide this.
@@ -537,13 +542,13 @@ Time required for optimization: 0.1160416 seconds
 Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized,
 you'll get a vastly different result whenever the extraction is performced), so let's try to get the solution via the heuristic
 method:
-```Julia
-julia> poly_all_solutions(prob, ans, heuristic=true)
+```jldoctest walkthrough
+julia> poly_all_solutions(:heuristic, res)
 4-element Vector{Tuple{Vector{Float64}, Float64}}:
- ([1.0000006425873473, 1.0000006425873476], 7.711065512783222e-6)
- ([1.0000006425873473, -1.0000006425873476], 7.711065512783222e-6)
- ([-1.0000006425873473, 1.0000006425873476], 7.711065512783222e-6)
- ([-1.0000006425873473, -1.0000006425873476], 7.711065512783222e-6)
+ ([1.000000651012571, 1.0000006504036543], 7.809732969654704e-6)
+ ([-1.000000651012571, 1.0000006504036543], 7.809732969654704e-6)
+ ([1.000000651012571, -1.0000006504036543], 7.809732969654704e-6)
+ ([-1.000000651012571, -1.0000006504036543], 7.809732969654704e-6)
 ```
 This was successful in delivering multiple solutions.
 
@@ -606,6 +611,10 @@ Used optimization method: ClarabelMoment
 Status of the solver: SOLVED
 Lower bound to optimum (in case of good status): -1.9999999928826857
 Time required for optimization: 1.1383336 seconds
+
+julia> poly_all_solutions(ans)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([-1.0000000000000042 + 0.0im], 7.117322731176046e-9)
 ```
 The dense solution extraction mechanism also works in the complex case.
 
@@ -626,6 +635,10 @@ Used optimization method: ClarabelMoment
 Status of the solver: SOLVED
 Lower bound to optimum (in case of good status): 0.42817470663218404
 Time required for optimization: 1.2524744 seconds
+
+julia> poly_all_solutions(ans)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([2.2522776434581143e-16 - 0.8164965543178686im, 1.527525200200192 + 3.4269901696444247e-22im], 1.3954041122588023e-7)
 ```
 Indeed, this solution gives the same objective value and satisfies the constraints, so we found the optimum! Again, note that
 the longer optimization times are due to compilation times, as some of the methods for handling complex-valued variables needed
@@ -633,18 +646,33 @@ to be compiled first.
 
 And finally something with matrices:
 ```jldoctest walkthrough
-julia> poly_optimize(:Clarabel, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]),
-                                             psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
-                                                   conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]), 3)
+julia> res = poly_optimize(:Clarabel, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]),
+                                                   psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
+                                                         conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]), 3)
 Polynomial optimization result
 Relaxation method: Dense
 Used optimization method: ClarabelMoment
 Status of the solver: SOLVED
 Lower bound to optimum (in case of good status): -3.9999999661436303
 Time required for optimization: 0.3807631 seconds
+
+julia> poly_all_solutions(res)
+5-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([0.29184091706343507 - 0.06552418313629553im, 0.3254570178833055 + 0.07307167705391754im], 3.7992736862185583)
+ ([-0.29184091706342524 + 0.06552418313629696im, -0.3254570178833103 - 0.07307167705392334im], 3.79927368621856)
+ ([-0.11248589631862503 + 0.025255356736113562im, -0.15814378934481646 - 0.035506476333623437im], 3.9604388882591897)
+ ([0.1124858963186218 - 0.025255356736114246im, 0.1581437893448013 + 0.03550647633362005im], 3.9604388882591954)
+ ([2.0450663614224852e-15 + 5.628783923208919e-17im, 6.186625786577447e-15 + 5.23675758430312e-15im], 3.9999999661436303)
+
+julia> poly_all_solutions(:heuristic, res)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([8.786670321838077e-19 - 0.0im, -6.275532682330681e-16 - 0.0im], 3.9999999661436303)
+
+julia> optimality_certificate(res)
+:Unknown
 ```
 Note that the solution extraction algorithm in principle also works in the complex case even though the moment matrix is no
 longer of Hankel form; the theory is powerful enough to handle this "minor detail." The built-in heuristic will still try
 to find good solutions and can sometimes do so even in the case of multiple solutions if they only differ in the phase of
 variables. However, as in the real case, there is no guarantee that the solutions can be decomposed in atomic measures, and
-therefore the extraction may also fail.
+therefore the extraction or certification may also fail, which is shown here.
