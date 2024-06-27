@@ -42,11 +42,11 @@ mutable struct SparsityTerm{
         grouptime = @elapsed begin
             newgroupings = _extend_graphs!(Val(method), parent, graphs, everything)
         end
-        @verbose_info("Generated new groupings in ", grouptime, " seconds; intersecting with old.")
+        @verbose_info("Generated new groupings in ", grouptime, " seconds; embedding with old.")
         intersecttime = @elapsed begin
-            gr = intersect(newgroupings, parent)
+            gr = embed(newgroupings, parent)
         end
-        @verbose_info("Obtained intersection in ", intersecttime, " seconds")
+        @verbose_info("Obtained embedding in ", intersecttime, " seconds")
 
         new{I,P,typeof(parent),typeof(support_union),eltype(localizing_supports),typeof(gr)}(
             problem, relaxation, parent, support_union, localizing_supports, graphs, gr, method
@@ -195,10 +195,10 @@ end
 
 _extend_graphs!(::Val{:chordal_cliques}, g::Graphs.SimpleGraph) = chordal_cliques!(g)
 
-@eval function _extend_graphs!(@nospecialize(method::Val), parent::RelaxationGroupings, g::Vector{G},
-        indices::AbstractSet{Int}) where {G<:Graphs.SimpleGraph}
+@eval function _extend_graphs!(@nospecialize(method::Val), parent::RelaxationGroupings{Nr,Nc,I}, g::Vector{G},
+        indices::AbstractSet{Int}) where {Nr,Nc,I<:Integer,G<:Graphs.SimpleGraph}
     igroup = 1
-    newobj = FastVec{Base.promote_op(view, eltype(parent.obj), Vector{Int})}()
+    newobj = FastVec{SimpleMonomialVector{Nr,Nc,I}}()
     1 ∈ indices && for grouping in parent.obj
         cliques = _extend_graphs!(method, g[igroup]) # enable bounds checking
         for clique in cliques
@@ -208,12 +208,10 @@ _extend_graphs!(::Val{:chordal_cliques}, g::Graphs.SimpleGraph) = chordal_clique
     end
     ipoly = 2
     $((quote
-        $(Symbol(:new, name)) = Vector{Vector{Base.promote_op(view, eltype(eltype(parent.$name)), Vector{Int})}}(
-            undef, length(parent.$name)
-        )
+        $(Symbol(:new, name)) = Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}(undef, length(parent.$name))
         for (i, constr_groupings) in enumerate(parent.$name)
             if ipoly ∈ indices
-                newgroup = FastVec{eltype(eltype($(Symbol(:new, name))))}()
+                newgroup = FastVec{SimpleMonomialVector{Nr,Nc,I}}()
                 for grouping in constr_groupings
                     cliques = _extend_graphs!(method, g[igroup]) # enable bounds checking
                     for clique in cliques

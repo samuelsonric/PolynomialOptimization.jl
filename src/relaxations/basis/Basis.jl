@@ -15,12 +15,12 @@ function basis(relaxation::AbstractRelaxationBasis, i::Int)
 end
 
 function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
-    {Nr,Nc,M<:SimpleMonomial{Nr,Nc},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
-    return intersect(RelaxationGroupings(
-        [basis],
-        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
-        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
-        [[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
+    {Nr,Nc,I<:Integer,M<:SimpleMonomial{Nr,Nc,I},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
+    return embed(RelaxationGroupings(
+        SimpleMonomialVector{Nr,Nc,I}[basis],
+        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
+        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
+        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
     ), parent)
 end

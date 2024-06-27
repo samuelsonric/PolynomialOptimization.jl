@@ -124,7 +124,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         # The correlative iterator could potentially be made even smaller by determining all the multideg boundaries, but would
         # this be worth the effort?
         minmultideg = SimplePolynomials.ConstantVector(0, Nr + 2Nc)
-        newobj = Vector{SimpleMonomialVector{Nr,Nc,I,ExponentsMultideg{Nr+2Nc,I,typeof(minmultideg),Vector{Int}}}}(undef, length(cliques))
+        newobj = Vector{SimpleMonomialVector{Nr,Nc,I}}(undef, length(cliques))
         newzero = [similar(newobj) for _ in 1:length(problem.constr_zero)]
         newnonneg = [similar(newobj) for _ in 1:length(problem.constr_nonneg)]
         newpsd = [similar(newobj) for _ in 1:length(problem.constr_psd)]
@@ -141,12 +141,12 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                 end
             end
         end
-        @verbose_info("Generated new groupings; intersecting with old.")
-        gentime = @elapsed(gr = intersect(
+        @verbose_info("Generated new groupings; embedding in old.")
+        gentime = @elapsed(gr = embed(
             RelaxationGroupings(newobj, newzero, newnonneg, newpsd, map.(SimpleVariable{Nr,Nc}, cliques)),
             parent
         ))
-        @verbose_info("Obtained intersection in ", gentime, " seconds")
+        @verbose_info("Obtained embedding in ", gentime, " seconds")
 
         return new{P,typeof(gr)}(problem, relaxation, gr)
     end

@@ -81,9 +81,10 @@ See also [`halfpolytope_from_file`](@ref).
 function halfpolytope(method::Symbol, poly::SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}; kwargs...) where {Nr,I<:Integer}
     mons = SimpleMonomialVector{Nr,0}(ExponentsDegree{Nr,I}(0, maxhalfdegree(poly)))
     noconstr = typeof(poly)[]
-    nogroup = Vector{<:SimpleMonomialVector{Nr,0,I}}[]
+    nogroup = Vector{SimpleMonomialVector{Nr,0,I}}[]
     return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=noconstr, nonneg=noconstr, psd=Matrix{typeof(poly)}[],
-        groupings=RelaxationGroupings([mons], nogroup, nogroup, nogroup, Vector{variable_union_type(poly)}[]), kwargs...)
+        groupings=RelaxationGroupings(SimpleMonomialVector{Nr,0,I}[mons], nogroup, nogroup, nogroup,
+            Vector{variable_union_type(poly)}[]), kwargs...)
 end
 function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
     out = halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)

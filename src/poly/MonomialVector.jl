@@ -421,6 +421,7 @@ Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorComplete{Nr,Nc}) where 
     x.e == v.e || !iszero(convert_index(v.e, x.e, x.index, degree(x)))
 Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} =
     insorted(v.indices, monomial_index(v.e, x))
+Base.hasfastin(::Type{<:SimpleMonomialVector}) = true
 Base.searchsortedlast(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     monomial_index(v.e, x)
 Base.searchsortedlast(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
@@ -433,6 +434,84 @@ function Base.searchsorted(v::SimpleMonomialVector{Nr,Nc}, x::SimpleMonomialOrCo
     ssl = searchsortedlast(v, x)
     return iszero(ssl) ? ((lastindex(v) +1):0) : ssl:ssl
 end
+Base.issubset(a::SimpleMonomialVector{Nr,Nc},
+    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc} =
+    @inbounds isempty(a) || (first(a) ∈ b && last(a) ∈ b)
+Base.issubset(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
+    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
+    return a.e.mindeg ≥ b.e.mindeg && a.e.maxdeg ≤ b.e.maxdeg
+function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc}
+    isempty(a) && return true
+    length(a) > length(b) && return false
+    @inbounds if a.e == b.e
+        ai, bi = a.indices, b.indices
+        if first(ai) < first(bi) || last(ai) > last(bi)
+            return false
+        end
+        length(ai) ≤ 2 && return true
+        ia = 2
+        ib = searchsortedfirst(bi, ai[ia])
+        la, lb = lastindex(ai), lastindex(bi)
+        while true
+            while ai[ia] == bi[ib]
+                ia += 1
+                ia > la && return true
+                ib += 1
+            end
+            if ai[ia] > bi[ib]
+                ib = ib + searchsortedfirst(@view(bi[ib:end]), ai[ia]) -1
+                ib > lb && return false
+            else
+                return false
+            end
+        end
+    else
+        ae, be = a.e, b.e
+        ai, bi = a.indices, b.indices
+        if compare_indices(ae, first(ai), <, be, first(bi)) || compare_indices(ae, last(ai), >, be, last(bi))
+            return false
+        end
+        length(ai) ≤ 2 && return true
+        ia = 2
+        va = convert_index(unsafe, be, ae, ai[ia])
+        ib = searchsortedfirst(bi, va)
+        la, lb = lastindex(ai), lastindex(bi)
+        while true
+            while va == bi[ib]
+                ia += 1
+                ia > la && return true
+                va = convert_index(unsafe, be, ae, ai[ia])
+                ib += 1
+            end
+            if va > bi[ib]
+                ib = ib + searchsortedfirst(@view(bi[ib:end]), va) -1
+                ib > lb && return false
+            else
+                return false
+            end
+        end
+    end
+end
+Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
+    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc} =
+    @inbounds length(a) == length(b) && (isempty(a) || (first(a) == first(b) && last(a) == last(b)))
+Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
+    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
+    return a.e.mindeg == b.e.mindeg && a.e.maxdeg == b.e.maxdeg
+Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsMultideg},
+    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsMultideg}) where {Nr,Nc} =
+    return a.e.mindeg == b.e.mindeg && a.e.maxdeg == b.e.maxdeg && a.e.minmultideg == b.e.minmultideg &&
+        a.e.maxmultideg == b.e.maxmultideg
+function Base.:(==)(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+    length(a) == length(b) || return false
+    isempty(a) && return true
+    @inbounds if a.e == b.e
+        return all(splat(isequal), zip(a.indices, b.indices))
+    else
+        return all(splat(isequal), zip(a, b))
+    end
+end
+Base.sort!(x::SimpleMonomialVector) = x # we are already sorted; and no keyword argument that changes the order is allowed
 
 MultivariatePolynomials.variables(::XorTX{<:AbstractVector{<:SimpleMonomial{Nr,Nc}}}) where {Nr,Nc} = SimpleVariables{Nr,Nc}()
 MultivariatePolynomials.nvariables(::XorTX{AbstractVector{<:SimpleMonomial{Nr,Nc}}}) where {Nr,Nc} = Nr + 2Nc

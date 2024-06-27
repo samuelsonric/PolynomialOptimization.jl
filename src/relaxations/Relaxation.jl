@@ -34,13 +34,13 @@ Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
-struct RelaxationGroupings{Nr,Nc,V<:SimpleVariable{Nr,Nc}}
+struct RelaxationGroupings{Nr,Nc,I<:Integer,V<:SimpleVariable{Nr,Nc}}
     # These can all be different types of monomial vectors, but we don't want to have a type explosion with nested relaxation
     # groupings. Keep it dynamic.
-    obj::Vector{<:SimpleMonomialVector{Nr,Nc}}
-    zeros::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
-    nonnegs::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
-    psds::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
+    obj::Vector{SimpleMonomialVector{Nr,Nc,I}}
+    zeros::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
+    nonnegs::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
+    psds::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
     var_cliques::Vector{Vector{V}}
 end
 
@@ -77,7 +77,7 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     print(io, "\nBlock groupings\n===============\nObjective: ")
     _show_groupings(io, groupings.obj)
     for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
-        block = getproperty(groupings, f)::Vector{<:Vector{<:SimpleMonomialVector{Nr,Nc}}}
+        block = getproperty(groupings, f)::Vector{<:Vector{SimpleMonomialVector{Nr,Nc,I}}}
         if !isempty(block)
             for (i, constr) in enumerate(block)
                 print(io, "\n", name, " constraint #", i, ": ")
@@ -87,40 +87,49 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     end
 end
 
-@eval function Base.intersect(a::RG, b::RG) where {Nr,Nc,RG<:RelaxationGroupings{Nr,Nc}}
-    (length(a.zeros) == length(b.zeros) && length(a.nonnegs) == length(b.nonnegs) && length(a.psds) == length(b.psds)) ||
-        error("Cannot intersect two relaxation groupings for different optimization problems")
-    # TODO: move from Iterators.product to something that is indexable, so that every loop can be parallelized
-    newobj = Vector{SimpleMonomialVector{Nr,Nc}}(undef, length(a.obj) * length(b.obj))
-    for (i, (obj_a, obj_b)) in enumerate(Iterators.product(a.obj, b.obj))
-        @inbounds newobj[i] = intersect(obj_a, obj_b)
-    end
-    newobj = Base._groupedunique!(sort!(newobj))
-
-    $((quote
-        $(Symbol(:new, name)) = Vector{Vector{<:SimpleMonomialVector{Nr,Nc}}}(undef, length(a.$name))
-        for k in 1:length(a.$name)
-            @inbounds as, bs = a.$name[k], b.$name[k]
-            newₖ = Vector{SimpleMonomialVector{Nr,Nc}}(undef, length(as) * length(bs))
-            for (i, (asᵢ, bsᵢ)) in enumerate(Iterators.product(as, bs))
-                @inbounds newₖ[i] = intersect(asᵢ, bsᵢ)
-            end
-            @inbounds $(Symbol(:new, name))[k] = Base._groupedunique!(sort!(newₖ))
+function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X}
+    for oldᵢ in olds
+        if new ⊆ oldᵢ
+            push!(to, new)
+            return
         end
-    end for name in (:zeros, :nonnegs, :psds))...)
-
-    newcliques = Vector{Vector{variable_union_type(SimpleVariable{Nr,Nc})}}(
-        undef, length(a.var_cliques) * length(b.var_cliques)
-    )
-    for (i, (clique_a, clique_b)) in enumerate(Iterators.product(a.var_cliques, b.var_cliques))
-        @inbounds newcliques[i] = sort!(intersect(clique_a, clique_b))
     end
-    newcliques = Base._groupedunique!(sort!(newcliques, by=x -> (-length(x), x)))
+    temp = sort!(intersect.((new,), olds), by=_lensort)
+    @inbounds for i in length(temp):-1:2
+        tempᵢ = temp[i]
+        for tempⱼ in @view(temp[1:i-1])
+            tempᵢ ⊆ tempⱼ && deleteat!(temp, i)
+        end
+    end
+    append!(to, temp)
+    return
+end
 
+function embed(news::AbstractVector{X}, olds::AbstractVector{X}) where {X}
+    to = FastVec{X}(buffer=length(news))
+    for new in news
+        embed!(to, new, olds)
+    end
+    if X <: AbstractVector
+        for toᵢ in to
+            sort!(toᵢ)
+        end
+    end
+    return Base._groupedunique!(sort!(finish!(to), by=_lensort))
+end
+
+function embed(new::RG, old::RG) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
+    (length(new.zeros) == length(old.zeros) && length(new.nonnegs) == length(old.nonnegs) &&
+        length(new.psds) == length(old.psds)) ||
+        throw(ArgumentError("Cannot embed two relaxation groupings for different optimization problems"))
+    newobj = embed(new.obj, old.obj)
+    newzeros = embed.(new.zeros, old.zeros)
+    newnonnegs = embed.(new.nonnegs, old.nonnegs)
+    newpsds = embed.(new.psds, old.psds)
+    newcliques = embed(new.var_cliques, old.var_cliques)
     return RG(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end
-Base.intersect(a::RelaxationGroupings, ::Nothing) = a
-Base.intersect(::Nothing, b::RelaxationGroupings) = b
+embed(new::RelaxationGroupings, ::Nothing) = new
 
 Base.:(==)(g₁::G, g₂::G) where {G<:RelaxationGroupings} = g₁.obj == g₂.obj && g₁.zeros == g₂.zeros &&
     g₁.nonnegs == g₂.nonnegs && g₁.psds == g₂.psds && g₁.var_cliques == g₂.var_cliques
