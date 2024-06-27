@@ -73,8 +73,9 @@ _get_e(::SimpleMonomialVector{<:Any,<:Any,<:Integer,E}) where {E<:AbstractExpone
 _get_e(::SimpleMonomialVector{<:Any,<:Any,<:Integer,Tuple{E,<:Any}}) where {E<:AbstractExponents} = E
 function _convert_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc}}) where {Nr,Nc}
     # best situation (which should always be the case: all vectors have the same set of exponents)
-    required_e = _get_e(first(cl))
-    for item in Iterators.drop(cl, 1)
+    a, rest = Iterators.peel(cl)
+    required_e = _get_e(a)
+    for item in rest
         if required_e != _get_e(item)
             use_e = ExponentsAll{Nr+2Nc}()
             return let E=ExponentsAll{Nr+2Nc}()

@@ -52,8 +52,9 @@ function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector})
     for block in lensorted
         # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
         print(io, "\n  ", lpad(length(block), len, " "), " [")
-        show(io, "text/plain", first(block))
-        for x in Iterators.drop(block, 1)
+        a, rest = Iterators.peel(block)
+        show(io, "text/plain", a)
+        for x in rest
             print(io, ", ")
             show(io, "text/plain", x)
         end
@@ -65,8 +66,9 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     println(io, "Groupings for the relaxation of a polynomial optimization problem\nVariable cliques\n================")
     for clique in groupings.var_cliques
         print(io, "[")
-        show(io, "text/plain", first(clique))
-        for x in Iterators.drop(clique, 1)
+        a, rest = Iterators.peel(clique)
+        show(io, "text/plain", a)
+        for x in rest
             print(io, ", ")
             show(io, "text/plain", x)
         end

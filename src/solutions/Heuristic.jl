@@ -210,8 +210,8 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
                         # However, maybe for this monomial it doesn't play a role because all are give rise to the same value
                         # when exponentiated...
                         exp_phases = unknown_phases[var_idx]
-                        exp_phase = first(exp_phases)
-                        if any(@capture(ϕ -> mod2pi((ϕ - $exp_phase) * $var_exp) ≥ 1e-7), Iterators.drop(exp_phases, 1))
+                        exp_phase, rest = Iterators.peel(exp_phases)
+                        if any(@capture(ϕ -> mod2pi((ϕ - $exp_phase) * $var_exp) ≥ 1e-7), rest)
                             if !iszero(unknownvar)
                                 push!(dependencies, unknownvar, var_idx)
                                 unknownvar = zero(I)
