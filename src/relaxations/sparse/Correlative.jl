@@ -74,7 +74,8 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         for (constrs, parentgroupings, h, l, md) in (
             (problem.constr_zero, parent.zeros, high_order_zero, low_order_zero, parentmaxzerodeg),
             (problem.constr_nonneg, parent.nonnegs, high_order_nonneg, low_order_nonneg, parentmaxnonnegdeg),
-            (problem.constr_psd, parent.psds, high_order_psd, low_order_psd, parentmaxpsddeg))
+            (problem.constr_psd, parent.psds, high_order_psd, low_order_psd, parentmaxpsddeg)
+        )
             if !ismissing(h) && !(h isa AbstractSet)
                 h = Set(h)
             end
@@ -89,7 +90,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     low_deg = i ∈ l
                 end
                 if !low_deg && isone(length(groupings))
-                    low_deg = isempty(effective_variables(first(groupings)))
+                    low_deg = isconstant(last(first(groupings)))
                 end
                 if low_deg
                     # we must make sure that the grouping only contains the constant, else mixing will occur
@@ -105,12 +106,12 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                         end
                     end
                 else
-                    vars = Set(effective_variables(constr))
+                    vars = Set(Iterators.map(ordinary_variable, effective_variables(constr)))
                     for grouping in groupings, var_gr in effective_variables(grouping)
                         var_gro = ordinary_variable(var_gr)
-                        if var_gr ∈ vars
+                        if var_gro ∈ vars
                             for var ∈ vars
-                                Graphs.add_edge!(g, Graphs.Edge(var_gro.index, ordinary_variable(var).index))
+                                Graphs.add_edge!(g, Graphs.Edge(var_gro.index, var.index))
                             end
                         end
                     end

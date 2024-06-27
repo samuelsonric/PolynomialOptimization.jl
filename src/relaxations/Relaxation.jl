@@ -44,22 +44,26 @@ struct RelaxationGroupings{Nr,Nc,I<:Integer,V<:SimpleVariable{Nr,Nc}}
     var_cliques::Vector{Vector{V}}
 end
 
-function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector})
+_lensort(x) = (-length(x), x) # use as "by" argument for sort to sort with descending length, standard tie-breaker
+
     lg = length(grouping)
     print(io, lg, " block", isone(lg) ? "" : "s")
-    lensorted = sort(grouping, by=length, rev=true)
+    lensorted = sort(grouping, by=_lensort)
     len = floor(Int, log10(length(first(lensorted)))) +1
-    for block in lensorted
+    limit = get(io, :limit, false)::Bool
+    for block in Iterators.take(lensorted, limit ? 5 : length(lensorted) -1)
         # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
         print(io, "\n  ", lpad(length(block), len, " "), " [")
         a, rest = Iterators.peel(block)
         show(io, "text/plain", a)
-        for x in rest
+        for x in Iterators.take(rest, limit ? 10 : length(block) -1)
             print(io, ", ")
             show(io, "text/plain", x)
         end
+        limit && length(block) > 10 && print(io, ", ...")
         print(io, "]")
     end
+    limit && length(lensorted) > 5 && print(io, "\n  ", lpad("⋮", len, " "))
 end
 
 function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}

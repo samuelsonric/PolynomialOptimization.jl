@@ -65,7 +65,7 @@ function chordal_cliques!(G::Graphs.SimpleGraph)
         candidate_cliques[i] = [intersect(Graphs.neighbors(G, i), findall(x -> order[x] > order[i], 1:n)); i]
         sort!(candidate_cliques[i])
     end
-    sort!(candidate_cliques, by=length, rev=true)
+    sort!(candidate_cliques, by=_lensort)
     maximal_cliques = FastVec{eltype(candidate_cliques)}(buffer=length(candidate_cliques))
     for clique in candidate_cliques
         if all(other_clique -> !(clique ⊆ other_clique), maximal_cliques)
