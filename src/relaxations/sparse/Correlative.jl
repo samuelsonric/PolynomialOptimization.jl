@@ -32,7 +32,8 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     """
     function SparsityCorrelative(relaxation::AbstractRelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
-        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
+        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where # sync with SparsityCorrelativeTerm
+        {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
             (!ismissing(high_order_psd) && !ismissing(lower_order_psd))) &&

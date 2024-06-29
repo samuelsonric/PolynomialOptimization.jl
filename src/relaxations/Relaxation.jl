@@ -46,12 +46,29 @@ end
 
 _lensort(x) = (-length(x), x) # use as "by" argument for sort to sort with descending length, standard tie-breaker
 
+# We don't store the association of a grouping with a clique; we just find it anew every time. While this is not too efficient,
+# it also doesn't occur so often that we actually need this information.
+_findclique(grouping::SimpleMonomialVector{Nr,Nc}, var_cliques::(Vector{Vector{V}} where V<:SimpleVariable)) where {Nr,Nc} =
+    findlast(Base.Fix1(⊆, effective_variables(grouping)), var_cliques) # put the grouping in the smallest fitting clique
+
+function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector}, cliques)
+    if get(io, :bycliques, false)::Bool
+        noc = IOContext(io, :bycliques => false)
+        for i in 1:length(cliques)
+            inclique = filter(let i=i; g -> _findclique(g, cliques) == i end, grouping)
+            if !isempty(inclique)
+                print(io, "\n> Clique #", i, ": ")
+                _show_groupings(noc, inclique, cliques)
+            end
+        end
+        return
+    end
     lg = length(grouping)
     print(io, lg, " block", isone(lg) ? "" : "s")
     lensorted = sort(grouping, by=_lensort)
     len = floor(Int, log10(length(first(lensorted)))) +1
     limit = get(io, :limit, false)::Bool
-    for block in Iterators.take(lensorted, limit ? 5 : length(lensorted) -1)
+    for block in Iterators.take(lensorted, limit ? 5 : length(lensorted))
         # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
         print(io, "\n  ", lpad(length(block), len, " "), " [")
         a, rest = Iterators.peel(block)
@@ -66,9 +83,16 @@ _lensort(x) = (-length(x), x) # use as "by" argument for sort to sort with desce
     limit && length(lensorted) > 5 && print(io, "\n  ", lpad("⋮", len, " "))
 end
 
-function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
+function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{Nr,Nc,I}) where {Nr,Nc,I<:Integer}
     println(io, "Groupings for the relaxation of a polynomial optimization problem\nVariable cliques\n================")
-    for clique in groupings.var_cliques
+    bycliques = get(io, :bycliques, false)::Bool
+    if bycliques
+        cliquelen = floor(Int, log10(length(groupings.var_cliques))) +1
+    end
+    for (i, clique) in enumerate(groupings.var_cliques)
+        if bycliques
+            print(io, "#", lpad(i, cliquelen, " "), ": ")
+        end
         print(io, "[")
         a, rest = Iterators.peel(clique)
         show(io, "text/plain", a)
@@ -79,13 +103,13 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
         println(io, "]")
     end
     print(io, "\nBlock groupings\n===============\nObjective: ")
-    _show_groupings(io, groupings.obj)
+    _show_groupings(io, groupings.obj, groupings.var_cliques)
     for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
         block = getproperty(groupings, f)::Vector{<:Vector{SimpleMonomialVector{Nr,Nc,I}}}
         if !isempty(block)
             for (i, constr) in enumerate(block)
                 print(io, "\n", name, " constraint #", i, ": ")
-                _show_groupings(io, constr)
+                _show_groupings(io, constr, groupings.var_cliques)
             end
         end
     end
@@ -102,7 +126,10 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
     @inbounds for i in length(temp):-1:2
         tempᵢ = temp[i]
         for tempⱼ in @view(temp[1:i-1])
-            tempᵢ ⊆ tempⱼ && deleteat!(temp, i)
+            if tempᵢ ⊆ tempⱼ
+                deleteat!(temp, i)
+                break
+            end
         end
     end
     append!(to, temp)
@@ -119,7 +146,27 @@ function embed(news::AbstractVector{X}, olds::AbstractVector{X}) where {X}
             sort!(toᵢ)
         end
     end
-    return Base._groupedunique!(sort!(finish!(to), by=_lensort))
+    result = Base._groupedunique!(sort!(finish!(to), by=_lensort))
+    # it is not guaranteed that news is completely subset-free, as it might have been constructed from different sources
+    lastdel = 0
+    @inbounds for i in length(result):-1:2
+        resultᵢ = result[i]
+        for resultⱼ in @view(result[1:i-1])
+            if resultᵢ ⊆ resultⱼ
+                if iszero(lastdel)
+                    lastdel = i
+                end
+                break
+            elseif !iszero(lastdel)
+                deleteat!(result, i+1:lastdel)
+                lastdel = 0
+            end
+        end
+    end
+    if !iszero(lastdel)
+        deleteat!(result, 2:lastdel)
+    end
+    return result
 end
 
 function embed(new::RG, old::RG) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
@@ -163,19 +210,13 @@ groupings(relaxation::AbstractRelaxation) = relaxation.groupings
 groupings(::Nothing) = nothing
 
 """
-    iterate!(state::AbstractRelaxation; objective=true, zero=true, nonneg=true, psd=true)
+    iterate!(relaxation::AbstractRelaxation)
 
 Some sparse polynomial optimization relaxations allow to iterate their sparsity, which will lead to a more dense representation
 and might give better bounds at the expense of a more costly optimization. Return `nothing` if the iterations converged
 (`state` did not change any more), else return the new state. Note that `state` will be modified.
-
-The keyword arguments allow to restrict the iteration to certain elements. This does not necessarily mean that the bases
-associated to other elements will not change as well to keep consistency; but their own contribution will not be considered.
-The parameters `nonneg` and `psd` may either be `true` (to iterate all those constraints) or a set of integers that refer to
-the indices of the constraints, as they were originally given to [`poly_problem`](@ref).
 """
-iterate!(::AbstractRelaxation; objective::Bool=true, zero::Union{Bool,<:AbstractSet{<:Integer}}=true,
-    nonneg::Union{Bool,<:AbstractSet{<:Integer}}=true, psd::Union{Bool,<:AbstractSet{<:Integer}}=true) = nothing
+iterate!(::AbstractRelaxation) = nothing
 
 """
     Relaxation.XXX(problem::Problem[, degree]; kwargs...)
@@ -195,26 +236,50 @@ function (r::Type{<:AbstractRelaxation})(problem::Problem, args...; kwargs...)
     return r(Dense(problem, args...); kwargs...)
 end
 
-function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation)
+function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x).name.name)
     groups = groupings(x)
     # we don't want to print the fully parameterized type type
-    print(io, "Relaxation.", typeof(x).name.name, " of a polynomial optimization problem\nVariable cliques:")
-    for va in groups.var_cliques
-        print(io, "\n  ", join(va, ", "))
-    end
-    bs = StatsBase.countmap(length.(groups.obj))
-    for constrs in (groups.nonnegs, groups.psds)
-        for constr in constrs
-            mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+    print(io, "Relaxation.", name, " of a polynomial optimization problem")
+    bycliques = get(io, :bycliques, false)::Bool
+    if bycliques
+        cliquesizes_psd = [Dict{Int,Int}() for _ in 1:length(groups.var_cliques)]
+        cliquesizes_lin = [Dict{Int,Int}() for _ in 1:length(groups.var_cliques)]
+        for grouping in groups.obj
+            cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
+            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
         end
-    end
-    print(io, "\nPSD block sizes:\n  ", sort!(collect(bs), rev=true))
-    if !isempty(groups.zeros)
-        empty!(bs)
-        for constr in groups.zeros
-            mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+        for constr in groups.zeros, grouping in constr
+            cliquesize = cliquesizes_lin[_findclique(grouping, groups.var_cliques)]
+            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
         end
-        print(io, "\nFree block sizes:\n  ", sort!(collect(bs), rev=true))
+        for constrs in (groups.nonnegs, groups.psds), constr in constrs, grouping in constr
+            cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
+            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
+        end
+        for (i, (va, size_psd, size_lin)) in enumerate(zip(groups.var_cliques, cliquesizes_psd, cliquesizes_lin))
+            print(io, "\n> Clique #", i, ": ", join(va, ", "))
+            isempty(size_psd) || print(io, "\n  PSD block sizes:\n    ", sort!(collect(size_psd), rev=true))
+            isempty(size_lin) || print(io, "\n  Free block sizes:\n    ", sort!(collect(size_lin), rev=true))
+        end
+    else
+        print(io, "\nVariable cliques:")
+        for va in groups.var_cliques
+            print(io, "\n  ", join(va, ", "))
+        end
+        bs = StatsBase.countmap(length.(groups.obj))
+        for constrs in (groups.nonnegs, groups.psds)
+            for constr in constrs
+                mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+            end
+        end
+        print(io, "\nPSD block sizes:\n  ", sort!(collect(bs), rev=true))
+        if !isempty(groups.zeros)
+            empty!(bs)
+            for constr in groups.zeros
+                mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+            end
+            print(io, "\nFree block sizes:\n  ", sort!(collect(bs), rev=true))
+        end
     end
 end
 
