@@ -16,10 +16,10 @@ To construct a real-valued or complex-valued variable, see [`SimpleRealVariable`
 struct SimpleVariable{Nr,Nc,I<:Unsigned} <: AbstractVariable
     index::I
 
-    function SimpleVariable{Nr,Nc}(index::Integer) where {Nr,Nc}
+    @inline function SimpleVariable{Nr,Nc}(index::Integer) where {Nr,Nc}
         0 ≤ Nr || throw(DomainError(Nr, "Invalid ring: Nr must be a nonnegative integer"))
         0 ≤ Nc || throw(DomainError(Nc, "Invalid ring: Nc must be nonnegative integer"))
-        0 < index ≤ Nr + 2Nc || throw(DomainError(index, "Invalid index: must be between 1 and $(Nr + 2Nc)"))
+        @boundscheck 0 < index ≤ Nr + 2Nc || throw(DomainError(index, "Invalid index: must be between 1 and $(Nr + 2Nc)"))
         I = smallest_unsigned(Nr + 2Nc)
         new{Nr,Nc,I}(I(index))
     end

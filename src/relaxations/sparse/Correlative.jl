@@ -126,19 +126,27 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         # this be worth the effort?
         minmultideg = SimplePolynomials.ConstantVector(0, Nr + 2Nc)
         newobj = Vector{SimpleMonomialVector{Nr,Nc,I}}(undef, length(cliques))
-        newzero = [similar(newobj) for _ in 1:length(problem.constr_zero)]
-        newnonneg = [similar(newobj) for _ in 1:length(problem.constr_nonneg)]
-        newpsd = [similar(newobj) for _ in 1:length(problem.constr_psd)]
+        newzero = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_zero)]
+        newnonneg = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_nonneg)]
+        newpsd = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_psd)]
         @inbounds for (i, clique) in enumerate(cliques)
             maxmultideg = zeros(Int, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
             newobj[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
-            for (parentdeg, news) in ((parentmaxzerodeg, newzero), (parentmaxnonnegdeg, newnonneg), (parentmaxpsddeg, newpsd))
-                for (maxdeg, newel) in zip(parentdeg, news)
+            cliquevars = Set(Iterators.map(SimpleVariable{Nr,Nc}, clique))
+            for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
+                                               (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
+                                               (problem.constr_psd, parentmaxpsddeg, newpsd))
+                for (constr, maxdeg, newel) in zip(constrs, parentdeg, news)
+                    SimplePolynomials.effective_variables_in(constr, cliquevars) || continue
                     maxmultideg = zeros(Int, Nr + 2Nc)
                     fill!(@view(maxmultideg[clique]), maxdeg)
-                    newel[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
-                        minmultideg, maxmultideg))
+                    push!(newel,
+                        SimpleMonomialVector{Nr,Nc}(
+                            ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
+                            minmultideg, maxmultideg)
+                        )
+                    )
                 end
             end
         end
