@@ -109,7 +109,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
             if isnan(abs_val) || isempty(phase_candidates)
                 push!(zero_checks, var)
             elseif isone(length(phase_candidates))
-                solution[i] = abs_val * cis(first(phase_candidates))
+                solution[i] = abs_val * cis(@inbounds phase_candidates[begin])
             else
                 solution[i] = abs_val
                 unknown_phases[i] = phase_candidates
@@ -268,7 +268,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
             return [first_sol; second_sol]
         else
             # Find the variable with the last possible combinations
-            candidate_index, candidate_phases = first(unknown_phases)
+            candidate_index, candidate_phases = @inbounds unknown_phases[begin]
             for (k, v) in unknown_phases
                 if length(v) < candidate_phases
                     candidate_index, candidate_phases = k, v

@@ -46,7 +46,7 @@ function Base.get(d::MomentVector{R,R,Nr,0,<:AbstractSparseVector{R}} where {R},
     idx = monomial_index(d.e, keys...)
     ridx = searchsorted(rowvals(d.values), idx)
     isempty(ridx) && return not_found()
-    @inbounds return nonzeros(d.values)[first(ridx)]
+    @inbounds return nonzeros(d.values)[ridx[begin]]
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
     keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
@@ -71,12 +71,12 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}},
     isempty(ridx) && return not_found()
     idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
     if idx_c == idx
-        val = @inbounds nz[first(ridx)]
+        val = @inbounds nz[ridx[begin]]
         return isnan(val) ? not_found() : Complex{R}(val)
     else
         ridx_c = searchsorted(rv, idx_c)
         @assert(!isempty(ridx_c))
-        @inbounds idx_re, idx_im = minmax(first(ridx), first(ridx_c)) # rowvals is ascending, so this is transitive
+        @inbounds idx_re, idx_im = minmax(ridx[begin], ridx_c[begin]) # rowvals is ascending, so this is transitive
         @inbounds val_re, val_im = nz[idx_re], nz[idx_im]
         return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_re : -val_re)
     end
@@ -92,8 +92,7 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVe
             deg += 1
             degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
         end
-        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e,
-            sizeof(I) == sizeof(Int) ? Core.bitcast(I, i) : (sizeof(I) < sizeof(Int) ? Core.trunc_int(I, i) : I(i)), deg)
+        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, unsafe_cast(I, i), deg)
         iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
@@ -107,7 +106,7 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSp
     isempty(rv) && return nothing
     idx = 1
     rem = length(rv)
-    deg = @inbounds degree_from_index(unsafe, d.e, first(rv))
+    deg = @inbounds degree_from_index(unsafe, d.e, rv[begin])
     degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
     return iterate(d, (idx, rem, deg, degIncAt))
 end
@@ -132,7 +131,7 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSp
         if mon.index < cmon.index
             cidx = searchsorted(rv, cmon.index)
             @assert(!isempty(cidx))
-            @inbounds return Pair(mon, Complex(nz[idx], nz[first(cidx)])), (idx +1, rem, deg, degIncAt)
+            @inbounds return Pair(mon, Complex(nz[idx], nz[cidx[begin]])), (idx +1, rem, deg, degIncAt)
         end
         # skip over the conjugates
     end

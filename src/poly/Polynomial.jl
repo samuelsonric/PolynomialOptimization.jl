@@ -21,7 +21,7 @@ MultivariatePolynomials.coefficients(p::SimplePolynomial) = p.coeffs
 
 function MultivariatePolynomials.coefficient(p::SimplePolynomial{C,Nr,Nc}, m::SimpleMonomial{Nr,Nc}) where {C,Nr,Nc}
     pos = searchsortedlast(p.monomials, m)
-    iszero(pos) && return zero(C)
+    (iszero(pos) || @inbounds(p.monomials[pos] != m)) && return zero(C)
     @inbounds return p.coeffs[pos]
 end
 
@@ -34,7 +34,7 @@ MultivariatePolynomials.nterms(p::SimplePolynomial) = length(p.coeffs)
 MultivariatePolynomials.nvariables(::XorTX{SimplePolynomial{C,Nr,Nc} where {C}}) where {Nr,Nc} = Nr + 2Nc
 
 Base.iterate(p::SimplePolynomial) =
-    isempty(p.coeffs) ? nothing : (@inbounds(term_type(p)(first(p.coeffs), first(p.monomials))), 2)
+    isempty(p.coeffs) ? nothing : (@inbounds(term_type(p)(p.coeffs[begin], p.monomials[begin])), 2)
 Base.iterate(p::SimplePolynomial, i::Integer) =
     i > length(p.coeffs) ? nothing : (@inbounds(term_type(p)(p.coeffs[i], p.monomials[i])), i +1)
 Base.IteratorSize(::Type{<:SimplePolynomial}) = Base.HasLength()

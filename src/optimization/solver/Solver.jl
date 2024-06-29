@@ -24,7 +24,7 @@ const solver_methods = Symbol[]
 function default_solver_method()
     isempty(solver_methods) &&
         error("No solver method is available. Load a solver package that provides such a method (e.g., Mosek)")
-    return first(solver_methods)
+    @inbounds return solver_methods[begin]
 end
 
 """

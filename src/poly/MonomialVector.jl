@@ -11,7 +11,7 @@ struct SimpleMonomialVector{Nr,Nc,I<:Integer,E,T<:SimpleMonomial{Nr,Nc,I}} <: Ab
 
     function SimpleMonomialVector{Nr,Nc}(::Unsafe, e::AbstractExponents{N,I}, indices::AbstractVector{I}) where {Nr,Nc,N,I<:Integer}
         N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (unsafe, e, indices))) # compile-time check
-        @inbounds degree_from_index(e, isempty(indices) ? one(I) : last(indices)) # populate the cache
+        @inbounds degree_from_index(e, isempty(indices) ? one(I) : indices[end]) # populate the cache
         et = (e, indices)
         new{Nr,Nc,I,typeof(et),SimpleMonomial{Nr,Nc,I,typeof(e)}}(et)
     end
@@ -20,9 +20,9 @@ end
 function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{<:Any,I}, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer}
     _sortedallunique(sort!(indices)) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     if !isempty(indices)
-        @boundscheck @inbounds first(indices) ≥ firstindex(e) || throw(BoundsError(e, first(indices)))
+        @boundscheck @inbounds indices[begin] ≥ firstindex(e) || throw(BoundsError(e, indices[begin]))
         e isa AbstractExponentsDegreeBounded &&
-            (@boundscheck @inbounds last(indices) ≤ lastindex(e) || throw(BoundsError(e, last(indices))))
+            (@boundscheck @inbounds indices[end] ≤ lastindex(e) || throw(BoundsError(e, indices[end])))
     end
     return SimpleMonomialVector{Nr,Nc}(unsafe, e, indices)
 end
@@ -60,9 +60,9 @@ function SimpleMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     if !isempty(exps)
-        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        @boundscheck @inbounds exps[begin] ≥ firstindex(e) || throw(BoundsError(e, exps[begin]))
         e isa AbstractExponentsDegreeBounded &&
-            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+            (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
     return SimpleMonomialVector{Nr,0}(unsafe, e, exps)
 end
@@ -83,9 +83,9 @@ function SimpleMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     if !isempty(exps)
-        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        @boundscheck @inbounds exps[begin] ≥ firstindex(e) || throw(BoundsError(e, exps[begin]))
         e isa AbstractExponentsDegreeBounded &&
-            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+            (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
     return SimpleMonomialVector{0,Nc}(unsafe, e, exps)
 end
@@ -109,9 +109,9 @@ function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     if !isempty(exps)
-        @boundscheck @inbounds first(exps) ≥ firstindex(e) || throw(BoundsError(e, first(exps)))
+        @boundscheck @inbounds exps[begin] ≥ firstindex(e) || throw(BoundsError(e, exps[begin]))
         e isa AbstractExponentsDegreeBounded &&
-            (@boundscheck @inbounds last(exps) ≤ lastindex(e) || throw(BoundsError(e, last(exps))))
+            (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
     return SimpleMonomialVector{Nr,Nc}(unsafe, e, exps)
 end
@@ -148,21 +148,22 @@ function SimpleMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, alo
     exponents_tmp = Vector{Int}(undef, vars_real + 2vars_complex)
     @inbounds for (j, m) in enumerate(mv)
         i_real, i_complex = 1, 1
+        d = 0
         for v in vars
             if isreal(v)
-                exponents_tmp[i_real] = degree(m, v)
+                d += (exponents_tmp[i_real] = degree(m, v))
                 i_real += 1
             else
-                exponents_tmp[vars_real+2i_complex-1] = degree(m, v)
-                exponents_tmp[vars_real+2i_complex] = degree(m, conj(v))
+                d += (exponents_tmp[vars_real+2i_complex-1] = degree(m, v))
+                d += (exponents_tmp[vars_real+2i_complex] = degree(m, conj(v)))
                 i_complex += 1
             end
         end
-        exps[j] = exponents_to_index(ea, exponents_tmp)
+        exps[j] = exponents_to_index(ea, exponents_tmp, d)
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
-    return SimpleMonomialVector{vars_real,vars_complex}(unsafe, exps)
+    return SimpleMonomialVector{vars_real,vars_complex}(unsafe, ea, exps)
 end
 
 SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, args...; kwargs...) =
@@ -177,7 +178,7 @@ function Base.getproperty(x::SimpleMonomialVectorComplete{<:Any,<:Any,I}, f::Sym
     if f === :e
         return getfield(x, :data)
     elseif f === :indices
-        return one(I):I(length(unsafe, getfield(x, :data)))
+        return one(I):unsafe_cast(I, length(unsafe, getfield(x, :data)))
     else
         return getfield(x, f)
     end
@@ -193,7 +194,9 @@ function Base.getproperty(x::SimpleMonomialVectorSubset, f::Symbol)
 end
 
 Base.IndexStyle(::Type{<:SimpleMonomialVector}) = IndexLinear()
-Base.size(x::SimpleMonomialVector) = (Int(length(x.indices)),)
+Base.size(x::SimpleMonomialVector) = (unsafe_cast(Int, length(x.indices)),)
+Base.firstindex(::SimpleMonomialVector) = 1
+Base.lastindex(x::SimpleMonomialVector) = length(x)
 Base.isempty(::SimpleMonomialVectorComplete) = false # AbstractExponents must not be empty
 Base.copy(x::SimpleMonomialVectorComplete) = x
 Base.copy(x::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} = SimpleMonomialVector{Nr,Nc}(unsafe, x.e, copy(x.indices))
@@ -246,7 +249,7 @@ struct SimpleMonomialVectorIterator{Indexed,V,MV,Iterate}
         new{Indexed,V,MV,
             MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
             MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
-            isempty(mv) || 2length(mv) ≥ (last(mv.indices) - first(mv.indices) +1)
+            isempty(mv) || 2length(mv) ≥ @inbounds(mv.indices[end] - mv.indices[begin] +1)
            }(v, mv)
     end
 
@@ -255,7 +258,7 @@ struct SimpleMonomialVectorIterator{Indexed,V,MV,Iterate}
         new{Indexed,Nothing,MV,
             MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
             MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
-            isempty(mv) || 2length(mv) ≥ (last(mv.indices) - first(mv.indices) +1)
+            isempty(mv) || 2length(mv) ≥ @inbounds(mv.indices[end] - mv.indices[begin] +1)
            }(nothing, mv)
     end
 end
@@ -269,19 +272,19 @@ Base.eltype(::Type{<:SimpleMonomialVectorIterator{<:Any,V}}) where {V} = V
 function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed,V,<:SimpleMonomialVector{<:Any,<:Any,I,E},Iterate}) where {Indexed,V,I<:Integer,E,Iterate}
     isempty(mi.mv) && return nothing
     if V <: AbstractVector{Int}
-        @inbounds v = copyto!(mi.v, exponents(first(mi.mv)))
+        @inbounds v = copyto!(mi.v, exponents(mi.mv[begin]))
     else
         @assert(V === Nothing)
-        @inbounds v = collect(exponents(first(mi.mv)))
+        @inbounds v = collect(exponents(mi.mv[begin]))
     end
-    if E <: AbstractExponents
+    @inbounds if E <: AbstractExponents
         return Indexed ? ((one(I), v), (one(I), v)) : (v, v)
     elseif E <: Tuple{AbstractExponents,AbstractUnitRange}
-        return Indexed ? ((first(mi.mv.indices), v), (first(mi.mv.indices), v, length(mi.mv) -1)) : (v, (v, length(mi.mv) -1))
+        return Indexed ? ((mi.mv.indices[begin], v), (mi.mv.indices[begin], v, length(mi.mv) -1)) : (v, (v, length(mi.mv) -1))
     elseif Iterate
-        return (Indexed ? (first(mi.mv.indices), v) : v), (v, I(2), 1, length(mi.mv) -1)
+        return (Indexed ? (mi.mv.indices[begin], v) : v), (v, I(2), 1, length(mi.mv) -1)
     else
-        return Indexed ? ((first(mi.mv.indices), v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
+        return Indexed ? ((mi.mv.indices[begin], v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
     end
 end
 Base.iterate(mi::SimpleMonomialVectorIterator{false}, state::AbstractVector{Int}) =
@@ -335,10 +338,10 @@ veciter(mv::SimpleMonomialVector, indexed::Bool) = veciter(mv, Val(indexed))
 
 MultivariatePolynomials.mindegree(x::SimpleMonomialVectorComplete) = x.e.mindeg
 MultivariatePolynomials.mindegree(x::SimpleMonomialVectorSubset) =
-    isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, first(x.indices))
+    isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, @inbounds x.indices[begin])
 MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorComplete) = x.e.maxdeg
 MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorSubset) =
-    isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, last(x.indices))
+    isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, @inbounds x.indices[end])
 MultivariatePolynomials.extdegree_complex(x::SimpleMonomialVector{<:Any,0}) = extdegree(x)
 MultivariatePolynomials.mindegree_complex(x::SimpleMonomialVector{<:Any,0}) = mindegree(x)
 MultivariatePolynomials.maxdegree_complex(x::SimpleMonomialVector{<:Any,0}) = maxdegree(x)
@@ -426,38 +429,28 @@ Base.searchsortedlast(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialO
     monomial_index(v.e, x)
 Base.searchsortedlast(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     searchsortedlast(v.indices, monomial_index(v.e, x))
-function Base.searchsortedfirst(v::SimpleMonomialVector{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
-    ssl = searchsortedlast(v, x)
-    return iszero(ssl) ? lastindex(v) +1 : ssl
+function Base.searchsortedfirst(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    i = monomial_index(v.e, x)
+    return iszero(i) ? lastindex(v) +1 : i
 end
-function Base.searchsorted(v::SimpleMonomialVector{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
-    ssl = searchsortedlast(v, x)
-    return iszero(ssl) ? ((lastindex(v) +1):0) : ssl:ssl
+function Base.searchsortedfirst(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    i = monomial_index(v.e, x)
+    iszero(i) && return lastindex(v) +1
+    return searchsortedfirst(v.indices, i)
 end
-function Base.issubset(a::SimpleMonomialVector{Nr,Nc},
-    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
-    isempty(a) && return true
-    if a.e isa ExponentsMultideg
-        if b.e isa ExponentsMultideg
-            all(splat(≥), zip(a.e.minmultideg, b.e.minmultideg)) && all(splat(≤), zip(a.e.maxmultideg, b.e.maxmultideg)) &&
-                @goto simple
-        else
-            @goto simple
-        end
-    elseif b.e isa ExponentsAll || b.e isa ExponentsDegree
-        @goto simple
-    else
-        @assert(b.e isa ExponentsMultideg)
-        all(isequal(0), b.e.minmultideg) && all(Base.Fix2(≥, degree(last(a))), b.e.maxmultideg) && @goto simple
-    end
-    return invoke(issubset, Tuple{SimpleMonomialVector{Nr_,Nc_},SimpleMonomialVector{Nr_,Nc_}} where {Nr_,Nc_}, a, b)
-    @label simple
-    @inbounds return first(a) ∈ b && last(a) ∈ b
+function Base.searchsorted(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    i = monomial_index(v.e, x)
+    iszero(i) && return 1:0
+    return i:i
 end
-Base.issubset(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
-    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
-    return a.e.mindeg ≥ b.e.mindeg && a.e.maxdeg ≤ b.e.maxdeg
-function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+function Base.searchsorted(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+    i = monomial_index(v.e, x)
+    iszero(i) && return 1:0
+    idx = searchsortedlast(v.indices, i)
+    iszero(idx) && return 1:0
+    return idx:idx
+end
+function _issubset_generic(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
     isempty(a) && return true
     length(a) > length(b) && return false
     @inbounds if a.e == b.e
@@ -523,12 +516,36 @@ function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{N
         end
     end
 end
+function Base.issubset(a::SimpleMonomialVector{Nr,Nc},
+    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
+    isempty(a) && return true
+    if a.e isa ExponentsMultideg
+        if b.e isa ExponentsMultideg
+            all(splat(≥), zip(a.e.minmultideg, b.e.minmultideg)) && all(splat(≤), zip(a.e.maxmultideg, b.e.maxmultideg)) &&
+                @goto simple
+        else
+            @goto simple
+        end
+    elseif b.e isa ExponentsAll || b.e isa ExponentsDegree
+        @goto simple
+    else
+        @assert(b.e isa ExponentsMultideg)
+        all(isequal(0), b.e.minmultideg) && all(Base.Fix2(≥, degree(@inbounds a[end])), b.e.maxmultideg) && @goto simple
+    end
+    return _issubset_generic(a, b) # invoke will not be able to infer the correct method at compile time
+    @label simple
+    @inbounds return a[begin] ∈ b && a[end] ∈ b
+end
+Base.issubset(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
+    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
+    return a.e.mindeg ≥ b.e.mindeg && a.e.maxdeg ≤ b.e.maxdeg
+Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc} = _issubset_generic(a, b)
 function Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
     b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
     length(a) == length(b) || return false
     isempty(a) && return true
     @inbounds if a.e == b.e
-        return first(a) == first(b) && last(a) == last(b)
+        return a[begin] == b[begin] && a[end] == b[end]
     else
         return all(splat(isequal), zip(a, b))
     end
@@ -834,14 +851,14 @@ function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree},
     @assert(!isempty(a))
     isempty(b) && return SimpleMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end])) # just to have type-stability
     ae, be = a.e, b.e
-    if ae.mindeg ≤ degree(first(b))
-        if ae.maxdeg ≥ degree(last(b))
+    @inbounds if ae.mindeg ≤ degree(b[begin])
+        if ae.maxdeg ≥ degree(b[end])
             return SimpleMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end]))
         else
             lastina = searchsortedlast(b.indices, convert_index(unsafe, be, ae, lastindex(ae), ae.maxdeg))
         end
         firstina = 1
-    elseif ae.maxdeg ≥ degree(last(b))
+    elseif ae.maxdeg ≥ degree(b[end])
         firstina = searchsortedfirst(b.indices, convert_index(unsafe, be, ae, firstindex(ae), ae.mindeg))
         lastina = length(b.indices)
     else
@@ -1031,8 +1048,9 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
         e = missing
         no_indexing = true
         copied = false
-        for Xᵢ in X
+        @inbounds for Xᵢ in X
             if Xᵢ isa SimpleMonomialVector
+                isempty(Xᵢ) && continue
                 eᵢ = Xᵢ.e
                 no_indexingᵢ = _is_full_smv(Xᵢ)
             else
@@ -1043,7 +1061,7 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
             end
             if ismissing(e)
                 if eᵢ isa ExponentsAll
-                    e = ExponentsDegree{Nr+2Nc,_extract_I(e)}(degree(first(Xᵢ)), degree(last(Xᵢ)))
+                    e = ExponentsDegree{Nr+2Nc,_extract_I(e)}(degree(Xᵢ[begin]), degree(Xᵢ[end]))
                     if Base.haslength(Xᵢ)
                         no_indexing = length(Xᵢ) == length(e)
                     end
@@ -1057,7 +1075,7 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
             if eᵢ isa ExponentsAll
                 @assert(!no_indexingᵢ) # ExponentsAll can never determine a finite-size vector fully to do the merge, convert
                                        # it to a degree-bound index
-                eᵢ = ExponentsDegree{Nr+2Nc,I}(degree(first(Xᵢ)), degree(last(Xᵢ)))
+                eᵢ = ExponentsDegree{Nr+2Nc,I}(degree(Xᵢ[begin]), degree(Xᵢ[end]))
                 if Base.haslength(Xᵢ)
                     no_indexingᵢ = length(Xᵢ) == length(eᵢ)
                 end

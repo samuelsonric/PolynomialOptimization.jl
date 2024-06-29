@@ -31,6 +31,7 @@ Base.size(cv::ConstantVector) = (cv.length,)
     @boundscheck checkbounds(cv, i)
     return cv.value
 end
+Base.iterate(cv::ConstantVector, rem=cv.length) = rem ≤ 0 ? nothing : (cv.value, rem -1)
 @inline function elementwise(f, a::ConstantVector, b::ConstantVector)
     @assert(length(a) == length(b))
     return ConstantVector(f(a.value, b.value), a.length)
@@ -74,3 +75,24 @@ intersect_sorted(a::AbstractVector, b::AbstractUnitRange) =
 intersect_sorted(a::AbstractUnitRange, b::AbstractVector) = intersect_sorted(b, a)
 intersect_sorted(a::AbstractUnitRange, b::AbstractUnitRange) = intersect(a, b)
 # TODO (maybe): intersect_sorted for two vectors, using binary or exponential search skipping...
+
+unsafe_cast(T::Type{<:Signed}, x::Signed) = T(x)
+unsafe_cast(T::Type{<:Unsigned}, x::Unsigned) = T(x)
+function unsafe_cast(T::Type{S}, x::Unsigned) where {S<:Signed} # assume the unsigned value does not have the top bit set
+    if sizeof(T) == sizeof(x)
+        return Core.bitcast(T, x)
+    elseif sizeof(T) < sizeof(x)
+        return Core.trunc_int(T, x)
+    else
+        return T(x)
+    end
+end
+function unsafe_cast(T::Type{U}, x::Signed) where {U<:Unsigned} # assume the signed value is not negative
+    if sizeof(T) == sizeof(x)
+        return Core.bitcast(T, x)
+    elseif sizeof(T) < sizeof(x)
+        return Core.trunc_int(T, x)
+    else
+        return T(x)
+    end
+end

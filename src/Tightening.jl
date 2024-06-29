@@ -1,8 +1,9 @@
 const tightening_methods = Symbol[]
 
 function default_tightening_method()
-    isempty(tightening_methods) && error("No tightening method is available. Load a solver package that provides such a method (e.g., Mosek)")
-    return first(tightening_methods)
+    isempty(tightening_methods) &&
+        error("No tightening method is available. Load a solver package that provides such a method (e.g., Mosek)")
+    @inbounds return tightening_methods[begin]
 end
 
 """

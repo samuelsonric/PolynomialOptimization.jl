@@ -14,7 +14,7 @@ struct SimpleMonomial{Nr,Nc,I<:Integer,E<:AbstractExponents} <: AbstractMonomial
     degree::Int # because it is required very often, we'll precalculate it
 
     # internal functions, don't use.
-    function SimpleMonomial{Nr,Nc}(::Unsafe, e::E, index::I, degree::Int=degree_from_index(unsafe, e, index)) where
+    @inline function SimpleMonomial{Nr,Nc}(::Unsafe, e::E, index::I, degree::Int=degree_from_index(unsafe, e, index)) where
         {Nr,Nc,N,I<:Integer,E<:AbstractExponents{N,I}}
         N == Nr + 2Nc || throw(MethodError(SimpleMonomial{Nr,Nc,E}, (unsafe, index, degree)))
         new{Nr,Nc,I,E}(e, index, degree)

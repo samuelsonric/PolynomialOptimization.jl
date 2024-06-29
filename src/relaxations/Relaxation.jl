@@ -65,8 +65,9 @@ function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector}, cliqu
     end
     lg = length(grouping)
     print(io, lg, " block", isone(lg) ? "" : "s")
+    iszero(lg) && return
     lensorted = sort(grouping, by=_lensort)
-    len = floor(Int, log10(length(first(lensorted)))) +1
+    len = floor(Int, log10(length(@inbounds lensorted[begin]))) +1
     limit = get(io, :limit, false)::Bool
     for block in Iterators.take(lensorted, limit ? 5 : length(lensorted))
         # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.

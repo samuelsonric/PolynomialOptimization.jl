@@ -3,7 +3,7 @@ function preproc_prequick(V, mons::SimpleMonomialVector{Nr,0}, verbose; paramete
         vertexindices = fill(1, 2Nr)
         lowestidx = @view(vertexindices[1:Nr])
         highestidx = @view(vertexindices[Nr+1:2Nr])
-        lowestvals = collect(exponents(first(mons)))
+        lowestvals = collect(exponents(mons[begin]))
         highestvals = copy(lowestvals)
         # we might also add the points with the smallest/largest sum of all coordinates, or differences (but there are 2^nv
         # ways to combine, so let's skip it)

@@ -89,7 +89,7 @@ let
                     quote
                         fx = fill(MSK_BK_FX.value, nv)
                         vertexpos = 1
-                        vertexindex = first(vertexindices)
+                        vertexindex = vertexindices[begin]
                         for (progress, exps) in enumerate(veciter(mons))
                             if progress == vertexindex
                                 vertexpos += 1

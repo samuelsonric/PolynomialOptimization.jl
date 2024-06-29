@@ -36,7 +36,7 @@ end
 Base.length(smc::SparseMatrixCOO) = length(smc.rowinds)
 @inline function Base.size(smc::SparseMatrixCOO{<:Integer,<:Integer,<:Real,Offset}, dim) where {Offset}
     dim == 1 || error("Not implemented")
-    @inbounds return isempty(smc.rowinds) ? 0 : Int(last(smc.rowinds)) + (1 - Int(Offset))
+    @inbounds return isempty(smc.rowinds) ? 0 : Int(smc.rowinds[end]) + (1 - Int(Offset))
 end
 
 function FastVector.prepare_push!(smc::SparseMatrixCOO, new_items::Integer)
@@ -60,7 +60,7 @@ See also [`AbstractIndvals`](@ref).
         prep += length(indval)
     end
     prepare_push!(coo, prep)
-    v = isempty(coo.rowinds) ? Offset : last(coo.rowinds) + one(I)
+    @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
     for indval in indvals
         for (monind, nzval) in indval
             unsafe_push!(coo.rowinds, v)
@@ -81,7 +81,7 @@ See also [`PSDVector`](@ref).
 """
 @inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prepare_push!(coo.rowinds, length(rowvals(psd)))
-    v = isempty(coo.rowinds) ? Offset : last(coo.rowinds) + one(I)
+    @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
     for l in Base.index_lengths(psd)
         for _ in 1:l
             unsafe_push!(coo.rowinds, v)

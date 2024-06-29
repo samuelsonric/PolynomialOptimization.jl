@@ -159,7 +159,7 @@ const newton_methods = Symbol[]
 function default_newton_method()
     isempty(newton_methods) &&
         error("No Newton method is available. Load a solver package that provides such a method (e.g., Mosek)")
-    return first(newton_methods)
+    @inbounds return newton_methods[begin]
 end
 
 include("./helpers/Helpers.jl")
