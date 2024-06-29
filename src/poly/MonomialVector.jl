@@ -420,7 +420,7 @@ end
 Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorComplete{Nr,Nc}) where {Nr,Nc} =
     x.e == v.e || !iszero(convert_index(v.e, x.e, x.index, degree(x)))
 Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} =
-    insorted(v.indices, monomial_index(v.e, x))
+    insorted(monomial_index(v.e, x), v.indices)
 Base.hasfastin(::Type{<:SimpleMonomialVector}) = true
 Base.searchsortedlast(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     monomial_index(v.e, x)
@@ -434,32 +434,55 @@ function Base.searchsorted(v::SimpleMonomialVector{Nr,Nc}, x::SimpleMonomialOrCo
     ssl = searchsortedlast(v, x)
     return iszero(ssl) ? ((lastindex(v) +1):0) : ssl:ssl
 end
-Base.issubset(a::SimpleMonomialVector{Nr,Nc},
-    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc} =
-    @inbounds isempty(a) || (first(a) ∈ b && last(a) ∈ b)
+function Base.issubset(a::SimpleMonomialVector{Nr,Nc},
+    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
+    isempty(a) && return true
+    if a.e isa ExponentsMultideg
+        if b.e isa ExponentsMultideg
+            all(splat(≥), zip(a.e.minmultideg, b.e.minmultideg)) && all(splat(≤), zip(a.e.maxmultideg, b.e.maxmultideg)) &&
+                @goto simple
+        else
+            @goto simple
+        end
+    elseif b.e isa ExponentsAll || b.e isa ExponentsDegree
+        @goto simple
+    else
+        @assert(b.e isa ExponentsMultideg)
+        all(isequal(0), b.e.minmultideg) && all(Base.Fix2(≥, degree(last(a))), b.e.maxmultideg) && @goto simple
+    end
+    return invoke(issubset, Tuple{SimpleMonomialVector{Nr_,Nc_},SimpleMonomialVector{Nr_,Nc_}} where {Nr_,Nc_}, a, b)
+    @label simple
+    @inbounds return first(a) ∈ b && last(a) ∈ b
+end
 Base.issubset(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
     b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
     return a.e.mindeg ≥ b.e.mindeg && a.e.maxdeg ≤ b.e.maxdeg
-function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc}
+function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
     isempty(a) && return true
     length(a) > length(b) && return false
     @inbounds if a.e == b.e
-        ai, bi = a.indices, b.indices
-        if first(ai) < first(bi) || last(ai) > last(bi)
-            return false
+        ai = a.indices
+        bi = let bi=b.indices
+            firsti = searchsortedfirst(bi, ai[1])
+            (firsti > lastindex(bi) || bi[firsti] != ai[1]) && return false
+            lasti = searchsortedlast(bi, ai[end])
+            (lasti < firstindex(bi) || bi[lasti] != ai[end]) && return false
+            length(ai) > lasti - firsti +1 && return false
+            length(ai) ≤ 2 && return true
+            @view(bi[firsti:lasti])
         end
-        length(ai) ≤ 2 && return true
+        la, lb = lastindex(ai), lastindex(bi)
         ia = 2
         ib = searchsortedfirst(bi, ai[ia])
-        la, lb = lastindex(ai), lastindex(bi)
+        ib > lb && return false
         while true
             while ai[ia] == bi[ib]
                 ia += 1
-                ia > la && return true
-                ib += 1
+                ia ≥ la && return true
+                ib += 1 # we cannot exceed bi, as the last entry is present
             end
             if ai[ia] > bi[ib]
-                ib = ib + searchsortedfirst(@view(bi[ib:end]), ai[ia]) -1
+                ib = ib + searchsortedfirst(@view(bi[ib+1:end]), ai[ia])
                 ib > lb && return false
             else
                 return false
@@ -467,24 +490,32 @@ function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVectorSu
         end
     else
         ae, be = a.e, b.e
-        ai, bi = a.indices, b.indices
-        if compare_indices(ae, first(ai), <, be, first(bi)) || compare_indices(ae, last(ai), >, be, last(bi))
-            return false
+        ai = a.indices
+        bi = let bi=b.indices
+            va = convert_index(be, ae, ai[1])
+            firsti = searchsortedfirst(bi, va)
+            (firsti > lastindex(bi) || bi[firsti] != va) && return false
+            va = convert_index(be, ae, ai[end])
+            lasti = searchsortedlast(bi, va)
+            (lasti < firstindex(bi) || bi[lasti] != va) && return false
+            length(ai) > lasti - firsti +1 && return false
+            length(ai) ≤ 2 && return true
+            @view(bi[firsti:lasti])
         end
-        length(ai) ≤ 2 && return true
+        la, lb = lastindex(ai), lastindex(bi)
         ia = 2
         va = convert_index(unsafe, be, ae, ai[ia])
         ib = searchsortedfirst(bi, va)
-        la, lb = lastindex(ai), lastindex(bi)
+        ib > lb && return false
         while true
             while va == bi[ib]
                 ia += 1
-                ia > la && return true
+                ia ≥ la && return true
                 va = convert_index(unsafe, be, ae, ai[ia])
                 ib += 1
             end
             if va > bi[ib]
-                ib = ib + searchsortedfirst(@view(bi[ib:end]), va) -1
+                ib = ib + searchsortedfirst(@view(bi[ib+1:end]), va)
                 ib > lb && return false
             else
                 return false
@@ -492,16 +523,19 @@ function Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVectorSu
         end
     end
 end
-Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
-    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc} =
-    @inbounds length(a) == length(b) && (isempty(a) || (first(a) == first(b) && last(a) == last(b)))
-Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
-    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
-    return a.e.mindeg == b.e.mindeg && a.e.maxdeg == b.e.maxdeg
-Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsMultideg},
-    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsMultideg}) where {Nr,Nc} =
-    return a.e.mindeg == b.e.mindeg && a.e.maxdeg == b.e.maxdeg && a.e.minmultideg == b.e.minmultideg &&
-        a.e.maxmultideg == b.e.maxmultideg
+function Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
+    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
+    length(a) == length(b) || return false
+    isempty(a) && return true
+    @inbounds if a.e == b.e
+        return first(a) == first(b) && last(a) == last(b)
+    else
+        return all(splat(isequal), zip(a, b))
+    end
+end
+Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,E},
+    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,E}) where {Nr,Nc,E<:AbstractExponents} =
+    return a.e == b.e
 function Base.:(==)(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
     length(a) == length(b) || return false
     isempty(a) && return true

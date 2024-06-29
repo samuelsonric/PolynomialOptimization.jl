@@ -136,7 +136,7 @@ end
 
 function effective_variables_in(p::SimplePolynomial, in)
     for t in p
-        !iszero(coefficient(t)) && effective_variables_in(monomial(t), in) || return true
+        iszero(coefficient(t)) || effective_variables_in(monomial(t), in) || return false
     end
-    return false
+    return true
 end
