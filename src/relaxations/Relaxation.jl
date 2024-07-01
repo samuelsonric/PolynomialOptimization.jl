@@ -3,7 +3,7 @@ module Relaxation
 using ..SimplePolynomials, .SimplePolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector
 import StatsBase, Graphs
-using ..PolynomialOptimization: Problem, @verbose_info
+using ..PolynomialOptimization: @assert, @inbounds, Problem, @verbose_info, issubset_sorted
 import ..PolynomialOptimization: poly_problem, iterate!
 
 export AbstractRelaxation, basis, groupings, iterate!
@@ -120,7 +120,7 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
     for oldᵢ in olds
         if new ⊆ oldᵢ
             push!(to, new)
-            return
+            return true
         end
     end
     temp = sort!(intersect.((new,), olds), by=_lensort)
@@ -134,13 +134,14 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
         end
     end
     append!(to, temp)
-    return
+    return false
 end
 
-function embed(news::AbstractVector{X}, olds::AbstractVector{X}) where {X}
+function embed(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where {X}
+    complete = true
     to = FastVec{X}(buffer=length(news))
     for new in news
-        embed!(to, new, olds)
+        complete &= embed!(to, new, olds)
     end
     if X <: AbstractVector
         for toᵢ in to
@@ -148,6 +149,7 @@ function embed(news::AbstractVector{X}, olds::AbstractVector{X}) where {X}
         end
     end
     result = Base._groupedunique!(sort!(finish!(to), by=_lensort))
+    news_is_clean && complete && return result
     # it is not guaranteed that news is completely subset-free, as it might have been constructed from different sources
     lastdel = 0
     @inbounds for i in length(result):-1:2
@@ -170,18 +172,18 @@ function embed(news::AbstractVector{X}, olds::AbstractVector{X}) where {X}
     return result
 end
 
-function embed(new::RG, old::RG) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
+function embed(new::RG, old::RG, new_is_clean::Bool) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
     (length(new.zeros) == length(old.zeros) && length(new.nonnegs) == length(old.nonnegs) &&
         length(new.psds) == length(old.psds)) ||
         throw(ArgumentError("Cannot embed two relaxation groupings for different optimization problems"))
-    newobj = embed(new.obj, old.obj)
-    newzeros = embed.(new.zeros, old.zeros)
-    newnonnegs = embed.(new.nonnegs, old.nonnegs)
-    newpsds = embed.(new.psds, old.psds)
-    newcliques = embed(new.var_cliques, old.var_cliques)
+    newobj = embed(new.obj, old.obj, new_is_clean)
+    newzeros = embed.(new.zeros, old.zeros, new_is_clean)
+    newnonnegs = embed.(new.nonnegs, old.nonnegs, new_is_clean)
+    newpsds = embed.(new.psds, old.psds, new_is_clean)
+    newcliques = embed(new.var_cliques, old.var_cliques, new_is_clean)
     return RG(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end
-embed(new::RelaxationGroupings, ::Nothing) = new
+embed(new::RelaxationGroupings, ::Nothing, ::Bool) = new
 
 Base.:(==)(g₁::G, g₂::G) where {G<:RelaxationGroupings} = g₁.obj == g₂.obj && g₁.zeros == g₂.zeros &&
     g₁.nonnegs == g₂.nonnegs && g₁.psds == g₂.psds && g₁.var_cliques == g₂.var_cliques

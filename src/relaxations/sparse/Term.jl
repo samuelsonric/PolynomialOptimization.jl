@@ -79,7 +79,7 @@ mutable struct SparsityTerm{
         end
         @verbose_info("Generated new groupings in ", grouptime, " seconds; embedding with old.")
         intersecttime = @elapsed begin
-            gr = embed(newgroupings, parent)
+            gr = embed(newgroupings, parent, relaxation isa AbstractRelaxationBasis)
         end
         @verbose_info("Obtained embedding in ", intersecttime, " seconds")
 

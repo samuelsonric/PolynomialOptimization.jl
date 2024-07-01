@@ -22,7 +22,7 @@ function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Int
         [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
         [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
-    ), parent)
+    ), parent, true)
 end
 
 MultivariatePolynomials.degree(relaxation::AbstractRelaxationBasis) = relaxation.degree
