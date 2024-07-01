@@ -9,7 +9,7 @@ struct SimplePolynomial{C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} <: AbstractPolyn
 
     Creates a `SimplePolynomial` with well-defined coefficients and monomials, which must have the same length.
     """
-    function SimplePolynomial(coeffs::Vector{C}, monomials::M) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}}
+    @inline function SimplePolynomial(coeffs::Vector{C}, monomials::M) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}}
         length(coeffs) == length(monomials) || throw(ArgumentError("Lengths are different"))
         return new{C,Nr,Nc,M}(coeffs, monomials)
     end

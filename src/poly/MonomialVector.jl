@@ -3,13 +3,13 @@ export SimpleMonomialVector, effective_nvariables
 struct SimpleMonomialVector{Nr,Nc,I<:Integer,E,T<:SimpleMonomial{Nr,Nc,I}} <: AbstractVector{T}
     data::E
 
-    function SimpleMonomialVector{Nr,Nc}(e::AbstractExponentsDegreeBounded{N,I}) where {Nr,Nc,N,I<:Integer}
+    @inline function SimpleMonomialVector{Nr,Nc}(e::AbstractExponentsDegreeBounded{N,I}) where {Nr,Nc,N,I<:Integer}
         N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (e,)))
         index_counts(e, 0) # populate the cache
         new{Nr,Nc,I,typeof(e),SimpleMonomial{Nr,Nc,I,typeof(e)}}(e)
     end
 
-    function SimpleMonomialVector{Nr,Nc}(::Unsafe, e::AbstractExponents{N,I}, indices::AbstractVector{I}) where {Nr,Nc,N,I<:Integer}
+    @inline function SimpleMonomialVector{Nr,Nc}(::Unsafe, e::AbstractExponents{N,I}, indices::AbstractVector{I}) where {Nr,Nc,N,I<:Integer}
         N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (unsafe, e, indices))) # compile-time check
         @inbounds degree_from_index(e, isempty(indices) ? one(I) : indices[end]) # populate the cache
         et = (e, indices)
