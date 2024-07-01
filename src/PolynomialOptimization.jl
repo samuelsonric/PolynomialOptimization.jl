@@ -5,7 +5,6 @@ using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
 using Printf
-import Combinatorics
 import MutableArithmetics
 import StatsBase
 

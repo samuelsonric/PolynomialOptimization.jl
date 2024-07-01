@@ -72,5 +72,5 @@ function chordal_cliques!(G::Graphs.SimpleGraph)
             unsafe_push!(maximal_cliques, clique)
         end
     end
-    return sort!(finish!(maximal_cliques))
+    return finish!(maximal_cliques)
 end

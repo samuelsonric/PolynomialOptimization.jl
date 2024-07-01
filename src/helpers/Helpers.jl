@@ -15,3 +15,19 @@ using .SimplePolynomials: SimpleMonomialOrConj
 import .SimplePolynomials.MultivariateExponents: iterate! # be careful to avoid duplication of methods; let's reuse this one
 
 include("./MatrixPolynomials.jl")
+
+"""
+    issubset_sorted(a, b)
+
+Equivalent to `issubset(a, b)`, but assumes that both `a` and `b` are sorted vectors.
+"""
+function issubset_sorted(a, b)
+    i = firstindex(b)
+    @inbounds for x in a
+        i += searchsortedlast(@view(b[i:end]), x) -1
+        if i < firstindex(b) || b[i] != x
+            return false
+        end
+    end
+    return true
+end

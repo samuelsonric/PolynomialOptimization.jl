@@ -60,6 +60,15 @@ function MultivariatePolynomials.map_coefficients!(f::Function, p::SimplePolynom
     return p
 end
 
+function MultivariatePolynomials.effective_variables(p::SimplePolynomial{<:Any,Nr,Nc}; rettype::Type{V}=Vector, by::F=identity) where {Nr,Nc,V<:Union{Vector,Set},F}
+    ev = Set{Base.promote_op(by, SimpleVariable{Nr,Nc,smallest_unsigned(Nr+2Nc)})}()
+    for t in p, (v, _) in monomial(t)
+        push!(ev, by(v))
+    end
+    V <: Vector && return sort!(collect(ev))
+    return ev
+end
+
 # these are tricky. They shouldn't even be there since they might (or will) violate the no-allocation policy of
 # SimplePolynomials
 function Base.conj(p::SimplePolynomial)

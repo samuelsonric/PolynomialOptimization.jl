@@ -48,10 +48,10 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             error("Unknown constraint index specified")
 
         parent = groupings(relaxation)
-        parentmaxobjdeg = maximum(maxdegree, parent.obj)
-        parentmaxzerodeg = maximum.(maxdegree, parent.zeros, init=0)
-        parentmaxnonnegdeg = maximum.(maxdegree, parent.nonnegs, init=0)
-        parentmaxpsddeg = maximum.(maxdegree, parent.psds, init=0)
+        parentmaxobjdeg = maximum(maxdegree, parent.obj, init=0)::Int
+        parentmaxzerodeg = Int[maximum(maxdegree, z, init=0) for z in parent.zeros]
+        parentmaxnonnegdeg = Int[maximum(maxdegree, n, init=0) for n in parent.nonnegs]
+        parentmaxpsddeg = Int[maximum(maxdegree, p, init=0) for p in parent.psds]
 
         @verbose_info("Constructing correlative sparsity graph")
         g = Graphs.SimpleGraph(Nr + Nc)
@@ -62,7 +62,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         for poly in (problem.objective, problem.prefactor)
             for term in poly
                 mon = monomial(term)
-                for (i, (var1, _)) in enumerate(mon)
+                for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
                     var1o = ordinary_variable(var1)
                     for (var2, _) in Iterators.take(mon, i -1)
                         Graphs.add_edge!(g, Graphs.Edge(var1o.index, ordinary_variable(var2).index))
@@ -83,7 +83,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             if !ismissing(l) && !(l isa AbstractSet)
                 l = Set(l)
             end
-            for (i, (constr, groupings)) in enumerate(zip(constrs, parentgroupings))
+            for (i, (constr, groupings)) in enumerate(zip(constrs, parentgroupings::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}))
                 low_deg = false
                 if !ismissing(h)
                     low_deg = !(i ∈ h)
@@ -99,7 +99,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     # then we can go back to considering only variables in terms instead of all variables
                     for term in constr
                         mon = monomial(term)
-                        for (i, (var1, _)) in enumerate(mon)
+                        for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
                             var1o = ordinary_variable(var1)
                             for (var2, _) in Iterators.take(mon, i -1)
                                 Graphs.add_edge!(g, Graphs.Edge(var1o.index, ordinary_variable(var2).index))
@@ -107,20 +107,18 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                         end
                     end
                 else
-                    vars = Set(Iterators.map(ordinary_variable, effective_variables(constr)))
-                    for grouping in groupings, var_gr in effective_variables(grouping)
-                        var_gro = ordinary_variable(var_gr)
-                        if var_gro ∈ vars
-                            for var ∈ vars
-                                Graphs.add_edge!(g, Graphs.Edge(var_gro.index, var.index))
-                            end
+                    vars = effective_variables(constr, rettype=Set, by=ordinary_variable)
+                    @inbounds for (i, var1) in Iterators.drop(enumerate(vars), 1)
+                        for var2 in Iterators.take(vars, i -1)
+                            Graphs.add_edge!(g, Graphs.Edge(var1.index, var2.index))
                         end
                     end
                 end
             end
         end
         @verbose_info("Determining cliques")
-        gentime = @elapsed(cliques = chordal_completion ? chordal_cliques!(g) : Graphs.maximal_cliques(g))
+        gentime = @elapsed(cliques = sort!(chordal_completion ? chordal_cliques!(g) : Graphs.maximal_cliques(g), by=length))
+        sort!.(cliques)
         @verbose_info("Obtained ", length(cliques), " clique", length(cliques) > 1 ? "s" : "", " in ", gentime,
             " seconds. Generating groupings.")
         # The correlative iterator could potentially be made even smaller by determining all the multideg boundaries, but would
@@ -134,12 +132,18 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             maxmultideg = zeros(Int, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
             newobj[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
-            cliquevars = Set(Iterators.map(SimpleVariable{Nr,Nc}, clique))
-            for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
-                                               (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
-                                               (problem.constr_psd, parentmaxpsddeg, newpsd))
-                for (constr, maxdeg, newel) in zip(constrs, parentdeg, news)
-                    SimplePolynomials.effective_variables_in(constr, cliquevars) || continue
+        end
+        for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
+                                           (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
+                                           (problem.constr_psd, parentmaxpsddeg, newpsd))
+            for (constr, maxdeg, newel) in zip(constrs, parentdeg, news)
+                constrvars = effective_variables(constr, rettype=Vector,
+                    by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{SimplePolynomials.smallest_unsigned(Nr+2Nc)}
+                @assert(issorted(constrvars))
+                # There will be at least one clique that contains all the variables in the constraint; take the smallest one...
+                cliqueᵢ = findfirst(Base.Fix1(issubset_sorted, constrvars), cliques)
+                @inbounds if !isnothing(cliqueᵢ)
+                    clique = cliques[cliqueᵢ]
                     maxmultideg = zeros(Int, Nr + 2Nc)
                     fill!(@view(maxmultideg[clique]), maxdeg)
                     push!(newel,
@@ -148,6 +152,11 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                             minmultideg, maxmultideg)
                         )
                     )
+                else
+                    # ...unless the prefactor was of low order, as then we didn't necessarily introduce all the couplings.
+                    # But low degree = prefactor is 1
+                    iszero(maxdeg) || error("Something is wrong with graph theory")
+                    push!(newel, SimpleMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)))
                 end
             end
         end
