@@ -9,8 +9,8 @@ const unsafe = Unsafe()
 
 include("./AbstractExponents.jl")
 include("./ExponentsIndices.jl")
-include("./ExponentsAll.jl")
-include("./ExponentsDegree.jl")
-include("./ExponentsMultidegree.jl")
+include("./AbstractExponentsUnbounded.jl")
+include("./AbstractExponentsDegreeBounded.jl")
+
 
 end

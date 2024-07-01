@@ -1,6 +1,5 @@
-export AbstractExponents, AbstractExponentsUnbounded, AbstractExponentsDegreeBounded,
-    index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index, compare_indices, exponents_sum,
-    exponents_product
+export AbstractExponents, index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index,
+    compare_indices, exponents_sum, exponents_product
 
 """
     AbstractExponents{N,I}
@@ -25,89 +24,10 @@ Returns the index type of an instance or subtype of [`AbstractExponents`](@ref).
 """
 indextype(::Union{<:AbstractExponents{<:Any,I},<:Type{<:AbstractExponents{<:Any,I}}}) where {I<:Integer} = I
 
-"""
-    AbstractExponentsUnbounded{N,I} <: AbstractExponents{N,I}
-
-Abstract supertype for unbounded collections of multivariate exponents. These collections do not have a length; they are
-infinite. Their cache is always initialized incrementally as required.
-"""
-abstract type AbstractExponentsUnbounded{N,I<:Integer} <: AbstractExponents{N,I} end
-# AbstractExponentsUnbounded descendants must implement
-# - _has_index_counts(::AbstractExponentsUnbounded, degree::Integer) that checks whether the cache matrix is valid for the
-#   given degree (should be fast)
-# - _calc_index_counts!(::AbstractExponentsUnbounded, degree::Integer) that makes sure that the cache matrix contains valid
-#   entries for at least degree+1 rows
-Base.IteratorSize(::Type{<:AbstractExponentsUnbounded}) = Base.IsInfinite()
-
-"""
-    AbstractExponentsDegreeBounded{N,I} <: AbstractExponents{N,I}
-
-Abstract supertype for finite collections of multivariate exponents, bounded by their degrees. These collections have a length;
-they also provide at least the fields `mindeg` and `maxdeg` that describe (a superset of) the covered degree range. Their
-cache is always initialized completely when required.
-"""
-abstract type AbstractExponentsDegreeBounded{N,I<:Integer} <: AbstractExponents{N,I} end
-# AbstractExponentsDegreeBounded descendants must implement
-# - _has_index_counts(::AbstractExponents) that checks whether the cache matrix is fully initialized (should be fast)
-# - _calc_index_counts!(::AbstractExponents) that initializes the full cache matrix.
-
-Base.IteratorSize(::Type{<:AbstractExponentsDegreeBounded}) = Base.HasLength()
-"""
-    length(unsafe, e::AbstractExponentsDegreeBounded)
-
-Unsafe variant of [`length`](@ref length(::AbstractExponentsDegreeBounded)): requires the cache to be set up
-correctly, else the behavior is undefined.
-"""
-function Base.length(::Unsafe, e::AbstractExponentsDegreeBounded)
-    counts = index_counts(unsafe, e)
-    @inbounds return counts[e.maxdeg+1, 1] - (iszero(e.mindeg) ? zero(eltype(counts)) : counts[e.mindeg, 1])
-end
-"""
-    length(e::AbstractExponentsDegreeBounded)
-
-Returns the total number of exponents present in `e`.
-"""
-function Base.length(e::AbstractExponentsDegreeBounded)
-    counts, success = index_counts(e, e.maxdeg)
-    @assert(success)
-    @inbounds return counts[e.maxdeg+1, 1] - (iszero(e.mindeg) ? zero(eltype(counts)) : counts[e.mindeg, 1])
-end
-
 Base.firstindex(::AbstractExponents{<:Any,I}) where {I<:Integer} = one(I)
-Base.lastindex(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer} = I(length(e))
 Base.getindex(e::AbstractExponents{<:Any,I}, index::I) where {I<:Integer} = exponents_from_index(e, index)
 # ^ should we maybe dispatch the @inbounds version to unsafe and the normal to the one with known cache? Dangerous, this makes
 # assumptions not only about whether the index is valid, but also whether the cache is populated to know about the index...
-
-Base.iterate(e::AbstractExponentsUnbounded{<:Any,I}) where {I<:Integer} =
-    ExponentIndices(e, one(I), 0), (one(I), 0, one(I))
-function Base.iterate(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer}
-    counts, success = index_counts(e, e.mindeg) # ExponentIndices requires the cache to be set up
-    iszero(e.mindeg) && return ExponentIndices(e, one(I), e.mindeg), (one(I), e.mindeg, one(I))
-    @assert(success)
-    @inbounds return ExponentIndices(e, one(I), e.mindeg), (one(I), e.mindeg, counts[e.mindeg+1, 1] - counts[e.mindeg, 1])
-end
-function Base.iterate(e::AbstractExponentsUnbounded{<:Any,I}, (index, degree, remainingdeg)::Tuple{I,Int,I}) where {I<:Integer}
-    if isone(remainingdeg)
-        counts, success = index_counts(e, degree +1)
-        @assert(success)
-        @inbounds return ExponentIndices(e, index + one(I), degree +1),
-            (index + one(I), degree +1, counts[degree+2, 1] - counts[degree+1, 1])
-    else
-        return ExponentIndices(e, index + one(I), degree), (index + one(I), degree, remainingdeg - one(I))
-    end
-end
-function Base.iterate(e::AbstractExponentsDegreeBounded{<:Any, I}, (index, degree, remainingdeg)::Tuple{I,Int,I}) where {I<:Integer}
-    if isone(remainingdeg)
-        degree == e.maxdeg && return nothing
-        counts, success = index_counts(e, degree +1)
-        @assert(success)
-        @inbounds return ExponentIndices(e, index + one(I), degree +1),
-            (index + one(I), degree +1, counts[degree+2, 1] - counts[degree+1, 1])
-    else
-        return ExponentIndices(e, index + one(I), degree), (index + one(I), degree, remainingdeg - one(I))
-    end
-end
 
 """
     iterate!(v::AbstractVector{Int}, e::AbstractExponents)
@@ -138,10 +58,7 @@ struct ExponentsVectorIterator{V,E<:AbstractExponents}
     end
 end
 
-Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsUnbounded}}) = Base.IsInfinite()
-Base.IteratorSize(::Type{<:ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}}) = Base.HasLength()
 Base.IteratorEltype(::Type{<:ExponentsVectorIterator}) = Base.HasEltype()
-Base.length(ei::ExponentsVectorIterator{<:Any,<:AbstractExponentsDegreeBounded}) = length(unsafe, ei.e)
 Base.eltype(::Type{<:ExponentsVectorIterator{Nothing}}) = Vector{Int}
 Base.eltype(::Type{<:ExponentsVectorIterator{V}}) where {V} = V
 # AbstractExponents are never empty
@@ -187,36 +104,8 @@ The result is neither guaranteed to be defined at all nor have the required form
 """
 index_counts(::Unsafe, ::AbstractExponents{N,I}) where {N,I<:Integer}
 
-Base.@assume_effects :total !:inaccessiblememonly index_counts(::Unsafe, e::AbstractExponentsDegreeBounded) =
-    (@inline; e.counts)
-
-"""
-    index_counts(::AbstractExponents{N,I}, degree::Integer) -> Tuple{Matrix{I},Bool}
-
-Safe version of the above. If the boolean in the result is `true`, the matrix will have at least `degree+1` rows, i.e., all
-entries up to `degree` are present. If it is false, the requested degree is not present in the exponents and the matrix will
-have fewer rows. Note that `true` does not mean that the degree is actually present in the exponents, only that its information
-has been calculated.
-"""
-@inline function index_counts(e::AbstractExponentsUnbounded, degree::Integer)
-    # index_counts will be interpreted in a two-dimensional way. The maximal number of variables is fixed, so this will
-    # be the fast dimension; the degrees may increase, which leads to appending elements. This will be the slow dimension.
-    @boundscheck 0 ≤ degree || throw(ArgumentError("The degree must be nonnegative"))
-    @inline(_has_index_counts(e, degree)) || @noinline(_calc_index_counts!(e, degree)) # zero degree = row 1
-    # ^ would be good if we could insert an unlikely hint here
-    counts = index_counts(unsafe, e)
-    return counts, true
-end
-
-Base.@assume_effects :nothrow function index_counts(e::AbstractExponentsDegreeBounded, degree::Integer)
-    @inline
-    @inline(_has_index_counts(e)) || @noinline(_calc_index_counts!(e))
-    return e.counts, size(e.counts, 1) > degree
-end
-
 function _has_index_counts end
 function _calc_index_counts! end
-@inline _has_index_counts(e::AbstractExponentsDegreeBounded) = isdefined(e, :counts)
 
 """
     exponents_to_index(::AbstractExponents{N,I}, exponents,

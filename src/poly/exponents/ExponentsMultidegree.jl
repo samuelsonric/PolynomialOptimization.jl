@@ -109,43 +109,6 @@ function _exponents_to_index(e::ExponentsMultideg{N,I}, exponents, degree::Int, 
     return isnothing(report_lastexp) ? index : (index, lastexp)
 end
 
-@inline function degree_from_index(::Unsafe, e::ExponentsMultideg{<:Any,I}, index::I) where {I<:Integer}
-    @inbounds counts = @view(index_counts(unsafe, e)[:, 1])
-    iszero(e.mindeg) || (index += @inbounds counts[e.mindeg, 1])
-    return searchsortedfirst(counts, index) -1
-end
-
-Base.@propagate_inbounds function degree_from_index(e::ExponentsMultideg{<:Any,I}, index::I) where {I<:Integer}
-    counts = let ic=index_counts(e, e.maxdeg)
-        @assert(ic[2])
-        @inbounds @view(ic[1][:, 1])
-    end
-    iszero(e.mindeg) || (index += @inbounds counts[e.mindeg, 1])
-    return searchsortedfirst(counts, index) -1
-end
-
-function exponents_from_index(e::ExponentsMultideg{<:Any,I}, index::I, degree::Int) where {I<:Integer}
-    index > zero(I) || throw(BoundsError(e, index))
-    e.mindeg ≤ degree ≤ e.maxdeg || throw(BoundsError(e, index))
-    counts, success = index_counts(e, degree) # initialize the cache
-    @assert(success)
-    allindex = index
-    iszero(e.mindeg) || (allindex += @inbounds counts[e.mindeg, 1])
-    @inbounds if (iszero(degree) && allindex > 1) ||
-        (!iszero(degree) && (counts[degree, 1] ≥ allindex || counts[degree+1, 1] < allindex))
-        throw(ArgumentError("Index $index does not have degree $degree"))
-    end
-    return ExponentIndices(e, index, degree)
-end
-
-function Base.iterate(efi::ExponentIndices{I,<:ExponentsMultideg{<:Any,I}}) where {I<:Integer}
-    parent = efi.parent
-    counts = index_counts(unsafe, parent)
-    degree = efi.degree
-    @inbounds return iterate(efi, (degree, 2, (iszero(degree) ? efi.index : efi.index - counts[degree, 1]) +
-                                              (iszero(parent.mindeg) ? zero(I) : counts[parent.mindeg, 1])))
-end
-
 function Base.iterate(efi::ExponentIndices{I,<:ExponentsMultideg{N,I}}, (degree, i, index)::Tuple{Int,Int,I}) where {N,I<:Integer}
     counts = index_counts(unsafe, efi.parent) # must not be passed in the state - then Julia would have to do an allocation for
                                               # the return type
