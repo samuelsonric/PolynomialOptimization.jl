@@ -19,6 +19,8 @@ end
 
 ExponentsDegree{N,I}(range::AbstractUnitRange) where {N,I<:Integer} = ExponentsDegree{N,I}(first(range), last(range))
 
+Base.:(==)(e1::E, e2::E) where {E<:ExponentsDegree} = e1.mindeg == e2.mindeg && e1.maxdeg == e2.maxdeg
+
 function _calc_index_counts!(E::ExponentsDegree{N,I}) where {N,I<:Integer}
     # This is not exactly correct if we think about the very last column (corresponding to zero variables), which should be
     # zero if a nonzero mindeg is set. But this last column is not used anyway (apart from the construction of the matrix), so

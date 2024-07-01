@@ -41,6 +41,9 @@ end
 ExponentsMultideg{N,I}(range::AbstractUnitRange, minmultideg::Vmin, maxmultideg::Vmax) where {N,I<:Integer,Vmin<:AbstractVector{<:Integer},Vmax<:AbstractVector{<:Integer}} =
     ExponentsMultideg{N,I}(first(range), last(range), minmultideg, maxmultideg)
 
+Base.:(==)(e1::ExponentsMultideg{N,I}, e2::ExponentsMultideg{N,I}) where {N,I<:Integer} =
+    e1.mindeg == e2.mindeg && e1.maxdeg == e2.maxdeg && e1.minmultideg == e2.minmultideg && e1.maxmultideg == e2.maxmultideg
+
 function _calc_index_counts!(e::ExponentsMultideg{N,I}) where {N,I<:Integer}
     maxdeg = e.maxdeg
     if e.mindeg > e.maxdeg
