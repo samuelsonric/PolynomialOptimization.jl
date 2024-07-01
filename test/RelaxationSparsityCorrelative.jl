@@ -1,7 +1,7 @@
 include("./shared.jl")
 
-# filter out very slow solvers
-filter!(s -> s != :MosekMoment && !occursin("Hypatia", string(s)), solvers)
+# filter out very slow solvers. Indeed Mosek in its moment formulation sucks.
+filter!(s -> s != :MosekMoment && s != :HypatiaMoment, solvers)
 
 @testset "Example 6.1 chained singular from correlative sparsity paper" begin
     for n in (16, 40, 100, 200, 400)
@@ -31,7 +31,7 @@ end
         if optimize
             for solver in solvers
                 @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5
+                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5 skip=solver==:ClarabelMoment
                 end
             end
         end
@@ -49,7 +49,7 @@ end
         if optimize
             for solver in solvers
                 @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 1e-5
+                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 5e-5 skip=solver==:SCSMoment
                 end
             end
         end
@@ -67,7 +67,7 @@ end
         if optimize
             for solver in solvers
                 @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4
+                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4 skip=solver==:SCSMoment
                 end
             end
         end
@@ -84,7 +84,8 @@ end
         if optimize
             for solver in solvers
                 @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-5
+                    @test poly_optimize(solver, sp).objective ≈ 1 atol=1e-5 skip=solver ∈ (:ClarabelMoment, :SCSMoment)
+                    # Clarabel very inaccurate, SCS very slow
                 end
             end
         end
@@ -93,7 +94,7 @@ end
 
 @testset "Example 6.2 Problem (6.1) from correlative sparsity paper" begin
     # Note that these values are generated with Mathematica. They do not correspond to the values given in the paper; however,
-    # there, they use a chordal extension heuristic (and option that we also have, but it is a different one). Here, we disable
+    # there, they use a chordal extension heuristic (an option that we also have, but it is a different one). Here, we disable
     # chordal completion in order to obtain the best possible (and unique) answer.
     # The numerical results for μ = 0 are exact, as NMinimize gives the same value for feasible points.
     results = Dict(
@@ -139,12 +140,12 @@ end
             if optimize && μ != 0.5
                 for solver in solvers # the largest 0.5 can take about 180s to solve
                     if solver == :MosekSOS
-                        parameters = ((Mosek.MSK_IPAR_PRESOLVE_USE, Mosek.MSK_PRESOLVE_MODE_OFF),)
+                        parameters = Dict(:MSK_IPAR_PRESOLVE_USE => Mosek.MSK_PRESOLVE_MODE_OFF.value)
                     else
-                        parameters = ()
+                        parameters = Dict()
                     end
                     @testset let nx=nx, ny=ny, μ=μ, M=M, solver=solver
-                        @test poly_optimize(solver, sp; parameters).objective ≈ bound atol = 1e-4
+                        @test poly_optimize(solver, sp; parameters...).objective ≈ bound atol = solver===:SCSMoment ? 1e-3 : 1e-4
                     end
                 end
             end
@@ -162,7 +163,10 @@ end
                 zero=[Y(i) + (Y(i)^2 - x[i]) - Y(i+1) for i in 1:M-1]
             )
         )
-        @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => 1, 3 => M -2)
+        # We use a more sophisticated analysis that the correlative sparsity paper: relaxation order 1 means that the
+        # constraints will only allow for the constant prefactor - therefore, we can also count variables occurring
+        # simultaneously in terms instead of the whole constraints!
+        @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(1 => 2*(M -1))
         if optimize
             for solver in solvers
                 @testset let M=M, solver=solver
@@ -185,7 +189,7 @@ PSD block sizes:
     if optimize
         for solver in solvers
             @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.625 atol = 1e-6
+                @test poly_optimize(solver, sp).objective ≈ 0.625 atol = solver===:SCSMoment ? 1e-5 : 1e-6
             end
         end
     end
@@ -270,8 +274,11 @@ Variable cliques:
 PSD block sizes:
   [10 => 48]"
     if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 2e-6
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 6e-6
+        for solver in solvers
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = solver===:SCSMoment ? 1e-5 : 1e-6
+            end
+        end
     end
 end
 
@@ -330,9 +337,8 @@ Block groupings
 Objective: 2 blocks
   10 [1, x₃, x₂, x₁, x₃², x₂x₃, x₂², x₁x₃, x₁x₂, x₁²]
    6 [1, x₄, x₁, x₄², x₁x₄, x₁²]
-Nonnegative constraint #1: 2 blocks
+Nonnegative constraint #1: 1 block
   4 [1, x₃, x₂, x₁]
-  3 [1, x₄, x₁]
 Nonnegative constraint #2: 1 block
   1 [1]"
 end

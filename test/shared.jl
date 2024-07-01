@@ -3,13 +3,14 @@ using PolynomialOptimization, PolynomialOptimization.SimplePolynomials, Polynomi
 # ^ we don't require SimplePolynomials in the namespace, but for printing we want the guarantee that it is there
 using MultivariatePolynomials
 import DynamicPolynomials
-import COPT, #= COSMO, =# Hypatia, Mosek, SCS
+import Clarabel, COPT, #= COSMO, =# Hypatia, Mosek, SCS
 import StatsBase
 
 if !@isdefined(optimize)
     optimize = true
 
-    const all_solvers = copy(PolynomialOptimization.Solver.solver_methods)
+    const all_solvers = filter(s -> occursin("Moment", string(s)) || occursin("SOS", string(s)),
+        PolynomialOptimization.Solver.solver_methods) # remove all shorthands
     # Mosek requires a license to work at all. COPT will work without a license for small problems.
     try
         Mosek.maketask() do t

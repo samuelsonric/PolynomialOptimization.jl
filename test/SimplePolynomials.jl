@@ -456,8 +456,8 @@ end
                          (SimpleComplexVariable{2,7}(1), 1), (SimpleComplexVariable{2,7}(3, true), 1),
                          (SimpleComplexVariable{2,7}(5), 1), (SimpleComplexVariable{2,7}(7), 1)]
     @test collect(SimpleConjMonomial(m)) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
-                         (SimpleComplexVariable{2,7}(1), 1, true), (SimpleComplexVariable{2,7}(3), 1),
-                         (SimpleComplexVariable{2,7}(5), 1, true), (SimpleComplexVariable{2,7}(7, true), 1)]
+                         (SimpleComplexVariable{2,7}(1, true), 1), (SimpleComplexVariable{2,7}(3), 1),
+                         (SimpleComplexVariable{2,7}(5, true), 1), (SimpleComplexVariable{2,7}(7, true), 1)]
     @test collect(SimpleMonomial{2,7}([0, 4], [0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
                          [(SimpleRealVariable{2,7}(2), 4),
                           (SimpleComplexVariable{2,7}(2), 1), (SimpleComplexVariable{2,7}(4, true), 2),
@@ -549,21 +549,30 @@ end
          SimpleMonomial{2,0}(UInt8[2, 0])]
     monos = monomials(2, 0, 0x2:0x2)
     @test length(monos) == length(X)
+    @test monos ⊆ monos
     for (x, m) in zip(X, monos)
         @test m == x
+        @test [x] ⊆ monos
     end
-    @test monomials(2, 0, 0x1:0x2, filter_exps=e -> sum(e) == 2) == monos
+    m2 = monomials(2, 0, 0x1:0x2, filter_exps=e -> sum(e) == 2)
+    @test m2 == monos
+    @test m2 ⊆ monos
+    @test monos ⊆ m2
     @test monomials(2, 0, 0x1:0x2, filter_mons=m -> degree(m) == 2) == monos
     @test monomials(2, 0, 0x1:0x3, filter_exps=e -> sum(e) > 1, filter_mons=m -> degree(m) < 3) == monos
     # we don't provide monomial_vector_type
 
     X = SimpleMonomialVector{2,0}(UInt8[1 0 1; 0 0 1])
+    @test !(monos ⊆ X)
+    @test !(X ⊆ monos)
     @test X == collect(X)
     @test nvariables(X) == 2
     @test variables(X)[1] == SimpleRealVariable{2,0}(1)
     @test variables(X)[2] == SimpleRealVariable{2,0}(2)
     @test X[2:3][1] == SimpleMonomial{2,0}([0x1, 0x0])
     @test X[2:3][2] == SimpleMonomial{2,0}([0x1, 0x1])
+    @test X[3:3] ⊆ monos
+    @test !(monos ⊆ X[3:3])
 
     _checkindex(::SimpleMonomialVector{<:Any,<:Any,<:Integer,<:Tuple}, indexed::Bool) = @test indexed
     _checkindex(::SimpleMonomialVector, indexed::Bool) = @test !indexed

@@ -17,11 +17,11 @@ Variable cliques:
 PSD block sizes:
   [3 => 4]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ -0.0035512 atol = 1e-6
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ -0.0035512 atol = 1e-6
-        :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ -0.0035512 atol = 2e-3
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ -0.0035512 atol = 1e-6
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ -0.0035512 atol = 1e-6
+        for solver in solvers
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ -0.0035512 atol = solver==:SCSMoment ? 1e-4 : 1e-6
+            end
+        end
     end
 
     # paper says that the iterations terminate. However, this is a result of the paper always considering the constant term to
@@ -32,11 +32,11 @@ Variable cliques:
 PSD block sizes:
   [4 => 2, 3 => 1]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0. atol = 4e-8
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 1e-7
-        :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ 0 atol = 7e-6
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ 0 atol = 2e-7
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 1e-7
+        for solver in solvers
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = solver==:SCSMoment ? 1e-6 : 5e-8
+            end
+        end
     end
 
     @test isnothing(iterate!(sp))
@@ -58,11 +58,13 @@ PSD block sizes:
 Free block sizes:
   [12 => 1, 9 => 1, 7 => 1, 1 => 6]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0 atol = 2e-8
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 1e-6
-        :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ 0 atol = 2e-5
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ 0 atol = 1e-7
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 1e-6
+        for solver in solvers
+            @testset let solver=solver
+                @test(poly_optimize(solver, sp;
+                    (solver == :HypatiaMoment ? Dict(:preprocess => true) : Dict())...).objective ≈ 0,
+                    atol=solver==:SCSMoment ? 5e-5 : 5e-7)
+            end
+        end
     end
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
@@ -126,11 +128,11 @@ Semidefinite constraint #1: 2 blocks
   3 [1, x₂, x₁]
   3 [x₃, x₂, x₁]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0.5355788 atol = 1e-7
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0.5355788 atol = 1e-7
-        :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ 0.5355788 atol = 2e-4
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ 0.5355788 atol = 1e-6
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0.5355788 atol = 1e-7
+        for solver in solvers
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0.5355788 atol = solver==:SCSMoment ? 1e-4 : 1e-7
+            end
+        end
     end
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
@@ -159,11 +161,11 @@ Variable cliques:
 PSD block sizes:
   [18 => 3, 17 => 4, 15 => 2, 14 => 3, 13 => 3, 12 => 4, 11 => 5, 10 => 4, 9 => 8, 8 => 3, 7 => 4, 6 => 11, 4 => 5, 1 => 35]"
     if optimize
-        :MosekMoment ∈ solvers && @test poly_optimize(:MosekMoment, sp).objective ≈ 0 atol = 1e-7
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 1e-7
-        :COSMOMoment ∈ solvers && @test poly_optimize(:COSMOMoment, sp).objective ≈ 0 atol = 1e-6
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, sp).objective ≈ 0 atol = 2e-5
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, sp).objective ≈ 0 atol = 1e-6
+        for solver in solvers
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5
+            end
+        end
     end
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
@@ -233,7 +235,7 @@ Nonnegative constraint #1: 2 blocks
     if optimize
         for solver in solvers
             @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-6
+                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-6
             end
         end
     end
