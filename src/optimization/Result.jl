@@ -21,6 +21,9 @@ struct MomentVector{R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R},E<:Expon
     end
 end
 
+MomentVector(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}, ::Missing) where {Nr,Nc,I<:Integer} =
+    MomentVector(r, ExponentsAll{Nr+2Nc,I}(), Float64[]) # this is the fallback if no data was provided by the solver
+
 Base.length(d::MomentVector) = length(d.values)
 Base.size(d::MomentVector) = (length(d.values),)
 Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =

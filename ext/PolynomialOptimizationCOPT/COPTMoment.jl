@@ -132,6 +132,6 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
         return status[], value[], MomentVector(relaxation, resize!(x, state.num_used_vars), state)
     else
         @verbose_info("Solution data extraction complete")
-        return status[], value[], MomentVector(relaxation, Cdouble[])
+        return status[], value[], MomentVector(relaxation, missing)
     end
 end
