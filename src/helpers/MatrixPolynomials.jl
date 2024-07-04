@@ -3,12 +3,25 @@ for f in (:variables, :effective_variables)
         function MultivariatePolynomials.$f(m::AbstractMatrix{<:AbstractPolynomialLike})
             isempty(m) && return variable_union_type(eltype(m))[]
             result = Set{variable_union_type(eltype(m))}()
-            for v in $f.(m)
-                union!(result, v)
+            for x in m
+                union!(result, $f(x))
             end
             return sort!(collect(result))
         end
     end
+end
+
+function MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc}};
+    rettype::Type{V}=Vector, by::F=identity) where {Nr,Nc,V<:Union{Vector,Set},F}
+    ET = Base.promote_op(by, SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr+2Nc)})
+    isempty(m) && return V <: Vector ? ET[] : Set{ET}()
+    a, rest = Iterators.peel(m)
+    @inbounds result = effective_variables(a; rettype=Set, by)
+    for x in rest
+        union!(result, effective_variables(x; rettype=Set, by))
+    end
+    V <: Vector && return sort!(collect(result))
+    return result
 end
 
 MultivariatePolynomials.monomials(m::AbstractMatrix{<:AbstractPolynomialLike}) = merge_monomial_vectors(monomials.(m))
