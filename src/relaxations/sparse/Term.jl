@@ -334,8 +334,8 @@ end
 end
 
 function _extend_graphs!(relaxation::SparsityTerm, methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods)
-    newgroupings = _extend_graphs!(groupings(relaxation), relaxation.parentgroupings, relaxation.graphs, methods,
-        varclique_methods)
+    newgroupings = embed(_extend_graphs!(groupings(relaxation), relaxation.parentgroupings, relaxation.graphs, methods,
+        varclique_methods), relaxation.parentgroupings, relaxation.parent isa AbstractRelaxationBasis)
     if newgroupings != relaxation.groupings
         relaxation.groupings = newgroupings
         return relaxation
