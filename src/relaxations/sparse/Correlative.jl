@@ -63,9 +63,9 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             for term in poly
                 mon = monomial(term)
                 for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
-                    var1o = ordinary_variable(var1)
+                    var1i = variable_index(var1)
                     for (var2, _) in Iterators.take(mon, i -1)
-                        Graphs.add_edge!(g, Graphs.Edge(var1o.index, ordinary_variable(var2).index))
+                        Graphs.add_edge!(g, Graphs.Edge(var1i, variable_index(var2)))
                     end
                 end
             end
@@ -100,17 +100,18 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     for term in constr
                         mon = monomial(term)
                         for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
-                            var1o = ordinary_variable(var1)
+                            var1i = variable_index(var1)
                             for (var2, _) in Iterators.take(mon, i -1)
-                                Graphs.add_edge!(g, Graphs.Edge(var1o.index, ordinary_variable(var2).index))
+                                Graphs.add_edge!(g, Graphs.Edge(var1i, variable_index(var2)))
                             end
                         end
                     end
                 else
                     vars = effective_variables(constr, rettype=Set, by=ordinary_variable)
                     @inbounds for (i, var1) in Iterators.drop(enumerate(vars), 1)
+                        var1i = variable_index(var1)
                         for var2 in Iterators.take(vars, i -1)
-                            Graphs.add_edge!(g, Graphs.Edge(var1.index, var2.index))
+                            Graphs.add_edge!(g, Graphs.Edge(var1i, variable_index(var2)))
                         end
                     end
                 end
@@ -119,6 +120,15 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         @verbose_info("Determining cliques")
         gentime = @elapsed(cliques = sort!(chordal_completion ? chordal_cliques!(g) : Graphs.maximal_cliques(g), by=length))
         sort!.(cliques)
+        if Nc > 1
+            # The graph needs continuous indices; but the complex variables are not indexed contiuously. Normal and conjugated
+            # variables alternate. The first complex variable doesn't need to be touched.
+            for clique in cliques
+                @inbounds for i in searchsortedfirst(clique, Nr +2):length(clique)
+                    clique[i] = ((clique[i] - Nr) << 1) + Nr -1
+                end
+            end
+        end
         @verbose_info("Obtained ", length(cliques), " clique", length(cliques) > 1 ? "s" : "", " in ", gentime,
             " seconds. Generating groupings.")
         # The correlative iterator could potentially be made even smaller by determining all the multideg boundaries, but would
