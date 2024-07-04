@@ -676,6 +676,9 @@ end
         req_same(intersect(monomials(2, 0, 0x2:0x3, maxmultideg=[2, 2]),
             monomials(2, 0, 0x2:0x4, minmultideg=[2, 0], maxmultideg=[2, 2])),
             monomials(2, 0, 0x2:0x3, minmultideg=[2, 0], maxmultideg=[2, 2]), false)
+        m3 = SimpleMonomialVector{2,0}(ExponentsMultideg{2,UInt}(0, 3, [0, 0], [1, 1]))
+        req_same(intersect(m1, m3), m1, true)
+        req_same(intersect(m2, m3), SimpleMonomialVector{2,0}([1; 0;;]), true)
     end
 
     @testset failfast=true "effective_variables" begin

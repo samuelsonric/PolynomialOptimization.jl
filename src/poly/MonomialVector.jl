@@ -915,6 +915,16 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
             nexta = convert_index(unsafe, newe, ae, indices_a[ia])
             nextb = convert_index(unsafe, newe, be, indices_b[ib])
             while true
+                while iszero(nexta) || nexta < nextb
+                    iszero(rema -= 1) && @goto done
+                    ia += 1
+                    nexta = convert_index(unsafe, newe, ae, indices_a[ia])
+                end
+                while iszero(nextb) || nextb < nexta
+                    iszero(remb -= 1) && @goto done
+                    ib += 1
+                    nextb = convert_index(unsafe, newe, be, indices_b[ib])
+                end
                 if nexta == nextb
                     unsafe_push!(indices, nexta)
                     iszero(rema -= 1) && @goto done
@@ -923,17 +933,6 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
                     nexta = convert_index(unsafe, newe, ae, indices_a[ia])
                     ib += 1
                     nextb = convert_index(unsafe, newe, be, indices_b[ib])
-                else
-                    while nexta < nextb
-                        iszero(rema -= 1) && @goto done
-                        ia += 1
-                        nexta = convert_index(unsafe, newe, ae, indices_a[ia])
-                    end
-                    while nextb < nexta
-                        iszero(remb -= 1) && @goto done
-                        ib += 1
-                        nextb = convert_index(unsafe, newe, be, indices_b[ib])
-                    end
                 end
             end
         end
