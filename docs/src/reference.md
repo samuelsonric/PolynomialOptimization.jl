@@ -45,9 +45,11 @@ Custom
 ```@docs
 AbstractRelaxationSparse
 SparsityCorrelative
+SparsityTerm
 SparsityTermBlock
 SparsityTermChordal
-#SparsityCorrelativeTerm
+SparsityCorrelativeTerm
+TermMode
 ```
 
 ## Optimization and problem solutions

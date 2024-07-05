@@ -17,7 +17,8 @@ clique. However, it is nothing more than first performing correlative sparsity a
 This constructor will take all keyword arguments and distribute them appropriately to the [`SparsityCorrelative`](@ref)
 and [`SparsityTerm`](@ref) constructors.
 The returned object will be a very thin wrapper around [`SparsityTerm`](@ref), with the only difference in printing;
-[`SparsityCorrelativeTerm`](@ref) objects by default print the clique grouping.
+[`SparsityCorrelativeTerm`](@ref) objects by default print the clique grouping. Note that the same can be achieved for any
+relaxation (or groupings of a relaxation) if the IO parameter `bycliques` is set to `true`.
 
 See also [`SparsityCorrelative`](@ref), [`SparsityTermBlock`](@ref), [`SparsityTermChordal`](@ref), [`TermMode`](@ref).
 """

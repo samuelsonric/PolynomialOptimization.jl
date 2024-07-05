@@ -73,7 +73,8 @@ add_constr_psd!(::Any, ::Int, ::PSDVector{<:Any,<:Real})
 function add_constr_psd_complex! end
 
 """
-    add_constr_psd_complex!(state, dim::Int, data::PSDMatrixCartesian{T,V}) where {T,V<:Complex}
+    add_constr_psd_complex!(state, dim::Int,
+        data::PSDMatrixCartesian{T,V}) where {T,V<:Complex}
 
 Add a Hermitian PSD constraint of side dimension `dim` ≥ 3 to the solver. Its requested triangle is indexed according to the
 return value of [`psd_indextype`](@ref)); these elements of the matrix are put into the linear constraints (rows in the linear

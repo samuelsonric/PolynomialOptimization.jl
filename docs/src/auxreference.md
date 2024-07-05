@@ -10,6 +10,7 @@ optimization.
 ```@docs
 @allocdiff
 keepcol!
+issubset_sorted
 ```
 
 ## Chordal graphs

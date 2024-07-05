@@ -6,15 +6,16 @@
     TERM_MODE_NONE = 4 # only for subselection
 end
 
-@doc "
-    @enum TermMode TERM_MODE_DENSE TERM_MODE_BLOCK TERM_MODE_CLIQUES TERM_MODE_CHORDAL_CLIQUES TERM_MODE_NONE
+@doc """
+    @enum TermMode TERM_MODE_DENSE TERM_MODE_BLOCK TERM_MODE_CLIQUES
+        TERM_MODE_CHORDAL_CLIQUES TERM_MODE_NONE
 
 Specifies which kind of completion procedure is used for the iteration of term sparsity pattern.
 Valid values are `TERM_MODE_DENSE` ([`Dense`](@ref)), `TERM_MODE_BLOCK` ([`SparsityTermBlock`](@ref)),
 `TERM_MODE_CHORDAL_CLIQUES` ([`SparsityTermChordal`](@ref)), and `TERM_MODE_CLIQUES` ([`SparsityTermChordal`](@ref) with
 `chordal_completion = false`).
 `TERM_MODE_NONE` can be used during iteration to disable the iteration of individual constraints.
-" TermMode
+""" TermMode
 
 const VarcliqueMethods = Union{Missing,<:AbstractVector{<:Union{Missing,TermMode}}}
 

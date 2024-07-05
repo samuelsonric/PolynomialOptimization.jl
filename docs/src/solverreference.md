@@ -53,7 +53,7 @@ number up or down by 100 or more. All solvers may expose options that can influe
 
 |  Solver     |                            Package                          |   License  | Methods     | Speed    | Accuracy | Memory  | max. recomm. basis size |
 | ------:     | :---------------------------------------------------------: | :--------: | :---------: | :-----:  | :------: | :-----: | :---------------------- |
-| Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment      | 👍👍👍  | 👍👍👍  |         |                         |
+| Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment      | 👍👍👍  | 👍👍👍  | 👍👍    | ~200                    |
 | COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment      | 👍👍👍  | 👍👍👍  | 👍👍👍  | ~700                    |
 | Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment      | 👍👍    | 👍👍     | 👍      | ~100                    |
 | Mosek[^2]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍  | 👍👍    | ~300 - 500              |
@@ -210,8 +210,8 @@ trisize
 count_uniques
 ```
 Additionally, `Solver` reexports a number of useful types and functions for developing the interface (see
-[`Solver.jl`](../../src/optimization/solver/Solver.jl)); therefore, usually only the `Solver` submodule itself has to be used
-and not `PolynomialOptimization` itself. However, note that it is highly recommended to say
+`src/optimization/solver/Solver.jl`); therefore, usually only the `Solver` submodule itself has to be used and not
+`PolynomialOptimization` itself. However, note that it is highly recommended to say
 `using PolynomialOptimization: @assert, @inbounds` in the solver implementation; this will replace the Base implementations of
 the macros by ones that, depending on a debugging constant, enable or disable the desired functionality.
 

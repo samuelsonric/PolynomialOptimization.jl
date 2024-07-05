@@ -1,9 +1,10 @@
 ```@meta
 DocTestFilters = [
+  r"\d+\.\d+ seconds" => "seconds",
   r"\d\.\d+e-\d+" => s"~0~",
   r"(\d*)\.(\d{6})\d+" => s"\1.\2~"
 ]
-DocTestSetup = :(using OrderedCollections; import Random; Random.seed!(1234))
+DocTestSetup = :(import Random; Random.seed!(1234))
 CurrentModule = PolynomialOptimization
 ```
 # Walkthrough
@@ -74,8 +75,8 @@ violate the bound or constraints, if any were given. The solutions are then retu
 ```jldoctest walkthrough
 julia> poly_all_solutions(res)
 2-element Vector{Tuple{Vector{Float64}, Float64}}:
- ([-5.352664236306117e-20, -0.40824265804856064, 0.40824266064547876], 5.266275193704928e-10)
- ([-1.1700613807653978e-18, 0.40824265804855975, -0.40824266064547793], 5.266276303927953e-10)
+ ([-1.1700613807653743e-18, 0.4082426580485429, -0.408242660645461], 5.266275193704928e-10)
+ ([-5.352664236308434e-20, -0.4082426580485437, 0.40824266064546183], 5.266276303927953e-10)
 ```
 Every element in the vector is a tuple, where the first entry corresponds to the optimal variables, and the second term is the
 badness of this solution (which can also be calculated manually using [`poly_solution_badness`](@ref)). Since here, the badness
@@ -257,7 +258,7 @@ Variable cliques:
 PSD block sizes:
   [4 => 1, 2 => 2, 1 => 3]
 
-julia> poly_optimize(:Clarabel, tcs)
+julia> res = poly_optimize(:Clarabel, tcs)
 Polynomial optimization result
 Relaxation method: SparsityTerm
 Used optimization method: ClarabelMoment
@@ -276,7 +277,7 @@ supported methods, see [the solver reference](@ref solvers_poly_optimize).
 Note that by passing the keyword argument `verbose=true` to the optimization function, we get some more insight into what
 happens behind the hood. Let's redo the last optimization.
 ```Julia
-julia> res = poly_optimize(:Clarabel, tcs, verbose=true)
+julia> poly_optimize(:Clarabel, tcs, verbose=true)
 Beginning optimization...
 Clique merging disabled.
 PSD block sizes:
@@ -347,7 +348,7 @@ constructed; then the solver runs.
 
 Indeed, due to sparsity, the moment matrix is full of unknowns:
 ```jldoctest walkthrough
-julia> moment_matrix(res)
+julia> show(stdout, "text/plain", moment_matrix(res))
 10×10 LinearAlgebra.Symmetric{Float64, Matrix{Float64}}:
    1.0         NaN         NaN         NaN             0.166666    -0.166666     0.166666   NaN          NaN            1.60942e-8
  NaN             0.166666   -0.166666  NaN           NaN          NaN          NaN          NaN          NaN          NaN
@@ -414,8 +415,8 @@ Lower bound to optimum (in case of good status): -3.999999965663831
 Time required for optimization: 0.0014009 seconds
 
 julia> poly_all_solutions(ans)
-2-element Vector{Tuple{Vector{Float64}, Float64}}:
- ([0.999947762870286, 2.9999477608105107], 9.938330158831832e-9)
+1-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([1.0000155981763819, 3.0000155844516696], 2.0076497353471723e-8)
 
 ```
 Note that when grading the quality of a solution, the package will determine the violation of the constraints as well as how
@@ -534,7 +535,7 @@ Objective: 1.0 - 3.0x₁²x₂² + x₁²x₂⁴ + x₁⁴x₂²
 1: -6.0x₁x₂² + 2.0x₁x₂⁴ + 4.0x₁³x₂² = 0
 2: -6.0x₁²x₂ + 4.0x₁²x₂³ + 2.0x₁⁴x₂ = 0
 
-julia> poly_optimize(:Clarabel, prob, 5)
+julia> res = poly_optimize(:Clarabel, prob, 5)
 Polynomial optimization result
 Relaxation method: Dense
 Used optimization method: ClarabelMoment
@@ -660,11 +661,11 @@ Time required for optimization: 0.3807631 seconds
 
 julia> poly_all_solutions(res)
 5-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
- ([0.29184091706343507 - 0.06552418313629553im, 0.3254570178833055 + 0.07307167705391754im], 3.7992736862185583)
- ([-0.29184091706342524 + 0.06552418313629696im, -0.3254570178833103 - 0.07307167705392334im], 3.79927368621856)
- ([-0.11248589631862503 + 0.025255356736113562im, -0.15814378934481646 - 0.035506476333623437im], 3.9604388882591897)
- ([0.1124858963186218 - 0.025255356736114246im, 0.1581437893448013 + 0.03550647633362005im], 3.9604388882591954)
- ([2.0450663614224852e-15 + 5.628783923208919e-17im, 6.186625786577447e-15 + 5.23675758430312e-15im], 3.9999999661436303)
+ ([0.26030598038884634 - 0.00026736336860256715im, 0.3407935395847438 + 0.00035003309799230153im], 3.816100332088393)
+ ([-0.2603059803888315 + 0.0002673633686024347im, -0.34079353958474984 - 0.00035003309799188205im], 3.8161003320883964)
+ ([-0.06036535235750472 + 6.200197140731072e-5im, -0.18480144151354266 - 0.00018981175865375325im], 3.962204377720153)
+ ([0.06036535235750221 - 6.200197140723483e-5im, 0.1848014415135279 + 0.00018981175865374902im], 3.962204377720159)
+ ([-4.503345903954037e-15 + 5.126149114067468e-17im, 8.070569843533215e-15 - 6.681107940528965e-18im], 3.9999999661436303)
 
 julia> poly_all_solutions(:heuristic, res)
 1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:

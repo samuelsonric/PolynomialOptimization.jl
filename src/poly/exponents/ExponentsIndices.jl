@@ -14,8 +14,12 @@ assumes that the cache for degree `degree` has already been populated, and that 
 is omitted, it is calculated using the unsafe variant of
 [`degree_from_index`](@ref degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}).
 """
-exponents_from_index(::Unsafe, e::AbstractExponents{<:Any,I}, index::I, degree::Int=degree_from_index(unsafe, e, index)) where {I<:Integer} =
+exponents_from_index(::Unsafe, e::AbstractExponents{<:Any,I}, index::I, degree::Int) where {I<:Integer} =
     ExponentIndices(e, index, degree)
+
+# do it manually instead of as a default parameter so that we don't get a missing docstring warning
+exponents_from_index(::Unsafe, e::AbstractExponents{<:Any,I}, index::I) where {I<:Integer} =
+    exponents_from_index(unsafe, e, index, degree_from_index(unsafe, e, index))
 
 """
     exponents_from_index(::AbstractExponents{N,I}, index::I[, degree::Int])
