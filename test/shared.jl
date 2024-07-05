@@ -1,4 +1,4 @@
-using Test
+using Test, Random
 using PolynomialOptimization, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.Relaxation
 # ^ we don't require SimplePolynomials in the namespace, but for printing we want the guarantee that it is there
 using MultivariatePolynomials
