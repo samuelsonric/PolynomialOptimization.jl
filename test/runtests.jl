@@ -23,6 +23,9 @@ using Documenter: doctest;
     @testset "term sparsity with chordal extension" begin
         include("./RelaxationSparsityTermCliques.jl")
     end
+    @testset "correlative and term sparsity" begin
+        include("./RelaxationSparsityCorrelativeTerm.jl")
+    end
     if :MosekSOS ∈ all_solvers
         # Tightening requires Mosek at the moment
         @testset "tightening using Nie's method" begin
