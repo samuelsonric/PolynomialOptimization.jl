@@ -95,7 +95,7 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVe
             deg += 1
             degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
         end
-        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, unsafe_cast(I, i), deg)
+        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, SimplePolynomials.unsafe_cast(I, i), deg)
         iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
