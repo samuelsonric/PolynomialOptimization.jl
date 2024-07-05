@@ -214,7 +214,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
         solution = moments
     else
         # We need to build the vector of monomial indices.
-        mon_pos = Vector{Int}(undef, length(moments))
+        mon_pos = Vector{K}(undef, length(moments))
         if length(cooₙ) == 0
             count_uniques(coo₁.moninds, @capture((index, i) -> @inbounds begin
                 $mon_pos[index] = $coo₁.moninds[i]
