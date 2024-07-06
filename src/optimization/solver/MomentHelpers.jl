@@ -51,24 +51,21 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         rows, indices, values = data
         i = zero(T)
     else
-        # Off-diagonals are multiplied by √2 in order to put variables into the vectorized PSD cone. However, if state isa
-        # SOSWrapper, we already have variables that correspond to a vectorized PSD cone, so we must instead multiply the
-        # coefficients by 1/√2 to undo this.
+        # Off-diagonals are multiplied by √2 in order to put variables into the vectorized PSD cone. Even if state isa
+        # SOSWrapper (then, the variables directly correspond to a vectorized PSD cone), the actual values in the PSD matrix
+        # are still multiplied by 1/√2, so we must indeed always multiply the coefficients by √2 to undo this.
         # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
         # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying the
         # left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
         if dim == 2
             quad = supports_quadratic(state)
-            if quad === SOLVER_QUADRATIC_NONE
-                sqrt2 = state isa SOSWrapper ? inv(sqrt(V(2))) : sqrt(V(2))
-            elseif quad === SOLVER_QUADRATIC_RSOC
-                sqrt2 = sqrt(V(2))
-            else
-                @assert(quad === SOLVER_QUADRATIC_SOC)
+            if quad === SOLVER_QUADRATIC_SOC
                 sqrt2 = V(2)
+            else
+                sqrt2 = sqrt(V(2))
             end
         else
-            sqrt2 = state isa SOSWrapper ? inv(sqrt(V(2))) : sqrt(V(2))
+            sqrt2 = sqrt(V(2))
         end
         lens, indices, values = data
         i = 1
@@ -242,8 +239,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false)))))
         tri = Tri
-        sqrt2 = (state isa SOSWrapper && !(dim == 2 && supports_quadratic(state) !== SOLVER_QUADRATIC_NONE)) ?
-                    inv(sqrt(V(2))) : sqrt(V(2))
+        sqrt2 = sqrt(V(2))
     end
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
