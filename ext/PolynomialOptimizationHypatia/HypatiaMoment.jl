@@ -65,9 +65,9 @@ function Solver.fix_objective!(state::StateMoment{K,V}, indvals::AbstractIndvals
     return
 end
 
-function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxation,
-    groupings::RelaxationGroupings; verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor),
-    customize::Function=_ -> nothing, parameters...)
+function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
+    verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor), customize::Base.Callable=_ -> nothing,
+    parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))

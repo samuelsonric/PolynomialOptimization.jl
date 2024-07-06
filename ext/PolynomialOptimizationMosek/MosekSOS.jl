@@ -69,7 +69,7 @@ function Solver.add_var_free_prepare!(state::StateSOS, num::Int)
     return
 end
 
-function Solver.add_var_free!(state::StateSOS, ::Nothing, indvals::AbstractIndvals{Int32}, obj::Float64)
+function Solver.add_var_free!(state::StateSOS, ::Nothing, indvals::AbstractIndvals{Int32,Float64}, obj::Float64)
     Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indvals), indvals.indices, indvals.values)
     iszero(obj) || Mosek.@MSK_putcj(state.task.task, state.num_vars, obj)
     state.num_vars += 1
@@ -84,8 +84,8 @@ function Solver.fix_constraints!(state::StateSOS, indvals::AbstractIndvals{Int32
     return
 end
 
-function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation,
-    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=(state) -> nothing, parameters...)
+function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
+    verbose::Bool=false, customize::Base.Callable=(state) -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     try
         setup_time = @elapsed begin
