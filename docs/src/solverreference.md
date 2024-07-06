@@ -277,7 +277,7 @@ open-source Julia implementation yet, one that is not versatile enough, or only 
 ```@meta
 CurrentModule = PolynomialOptimization.Solvers.SpecBM
 ```
-## SpecBM
+### SpecBM
 While the solver was implemented for the purpose of being used within `PolynomialOptimization`, it also works as a standalone
 routine (and could in principle be a separate package). SpecBM is a
 [spectral bundle algorithm for primal semidefinite programs](https://doi.org/10.48550/arXiv.2307.07651) and is based on the
