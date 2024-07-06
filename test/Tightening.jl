@@ -32,7 +32,9 @@ Objective: 10.0x₁x₂ - x₁x₂x₃
 12: -20.0x₁x₂ + 3.0x₁x₂x₃ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -0.05208 atol = solver==:SCSMoment ? 1e-3 : 1e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -0.05208 atol = solver==:SCSMoment ? 1e-3 : 1e-5
+            end
         end
     end
 end
@@ -53,7 +55,9 @@ Objective: x₃⁴ + x₂⁴ + x₁⁴ + x₃⁶ - 3.0x₁²x₂²x₃² + x₁�
 6: 2.0x₃⁴ + 2.0x₂⁴ + 2.0x₁⁴ + 3.0x₃⁶ - 9.0x₁²x₂²x₃² + 3.0x₁²x₂⁴ + 3.0x₁⁴x₂² ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 1/3 atol = solver==:SCSMoment ? 1e-3 : 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 1/3 atol = solver==:SCSMoment ? 1e-3 : 1e-6
+            end
         end
     end
 end
@@ -86,7 +90,9 @@ Objective: x₃x₄ + x₂x₃ + x₁x₂ + x₄³ + x₃³ + x₂³ + x₁³ - 
 18: -2.0x₃x₄ - x₂x₃ - 3.0x₄³ - 3.0x₃³ + 6.0x₁x₂x₃x₄ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 1e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 1e-5
+            end
         end
     end
 end
@@ -111,7 +117,9 @@ Objective: 50.0x₂² + x₁²
 11: 220.0x₂² + 0.4x₁x₂ + 3.2x₁² - 160.0x₂⁴ + 6468.8x₁x₂³ + 320.0x₁²x₂² - 0.8x₁³x₂ - 6.4x₁⁴ - 2880.0x₁x₂⁵ - 57.6x₁³x₂³ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 112.6516994 atol = 1e-2
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 112.6516994 atol = 1e-2
+            end
         end
     end
 end
@@ -137,8 +145,10 @@ Objective: x₃³ - x₂x₃² - x₂²x₃ + x₂³ - x₁x₃² + 4.0x₁x₂x
 11: 3.0x₃³ - 2.0x₂x₃² - x₂²x₃ - 2.0x₁x₃² + 4.0x₁x₂x₃ - x₁²x₃ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob, 4).objective ≈ 0.9491545329 atol = solver==:SCSMoment ? 1e-4 : 1e-6
-            # deg 3 is possible, but unstable
+            @testset let solver=solver
+                @test poly_optimize(solver, prob, 4).objective ≈ 0.9491545329 atol = solver==:SCSMoment ? 1e-4 : 1e-6
+                # deg 3 is possible, but unstable
+            end
         end
     end
 end
@@ -191,8 +201,10 @@ Objective: x₂² + x₂⁴x₃² + x₁²x₃⁴ - 3.0x₁²x₂²x₃² + x₁
 7: -2.0x₂ - 4.0x₂³x₃² + 6.0x₁²x₂x₃² - 2.0x₁⁴x₂ - 2.0x₁x₃⁵ + 6.0x₁x₂²x₃³ - 4.0x₁³x₂²x₃ ≥ 0"
     if optimize
         for solver in solvers
-            @test(poly_optimize(solver, prob, 5).objective ≈ 0, atol = solver==:SCSMoment ? 2e-4 : 1e-5,
-                skip = solver ∈ (:ClarabelMoment, :HypatiaMoment))
+            @testset let solver=solver
+                @test(poly_optimize(solver, prob, 5).objective ≈ 0, atol = solver==:SCSMoment ? 2e-4 : 1e-5,
+                    skip = solver ∈ (:ClarabelMoment, :HypatiaMoment))
+            end
         end
     end
 end
@@ -220,7 +232,9 @@ Objective: 3.0 - 2.0x₃ - 2.0x₂ - 2.0x₁ + x₃² + x₂² + x₁² + x₃²
 8: 2.0 - 2.0x₃ - 2.0x₃x₄² + 6.0x₃²x₄ - 4.0x₃³ + 4.0x₁x₂x₄ - 4.0x₁x₂x₃ - 2.0x₁x₂² - 2.0x₁²x₂ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob, 3).objective ≈ 0.3918305004 atol = solver==:SCSMoment ? 2e-3 : 1e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob, 3).objective ≈ 0.3918305004 atol = solver==:SCSMoment ? 2e-3 : 1e-5
+            end
         end
     end
 end
@@ -258,7 +272,9 @@ Objective: 1.0 - 2.0x₄ + 2.0x₃ + 2.0x₂ - 2.0x₁ + x₄² - 2.0x₃x₄ + 
 24: 2.0x₄ - 2.0x₄² + 2.0x₃x₄ - 2.0x₂x₄ - 2.0x₁x₄ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 6e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 6e-5
+            end
         end
     end
 end

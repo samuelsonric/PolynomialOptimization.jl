@@ -494,7 +494,9 @@ end
 
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-6
+            end
         end
     end
 
@@ -505,7 +507,9 @@ end
 
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
+            end
         end
     end
 

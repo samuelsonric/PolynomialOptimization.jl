@@ -10,7 +10,9 @@ Objective: 1.0e-5 + 5.0e-5x₂² + 5.0e-5x₁² + 0.0001x₂⁴ - 0.9998x₁²x�
 Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.0x₁²x₂² + x₁⁴"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -0.0369 atol = 2e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -0.0369 atol = 2e-3
+            end
         end
     end
 end
@@ -26,7 +28,9 @@ Objective: 1.0e-5 - 0.99995x₂² - 0.99995x₁² - 2.9999x₂⁴ - 0.9998x₁²
 Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.0x₁²x₂² + x₁⁴"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -0.9999 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -0.9999 atol = 1e-3
+            end
         end
     end
 end
@@ -41,7 +45,9 @@ Objective: 1.0e-5 + 4.0e-5x₂² + 1.00004x₁² + 1.00006x₂⁴ - 1.99988x₁�
 Objective was scaled by the prefactor 1.0 + x₂² + x₁²"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = 3e-4
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 3e-4
+            end
         end
     end
 end
@@ -57,7 +63,9 @@ Objective: 1.00001 - x₃ - x₂ - x₁ + 2.00004x₃² + x₂x₃ + 2.00004x₂
 Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + x₃⁴ + 2.0x₂²x₃² + x₂⁴ + 2.0x₁²x₃² + 2.0x₁²x₂² + x₁⁴"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-3
+            end
         end
     end
 end
@@ -72,7 +80,9 @@ Objective: 1.0e-5 + 6.0e-5x₃² + 6.0e-5x₂² + 6.0e-5x₁² + 0.00015x₃⁴ 
 Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + x₃⁴ + 2.0x₂²x₃² + x₂⁴ + 2.0x₁²x₃² + 2.0x₁²x₂² + x₁⁴"
     if optimize
        for solver in solvers
-           @test poly_optimize(solver, prob).objective ≈ 0 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 1e-3
+            end
        end
     end
 end
@@ -89,7 +99,9 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 1: -4.0 + x₂² + x₁² ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0.0062 atol = 2e-2
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0.0062 atol = 2e-2
+            end
         end
     end
 end
@@ -106,7 +118,9 @@ Objective was scaled by the prefactor 1.0 + x₃² + x₂² + x₁²
 1: 1.0 - x₃⁴ + 0.5x₂⁴ - x₁⁴ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -1.27937458 atol = solver==:SCSMoment ? 1e-2 : 1e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -1.27937458 atol = solver==:SCSMoment ? 1e-2 : 1e-7
+            end
         end
     end
 end
@@ -124,7 +138,9 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 2: -0.25 + x₂² ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 1 atol = 1e-4
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 1 atol = 1e-4
+            end
         end
     end
 end
@@ -143,7 +159,9 @@ Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.
 3: -1.0 + x₂² ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 3.6182472 atol = 2e-4
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 3.6182472 atol = 2e-4
+            end
         end
     end
 end
@@ -161,7 +179,9 @@ Objective was scaled by the prefactor 1.0 + 5.0x₂² + 5.0x₁² + 10.0x₂⁴ 
 2: -x₁x₂ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-2
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-2
+            end
         end
     end
 end
@@ -231,7 +251,9 @@ Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.
 1: 3.0 - x₁ - 3.0x₂² - 3.0x₁² + x₁x₂² + x₁³ = 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -1 atol = 1e-3
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -1 atol = 1e-3
+            end
         end
     end
 end
@@ -249,7 +271,9 @@ Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + 
 1: -1.0 + x₃ + x₂ + x₁ = 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 5e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 5e-5
+            end
         end
     end
 end
@@ -269,7 +293,9 @@ Objective was scaled by the prefactor 1.0 + x₄² + x₃² + x₂² + x₁²
 3: -x₄ + x₃ = 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = 5e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 5e-5
+            end
         end
     end
 end
@@ -354,7 +380,9 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 1: x₂² + x₁² - 2.0x₁x₂³ - 2.0x₁³x₂ + x₁²x₂⁴ + x₁⁴x₂² = 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0 atol = 4e-5
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0 atol = 4e-5
+            end
         end
     end
 end
@@ -372,7 +400,9 @@ Objective: 1.0e-5 + 1.00002x₄² + 1.00002x₃² + 1.00002x₂² + 1.00002x₁�
 2: 0.125 - x₄ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 0.2708494 atol = 2e-4
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 0.2708494 atol = 2e-4
+            end
         end
     end
 end
@@ -432,7 +462,9 @@ Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + 
 4: x₃ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 3 atol = 3e-4
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 3 atol = 3e-4
+            end
         end
     end
 end
@@ -477,7 +509,9 @@ Objective: 1.0e-5 + 3.0e-5x₄² + 3.0e-5x₃² + 3.0e-5x₂² + 3.0e-5x₁² + 
 5: x₄ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ 5.0625837 atol = solver==:SCSMoment ? 1e-3 : 2e-7
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ 5.0625837 atol = solver==:SCSMoment ? 1e-3 : 2e-7
+            end
         end
     end
 end
@@ -498,7 +532,9 @@ Objective was scaled by the prefactor 1.0 + x₃² + x₂² + x₁²
 4: x₃ ≥ 0"
     if optimize
         for solver in solvers
-            @test poly_optimize(solver, prob).objective ≈ -0.997439 atol = solver==:SCSMoment ? 2e-4 : 1e-6
+            @testset let solver=solver
+                @test poly_optimize(solver, prob).objective ≈ -0.997439 atol = solver==:SCSMoment ? 2e-4 : 1e-6
+            end
         end
     end
 end
