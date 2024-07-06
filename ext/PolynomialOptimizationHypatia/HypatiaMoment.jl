@@ -82,7 +82,7 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
         # make our own optimized COO -> CSC function.
         Ccoo = state.c[]
         b = zeros(V, size(state.Acoo, 1))
-        copy!(@view(b[state.b[1]]), state.b[2])
+        copyto!(@view(b[state.b[1]]), state.b[2])
         h = zeros(V, size(state.minusGcoo, 1))
 
         moncount, (Acolptr, Arowind, Anzval), (Gcolptr, Growind, Gnzval), c = coo_to_csc!(state.Acoo, state.minusGcoo, Ccoo)

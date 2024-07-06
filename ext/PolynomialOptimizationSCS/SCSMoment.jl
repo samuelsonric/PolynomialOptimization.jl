@@ -121,7 +121,7 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
         Ccoo = state.c[]
         m = size(Acoo, 1)
         b = zeros(Float64, m)
-        copy!(@view(b[state.b_zero[1]]), state.b_zero[2])
+        copyto!(@view(b[state.b_zero[1]]), state.b_zero[2])
 
         moncount, (Acolptr, Arowind, Anzval), c = coo_to_csc!(Acoo, Ccoo)
 

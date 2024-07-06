@@ -86,8 +86,16 @@ function SpecBM.setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
     # provides a routine just to set these rows.
     M₂barvaridx = collect(Int32(0):Int32(num_psds -1))
     M₂numterm = convert(Vector{Int64}, rdims)
-    M₂ptrterm = isempty(rdims) ? Int64[] : accumulate(+, Iterators.flatten((zero(Int64),
-                                                                            Iterators.take(rdims, length(rdims) -1))))
+    if isempty(rdims)
+        M₂ptrterm = Int64[]
+    else
+        M₂ptrterm = Vector{Int64}(undef, length(rdims))
+        @inbounds M₂ptrterm[1] = 0
+        acc = 0
+        @inbounds for (i, r) in zip(2:length(rdims), rdims)
+            M₂ptrterm[i] = (acc += r)
+        end
+    end
     M₂termidx = collect(Iterators.flatten(sparsemats[dimⱼ] for dimⱼ in rdims))
     # We put the γ data into the afes columnwise
     M₁afeidx = collect(Int64(2):Int64(num_psds + Σr +1))

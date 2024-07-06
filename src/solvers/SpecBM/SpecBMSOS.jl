@@ -63,7 +63,7 @@ function Solver.poly_optimize(::Val{:SpecBMSOS}, relaxation::AbstractRelaxation,
         # consecutive, removing all monomials that do not occur. We already know that no entry will ever occur twice, so we can
         # make our own optimized COO -> CSC function.
         c = zeros(V, size(state.Aᵀcoo, 1))
-        copy!(@view(c[state.c[1]]), state.c[2])
+        copyto!(@view(c[state.c[1]]), state.c[2])
 
         moncount, (Aᵀcolptr, Aᵀrowind, Aᵀnzval), b = coo_to_csc!(state.Aᵀcoo, state.b)
         A = transpose(SparseMatrixCSC{V,Int}(length(c), moncount, Aᵀcolptr, Aᵀrowind, Aᵀnzval))

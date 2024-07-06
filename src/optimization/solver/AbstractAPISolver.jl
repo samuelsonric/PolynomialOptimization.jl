@@ -62,7 +62,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
         solution = SparseVector(max_mons, mon_pos, moments)
     else
         solution = fill(NaN, max_mons)
-        copy!(@view(solution[mon_pos]), moments)
+        copyto!(@view(solution[mon_pos]), moments)
     end
     return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end

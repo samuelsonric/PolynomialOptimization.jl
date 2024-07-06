@@ -4,7 +4,7 @@ module SpecBM
 
 using LinearAlgebra, Printf, StandardPacked
 using StandardPacked: packed_format
-using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
+using ...PolynomialOptimization: @assert, @inbounds, @verbose_info, EfficientCholmod
 
 export specbm_primal
 
@@ -387,7 +387,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # variables come before the PSD variables.
     num_conds, num_vars = size(A)
     (num_conds == length(b) && num_vars == length(c)) || throw(ArgumentError("Incompatible dimensions"))
-    all(j -> j > 0, psds) || throw(ArgumentError("PSD dimensions must be positive"))
+    all(>(0), psds) || throw(ArgumentError("PSD dimensions must be positive"))
     if ismissing(num_frees)
         num_frees = num_vars - sum(packedsize, psds, init=0)
         num_frees ≥ 0 || throw(ArgumentError("Incompatible dimensions"))
@@ -403,7 +403,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     elseif length(r_current) != num_psds
         throw(ArgumentError("Number of r_current must be the same as number of psd constraints"))
     else
-        all(x -> x ≥ 1, r_current) || throw(ArgumentError("r_current must be positive"))
+        all(≥(1), r_current) || throw(ArgumentError("r_current must be positive"))
         all(splat(≤), zip(r_current, psds)) || throw(ArgumentError("No r_current must not exceed its associated dimension"))
     end
     if isa(r_past, Integer)
@@ -412,8 +412,8 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     elseif length(r_past) != num_psds
         throw(ArgumentError("Number of r_past must be the same as number of psd constraints"))
     else
-        all(x -> x ≥ 0, r_past) || throw(ArgumentError("r_past must be nonnegative"))
-        all((r_currentⱼ, r_pastⱼ, dimⱼ) -> r_currentⱼ + r_pastⱼ ≤ dimⱼ) ||
+        all(≥(0), r_past) || throw(ArgumentError("r_past must be nonnegative"))
+        all(args -> args[1] + args[2] ≤ args[3], zip(r_current, r_past, psds)) ||
             throw(ArgumentError("r_past + r_current must not exceed the associated dimension"))
     end
     # Parameters rₚ ≥ 0, r_c ≥ 1, α > 0, β ∈ (0, 1), ϵ ≥ 0, tₘₐₓ ≥ 1

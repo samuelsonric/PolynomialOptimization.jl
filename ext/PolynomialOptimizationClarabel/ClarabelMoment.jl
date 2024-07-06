@@ -73,7 +73,7 @@ function Solver.poly_optimize(::Val{:ClarabelMoment}, relaxation::AbstractRelaxa
         # make our own optimized COO -> CSC function.
         Qcoo = state.q[]
         b = zeros(V, size(state.Acoo, 1))
-        copy!(@view(b[state.b[1]]), state.b[2])
+        copyto!(@view(b[state.b[1]]), state.b[2])
 
         moncount, (Acolptr, Arowind, Anzval), q = coo_to_csc!(state.Acoo, Qcoo)
         solver = Clarabel.Solver()
