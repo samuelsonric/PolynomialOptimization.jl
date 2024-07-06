@@ -1,11 +1,11 @@
 struct SpecBMSubsolverHypatia{R}
-    model::Hypatia.Models.Model{R}
+    model::Models.Model{R}
     triupos::Vector{Int}
     ρpos::UnitRange{Int}
-    solver::Hypatia.Solvers.Solver{R}
+    solver::Solvers.Solver{R}
 end
 
-function specbm_setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr, ρ::R) where {R}
+function SpecBM.setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr, ρ::R) where {R}
     @inbounds begin
         sidedim = num_psds + Σr
         # first num_psds vars: γⱼ; following vars: triangles corresponding to vec(Sⱼ); last variable: objective
@@ -87,20 +87,20 @@ function specbm_setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr,
         h = zeros(R, size(G, 1))
         h[sidedim+1:sidedim+num_psds] .= ρ
         h[sidedim+num_psds+2] = inv(R(2))
-        cones = Vector{Hypatia.Cones.Cone{R}}(undef, num_psds +3)
+        cones = Vector{Cones.Cone{R}}(undef, num_psds +3)
         cones[1] = Hypatia.Cones.Nonnegative{R}(num_psds)
         cones[2:end-2] = Hypatia.Cones.PosSemidefTri{R,R}.(rdims)
         cones[end-1] = Hypatia.Cones.Nonnegative{R}(num_psds)
         cones[end] = Hypatia.Cones.EpiPerSquare{R}(sidedim +2)
         return SpecBMSubsolverHypatia{R}(
-            Hypatia.Models.Model{R}(
+            Models.Model{R}(
                 c, Matrix{R}(undef, 0, length(c)), Vector{R}(undef, 0), G, h, cones
             ),
             finish!(triupos),
             sidedim+1:sidedim+num_psds,
-            Hypatia.Solvers.Solver{R}(
+            Solvers.Solver{R}(
                 verbose=false,
-                syssolver=Hypatia.Solvers.SymIndefSparseSystemSolver{Float64}(),
+                syssolver=Solvers.SymIndefSparseSystemSolver{Float64}(),
                 preprocess=false,
                 reduce=false
             )
@@ -108,11 +108,12 @@ function specbm_setup_primal_subsolver(::Val{:Hypatia}, num_psds, r, rdims, Σr,
     end
 end
 
-specbm_adjust_penalty_subsolver!(data::SpecBMSubsolverHypatia, ρ) = @inbounds data.model.h[data.ρpos] .= ρ
+SpecBM.adjust_penalty_subsolver!(data::SpecBMSubsolverHypatia, ρ) = @inbounds data.model.h[data.ρpos] .= ρ
 
-specbm_finalize_primal_subsolver!(data::SpecBMSubsolverHypatia) = nothing
+SpecBM.finalize_primal_subsolver!(data::SpecBMSubsolverHypatia) = nothing
 
-function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverHypatia{R}}) where {R,F,ACV}
+function SpecBM.primal_subsolve!(mastersolver::SpecBM.MastersolverData{R},
+    cache::SpecBM.Cache{R,F,ACV,SpecBMSubsolverHypatia{R}}) where {R,F,ACV}
     sidedim = size(cache.M, 1)
     Mfact = cholesky!(cache.M, RowMaximum(), tol=sqrt(eps(R)), check=false)
     data = cache.subsolver
@@ -136,9 +137,9 @@ function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache:
     # While in principle, we'd have to negate all the entries due to Hypatia's extra minus, we just ignore this due to the
     # squaring in the cone.
     solver = data.solver
-    Hypatia.Solvers.load(solver, model)
-    Hypatia.Solvers.solve(solver)
-    Hypatia.Solvers.get_status(solver) ∈ (Hypatia.Solvers.Optimal, Hypatia.Solvers.NearOptimal) ||
+    Solvers.load(solver, model)
+    Solvers.solve(solver)
+    Solvers.get_status(solver) ∈ (Hypatia.Solvers.Optimal, Hypatia.Solvers.NearOptimal) ||
         error("Subsolver failed with status ", Hypatia.Solvers.get_status(solver))
     copyto!(mastersolver.γstars, 1, solver.result.x, 1, num_psds)
     i = num_psds +1

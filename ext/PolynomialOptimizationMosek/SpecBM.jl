@@ -1,5 +1,3 @@
-VersionNumber(Mosek.getversion()) < v"10.1.13" && @warn("Consider upgrading your version of Mosek to avoid rare crashes.")
-
 struct SpecBMSubsolverMosek
     task::Mosek.MSKtask
     sparsemats::Dict{Int,Vector{Int64}}
@@ -11,12 +9,13 @@ struct SpecBMSubsolverMosek
     M₂termidx::Vector{Int64}
 end
 
-function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, ρ)
+function SpecBM.setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, ρ)
+    isqrt2 = inv(sqrt(2.))
     task = Mosek.maketask()
     taskptr = task.task
     # Note that here, we use the macros for direct access. Often, this is more efficient as no index conversion is
-    # necessary, so we do it everywhere for consistency. However, they are not part of the documented API, so we'll hope
-    # that the interface does not change.
+    # necessary, so we do it everywhere for consistency. However, beware that the macros actually wrap anonoymous functions and
+    # therefore, all arguments are prone to the capture bug!
     # first num_psds vars: γⱼ; following vars: triangles corresponding to vec(Sⱼ); last variable: objective
     Mosek.@MSK_appendvars(taskptr, num_psds +1)
     Mosek.@MSK_putobjsense(taskptr, Mosek.MSK_OBJECTIVE_SENSE_MAXIMIZE.value)
@@ -39,9 +38,11 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
         rows=range, columns=similar(dims), nzs=ones(Int64, length(dims))
         Mosek.@MSK_putaijlist64(taskptr, num_psds, range, range, values)
         for (j, rⱼ) in zip(cfz, r)
-            sparseidx = get!(() -> let idx=Ref{Int64}()
-                Mosek.@MSK_appendsparsesymmat(taskptr, rⱼ, rⱼ, range, range, values, idx)
-                idx[]
+            sparseidx = get!(let rⱼ=rⱼ, range=range, values=values
+                () -> let idx=Ref{Int64}()
+                    Mosek.@MSK_appendsparsesymmat(taskptr, rⱼ, rⱼ, range, range, values, idx)
+                    idx[]
+                end
             end, traces, rⱼ)
             Mosek.@MSK_putbaraij(taskptr, j, j, 1, Ref(sparseidx), values)
         end
@@ -57,7 +58,7 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
                 for row in col+1:rⱼ-1
                     rows[k] = row
                     columns[k] = col
-                    values[k] = inv(sqrt2) # triangle is doubled, we don't want this
+                    values[k] = isqrt2 # triangle is doubled, we don't want this
                     k += 1
                 end
             end
@@ -94,13 +95,14 @@ function specbm_setup_primal_subsolver(::Val{:Mosek}, num_psds, r, rdims, Σr, �
     return SpecBMSubsolverMosek(task, sparsemats, M₁afeidx, M₁val, M₂barvaridx, M₂numterm, M₂ptrterm, M₂termidx)
 end
 
-specbm_adjust_penalty_subsolver!(data::SpecBMSubsolverMosek, ρ) =
+SpecBM.adjust_penalty_subsolver!(data::SpecBMSubsolverMosek, ρ) =
     Mosek.@MSK_putconboundsliceconst(data.task.task, zero(Int32), Int32(length(data.M₂barvaridx)), Mosek.MSK_BK_UP.value, -Inf,
         ρ)
 
-specbm_finalize_primal_subsolver!(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
+SpecBM.finalize_primal_subsolver!(data::SpecBMSubsolverMosek) = Mosek.deletetask(data.task)
 
-function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}
+function SpecBM.primal_subsolve!(mastersolver::SpecBM.MastersolverData{R},
+    cache::SpecBM.Cache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}
     # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
     # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
     # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
@@ -127,7 +129,7 @@ function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache:
     end
     let
         pL₂ᵀ = @view(pLᵀ[:, num_psds+1:end])
-        buf = gettmp(cache, size(pL₂ᵀ, 2))
+        buf = SpecBM.gettmp(cache, size(pL₂ᵀ, 2))
         # in the afes, our row index starts with 2 - as 0 is the index of the upper bound variable (-> objective) and 1 is the
         # index of the fixed 1/2
         for (i, row) in zip(Iterators.countfrom(Int64(2)), eachrow(pL₂ᵀ))
@@ -163,7 +165,7 @@ function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache:
     solutionsta == Mosek.MSK_SOL_STA_OPTIMAL || error("Subsolver failed with status ", solutionsta)
     Mosek.@MSK_getxxslice(taskptr, Mosek.MSK_SOL_ITR.value, 0, length(mastersolver.γstars), mastersolver.γstars)
     for (j, Sⱼ) in zip(cfz, mastersolver.Sstar_psds)
-        Sⱼunscaled = PackedMatrix(LinearAlgebra.checksquare(Sⱼ), vec(Sⱼ), :L)
+        Sⱼunscaled = SPMatrix(LinearAlgebra.checksquare(Sⱼ), vec(Sⱼ), :L)
         Mosek.@MSK_getbarxj(taskptr, Mosek.MSK_SOL_ITR.value, j, Sⱼunscaled)
         packed_scale!(Sⱼunscaled)
     end

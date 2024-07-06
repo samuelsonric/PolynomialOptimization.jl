@@ -34,6 +34,7 @@ PolynomialOptimizationMPI = "MPI"
 
 [compat]
 julia = "1.9"
+StandardPacked = "^1.0.1"
 
 [extras]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"

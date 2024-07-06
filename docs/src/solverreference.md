@@ -269,3 +269,25 @@ tighten_minimize_l1
 
 Once a solver has been implemented, it should add its solver symbol to the vector `PolynomialOptimization.tightening_methods`,
 which enables this solver to be chosen automatically.
+
+## Solvers that come with `PolynomialOptimization`
+This package provides efficient implementations of solvers recently proposed in research papers which either have no
+open-source Julia implementation yet, one that is not versatile enough, or only an unoptimized proof-of-concept.
+
+```@meta
+CurrentModule = PolynomialOptimization.Solvers.SpecBM
+```
+## SpecBM
+While the solver was implemented for the purpose of being used within `PolynomialOptimization`, it also works as a standalone
+routine (and could in principle be a separate package). SpecBM is a
+[spectral bundle algorithm for primal semidefinite programs](https://doi.org/10.48550/arXiv.2307.07651) and is based on the
+assumption that the optimal dual solution has low rank; indeed, in polynomial optimizations, if there is an optimal point for
+the problem that can be encoded in the chosen basis, then this automatically gives rise to a rank-one semidefinite moment
+matrix this point.
+The implementation also allows for free variables and multiple semidefinite constraints and contains further improvements
+compared to the [reference implementation](https://github.com/soc-ucsd/specBM). It requires either Hypatia or a very recent
+version of Mosek as subsolvers.
+```@docs
+specbm_primal
+Result
+```

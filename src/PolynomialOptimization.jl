@@ -10,7 +10,6 @@ import StatsBase
 
 export Newton, Relaxation
 
-const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
 const debugging = false
 

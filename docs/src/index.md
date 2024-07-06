@@ -24,5 +24,5 @@ Depth=3
 
 ## Index
 ```@index
-Modules=[PolynomialOptimization,PolynomialOptimization.PackedMatrices]
+Modules=[PolynomialOptimization]
 ```

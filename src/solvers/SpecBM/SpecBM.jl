@@ -1,12 +1,18 @@
-export SpecBMResult, specbm_primal
-
 # This is an implementation of the SpecPM primal solver, https://arxiv.org/abs/2307.07651v1 with a reference implementation on
 # https://github.com/soc-ucsd/SpecBM.git, tightly integrated with the PolynomialOptimization framework
+module SpecBM
+
+using LinearAlgebra, Printf, StandardPacked
+using StandardPacked: packed_format
+using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
+
+export specbm_primal
+
 const VecView{R,cont} = SubArray{R,1,Vector{R},Tuple{UnitRange{Int}},cont}
 const MatView{R,cont} = SubArray{R,2,Matrix{R},Tuple{UnitRange{Int},UnitRange{Int}},cont}
 const DiagView{R} = SubArray{R,1,Base.ReshapedArray{R,1,MatView{R,false},Tuple{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int}}},Tuple{StepRange{Int,Int}},false}
 
-struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
+struct Data{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
     psds::PType
     r::Vector{Int}
     ϵ::R
@@ -24,13 +30,13 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
     c::CType
     c_free::CVType
     c_psd::CVType
-    C_psds::Vector{PackedMatrix{R,CVType,:LS}}
+    C_psds::Vector{SPMatrix{R,CVType,:LS}}
     ω_free::VecView{R,true}
     ω_psd::VecView{R,true}
-    Ω_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
-    W_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+    Ω_psds::Vector{SPMatrix{R,VecView{R,true},:LS}}
+    W_psds::Vector{SPMatrix{R,VecView{R,true},:LS}}
 
-    function SpecBMData(num_vars::Integer, num_frees::Integer, psds::AbstractVector{<:Integer}, r::Vector{Int}, ϵ::R,
+    function Data(num_vars::Integer, num_frees::Integer, psds::AbstractVector{<:Integer}, r::Vector{Int}, ϵ::R,
         A::AbstractMatrix{R}, At::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R}) where {R}
         @inbounds @views begin
             @assert(length(psds) == length(r))
@@ -40,7 +46,7 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
             # allocated problem data
             Ω = zeros(R, num_vars)
             w_psd = zeros(R, num_psdvars)
-            W_psds = Vector{PackedMatrix{R,typeof(w_psd[begin:end]),:LS}}(undef, num_psds)
+            W_psds = Vector{SPMatrix{R,typeof(w_psd[begin:end]),:LS}}(undef, num_psds)
             P_psds = Vector{Matrix{R}}(undef, num_psds)
             # views into existing data
             a_free = A[:, 1:num_frees]
@@ -48,25 +54,25 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
             a_psds = Vector{typeof(A[:, begin:end])}(undef, num_psds)
             c_free = c[1:num_frees]
             c_psd = c[num_frees+1:end]
-            C_psds = Vector{PackedMatrix{R,typeof(c[begin:end]),:LS}}(undef, num_psds)
+            C_psds = Vector{SPMatrix{R,typeof(c[begin:end]),:LS}}(undef, num_psds)
             ω_free = Ω[1:num_frees]
             ω_psd = Ω[num_frees+1:end]
-            Ω_psds = Vector{PackedMatrix{R,typeof(Ω[begin:end]),:LS}}(undef, num_psds)
+            Ω_psds = Vector{SPMatrix{R,typeof(Ω[begin:end]),:LS}}(undef, num_psds)
             i = num_frees +1
             for (j, (nⱼ, rⱼ)) in enumerate(zip(psds, r))
                 # initialize all the data and connect the views appropriately
                 dimⱼ = packedsize(nⱼ)
-                Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, Ω[i:i+dimⱼ-1], :LS)
+                Ω_psds[j] = Ωⱼ = SPMatrix(nⱼ, Ω[i:i+dimⱼ-1], :LS)
                 # An initial point Ω₀ ∈ 𝕊ⁿ.  As in the reference implementation, we take zero for the free variables and the
                 # vectorized identity for the PSD variables.
-                for k in PackedDiagonalIterator(Ωⱼ)
+                for k in SPDiagonalIterator(Ωⱼ)
                     Ωⱼ[k] = one(R)
                 end
                 # Initialize W̄₀ ∈ 𝕊₊ⁿ with tr(W̄₀) = 1. As in the reference implementation, we take the (1,1) elementary matrix.
                 # Note that the reference implementation only allows for a single block; we map this to multiple semidefinite
                 # constraints not merely by mimicking a block-diagonal matrix, but taking the constraints into account
                 # individually!
-                W_psds[j] = Wⱼ = PackedMatrix(nⱼ, w_psd[i-num_frees:i-num_frees+dimⱼ-1], :LS)
+                W_psds[j] = Wⱼ = SPMatrix(nⱼ, w_psd[i-num_frees:i-num_frees+dimⱼ-1], :LS)
                 Wⱼ[1, 1] = one(R)
                 # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can
                 # do this explicitly.
@@ -75,7 +81,7 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
                     Pⱼ[k, k] = one(R)
                 end
                 a_psds[j] = A[:, i:i+dimⱼ-1]
-                C_psds[j] = PackedMatrix(nⱼ, c[i:i+dimⱼ-1], :LS)
+                C_psds[j] = SPMatrix(nⱼ, c[i:i+dimⱼ-1], :LS)
 
                 i += dimⱼ
             end
@@ -89,16 +95,16 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
     end
 end
 
-function Base.getproperty(d::SpecBMData, name::Symbol)
+function Base.getproperty(d::Data, name::Symbol)
     name === :num_vars && return length(getfield(d, :Ω))
     name === :num_conds && return size(getfield(d, :A), 1)
     name === :num_frees && return size(getfield(d, :a_free), 2)
     name === :num_psds && return length(getfield(d, :psds))
     return getfield(d, name)
 end
-Base.propertynames(::SpecBMData) = (:num_vars, :num_conds, :num_frees, :num_psds, fieldnames(SpecBMData)...)
+Base.propertynames(::Data) = (:num_vars, :num_conds, :num_frees, :num_psds, fieldnames(Data)...)
 
-struct SpecBMMastersolverData{R}
+struct MastersolverData{R}
     Xstar::Vector{R}
     sstar_psd::Vector{R}
     γstars::Vector{R}
@@ -107,11 +113,11 @@ struct SpecBMMastersolverData{R}
 
     xstar_free::VecView{R,true}
     xstar_psd::VecView{R,true}
-    Xstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
-    Sstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
-    Wstar_psds::Vector{PackedMatrix{R,VecView{R,true},:LS}}
+    Xstar_psds::Vector{SPMatrix{R,VecView{R,true},:LS}}
+    Sstar_psds::Vector{SPMatrix{R,VecView{R,true},:LS}}
+    Wstar_psds::Vector{SPMatrix{R,VecView{R,true},:LS}}
 
-    function SpecBMMastersolverData(data::SpecBMData{R}) where {R}
+    function MastersolverData(data::Data{R}) where {R}
         @inbounds begin
             num_psds = data.num_psds
             num_conds = data.num_conds
@@ -125,19 +131,19 @@ struct SpecBMMastersolverData{R}
             # views into existing data
             xstar_free = @view(Xstar[1:num_frees])
             xstar_psd = @view(Xstar[num_frees+1:end])
-            Xstar_psds = Vector{PackedMatrix{R,typeof(@view(Xstar[begin:end])),:LS}}(undef, num_psds)
-            Sstar_psds = Vector{PackedMatrix{R,typeof(@view(sstar_psd[begin:end])),:LS}}(undef, num_psds)
-            Wstar_psds = Vector{PackedMatrix{R,typeof(@view(wstar_psd[begin:end])),:LS}}(undef, num_psds)
+            Xstar_psds = Vector{SPMatrix{R,typeof(@view(Xstar[begin:end])),:LS}}(undef, num_psds)
+            Sstar_psds = Vector{SPMatrix{R,typeof(@view(sstar_psd[begin:end])),:LS}}(undef, num_psds)
+            Wstar_psds = Vector{SPMatrix{R,typeof(@view(wstar_psd[begin:end])),:LS}}(undef, num_psds)
 
             i_n = num_frees +1
             i_r = 1
             for (j, (nⱼ, rⱼ)) in enumerate(zip(data.psds, data.r))
                 dimⱼ = packedsize(nⱼ)
-                Xstar_psds[j] = PackedMatrix(nⱼ, @view(Xstar[i_n:i_n+dimⱼ-1]), :LS)
-                Wstar_psds[j] = PackedMatrix(nⱼ, @view(wstar_psd[i_n-num_frees:i_n-num_frees+dimⱼ-1]), :LS)
+                Xstar_psds[j] = SPMatrix(nⱼ, @view(Xstar[i_n:i_n+dimⱼ-1]), :LS)
+                Wstar_psds[j] = SPMatrix(nⱼ, @view(wstar_psd[i_n-num_frees:i_n-num_frees+dimⱼ-1]), :LS)
                 i_n += dimⱼ
                 rdimⱼ = packedsize(rⱼ)
-                Sstar_psds[j] = PackedMatrix(rⱼ, @view(sstar_psd[i_r:i_r+rdimⱼ-1]), :LS)
+                Sstar_psds[j] = SPMatrix(rⱼ, @view(sstar_psd[i_r:i_r+rdimⱼ-1]), :LS)
                 i_r += rdimⱼ
             end
         end
@@ -149,7 +155,7 @@ struct SpecBMMastersolverData{R}
     end
 end
 
-struct SpecBMCache{R,F,ACV,SS}
+struct Cache{R,F,ACV,SS}
     # data for the actual minimization
     m₁::Vector{R}
     m₂::Vector{R}
@@ -179,7 +185,7 @@ struct SpecBMCache{R,F,ACV,SS}
     # finally the subsolver
     subsolver::SS
 
-    function SpecBMCache(data::SpecBMData{R}, AAt, subsolver, ρ, r_current) where {R}
+    function Cache(data::Data{R}, AAt, subsolver, ρ, r_current) where {R}
         @inbounds begin
             rdims = packedsize.(data.r)
             Σr = sum(rdims, init=0)
@@ -227,7 +233,7 @@ struct SpecBMCache{R,F,ACV,SS}
                 # also need to find the minimum eigenvalue of Ωⱼ, for which we always call spevx!, and we always need the full
                 # eigendecomposition of Sⱼ with spevd!.
             end
-            ss = specbm_setup_primal_subsolver(Val(subsolver), num_psds, data.r, rdims, Σr, ρ)
+            ss = setup_primal_subsolver(Val(subsolver), num_psds, data.r, rdims, Σr, ρ)
         end
 
         return new{R,typeof(Q₃₃inv),typeof(twoAc),typeof(ss)}(
@@ -242,19 +248,19 @@ struct SpecBMCache{R,F,ACV,SS}
     end
 end
 
-gettmp(c::SpecBMCache, sizes...) = reshape(@view(c.tmp[1:*(sizes...)]), sizes...)
+gettmp(c::Cache, sizes...) = reshape(@view(c.tmp[1:*(sizes...)]), sizes...)
 
-function Base.getproperty(c::SpecBMCache, name::Symbol)
+function Base.getproperty(c::Cache, name::Symbol)
     name === :q₁ && return getfield(c, :m₁)
     name === :q₂s && return getfield(c, :m₂s)
     return getfield(c, name)
 end
-Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
+Base.propertynames(::Cache) = (:q₁, :q₂s, fieldnames(Cache)...)
 
-const specbm_warn_openblas = Ref{Bool}(true)
+const warn_openblas = Ref{Bool}(true)
 
 """
-    SpecBMResult
+    Result
 
 Contains the result of a SpecBM run
 
@@ -275,7 +281,7 @@ Contains the result of a SpecBM run
 - `rel_dual_infeas::R`
 - `rel_gap`
 """
-struct SpecBMResult{R}
+struct Result{R}
     status::Symbol
     objective::R
     x::Vector{R}
@@ -292,9 +298,11 @@ struct SpecBMResult{R}
 end
 
 @doc raw"""
-    specbm_primal(A, b, c; num_frees=missing, psds, ρ, r_past, r_current, ϵ=1e-4, β=0.1, maxiter=10000, maxnodescent=15,
-        adaptiveρ=false, α=1., adaptiveα=true, αmin=1e-5, αmax=1000., ml=0.001, mu=min(1.5β, 1), Nmin=10, verbose=false,
-        step=20, offset=0, At=transpose(A), AAt=A*At, subsolver=:Mosek, callback=(data, mastersolver_data)->nothing)
+    specbm_primal(A, b, c; [num_frees,] psds, ρ, r_past, r_current, ϵ=1e-4, β=0.1,
+        maxiter=10000, maxnodescent=15, adaptiveρ=false, α=1., adaptiveα=true, αmin=1e-5,
+        αmax=1000., ml=0.001, mu=min(1.5β, 1), Nmin=10, verbose=false, step=20, offset=0,
+        At=transpose(A), AAt=A*At, [subsolver,]
+        callback=(data, mastersolver_data)->nothing)
 
 Solves the minimization problem
 ```math
@@ -304,7 +312,8 @@ Solves the minimization problem
 where the vector ``x`` contains `num_frees` free variables, followed by the vectorized and scaled lower triangles of PSD
 matrices ``X_i`` that have side dimensions given in `psds`. _Scaled_ here means that the off-diagonal elements must be
 multiplied by ``\sqrt2`` when going from the matrix to its vectorization, so that scalar products are preserved. This
-corresponds to the `:LS` format of a [`PackedMatrix`](@ref).
+corresponds to the `:LS` format of an `SPMatrix` from the [`StandardPacked`](https://github.com/projekter/StandardPacked.jl)
+package.
 
 # Arguments
 ## Problem formulation
@@ -351,10 +360,10 @@ corresponds to the `:LS` format of a [`PackedMatrix`](@ref).
 - `verbose::Bool`: print the status every `step` iterations. Note that the first (incomplete) iteration will never be printed.
 - `step::Integer`: skip a number of iterations and only print every `step`th.
 ## Advanced solver interaction
-- `callback::Function`: a callback that is called with the last problem data (type `SpecBMData`) and the last mastersolver data
-  (type `SpecBMMastersolverData`) before the mastersolver is called anew. Changes to the structures may be made.
+- `callback::Function`: a callback that is called with the last problem data (type `Data`) and the last mastersolver data (type
+  `MastersolverData`) before the mastersolver is called anew. Changes to the structures may be made.
 
-See also [`SpecBMResult`](@ref).
+See also [`Result`](@ref).
 """
 function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R};
     num_frees::Union{Missing,Integer}=missing, psds::AbstractVector{<:Integer},
@@ -364,61 +373,61 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     ml::Real=R(0.001), mr::Real=min(R(1.5) * β, 1), Nmin::Integer=10,
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
-    subsolver::Symbol=:Mosek, callback::Function=(data, mastersolver_data) -> nothing) where {R<:AbstractFloat}
-    if specbm_warn_openblas[] && contains(BLAS.get_config().loaded_libs[1].libname, "openblas")
+    subsolver::Symbol=default_subsolver_method(), callback::Function=(data, mastersolver_data) -> nothing) where {R<:AbstractFloat}
+    if warn_openblas[] && contains(BLAS.get_config().loaded_libs[1].libname, "openblas")
         @warn("It is recommended to use an alternative to OpenBLAS for SpecBM, which appears to not use the CPU very efficiently (try 'using MKL').")
-        specbm_warn_openblas[] = false
+        warn_openblas[] = false
     end
     #region Input validation
-    subsolver ∈ (:Mosek, :Hypatia) || error("Unsupported subsolver ", subsolver)
+    subsolver ∈ specbm_methods || throw(ArgumentError("Unsupported subsolver $subsolver"))
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
     # We do not store the matrices A directly, but instead interpret all PSD variables by their scaled vectorized upper
     # triangle (contrary to the reference implementation, which uses vectorized full storage). Therefore, A contains the
     # (row-wise) stacked vectorized matrices with off-diagonals scaled by √2 and C is also a vector similarly scaled. All free
     # variables come before the PSD variables.
     num_conds, num_vars = size(A)
-    (num_conds == length(b) && num_vars == length(c)) || error("Incompatible dimensions")
-    all(j -> j > 0, psds) || error("PSD dimensions must be positive")
+    (num_conds == length(b) && num_vars == length(c)) || throw(ArgumentError("Incompatible dimensions"))
+    all(j -> j > 0, psds) || throw(ArgumentError("PSD dimensions must be positive"))
     if ismissing(num_frees)
         num_frees = num_vars - sum(packedsize, psds, init=0)
-        num_frees ≥ 0 || error("Incompatible dimensions")
+        num_frees ≥ 0 || throw(ArgumentError("Incompatible dimensions"))
     elseif num_frees < 0
-        error("Number of free variables must be nonnegative")
+        throw(ArgumentError("Number of free variables must be nonnegative"))
     elseif sum(packedsize, psds, init=0) + num_frees != num_vars
-        error("Incompatible dimensions")
+        throw(ArgumentError("Incompatible dimensions"))
     end
     num_psds = length(psds)
     if isa(r_current, Integer)
-        r_current ≥ 0 || error("r_current must be positive")
+        r_current ≥ 0 || throw(ArgumentError("r_current must be positive"))
         r_current = min.(r_current, psds)
     elseif length(r_current) != num_psds
-        error("Number of r_current must be the same as number of psd constraints")
+        throw(ArgumentError("Number of r_current must be the same as number of psd constraints"))
     else
-        all(x -> x ≥ 1, r_current) || error("r_current must be positive")
-        all(splat(≤), zip(r_current, psds)) || error("No r_current must not exceed its associated dimension")
+        all(x -> x ≥ 1, r_current) || throw(ArgumentError("r_current must be positive"))
+        all(splat(≤), zip(r_current, psds)) || throw(ArgumentError("No r_current must not exceed its associated dimension"))
     end
     if isa(r_past, Integer)
-        r_past ≥ 0 || error("r_past must be nonnegative")
+        r_past ≥ 0 || throw(ArgumentError("r_past must be nonnegative"))
         r_past = min.(fill(r_past, num_psds), psds .- r_current) # which is guaranteed to be nonnegative
     elseif length(r_past) != num_psds
-        error("Number of r_past must be the same as number of psd constraints")
+        throw(ArgumentError("Number of r_past must be the same as number of psd constraints"))
     else
-        all(x -> x ≥ 0, r_past) || error("r_past must be nonnegative")
+        all(x -> x ≥ 0, r_past) || throw(ArgumentError("r_past must be nonnegative"))
         all((r_currentⱼ, r_pastⱼ, dimⱼ) -> r_currentⱼ + r_pastⱼ ≤ dimⱼ) ||
-            error("r_past + r_current must not exceed the associated dimension")
+            throw(ArgumentError("r_past + r_current must not exceed the associated dimension"))
     end
     # Parameters rₚ ≥ 0, r_c ≥ 1, α > 0, β ∈ (0, 1), ϵ ≥ 0, tₘₐₓ ≥ 1
-    α > 0 || error("α must be positive")
-    0 < β < 1 || error("β must be in (0, 1)")
-    ϵ ≥ 0 || error("ϵ must be nonnegative")
-    maxiter > 1 || error("maxiter must be larger than 1")
-    maxnodescent ≥ 0 || error("maxnodescent must be nonnegative")
+    α > 0 || throw(ArgumentError("α must be positive"))
+    0 < β < 1 || throw(ArgumentError("β must be in (0, 1)"))
+    ϵ ≥ 0 || throw(ArgumentError("ϵ must be nonnegative"))
+    maxiter > 1 || throw(ArgumentError("maxiter must be larger than 1"))
+    maxnodescent ≥ 0 || throw(ArgumentError("maxnodescent must be nonnegative"))
     # Adaptive parameters mᵣ > β, 0 < mₗ < β
     if adaptiveα
-        mr > β || error("mr must be larger than β")
-        0 < ml < β || error("ml must be in (0, β)")
-        0 < Nmin || error("Nmin must be positive")
-        iszero(maxnodescent) || maxnodescent ≥ Nmin || error("maxnodescend must not be smaller than Nmin")
+        mr > β || throw(ArgumentError("mr must be larger than β"))
+        0 < ml < β || throw(ArgumentError("ml must be in (0, β)"))
+        0 < Nmin || throw(ArgumentError("Nmin must be positive"))
+        iszero(maxnodescent) || maxnodescent ≥ Nmin || throw(ArgumentError("maxnodescend must not be smaller than Nmin"))
         α = inv(R(2))
     end
     if ismissing(At)
@@ -427,10 +436,10 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     if ismissing(AAt)
         AAt = A * At
     end
-    step ≥ 1 || error("step must be positive")
+    step ≥ 1 || throw(ArgumentError("step must be positive"))
     #endregion
 
-    @verbose_info("SpecBM Primal Solver with parameters ρ = $ρ, r_past = $r_past, r_current = $r_current, ϵ = $ϵ, β = $β, $α ",
+    @verbose_info("SpecBM Primal Solver with parameters ρ = $ρ, r_past = $r_past, r_current = $r_current, ϵ = $ϵ, β = $β, α ",
         adaptiveα ? "∈ [$αmin, $αmax], ml = $ml, mr = $mr" : "= $α", ", subsolver = $subsolver")
     @verbose_info("Iteration | Primal objective | Primal infeas | Dual infeas | Duality gap | Rel. accuracy | Rel. primal inf. | Rel. dual inf. |    Rel. gap | Descent step | Consecutive null steps",
         adaptiveρ ? " | Dual trace" : "")
@@ -438,9 +447,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     invnormbplus1 = inv(norm(b) + one(R))
     invnormcplus1 = inv(norm(c) + one(R))
 
-    data = SpecBMData(num_vars, num_frees, psds, Int.(r_past .+ r_current), ϵ, A, At, b, c)
-    mastersolver = SpecBMMastersolverData(data)
-    cache = SpecBMCache(data, AAt, subsolver, ρ, r_current)
+    data = Data(num_vars, num_frees, psds, Int.(r_past .+ r_current), ϵ, A, At, b, c)
+    mastersolver = MastersolverData(data)
+    cache = Cache(data, AAt, subsolver, ρ, r_current)
 
     # We need some additional variables for the adaptive strategy, following the naming in the reference implementation
     # (in the paper, the number of consecutive null steps N_c is used instead).
@@ -474,7 +483,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             # we need the eigendecomposition for later in every case
             for (j, ((ev, work, iwork, ifail, _), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
                 if ==(size(ev.vectors)...)
-                    eigen!(Xstarⱼ, ev.values, ev.vectors, work)
+                    eigen!(Xstarⱼ, ev.values, ev.vectors, work, iwork)
                 else
                     @inbounds eigen!(Xstarⱼ, 1:r_current[j], ev.values, ev.vectors, work, iwork, ifail)
                 end
@@ -486,11 +495,10 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             # where (20): F(X) := ⟨C, X⟩ - ρ min(λₘᵢₙ(X), 0)
             if has_descended || changed_ρ
                 Σ = zero(R)
-                for ((ev, work, iwork, ifail, _), Ωⱼ) in zip(cache.eigens, data.Ω_psds)
-                    Ωcopy = PackedMatrix(LinearAlgebra.checksquare(Ωⱼ), gettmp(cache, length(Ωⱼ)),
-                        PackedMatrices.packed_format(Ωⱼ))
+                for ((ev, work, iwork, _, _), Ωⱼ) in zip(cache.eigens, data.Ω_psds)
+                    Ωcopy = SPMatrix(LinearAlgebra.checksquare(Ωⱼ), gettmp(cache, length(Ωⱼ)), packed_format(Ωⱼ))
                     copyto!(Ωcopy, Ωⱼ)
-                    Σ += min(eigmin!(Ωcopy, ev.values, ev.vectors, work, iwork, ifail), zero(R))
+                    Σ += min(eigmin!(Ωcopy, ev.values, work, iwork), zero(R))
                 end
                 FΩ = dot(data.c, data.Ω) - ρ * Σ
                 # else we do not need to recalculate this, it did not change from the previous iteration
@@ -498,9 +506,8 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             cXstar = dot(data.c, mastersolver.Xstar)
             Fmodel = cXstar - dot(mastersolver.wstar_psd, mastersolver.xstar_psd)
             Σ = zero(R)
-            for (j, ((ev, work, iwork, ifail), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
-                Xcopy = PackedMatrix(LinearAlgebra.checksquare(Xstarⱼ), gettmp(cache, length(Xstarⱼ)),
-                    PackedMatrices.packed_format(Xstarⱼ))
+            for (j, ((ev, work, iwork, ifail, _), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
+                Xcopy = SPMatrix(LinearAlgebra.checksquare(Xstarⱼ), gettmp(cache, length(Xstarⱼ)), packed_format(Xstarⱼ))
                 copyto!(Xcopy, Xstarⱼ)
                 if ==(size(ev.vectors)...)
                     eigen!(Xcopy, ev.values, ev.vectors, work, iwork)
@@ -558,7 +565,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 copyto!(Pⱼ, V.vectors)
             else
                 γstarⱼ = max(mastersolver.γstars[j], zero(R)) # prevent numerical issues
-                Sstareig = eigen!(mastersolver.Sstar_psds[j], @view(evⱼ[1].values[1:rⱼ]), evⱼ[5][:, 1:rⱼ], evⱼ[2], evⱼ[4])
+                Sstareig = @views eigen!(mastersolver.Sstar_psds[j], evⱼ[1].values[1:rⱼ], evⱼ[5][:, 1:rⱼ], evⱼ[2], evⱼ[3])
                 Q₁ = @view(Sstareig.vectors[:, end-r_pastⱼ+1:end]) # sorted in ascending order; we need the largest rₚ, but
                                                                    # the order doesn't really matter
                 Q₂ = @view(Sstareig.vectors[:, 1:end-r_pastⱼ])
@@ -566,7 +573,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 # Wⱼ = (γstar * Wⱼ + Pⱼ * Q₂ * Diagonal(Σ₂) * Q₂' * Pⱼ') / (γstar + tr(Σ₂))
                 den = γstarⱼ + sum(v -> max(v, zero(R)), Σ₂) # also prevent numerical issues here
                 #if den > sqrt(eps(R))
-                    newpart = PackedMatrix(rⱼ, fill!(gettmp(cache, packedsize(rⱼ)), zero(R)), :L)
+                    newpart = SPMatrix(rⱼ, fill!(gettmp(cache, packedsize(rⱼ)), zero(R)), :L)
                     for (factor, newcol) in zip(Σ₂, eachcol(Q₂))
                         if factor > zero(R) # just to be sure
                             spr!(factor, newcol, newpart)
@@ -598,14 +605,14 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             trdual = zero(R)
             # Adapt the parameter ρ if necessary.
             for (aⱼ, Cⱼ) in zip(data.a_psds, data.C_psds)
-                for i in PackedDiagonalIterator(Cⱼ)
+                for i in SPDiagonalIterator(Cⱼ)
                     trdual += Cⱼ[i] - dot(@view(aⱼ[:, i]), mastersolver.ystar)
                 end
             end
-            changed_ρ = trdual > R(1.1) * ρ
+            changed_ρ = trdual > R(11//10) * ρ
             if changed_ρ
                 ρ *= R(2)
-                specbm_adjust_penalty_subsolver!(cache.subsolver, ρ)
+                adjust_penalty_subsolver!(cache.subsolver, ρ)
             end
         end
 
@@ -627,25 +634,24 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     # 18: end for
     end
 
-    specbm_finalize_primal_subsolver!(cache.subsolver)
+    finalize_primal_subsolver!(cache.subsolver)
 
-    return SpecBMResult(status, FΩ + offset, data.Ω, mastersolver.ystar, t, quality, primal_infeas, dual_infeas, gap,
+    return Result(status, FΩ + offset, data.Ω, mastersolver.ystar, t, quality, primal_infeas, dual_infeas, gap,
         rel_accuracy, rel_primal_infeas, rel_dual_infeas, rel_gap)
 end
 
-function specbm_setup_primal_subsolver end
-function specbm_adjust_penalty_subsolver! end
-function specbm_finalize_primal_subsolver! end
-function specbm_primal_subsolve! end
+function setup_primal_subsolver end
+function adjust_penalty_subsolver! end
+function finalize_primal_subsolver! end
+function primal_subsolve! end
 
-if isdefined(Mosek, :appendafes)
-    if VersionNumber(Mosek.getversion()) ≥ v"10.1.11"
-        include("SpecBMMosek.jl")
-    else
-        @warn "The SpecBM method Mosek is not available: upgrade your Mosek distribution to at least version 10.1.11."
-    end
+const specbm_methods = Symbol[]
+
+function default_subsolver_method()
+    isempty(specbm_methods) &&
+        error("No subsolver method is available. Load a solver package that provides such a method (e.g., Mosek)")
+    @inbounds return specbm_methods[begin]
 end
-include("SpecBMHypatia.jl")
 
 if VERSION < v"1.10-"
     # identical to the implementation in SparseArrays, we just extend the allowed type for A, as this is already working
@@ -672,8 +678,8 @@ if VERSION < v"1.10-"
     end
 end
 
-@inline function direction_qp_primal_free!(mastersolver::SpecBMMastersolverData, data::SpecBMData, feasible::Bool, α::R,
-    cache::SpecBMCache) where {R}
+@inline function direction_qp_primal_free!(mastersolver::MastersolverData, data::Data, feasible::Bool, α::R, cache::Cache) where {R}
+    sqrt2 = sqrt(R(2))
     invα = inv(α)
     # We need to (34): maximize dot(m, v) - dot(v, M, v) + const.
     #                      s.t. v = [γ; svec(S)]
@@ -761,7 +767,7 @@ end
     mul!(cache.M₂₂, transpose(cache.Q₃₂), tmpm, -one(R), false)
     cache.Q₂₂ .+= one(R) # Q₂₂ is a diagonal view into M₂₂
 
-    specbm_primal_subsolve!(mastersolver, cache)
+    primal_subsolve!(mastersolver, cache)
 
     # Reconstruct y = Q₃₃⁻¹(q₃/2 - Q₃₁ γ - Q₃₂ svec(S))
     # Note that at this stage, we have already saved the original value of q₃ in y
@@ -782,4 +788,6 @@ end
 
     gap = abs(dot(data.b, mastersolver.ystar) - dot(data.c, mastersolver.Xstar))
     return dfeasible, dfeasible_free, dfeasible_psd, gap
+end
+
 end

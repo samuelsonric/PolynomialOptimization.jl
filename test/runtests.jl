@@ -50,7 +50,4 @@ else
             end
         end
     end
-    @testset "Packed matrices" begin
-        include("./PackedMatrices.jl")
-    end
 end
