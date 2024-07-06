@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    791551,      14299]
-NotebookOptionsPosition[    785631,      14187]
-NotebookOutlinePosition[    786064,      14204]
-CellTagsIndexPosition[    786021,      14201]
+NotebookDataLength[    791544,      14299]
+NotebookOptionsPosition[    785624,      14187]
+NotebookOutlinePosition[    786057,      14204]
+CellTagsIndexPosition[    786014,      14201]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -12484,8 +12484,8 @@ false}, indvals::AbstractIndvals{BigInt,BigFloat})\n    @test state.lastcall \
 false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...) =\n    \
 \>\"", "<>", "interp", "<>", 
               "\"\<add_constr_quadratic_worker!(state, indvals...)\n\n\
-function Solver.add_constr_quadratic_worker!(state::SolverSetup{false,true,\
-false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)\n    @test \
+function add_constr_quadratic_worker!(state::SolverSetup{false,true,false,\
+false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)\n    @test \
 state.lastcall === :none\n    state.lastcall = :quadratic\n    if \>\"", "<>",
                "\[IndentingNewLine]", 
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
@@ -14185,7 +14185,7 @@ Cell[BoxData[
   "In[105]:=",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 },
-WindowSize->{1428, 831.75},
+WindowSize->{1428, 771.75},
 WindowMargins->{{0, Automatic}, {Automatic, 0}},
 Magnification:>1. Inherited,
 FrontEndVersion->"14.0 for Microsoft Windows (64-bit) (December 12, 2023)",
@@ -14288,18 +14288,18 @@ Cell[717662, 12291, 3771, 102, 235, "Input",ExpressionUUID->"ccce65f6-3b66-9142-
 }, Closed]],
 Cell[CellGroupData[{
 Cell[721470, 12398, 89, 0, 38, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
-Cell[721562, 12400, 20483, 414, 3356, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
+Cell[721562, 12400, 20476, 414, 3356, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
  InitializationCell->True],
-Cell[742048, 12816, 4791, 137, 274, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
+Cell[742041, 12816, 4791, 137, 274, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
  InitializationCell->True],
-Cell[746842, 12955, 2280, 60, 197, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
+Cell[746835, 12955, 2280, 60, 197, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
  InitializationCell->True]
 }, Closed]]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[749171, 13021, 78, 0, 67, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
-Cell[749252, 13023, 36124, 1153, 1650, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
-Cell[785379, 14178, 236, 6, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+Cell[749164, 13021, 78, 0, 67, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
+Cell[749245, 13023, 36124, 1153, 1650, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+Cell[785372, 14178, 236, 6, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 }
 ]
