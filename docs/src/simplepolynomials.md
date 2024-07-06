@@ -50,7 +50,6 @@ exponents_to_index
 exponents_from_index(::AbstractExponents{<:Any,I}, ::I) where {I<:Integer}
 exponents_sum
 exponents_product
-Base.union(::AbstractExponents{N}, ::AbstractExponents{N}) where {N}
 ```
 Note that `exponents_from_index` returns a lazy implementation of an `AbstractVector{Int}`; if the same exponents must be
 accessed multple times, it might be beneficial to `collect` the result or copy it to a pre-allocated vector.
