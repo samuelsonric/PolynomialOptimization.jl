@@ -1,0 +1,189 @@
+"""
+    MomentVector(relaxation::AbstractRelaxation, values::AbstractVector{R} where {R<:Real})
+
+`MomentVector` is a representation of the result of a polynomial optimization. It contains all the values of the moments
+that were present in the optimization problem. This vector can be indexed in two ways:
+- linearly, which will just transparently yield what linearly indexing `values` would yield
+- with a monomial (or multiple monomials, which means that the product of all the monomials is to be considered), which will
+  yield the value that is associated with this monomial; if the problem was complex-valued, this will be a `Complex{R}`.
+While `MomentVector` implements the `AbstractVector` interface, it can also be iterated, giving `Pair`s that assign values to
+monomials.
+
+This type is not exported.
+"""
+struct MomentVector{R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R},E<:ExponentsAll} <: AbstractVector{V}
+    e::E
+    values::D
+
+    function MomentVector(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, exponents::E, values::D) where {Nr,Nc,R,D<:AbstractVector{R},N,E<:ExponentsAll{N}}
+        N == Nr + 2Nc || throw(MethodError(MomentVector, (r, exponents, values)))
+        new{R,iszero(Nc) ? R : Complex{R},Nr,Nc,D,E}(exponents, values)
+    end
+end
+
+MomentVector(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}, ::Missing) where {Nr,Nc,I<:Integer} =
+    MomentVector(r, ExponentsAll{Nr+2Nc,I}(), Float64[]) # this is the fallback if no data was provided by the solver
+
+Base.length(d::MomentVector) = length(d.values)
+Base.size(d::MomentVector) = (length(d.values),)
+Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    monomial_index(d.e, keys...) ≤ length(d.values)
+Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc,<:AbstractSparseVector},
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    insorted(monomial_index(d.e, keys...), rowvals(d.values))
+Base.getindex(d::MomentVector{<:Any,V,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+    @inline get(d, () -> V(NaN), keys...)
+Base.@propagate_inbounds Base.getindex(d::MomentVector, i::Integer) = d.values[i]
+Base.@propagate_inbounds Base.setindex!(d::MomentVector, value, i::Integer) = setindex!(d.values, value, i)
+function Base.get(d::MomentVector{R,R,Nr,0} where {R}, not_found,
+    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    idx = monomial_index(d.e, keys...)
+    if idx ≤ length(d.values)
+        val = @inbounds d.values[idx]
+        isnan(val) || return val
+    end
+    return not_found()
+end
+function Base.get(d::MomentVector{R,R,Nr,0,<:AbstractSparseVector{R}} where {R}, not_found,
+    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    idx = monomial_index(d.e, keys...)
+    ridx = searchsorted(rowvals(d.values), idx)
+    isempty(ridx) && return not_found()
+    @inbounds return nonzeros(d.values)[ridx[begin]]
+end
+function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    idx = monomial_index(d.e, keys...)
+    idx > length(d.values) && return not_found()
+    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
+    if idx_c == idx
+        val = @inbounds d.values[idx]
+        return isnan(val) ? not_found() : Complex{R}(val)
+    else
+        @assert(idx_c ≤ length(d.values))
+        idx_re, idx_im = minmax(idx, idx_c)
+        @inbounds val_re, val_im = d.values[idx_re], d.values[idx_im]
+        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_im : -val_im)
+    end
+end
+function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}}, not_found,
+    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    rv, nz = rowvals(d.values), nonzeros(d.values)
+    idx = monomial_index(d.e, keys...)
+    ridx = searchsorted(rv, idx)
+    isempty(ridx) && return not_found()
+    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
+    if idx_c == idx
+        val = @inbounds nz[ridx[begin]]
+        return isnan(val) ? not_found() : Complex{R}(val)
+    else
+        ridx_c = searchsorted(rv, idx_c)
+        @assert(!isempty(ridx_c))
+        @inbounds idx_re, idx_im = minmax(ridx[begin], ridx_c[begin]) # rowvals is ascending, so this is transitive
+        @inbounds val_re, val_im = nz[idx_re], nz[idx_im]
+        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_re : -val_re)
+    end
+end
+function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVector{R},<:ExponentsAll{<:Any,I}},
+    (i, rem, deg, degIncAt)=(1, length(d.values), 0, 2)) where {R,Nr,Nc,I<:Integer}
+    while true
+        iszero(rem) && return nothing
+        rem -= 1
+        # Determining the degree for every single iteration anew is quite wasteful. We can make things simpler by reusing the
+        # degree and storing the next index at which it is incremented.
+        if i == degIncAt
+            deg += 1
+            degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
+        end
+        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, SimplePolynomials.unsafe_cast(I, i), deg)
+        iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
+        cmon = conj(mon)
+        cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
+        mon.index < cmon.index &&
+            @inbounds return Pair(mon, Complex(d.values[i], d.values[cmon.index])), (i +1, rem, deg, degIncAt)
+        # skip over the conjugates
+    end
+end
+function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},<:ExponentsAll{<:Any,I}}) where {R,Nr,Nc,I<:Integer}
+    rv = rowvals(d.values)
+    isempty(rv) && return nothing
+    idx = 1
+    rem = length(rv)
+    deg = @inbounds degree_from_index(unsafe, d.e, rv[begin])
+    degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
+    return iterate(d, (idx, rem, deg, degIncAt))
+end
+function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},<:ExponentsAll{<:Any,I}},
+    (idx, rem, deg, degIncAt)) where {R,Nr,Nc,I<:Integer}
+    rv, nz = rowvals(d.values), nonzeros(d.values)
+    while true
+        iszero(rem) && return nothing
+        rem -= 1
+        i = @inbounds rv[idx]
+        # Determining the degree for every single iteration anew is quite wasteful. We can make things simpler by reusing the
+        # degree and storing the next index at which it is incremented. Let's assume that we probably don't skip too many
+        # complete degrees here, so that an incremental approach is the best.
+        while i ≥ degIncAt
+            deg += 1
+            degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
+        end
+        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, i, deg)
+        iszero(Nc) && @inbounds return Pair(mon, nz[idx]), (idx +1, rem, deg, degIncAt)
+        cmon = conj(mon)
+        cmon.index == mon.index && @inbounds return Pair(mon, Complex(nz[idx])), (idx +1, rem, deg, degIncAt)
+        if mon.index < cmon.index
+            cidx = searchsorted(rv, cmon.index)
+            @assert(!isempty(cidx))
+            @inbounds return Pair(mon, Complex(nz[idx], nz[cidx[begin]])), (idx +1, rem, deg, degIncAt)
+        end
+        # skip over the conjugates
+    end
+end
+
+"""
+    Result
+
+Result of a polynomial optimization, returned by calling [`poly_optimize`](@ref) on an [`AbstractRelaxation`](@ref).
+A `Result` struct `r` contains information about
+- the relaxation employed for the optimization (`r.relaxation`)
+- the optimized problem (available via [`poly_problem`](@ref poly_problem(::Result)))
+- the used method (`r.method`)
+- the time required for the optimization in seconds (`r.time`)
+- the status of the solver (`r.status`), which also depends on the solver type
+- the returned primal value of the solver (`r.objective`), which, if the status was successful, is a lower bound to the true
+  minimum
+- the moment information in vector form (`r.moments`), which allows to construct a [moment matrix](@ref moment_matrix),
+  extract solutions ([`poly_all_solutions`](@ref) or [`poly_solutions`](@ref)), and an
+  [optimality certificate](@ref optimality_certificate).
+
+This type is not exported.
+"""
+struct Result{R<:AbstractRelaxation,V,M<:MomentVector{<:Any,V}}
+    relaxation::R
+    method::Symbol
+    time::Float64
+    status
+    objective::Float64
+    moments::M
+end
+
+function Base.show(io::IO, ::MIME"text/plain", x::Result)
+    println(io, "Polynomial optimization result")
+    println(io, "Relaxation method: ", typeof(x.relaxation).name.name)
+    println(io, "Used optimization method: ", x.method)
+    println(io, "Status of the solver: ", x.status)
+    println(io, "Lower bound to optimum (in case of good status): ", x.objective)
+    println(io, "Time required for optimization: ",
+        iszero(x.time) ? "less than one second" :
+        (isone(x.time) ? "one second" : "$(x.time) seconds")
+    )
+end
+
+Base.eltype(::Type{<:(Result{<:AbstractRelaxation,V})}) where {V} = V
+
+"""
+    poly_problem(r::Result)
+
+Returns the problem that was associated with the optimization result.
+"""
+poly_problem(r::Result) = poly_problem(r.relaxation)

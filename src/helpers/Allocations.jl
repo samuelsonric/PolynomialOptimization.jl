@@ -82,7 +82,7 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the difference in the number of bytes
 allocated after vs. before evaluation of the expression (which is not guaranteed to be the peak, but allows to capture
-allocations done in third-party libraries that don't use Julia's GC, contrary to [`@allocated`](@ref)).
+allocations done in third-party libraries that don't use Julia's GC, contrary to `@allocated`).
 In order to provide consistent results, Julia's GC is disabled while the expression is evaluated.
 Note that on *nix systems, the value is only accurate up to the kibibyte.
 """

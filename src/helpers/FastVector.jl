@@ -1,3 +1,8 @@
+module FastVector
+
+export FastVec, prepare_push!, unsafe_push!, unsafe_append!, unsafe_prepend!, finish!
+using ..PolynomialOptimization: @assert, resizable_array
+
 # Julia exploits the sizehint!/push! combination very poorly (https://github.com/JuliaLang/julia/issues/24909). Here, we define
 # a (limited) fast vector, which rectifies this issue. It is similar to the PushVectors.jl package, but allows for even more
 # speed by allowing to drop the bounds check on push!. It also uses Julia's precise algorithm to determine the next size when
@@ -17,7 +22,7 @@ mutable struct FastVec{V} <: AbstractVector{V}
 
     function FastVec{V}(::UndefInitializer, n::Integer; buffer::Integer=n) where {V}
         buffer ≥ n || error("The buffer must not be smaller than the number of elements")
-        new{V}(Vector{V}(undef, buffer), n)
+        new{V}(isbitstype(V) ? resizable_array(V, buffer) : Vector{V}(undef, buffer), n)
     end
 end
 
@@ -29,6 +34,8 @@ Shorthand to create an empty FastVec with a certain buffer size.
 FastVec{V}(; buffer::Integer=0) where {V} = FastVec{V}(undef, 0; buffer)
 
 Base.size(v::FastVec) = (v.len,)
+Base.strides(v::FastVec) = strides(v.data)
+Base.elsize(v::FastVec) = Base.elsize(v.data)
 
 Base.@propagate_inbounds function Base.getindex(v::FastVec, i::Int)
     @boundscheck checkbounds(v, i)
@@ -37,9 +44,9 @@ end
 
 Base.IndexStyle(::FastVec) = IndexLinear()
 
-Base.@propagate_inbounds function Base.setindex!(v::FastVec{V}, el::V, i::Int) where {V}
+Base.@propagate_inbounds function Base.setindex!(v::FastVec{V}, el, i::Int) where {V}
     @boundscheck checkbounds(v, i)
-    @inbounds return v.data[i] = el
+    @inbounds return v.data[i] = convert(V, el)
 end
 
 Base.length(v::FastVec) = v.len
@@ -104,6 +111,15 @@ it will lead to memory corruption. Call [`push!`](@ref) instead if you cannot gu
     v.len += 1
     @assert(length(v.data) ≥ v.len)
     @inbounds v.data[v.len] = elV
+    return v
+end
+
+@inline function unsafe_push!(v::FastVec{V}, els...) where {V}
+    # we don't need calls to copyto! here - the size of els is completely known and probably quite small, so let's inline
+    @assert(length(v.data) > v.len + length(els))
+    for el in els
+        @inbounds v.data[v.len += 1] = convert(V, el)
+    end
     return v
 end
 
@@ -220,6 +236,52 @@ Base.similar(::FastVec{V}, ::Type{S}, len::Integer; buffer::Integer=overallocati
 
 Base.unsafe_convert(::Type{Ptr{V}}, v::FastVec{V}) where {V} = Base.unsafe_convert(Ptr{V}, v.data)
 
+"""
+    copyto!(dest::FastVec, doffs::Integer, src::FastVec, soffs::Integer, n::Integer)
+    copyto!(dest::Array, doffs::Integer, src::FastVec, soffs::Integer, n::Integer)
+    copyto!(dest::FastVec, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+
+Implements the standard `copyto!` operation between `FastVec`s and also mixed with source or destination as an array.
+"""
+@inline function Base.copyto!(dest::FastVec, doffs::Integer, src::FastVec, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    n > 0 || Base._throw_argerror()
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    unsafe_copyto!(dest.data, doffs, src.data, soffs, n)
+    return dest
+end
+
+@inline function Base.copyto!(dest::Array, doffs::Integer, src::FastVec, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    n > 0 || Base._throw_argerror()
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    unsafe_copyto!(dest, doffs, src.data, soffs, n)
+    return dest
+end
+
+@inline function Base.copyto!(dest::FastVec, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    n > 0 || Base._throw_argerror()
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    unsafe_copyto!(dest.data, doffs, src, soffs, n)
+    return dest
+end
+
+"""
+    resize!(v::FastVec, n::Integer)
+
+Ensures that the internal buffer can hold at least `n` items (meaning that larger buffers will not be shrunk, but smaller ones
+will be increased to exactly `n`) and sets the length of the vector to `n`.
+"""
+function Base.resize!(v::FastVec, n::Integer)
+    n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
+    v.len = n
+    return v
+end
+
 # inspired by KristofferC's PushVector
 """
     finish!(v::FastVec)
@@ -248,6 +310,10 @@ finish!(v::FastVec) = resize!(v.data, v.len)
 #     maxsize += ((size_t)1 << (exp2 * 7 / 8)) * 4 + maxsize / 8;
 #     return maxsize;
 # }
-overallocation(maxsize) = maxsize < 8 ? 8 : let exp2 = 8sizeof(maxsize) - leading_zeros(maxsize)
-    return maxsize + 4(1 << (7exp2 ÷ 8)) + maxsize ÷ 8
+function overallocation(maxsize::I) where {I<:Integer}
+    maxsize < I(8) && return I(8)
+    exp2 = I(8) * sizeof(maxsize) - leading_zeros(maxsize)
+    return maxsize + I(4(1 << (7exp2 ÷ 8)) + maxsize ÷ 8)
+end
+
 end
