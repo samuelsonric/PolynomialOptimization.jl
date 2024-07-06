@@ -105,10 +105,10 @@ function momenttest(instance, grouping, constraint, type)
     return
 end
 
-Solver.add_constr_nonnegative!(state::SolverSetup{true,false,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}) =
+Solver.add_constr_nonnegative!(state::SolverSetup{true,false,false,false,false}, indvals::Indvals{BigInt,BigFloat}) =
     @interpret add_constr_nonnegative_worker!(state, indvals)
 
-function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat})
+function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,false,false}, indvals::Indvals{BigInt,BigFloat})
     @test state.lastcall === :none
     state.lastcall = :linear
     if state.instance == 1
@@ -140,117 +140,203 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
     end
 end
 
-Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...) =
+Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}...) =
     @interpret add_constr_quadratic_worker!(state, indvals...)
 
-function add_constr_quadratic_worker!(state::SolverSetup{false,true,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)
+function add_constr_quadratic_worker!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}...)
     @test state.lastcall === :none
     state.lastcall = :quadratic
     if state.instance == 13
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[23048], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[169998], BigFloat[17], true)
-        @test checkequality(indvals[3], BigInt[68265], BigFloat[24.041630560342618])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[23048], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[169998], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[68265], BigFloat[24.041630560342618])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 15
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[21922], BigFloat[24], true)
-        @test checkequality(indvals[2], BigInt[151422], BigFloat[24], true)
-        @test checkequality(indvals[3], BigInt[63204], BigFloat[33.941125496954285])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[21922], BigFloat[24], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[151422], BigFloat[24], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[63204], BigFloat[33.941125496954285])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 17
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[6223,21928], BigFloat[2,8], true)
-        @test checkequality(indvals[2], BigInt[63728,151428], BigFloat[2,8], true)
-        @test checkequality(indvals[3], BigInt[22426,63210], BigFloat[2.8284271247461903,11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[6223,21928], BigFloat[2,8], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[63728,151428], BigFloat[2,8], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[22426,63210], BigFloat[2.8284271247461903,11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 19
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[5815], BigFloat[6], true)
-        @test checkequality(indvals[2], BigInt[55255], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[20441], BigFloat[8.485281374238571])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[5815], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[55255], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20441], BigFloat[8.485281374238571])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 21
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[21232], BigFloat[14], true)
-        @test checkequality(indvals[2], BigInt[150102], BigFloat[14], true)
-        @test checkequality(indvals[3], BigInt[62324], BigFloat[19.79898987322333])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[21232], BigFloat[14], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[150102], BigFloat[14], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[62324], BigFloat[19.79898987322333])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 23
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], true)
-        @test checkequality(indvals[2], BigInt[55255,55256,63728,92459,150100,151428], BigFloat[8,16,3,4,14,5], true)
-        @test checkequality(indvals[3], BigInt[20441,20442,22426,36378,62322,63210], BigFloat[11.313708498984761,22.627416997969522,4.242640687119286,5.656854249492381,19.79898987322333,7.0710678118654755])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[55255,55256,63728,92459,150100,151428], BigFloat[8,16,3,4,14,5], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20441,20442,22426,36378,62322,63210], BigFloat[11.313708498984761,22.627416997969522,4.242640687119286,5.656854249492381,19.79898987322333,7.0710678118654755])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 25
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[20830], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[23048], BigFloat[17], true)
-        @test checkequality(indvals[3], BigInt[22409], BigFloat[24.041630560342618])
-        @test checkequality(indvals[4], BigInt[22410], BigFloat[-24.041630560342618])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[20830], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[23048], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[22409], BigFloat[24.041630560342618])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[22410], BigFloat[-24.041630560342618])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 28
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[17744], BigFloat[24], true)
-        @test checkequality(indvals[2], BigInt[21922], BigFloat[24], true)
-        @test checkequality(indvals[3], BigInt[20571], BigFloat[33.941125496954285])
-        @test checkequality(indvals[4], BigInt[20574], BigFloat[-33.941125496954285])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[17744], BigFloat[24], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[21922], BigFloat[24], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20571], BigFloat[33.941125496954285])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20574], BigFloat[-33.941125496954285])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 31
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[5672,17777], BigFloat[2,8], true)
-        @test checkequality(indvals[2], BigInt[6223,21928], BigFloat[2,8], true)
-        @test checkequality(indvals[3], BigInt[6102,20588], BigFloat[2.8284271247461903,11.313708498984761])
-        @test checkequality(indvals[4], BigInt[6103,20589], BigFloat[-2.8284271247461903,-11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[5672,17777], BigFloat[2,8], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[6223,21928], BigFloat[2,8], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[6102,20588], BigFloat[2.8284271247461903,11.313708498984761])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[6103,20589], BigFloat[-2.8284271247461903,-11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 34
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[4699], BigFloat[6], true)
-        @test checkequality(indvals[2], BigInt[5815], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[5542,5545], BigFloat[4.242640687119286,4.242640687119286])
-        @test checkequality(indvals[4], BigInt[5546], BigFloat[-4.242640687119286])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[4699], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5815], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5542,5545], BigFloat[4.242640687119286,4.242640687119286])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5546], BigFloat[-4.242640687119286])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 37
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[17502], BigFloat[14], true)
-        @test checkequality(indvals[2], BigInt[21232], BigFloat[14], true)
-        @test checkequality(indvals[3], BigInt[20164,20168], BigFloat[-9.899494936611665,9.899494936611665])
-        @test checkequality(indvals[4], BigInt[20154,20162], BigFloat[9.899494936611665,-9.899494936611665])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[17502], BigFloat[14], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[21232], BigFloat[14], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20164,20168], BigFloat[-9.899494936611665,9.899494936611665])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[20154,20162], BigFloat[9.899494936611665,-9.899494936611665])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 40
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], true)
-        @test checkequality(indvals[2], BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], true)
-        @test checkequality(indvals[3], BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[5.656854249492381,5.656854249492381,11.313708498984761,4.242640687119286,5.656854249492381,9.899494936611665,9.899494936611665,7.0710678118654755])
-        @test checkequality(indvals[4], BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[11.313708498984761,-11.313708498984761,-5.656854249492381,-4.242640687119286,-5.656854249492381,9.899494936611665,-9.899494936611665,-7.0710678118654755])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[5.656854249492381,5.656854249492381,11.313708498984761,4.242640687119286,5.656854249492381,9.899494936611665,9.899494936611665,7.0710678118654755])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[11.313708498984761,-11.313708498984761,-5.656854249492381,-4.242640687119286,-5.656854249492381,9.899494936611665,-9.899494936611665,-7.0710678118654755])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 43
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[31799], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9460], BigFloat[11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[31799], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9460], BigFloat[11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 45
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[31799], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9460], BigFloat[11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[31799], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9460], BigFloat[11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 48
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[31799], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9278], BigFloat[11.313708498984761])
-        @test checkequality(indvals[4], BigInt[9280], BigFloat[-11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[31799], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9278], BigFloat[11.313708498984761])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9280], BigFloat[-11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 51
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[31799], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9280], BigFloat[11.313708498984761])
-        @test checkequality(indvals[4], BigInt[9278], BigFloat[11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[31799], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9280], BigFloat[11.313708498984761])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9278], BigFloat[11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 54
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[31799], BigFloat[17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9278,9280], BigFloat[11.313708498984761,2.8284271247461903])
-        @test checkequality(indvals[4], BigInt[9278,9280], BigFloat[2.8284271247461903,-11.313708498984761])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[31799], BigFloat[17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9278,9280], BigFloat[11.313708498984761,2.8284271247461903])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9278,9280], BigFloat[2.8284271247461903,-11.313708498984761])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 57
         @test length(indvals) == 4
-        @test checkequality(indvals[1], BigInt[9460,31799], BigFloat[5,17], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9280,9297], BigFloat[2.8284271247461903,1.4142135623730951])
-        @test checkequality(indvals[4], BigInt[5665,9278,9280], BigFloat[-4.242640687119286,-2.8284271247461903,22.627416997969522])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[9460,31799], BigFloat[5,17], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9280,9297], BigFloat[2.8284271247461903,1.4142135623730951])
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[5665,9278,9280], BigFloat[-4.242640687119286,-2.8284271247461903,22.627416997969522])
+        @test isnothing(iterate(indvals, iterstate))
     elseif state.instance == 60
         @test length(indvals) == 3
-        @test checkequality(indvals[1], BigInt[17669,17845], BigFloat[-34,10], true)
-        @test checkequality(indvals[2], BigInt[17770], BigFloat[6], true)
-        @test checkequality(indvals[3], BigInt[9278,9280], BigFloat[22.627416997969522,5.656854249492381])
+        indval, iterstate = iterate(indvals)
+        @test checkequality(indval, BigInt[17669,17845], BigFloat[-34,10], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[17770], BigFloat[6], true)
+        indval, iterstate = iterate(indvals, iterstate)
+        @test checkequality(indval, BigInt[9278,9280], BigFloat[22.627416997969522,5.656854249492381])
+        @test isnothing(iterate(indvals, iterstate))
     else
         @test false
     end
@@ -259,7 +345,7 @@ end
 Solver.add_constr_psd!(state::SolverSetup{false,false,<:Any,false,false}, dim::Int, data) =
     @interpret add_constr_psd_worker!(state, dim, psd_indextype(state), data)
 
-function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false}, dim::Int, ::PSDIndextypeVector{tri}, data::PSDVector{BigInt,BigFloat}) where {tri}
+function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false}, dim::Int, ::PSDIndextypeVector{tri}, data::IndvalsIterator{BigInt,BigFloat}) where {tri}
     @test state.lastcall === :none
     state.lastcall = :psdr
     if state.instance == 14
@@ -3389,7 +3475,7 @@ end
 Solver.add_constr_psd_complex!(state::SolverSetup{false,false,<:Any,true,false}, dim::Int, data) =
     @interpret add_constr_psd_complex_worker!(state, dim, psd_indextype(state), data)
 
-function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,true,false}, dim::Int, ::PSDIndextypeVector{tri}, data::PSDVector{BigInt,BigFloat}) where {tri}
+function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,true,false}, dim::Int, ::PSDIndextypeVector{tri}, data::IndvalsIterator{BigInt,BigFloat}) where {tri}
     @test state.lastcall === :none
     state.lastcall = :psdc
     if state.instance == 27
@@ -5023,10 +5109,10 @@ function Solver.add_constr_fix_finalize!(state::SolverSetup{false,false,false,fa
     @test isempty(state.fixed_available)
 end
 
-Solver.add_constr_fix!(state::SolverSetup{false,false,false,false,true}, constrstate::UInt, indvals::AbstractIndvals{BigInt,BigFloat}, rhs::BigFloat) =
+Solver.add_constr_fix!(state::SolverSetup{false,false,false,false,true}, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat) =
     @interpret add_constr_fix_helper!(state, constrstate, indvals, rhs)
 
-function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true}, constrstate::UInt, indvals::AbstractIndvals{BigInt,BigFloat}, rhs::BigFloat)
+function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true}, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat)
     @test in(state.lastcall, (:add_constr_fix_prepare, :add_constr_fix))
     state.lastcall = :add_constr_fix
     @test iszero(rhs)

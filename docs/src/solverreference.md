@@ -109,7 +109,7 @@ falls, then copy and modify an appropriate existing implementation.
 
 #### [`AbstractSparseMatrixSolver`](@ref)
 This solver type accumulates data in a COO matrix-like format. The callback functions can use
-[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset})
+[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset})
 to quickly add given data to the temporary storage.
 However, the format is not yet suitable for passing data to the solver, as all monomials are densely indexed. Therefore, in a
 postprocessing step, the COO matrices have to be converted to CSC matrices with continuous monomial indices using
@@ -119,8 +119,8 @@ constraint duals for SOS optimization) can be constructed using [`MomentVector`]
 ```@docs
 AbstractSparseMatrixSolver
 SparseMatrixCOO
-append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
-append!(::SparseMatrixCOO{I,K,V,Offset}, ::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
 MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
@@ -155,9 +155,9 @@ psd_indextype
 The interface functions that need to be implemented will get their data in the form of index-value pairs or a specific
 structure related to the desired matrix format.
 ```@docs
-AbstractIndvals
+Indvals
 PSDMatrixCartesian
-PSDVector
+IndvalsIterator
 ```
 
 #### Interface for the moment optimization
@@ -228,8 +228,8 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
-| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
-| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
+| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
 
 ### Solver interface
 The following functions need to be implemented so that a solver is available via [`Newton.halfpolytope`](@ref). The
@@ -260,8 +260,8 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
-| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
-| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
+| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
 
 ### Solver interface
 The following function needs to be implemented so that a solver is available via automatic tightening.

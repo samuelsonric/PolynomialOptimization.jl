@@ -27,40 +27,62 @@ end
 Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
-# While COPT expect the lower triangle, we calculate things with linear indexing, and the conversion is easier of upper tri.
 
-function Solver.add_constr_nonnegative!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64})
+function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Cint,Float64})
     _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, 0., COPT_INFINITY,
         C_NULL))
     return
 end
 
-@generated function Solver.add_constr_quadratic!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64}...)
+function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64})
     N = length(indvals)
-    quote
-        # COPT does not support an arbitrary-content quadratic cone. Either we put the cone into the form <x, Qx> ≤ b or we
-        # need to create more variables that wrap this functionality.
-        if state.num_solver_vars < state.num_used_vars + $N
-            newnum = overallocation(state.num_solver_vars + Cint($N))
-            Δ = newnum - state.num_solver_vars
-            lb = fill(-COPT_INFINITY, Δ)
-            @inbounds lb[1] = 0.0
-            @inbounds lb[2] = 0.0
-            _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
-                lb, C_NULL, C_NULL))
-            state.num_solver_vars += Δ
-        end
-        rowMatCnt = StackVec($((:(Cint(length(indvals[$i].indices) +1)) for i in 1:N)...),)
-        rowMatBeg = StackVec(zero(Cint), $((Expr(:call, :+, (:(rowMatCnt[$j]) for j in 1:i)...) for i in 1:N-1)...))
-        rowMatIdx = vcat($((x for i in 1:N for x in (:(indvals[$i].indices), :(state.num_used_vars + $(Cint(i -1)))))...),)
-        rowMatElem = vcat($((x for i in 1:N for x in (:(indvals[$i].values), :(-1.0)))...),)
-        _check_ret(copt_env, COPT_AddRows(state.problem, $N, rowMatBeg, rowMatCnt, rowMatIdx, rowMatElem, C_NULL,
-            StackVec($((:(0.0) for _ in 1:N)...),), StackVec($((:(0.0) for _ in 1:N)...),), C_NULL))
-        _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(COPT_CONE_RQUAD)), Ref(Cint(0)), Ref(Cint($N)),
-            StackVec($((:(state.num_used_vars + $i) for i in Cint(0):Cint(N -1))...),)))
-        state.num_used_vars += $N
-        return
+    rowMatBeg = Vector{Cint}(undef, N +1)
+    @inbounds rowMatBeg[1] = 0
+    @inbounds for (i, len) in zip(Iterators.countfrom(2), indvals.lens)
+        rowMatBeg[i] = rowMatBeg[i-1] + len
     end
+    _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, indvals.indices, indvals.values, C_NULL,
+        fill(0., N), fill(COPT_INFINITY, N), C_NULL))
+    return
+end
+
+function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64})
+    N = length(indvals)
+    # COPT does not support an arbitrary-content quadratic cone. Either we put the cone into the form <x, Qx> ≤ b or we
+    # need to create more variables that wrap this functionality.
+    if state.num_solver_vars < state.num_used_vars + N
+        newnum = overallocation(state.num_solver_vars + Cint(N))
+        Δ = newnum - state.num_solver_vars
+        lb = fill(-COPT_INFINITY, Δ)
+        @inbounds lb[1] = 0.0
+        @inbounds lb[2] = 0.0
+        _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
+            lb, C_NULL, C_NULL))
+        state.num_solver_vars += Δ
+    end
+    rowMatBeg = Vector{Cint}(undef, N +1)
+    @inbounds rowMatBeg[1] = 0
+    @inbounds for (i, len) in zip(Iterators.countfrom(2), indvals.lens)
+        rowMatBeg[i] = rowMatBeg[i-1] + len +1
+    end
+    rowMatIdx = Vector{Cint}(undef, length(indvals.indices) + N)
+    rowMatElem = similar(rowMatIdx, Cdouble)
+    i = 1
+    @inbounds for (j, indval) in zip(Iterators.countfrom(Cint(0)), indvals)
+        n = length(indval)
+        copyto!(rowMatIdx, i, indval.indices, 1, n)
+        copyto!(rowMatElem, i, indval.values, 1, n)
+        i += n
+        rowMatIdx[i] = state.num_used_vars + j
+        rowMatElem[i] = -1.
+        i += 1
+    end
+    zv = fill(0., N)
+    _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, rowMatIdx, rowMatElem, C_NULL, zv, zv, C_NULL))
+    _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(COPT_CONE_RQUAD)), Ref(Cint(0)), Ref(Cint(N)),
+        [state.num_used_vars + i for i in Cint(0):Cint(N -1)]))
+    state.num_used_vars += N
+    return
 end
 
 function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDMatrixCartesian{Cint,Float64})
@@ -84,18 +106,18 @@ function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDMatrixCar
     return
 end
 
-function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::AbstractIndvals{Cint,Float64}, rhs::Float64)
+function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::Indvals{Cint,Float64}, rhs::Float64)
     _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, rhs, rhs, C_NULL))
     return
 end
 
-function Solver.fix_objective!(state::StateMoment, indvals::AbstractIndvals{Cint,Float64})
+function Solver.fix_objective!(state::StateMoment, indvals::Indvals{Cint,Float64})
     _check_ret(copt_env, COPT_ReplaceColObj(state.problem, length(indvals), indvals.indices, indvals.values))
     return
 end
 
-function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation{<:Problem{P}},
-    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=_ -> nothing, parameters=()) where {P}
+function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings;
+    representation, verbose::Bool=false, customize::Function=_ -> nothing, parameters=()) where {P}
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
@@ -114,7 +136,7 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
         _check_ret(copt_env, COPT_SetObjSense(task, COPT_MINIMIZE))
 
         state = StateMoment{K}(task)
-        moment_setup!(state, relaxation, groupings)
+        moment_setup!(state, relaxation, groupings; representation)
         customize(state)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")

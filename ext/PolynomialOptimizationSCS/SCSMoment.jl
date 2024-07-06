@@ -23,18 +23,18 @@ Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_SOC
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
-function Solver.add_constr_nonnegative!(state::StateMoment{<:Integer,K}, indvals::AbstractIndvals{K,Float64}) where {K}
+function Solver.add_constr_nonnegative!(state::StateMoment{<:Integer,K}, indvals::IndvalsIterator{K,Float64}) where {K}
     append!(state.minusAcoo_nonneg, indvals)
     return
 end
 
-function Solver.add_constr_quadratic!(state::StateMoment{<:Integer,K}, indvals::AbstractIndvals{K,Float64}...) where {K}
-    append!(state.minusAcoo_soc, indvals...)
+function Solver.add_constr_quadratic!(state::StateMoment{<:Integer,K}, indvals::IndvalsIterator{K,Float64}) where {K}
+    append!(state.minusAcoo_soc, indvals)
     push!(state.socsizes, length(indvals))
     return
 end
 
-function Solver.add_constr_psd!(state::StateMoment{<:Integer,K}, dim::Int, data::PSDVector{K,Float64}) where {K}
+function Solver.add_constr_psd!(state::StateMoment{<:Integer,K}, dim::Int, data::IndvalsIterator{K,Float64}) where {K}
     append!(state.minusAcoo_zeropsd, data)
     push!(state.psdsizes, dim)
     return
@@ -47,7 +47,7 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     return
 end
 
-function Solver.add_constr_fix!(state::StateMoment{<:Integer,K}, ::Nothing, indvals::AbstractIndvals{K,Float64}, rhs::Float64) where {K}
+function Solver.add_constr_fix!(state::StateMoment{<:Integer,K}, ::Nothing, indvals::Indvals{K,Float64}, rhs::Float64) where {K}
     v = append!(state.minusAcoo_zeropsd, indvals)
     if !iszero(rhs)
         push!(state.b_zero[1], v +1)
@@ -58,20 +58,20 @@ function Solver.add_constr_fix!(state::StateMoment{<:Integer,K}, ::Nothing, indv
     return
 end
 
-function Solver.fix_objective!(state::StateMoment{<:Any,K}, indvals::AbstractIndvals{K,Float64}) where {K}
+function Solver.fix_objective!(state::StateMoment{<:Any,K}, indvals::Indvals{K,Float64}) where {K}
     state.c[] = (indvals.indices, indvals.values)
     return
 end
 
 function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    verbose::Bool=false, customize::Base.Callable=_ -> nothing, linear_solver::Type{<:LinearSolver}=SCS.DirectSolver,
-    parameters...)
+    representation, verbose::Bool=false, customize::Base.Callable=_ -> nothing,
+    linear_solver::Type{<:LinearSolver}=SCS.DirectSolver, parameters...)
     setup_time = @elapsed begin
         I = scsint_t(linear_solver)
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         state = StateMoment{I,K}()
 
-        moment_setup!(state, relaxation, groupings)
+        moment_setup!(state, relaxation, groupings; representation)
         customize(state)
 
         # We now must merge the noneg and the soc constraints into the zeropsd COO at the appropriate position

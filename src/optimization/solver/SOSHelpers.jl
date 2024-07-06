@@ -10,24 +10,27 @@ supports_quadratic(state::SOSWrapper) = supports_quadratic(state.state)
 supports_complex_psd(state::SOSWrapper) = supports_complex_psd(state.state)
 psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
 
-add_constr_nonnegative!(state::SOSWrapper, args...) = add_var_nonnegative!(state.state, args...)
-add_constr_quadratic!(state::SOSWrapper, args...) = add_var_quadratic!(state.state, args...)
-add_constr_psd!(state::SOSWrapper, args...) = add_var_psd!(state.state, args...)
-add_constr_psd_complex!(state::SOSWrapper, args...) = add_var_psd_complex!(state.state, args...)
+# both necessary for disambiguation
+add_constr_nonnegative!(state::SOSWrapper, indvals::Indvals) = add_var_nonnegative!(state.state, indvals)
+add_constr_nonnegative!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_nonnegative!(state.state, indvals)
+add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
+add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
+add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
 add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)
 add_constr_fix_finalize!(state::SOSWrapper, constrstate) = add_var_free_finalize!(state.state, constrstate)
 
-fix_objective!(state::SOSWrapper, args...) = fix_constraints!(state.state, args...)
+fix_objective!(state::SOSWrapper, indvals::Indvals) = fix_constraints!(state.state, indvals)
 
 """
     sos_add_matrix!(state, grouping::SimpleMonomialVector,
-        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}})
+        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
+        representation::AbstractRepresentationMethod=RepresentationPSD())
 
 Parses a SOS constraint with a basis given in `grouping` (this might also be a partial basis due to sparsity), premultiplied by
 `constraint` (which may be the unit polynomial for the SOS cone membership) and calls the appropriate solver functions to set
-up the problem structure.
+up the problem structure according to `representation`.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
@@ -42,8 +45,9 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_equality!`](@ref).
 """
-sos_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::SimplePolynomial) =
-    moment_add_matrix!(SOSWrapper(state), grouping, constraint)
+sos_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::SimplePolynomial,
+    representation::AbstractRepresentationMethod=RepresentationPSD()) =
+    moment_add_matrix!(SOSWrapper(state), grouping, constraint, representation)
 
 """
     sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
@@ -64,7 +68,7 @@ sos_add_equality!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, 
     moment_add_equality!(SOSWrapper(state), grouping, constraint)
 
 """
-    sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings)
+    sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
 
 Sets up all the necessary SOS matrices, free variables, objective, and constraints of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
@@ -93,7 +97,17 @@ The following methods must be implemented by a solver to make this function work
     This function is guaranteed to set up the free variables first, then followed by all the others. However, the order of
     nonnegative, quadratic, and PSD variables is undefined (depends on the problem).
 
-See also [`moment_setup!`](@ref), [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref).
+!!! info "Representation"
+    This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The
+    `representation` parameter can be used to define a representation that is employed for the individual groupings. This may
+    either be an instance of an [`AbstractRepresentationMethod`](@ref) - which requires the method to be independent of the
+    dimension of the grouping - or a callable. In the latter case, it will be passed as a first parameter an identifier[^3] of
+    the current conic variable, and as a second parameter the side dimension of its matrix. The method must then return an
+    [`AbstractRepresentationMethod`](@ref) instance.
+
+See also [`moment_setup!`](@ref), [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref),
+[`AbstractRepresentationMethod`](@ref).
 """
-sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings) =
-    moment_setup!(SOSWrapper(state), relaxation, groupings)
+sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
+    representation::Union{<:AbstractRepresentationMethod,<:Base.Callable}=RepresentationPSD()) =
+    moment_setup!(SOSWrapper(state), relaxation, groupings; representation)

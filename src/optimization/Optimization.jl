@@ -1,22 +1,30 @@
-export poly_optimize, optimality_certificate
+export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDSOS, RepresentationSDSOS
 
 include("./Result.jl")
 include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
-using .Solver: default_solver_method, monomial_count
+using .Solver: default_solver_method, monomial_count, AbstractRepresentationMethod, RepresentationPSD, RepresentationDSOS,
+    RepresentationSDSOS
 import .Solver: poly_optimize
 
 """
     poly_optimize([method, ]relaxation::AbstractRelaxation; verbose=false,
-        clique_merging=false, solutions::Bool=false, certificate::Bool=false, kwargs...)
+        clique_merging=false, representation=RepresentationPSD(), kwargs...)
 
 Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
 [`AbstractRelaxation`](@ref). Returns a [`Result`](@ref) object.
 
 Clique merging is a way to improve the performance of the solver in case a sparse analysis led to cliques with a lot of
 overlap; however, the process itself may be time-consuming and is therefore disabled by default.
+
+Instead of modeling the moment/SOS matrices as positive semidefinite, other representations such as the (scaled) diagonally
+dominant description are also possible. The `representation` parameter can be used to define a representation that is employed
+for the individual groupings. This may either be an instance of an [`AbstractRepresentationMethod`](@ref) - which requires the
+method to be independent of the dimension of the grouping - or a callable. In the latter case, it will be passed as a first
+parameter an identifier[^1] of the current conic variable, and as a second parameter the side dimension of its matrix. The
+method must then return an [`AbstractRepresentationMethod`](@ref) instance.
 
 `verbose=true` will enable logging; this will print basic information about the relaxation itself as well as instruct the
 solver to output a detailed log. The PSD block sizes reported accurately represent the side dimensions of semidefinite
@@ -27,8 +35,15 @@ Any additional keyword argument is passed on to the solver.
 For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize). If `method` is omitted, the default
 solver is used. Note that this depends on the loaded solver packages, and possibly also their loading order if no preferred
 solver has been loaded.
+
+[^1]: This identifier will be a tuple, where the first element is a symbol - either `:objective`, `:nonneg`, or `:psd` - to
+      indicate the general reason why the variable is there. The second element is an `Int` denoting the index of the
+      constraint (and will be undefined for the objective, but still present to avoid extra compilataion). The last element
+      is an `Int` denoting the index of the grouping within the constraint/objective.
 """
-function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false, clique_merging::Bool=false, kwargs...) where {S}
+function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false,
+    representation::Union{<:AbstractRepresentationMethod,<:Base.Callable}=RepresentationPSD(),
+    clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
         groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation
@@ -59,7 +74,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=
             end
             println("\nStarting solver...")
         end
-        result = poly_optimize(v, relaxation, groups; verbose, kwargs...)
+        result = poly_optimize(v, relaxation, groups; verbose, representation, kwargs...)
     end
     return Result(relaxation, S, otime, result...)
 end

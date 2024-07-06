@@ -20,25 +20,25 @@ Solver.supports_complex_psd(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
-function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::AbstractIndvals{K,V}) where {K,V}
+function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.Nonnegative{V}(1))
     return
 end
 
-function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::AbstractIndvals{K,V}...) where {K,V}
-    append!(state.minusGcoo, indvals...)
+function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiPerSquare{V}(length(indvals)))
     return
 end
 
-function Solver.add_constr_psd!(state::StateMoment{K,V}, dim::Int, data::PSDVector{K,V}) where {K,V}
+function Solver.add_constr_psd!(state::StateMoment{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, data)
     push!(state.cones, Cones.PosSemidefTri{V,V}(trisize(dim)))
     return
 end
 
-function Solver.add_constr_psd_complex!(state::StateMoment{K,V}, dim::Int, data::PSDVector{K,V}) where {K,V}
+function Solver.add_constr_psd_complex!(state::StateMoment{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, data)
     push!(state.cones, Cones.PosSemidefTri{V,Complex{V}}(dim^2))
     return
@@ -51,7 +51,7 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     return
 end
 
-function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::AbstractIndvals{K,V}, rhs::V) where {K,V}
+function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::Indvals{K,V}, rhs::V) where {K,V}
     v = append!(state.Acoo, indvals)
     if !iszero(rhs)
         push!(state.b[1], v)
@@ -60,20 +60,20 @@ function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::Abs
     return
 end
 
-function Solver.fix_objective!(state::StateMoment{K,V}, indvals::AbstractIndvals{K,V}) where {K,V}
+function Solver.fix_objective!(state::StateMoment{K,V}, indvals::Indvals{K,V}) where {K,V}
     state.c[] = (indvals.indices, indvals.values)
     return
 end
 
 function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor), customize::Base.Callable=_ -> nothing,
-    parameters...)
+    representation, verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor),
+    customize::Base.Callable=_ -> nothing, parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))
         state = StateMoment{K,V}()
 
-        moment_setup!(state, relaxation, groupings)
+        moment_setup!(state, relaxation, groupings; representation)
         customize(state)
 
         # Now we have all the data in COO form. The reason for this choice is that we were able to assign arbitrary column

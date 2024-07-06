@@ -4,7 +4,7 @@ export AbstractSparseMatrixSolver, SparseMatrixCOO, coo_to_csc!
     AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real}
 
 Superclass for a solver that requires its data in sparse matrix form. The data is aggregated in COO form using
-[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset})
+[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset})
 and can be converted to CSC form using [`coo_to_csc!`](@ref). The type of the indices in final CSC form is `I`, where the
 monomials during construction will be represented by numbers of type `K`.
 
@@ -47,39 +47,32 @@ function FastVector.prepare_push!(smc::SparseMatrixCOO, new_items::Integer)
 end
 
 """
-    append!(coo::SparseMatrixCOO, indvals::AbstractIndvals...)
+    append!(coo::SparseMatrixCOO, indvals::Union{Indvals,IndvalsIterator})
 
-Appends the data given in `indvals` into successive rows in `coo` (`indvals[1]` to the first rows, `indvals[2]` to the second,
+Appends the data given in `indvals` into successive rows in `coo` (`first(indvals)` to the first rows, the next to the second,
 ...). Returns the index of the last row that was added.
 
-See also [`AbstractIndvals`](@ref).
+See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 """
-@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
-    prep = 0
-    for indval in indvals
-        prep += length(indval)
-    end
-    prepare_push!(coo, prep)
+@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+    prepare_push!(coo, length(indvals))
     @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
-    for indval in indvals
-        for (monind, nzval) in indval
-            unsafe_push!(coo.rowinds, v)
-            unsafe_push!(coo.moninds, monind)
-            unsafe_push!(coo.nzvals, nzval)
-        end
-        v += one(I)
+    for (monind, nzval) in indvals
+        unsafe_push!(coo.rowinds, v)
+        unsafe_push!(coo.moninds, monind)
+        unsafe_push!(coo.nzvals, nzval)
     end
-    return v - one(I)
+    return v
 end
 
 """
-    append!(coo::SparseMatrixCOO, psd::PSDVector)
+    append!(coo::SparseMatrixCOO, psd::IndvalsIterator)
 
 Appends the data given in `psd` into successive rows in `coo`. Returns the index of the last row that was added.
 
-See also [`PSDVector`](@ref).
+See also [`IndvalsIterator`](@ref).
 """
-@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prepare_push!(coo.rowinds, length(rowvals(psd)))
     @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
     for l in Base.index_lengths(psd)

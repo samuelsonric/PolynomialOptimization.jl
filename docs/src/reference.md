@@ -58,6 +58,10 @@ CurrentModule = PolynomialOptimization
 ```
 ```@docs
 poly_optimize
+Solver.AbstractRepresentationMethod
+RepresentationPSD
+RepresentationSDSOS
+RepresentationDSOS
 Result
 poly_problem(::Result)
 optimality_certificate

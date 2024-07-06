@@ -1,5 +1,5 @@
-export mindex, SOLVER_QUADRATIC_NONE, SOLVER_QUADRATIC_SOC, SOLVER_QUADRATIC_RSOC, supports_quadratic, AbstractIndvals,
-    supports_complex_psd, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, PSDVector
+export mindex, SOLVER_QUADRATIC_NONE, SOLVER_QUADRATIC_SOC, SOLVER_QUADRATIC_RSOC, supports_quadratic, Indvals,
+    supports_complex_psd, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, IndvalsIterator
 
 """
     mindex(state, monomials::SimpleMonomialOrConj...)
@@ -34,7 +34,7 @@ The default implementation returns `false`.
 supports_quadratic(_) = SOLVER_QUADRATIC_NONE
 
 """
-    AbstractIndvals{T,V<:Real}
+    Indvals{T,V<:Real}
 
 Supertype for an iterable that returns a `Tuple{T,V}` on iteration, where the first is a variable/constraint index and the
 second its coefficient in the constraint matrix. The type `T` is the type returned by [`mindex`](@ref).
@@ -42,13 +42,7 @@ The properties `indices` and `values` can be accessed and will give `AbstractVec
 fields should only be used if an iterative approach is not feasible, as they might be constructed on-demand (this will only
 happen for the first two indvals in the standard quadratic cone, all other elements can be accessed with zero cost).
 """
-abstract type AbstractIndvals{T,V<:Real} end
-
-Base.IteratorSize(::Type{<:AbstractIndvals}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:AbstractIndvals}) = Base.HasEltype()
-Base.eltype(::Type{AbstractIndvals{T,V}}) where {T,V} = Tuple{T,V}
-
-struct Indvals{T,V<:Real,Z} <: AbstractIndvals{T,V}
+struct Indvals{T,V<:Real,Z}
     z::Z
 
     function Indvals(indices::AbstractVector{T}, values::AbstractVector{V}) where {T,V<:Real}
@@ -68,72 +62,11 @@ function Base.getproperty(iv::Indvals, f::Symbol)
     end
 end
 
+Base.IteratorSize(::Type{<:Indvals}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:Indvals}) = Base.HasEltype()
+Base.eltype(::Type{Indvals{T,V}}) where {T,V} = Tuple{T,V}
 Base.length(iv::Indvals) = length(iv.z)
 Base.iterate(iv::Indvals, args...) = iterate(iv.z, args...)
-
-struct RSocToSocHelper{plus,T,I<:AbstractVector{T},V<:Real,VV<:AbstractVector{V}} <: AbstractIndvals{T,V}
-    indices₁₁::I
-    values₁₁::VV
-    indices₂₂::I
-    values₂₂::VV
-
-    function RSocToSocHelper{plus}(indices₁₁::I, values₁₁::VV, indices₂₂::I, values₂₂::VV) where {plus,T,I<:AbstractVector{T},V<:Real,VV<:AbstractVector{V}}
-        plus isa Bool || throw(MethodError(RSocToSocHelper{soc}, (indices₁₁, values₁₁, indices₂₂, values₂₂)))
-        @assert(length(indices₁₁) == length(values₁₁) && length(indices₂₂) == length(indices₂₂))
-        new{plus,T,I,V,VV}(sort_along!(indices₁₁, values₁₁)..., sort_along!(indices₂₂, values₂₂)...)
-    end
-end
-
-Base.length(rsi::RSocToSocHelper) = count_uniques(rsi.indices₁₁, rsi.indices₂₂)
-
-function Base.iterate(rsi::RSocToSocHelper{plus}, (i₁, l₁, i₂, l₂)=(firstindex(rsi.indices₁₁), length(rsi.indices₁₁),
-                                                                    firstindex(rsi.indices₂₂), length(rsi.indices₂₂))) where {plus}
-    @inbounds if l₁ > 0
-        if l₂ > 0
-            ind₁, ind₂ = rsi.indices₁₁[i₁], rsi.indices₂₂[i₂]
-            if ind₁ < ind₂
-                return (ind₁, rsi.values₁₁[i₁]), (i₁ + one(i₁), l₁ -1, i₂, l₂)
-            elseif ind₁ == ind₂
-                return (ind₁, plus ? rsi.values₁₁[i₁] + rsi.values₂₂[i₂] : rsi.values₁₁[i₁] - rsi.values₂₂[i₂]),
-                    (i₁ + one(i₁), l₁ -1, i₂ + one(i₂), l₂ -1)
-            else
-                return (ind₂, plus ? rsi.values₂₂[i₂] : -rsi.values₂₂[i₂]), (i₁, l₁, i₂ + one(i₂), l₂ -1)
-            end
-        else
-            return (rsi.indices₁₁[i₁], rsi.values₁₁[i₁]), (i₁ + one(i₁), l₁ -1, i₂, l₂)
-        end
-    elseif l₂ > 0
-        return (rsi.indices₂₂[i₂], plus ? rsi.values₂₂[i₂] : -rsi.values₂₂[i₂]), (i₁, l₁, i₂ + one(i₂), l₂ -1)
-    else
-        return nothing
-    end
-end
-
-function Base.getproperty(rsi::RSocToSocHelper{plus,T,<:AbstractVector{T},V}, f::Symbol) where {plus,T,V<:Real}
-    if f === :indices
-        tmp = Vector{T}(undef, length(rsi.indices₁₁) + length(rsi.indices₂₂))
-        return resize!(
-            tmp,
-            count_uniques(rsi.indices₁₁, rsi.indices₂₂, let tmp=tmp, indices₁₁=rsi.indices₁₁, indices₂₂=rsi.indices₂₂
-                (i, i₁, i₂) -> @inbounds tmp[i] = ismissing(i₁) ? indices₂₂[i₂] : indices₁₁[i₁]
-            end)
-        )
-    elseif f === :values
-        tmp = Vector{V}(undef, length(rsi.values₁₁) + length(rsi.values₂₂))
-        return resize!(
-            tmp,
-            count_uniques(rsi.indices₁₁, rsi.indices₂₂, let tmp=tmp, values₁₁=rsi.values₁₁, values₂₂=rsi.values₂₂
-                (i, i₁, i₂) -> @inbounds tmp[i] = ismissing(i₁) ?
-                    (plus ? values₂₂[i₂] : -values₂₂[i₂]) :
-                    (ismissing(i₂) ? values₁₁[i₁] :
-                        (plus ? values₁₁[i₁] + values₂₂[i₂] : values₁₁[i₁] - values₂₂[i₂])
-                    )
-            end)
-        )
-    else
-        return getfield(rsi, f)
-    end
-end
 
 @doc raw"""
     supports_complex_psd(state)
@@ -261,7 +194,7 @@ case).
 
 If `triangle === :U`, the columns of the upper triangle are assumed to be stacked and scaled.
 
-See also [`PSDVector`](@ref).
+See also [`IndvalsIterator`](@ref).
 """
 struct PSDIndextypeVector{Tri} <: AbstractPSDIndextype{Tri}
     function PSDIndextypeVector(triangle::Symbol)
@@ -271,39 +204,39 @@ struct PSDIndextypeVector{Tri} <: AbstractPSDIndextype{Tri}
 end
 
 """
-    PSDVector
+    IndvalsIterator
 
 An iterable that returns consecutive elements in a vectorized PSD cone.
 This type stores a vector of indices and values together with information about the length of the individual subsequences.
-Iterating through it will give [`AbstractIndvals`](@ref) that contain views into the indices and the values.
+Iterating through it will give [`Indvals`](@ref) that contain views into the indices and the values.
 The vector of indices is available via `SparseArrays.rowvals`, the vector of values via `SparseArrays.nonzeros`, and the
 lengths of the subsequences via `Base.index_lengths`.
 
 See also [`PSDIndextypeVector`](@ref).
 """
-struct PSDVector{T,V,L}
+struct IndvalsIterator{T,V,L}
     indices::Vector{T}
     values::Vector{V}
     lens::L
 
-    function PSDVector(indices::Vector{T}, values::Vector{V}, len::I) where {T,V,I<:Integer}
-        length(indices) == length(values) || error("Invalid PSDVector construction")
+    function IndvalsIterator(indices::Vector{T}, values::Vector{V}, len::I) where {T,V,I<:Integer}
+        length(indices) == length(values) || throw(ArgumentError("Invalid IndvalsIterator construction"))
         new{T,V,I}(indices, values, len)
     end
-    function PSDVector(indices::Vector{T}, values::Vector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
-        length(indices) == length(values) || error("Invalid PSDVector construction")
-        (isempty(lens) || length(indices) != sum(lens, init=0)) && error("Invalid PSDVector construction")
+    function IndvalsIterator(indices::Vector{T}, values::Vector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
+        length(indices) == length(values) || error("Invalid IndvalsIterator construction")
+        (isempty(lens) || length(indices) != sum(lens, init=0)) && error("Invalid IndvalsIterator construction")
         new{T,V,L}(indices, values, lens)
     end
 end
 
-Base.IteratorSize(::Type{<:PSDVector}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:PSDVector}) = Base.HasEltype()
-Base.eltype(::Type{PSDVector{T,V,<:Any}}) where {T,V} =
+Base.IteratorSize(::Type{<:IndvalsIterator}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:IndvalsIterator}) = Base.HasEltype()
+Base.eltype(::Type{IndvalsIterator{T,V,<:Any}}) where {T,V} =
     Tuple{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true},SubArray{V,1,Vector{V},Tuple{UnitRange{Int}},true}}
-Base.length(psdi::PSDVector{<:Any,<:Any,<:Integer}) = length(psdi.indices) ÷ psdi.lens
-Base.length(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}) = length(psdi.lens)
-@inline function Base.iterate(psdi::PSDVector{<:Any,<:Any,<:Integer}, state=1)
+Base.length(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}) = length(psdi.indices) ÷ psdi.lens
+Base.length(psdi::IndvalsIterator{<:Any,<:Any,<:AbstractVector{<:Integer}}) = length(psdi.lens)
+@inline function Base.iterate(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}, state=1)
     endpos = state + psdi.lens -1
     if endpos ≤ length(psdi.indices)
         @inbounds return Indvals(view(psdi.indices, state:endpos), view(psdi.values, state:endpos)), endpos +1
@@ -311,16 +244,16 @@ Base.length(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}) = length(p
         return nothing
     end
 end
-@inline function Base.iterate(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}, state=(1, 1))
+@inline function Base.iterate(psdi::IndvalsIterator{<:Any,<:Any,<:AbstractVector{<:Integer}}, state=(1, 1))
     state[2] ≤ length(psdi.lens) || return nothing
     startpos = state[1]
     endpos = @inbounds(startpos + psdi.lens[state[2]] -1)
     @inbounds return Indvals(view(psdi.indices, startpos:endpos), view(psdi.values, startpos:endpos)), (endpos +1, state[2] +1)
 end
-SparseArrays.rowvals(psdi::PSDVector) = psdi.indices
-SparseArrays.nonzeros(psdi::PSDVector) = psdi.values
-Base.index_lengths(psdi::PSDVector{<:Any,<:Any,<:Integer}) = Iterators.repeated(psdi.lens, length(psdi))
-Base.index_lengths(psdi::PSDVector{<:Any,<:Any,<:AbstractVector{<:Integer}}) = psdi.lens
+SparseArrays.rowvals(psdi::IndvalsIterator) = psdi.indices
+SparseArrays.nonzeros(psdi::IndvalsIterator) = psdi.values
+Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}) = Iterators.repeated(psdi.lens, length(psdi))
+Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:AbstractVector{<:Integer}}) = psdi.lens
 
 """
     psd_indextype(state)
@@ -331,6 +264,55 @@ of an [`AbstractPSDIndextype`](@ref) subtype.
 See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
 """
 function psd_indextype end
+
+"""
+    AbstractRepresentationMethod
+
+Abstract base class that defines how the optimizer constraint σ ⪰ 0 is interpreted. Usually, "⪰" means positive semidefinite;
+however, there are various other possibilities giving rise to weaker results, but scale more favorably. The following methods
+are supported:
+- [`RepresentationPSD`](@ref)
+- [`RepresentationSDSOS`](@ref)
+- [`RepresentationDSOS`](@ref)
+"""
+abstract type AbstractRepresentationMethod end
+
+"""
+    RepresentationPSD <: AbstractRepresentationMethod
+
+Model the constraint "σ ⪰ 0" as a positive semidefinite cone membership, `σ ∈ PSD`. This is the strongest possible model, but
+the most resource-intensive.
+"""
+struct RepresentationPSD <: AbstractRepresentationMethod end
+
+"""
+    RepresentationSDSOS([u]) <: AbstractRepresentationMethod
+
+Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some
+`Q ∈ SDSOS`. The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix
+of suitable dimension.
+To represent `Q ∈ SDSOS`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
+to a semidefinite formulation if this is not the case, as such a rewrite would defeat the purpose.
+"""
+struct RepresentationSDSOS{M} <: AbstractRepresentationMethod
+    u::M
+
+    RepresentationSDSOS(u::M=I) where {M} = new{M}(u)
+end
+
+"""
+    RepresentationDSOS([u]) <: AbstractRepresentationMethod
+
+Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some `Q ∈ DSOS`.
+The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix of suitable
+dimension.
+The membership `Q ∈ DSOS` is achieved using linear inequalities only.
+"""
+struct RepresentationDSOS{M} <: AbstractRepresentationMethod
+    u::M
+
+    RepresentationDSOS(u::M=I) where {M} = new{M}(u)
+end
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")
