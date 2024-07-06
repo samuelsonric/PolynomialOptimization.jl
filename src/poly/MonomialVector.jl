@@ -977,7 +977,8 @@ function MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e:
         # We need to sort the types in an arbitrary, but consistent manner. The function is commutative, so no need to generate
         # two different functions just because the order differs. Assuming hash probably never collides on the few couple of
         # types that are possible, we'll use this as a comparison between Type objects.
-        return merge_monomial_vectors_impl(Val(Nr), Val(Nc), e, values(sort(grouped, by=hash))...)
+        return merge_monomial_vectors_impl(Val(Nr), Val(Nc), e,
+            sort_along!(hash.(keys(grouped)), collect(values(grouped)))[2]...)
     end
 end
 
