@@ -5,57 +5,25 @@ using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
 using Printf
-import SemialgebraicSets
-import Graphs
-import Mosek
-import COSMO
-import Hypatia
-import Combinatorics
-import DynamicPolynomials
 import MutableArithmetics
 import StatsBase
 
+export Newton, Relaxation
+
 const sqrt2 = sqrt(2.0)
+const haveMPI = Ref{Bool}(false)
+const debugging = false
 
-macro verbose_info(str...)
-    quote
-        if $(esc(:verbose))
-            println($(esc.(str)...))
-            flush(stdout)
-        end
-    end
-end
+include("./helpers/Helpers.jl")
 
-include("./helpers/FastVector.jl")
-include("./helpers/SortAlong.jl")
-include("./helpers/PackedMatrices.jl")
-using .PackedMatrices
-include("./helpers/FastSuiteSparse.jl")
-include("./helpers/ComplexPolynomials.jl")
-include("./helpers/MatrixPolynomials.jl")
-
-include("./sparsity/Chordal.jl")
-include("./Newton.jl")
 include("./Problem.jl")
-include("./sparsity/Sparsity.jl")
+include("./relaxations/Relaxation.jl")
+using .Relaxation
+include("./newton/Newton.jl")
+import .Newton
+include("./optimization/Optimization.jl")
+include("./solutions/SolutionExtraction.jl")
 include("./Tightening.jl")
-
-include("./SolutionExtraction.jl")
-include("./SolutionExtractionHeuristic.jl")
-
-include("./sparsity/SparsityNone.jl")
-include("./sparsity/SparsityCorrelative.jl")
-include("./sparsity/SparsityTerm.jl")
-include("./sparsity/SparsityTermBlock.jl")
-include("./sparsity/SparsityTermCliques.jl")
-include("./sparsity/SparsityCorrelativeTerm.jl")
-const SparsityAny = (SparsityNone,SparsityCorrelative,SparsityTerm,SparsityCorrelativeTerm)
-
-# Do we have Mosek version at least 10?
-isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
-include("./solvers/MosekSOS.jl")
-include("./solvers/COSMOMoment.jl")
-include("./solvers/SpecBMSOS.jl")
-include("./solvers/HypatiaMoment.jl")
+include("./solvers/Solvers.jl")
 
 end
