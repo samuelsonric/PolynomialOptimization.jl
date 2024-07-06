@@ -87,8 +87,8 @@ function Solver.fix_objective!(state::StateMoment, indvals::AbstractIndvals{Int3
     return
 end
 
-function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation,
-    groupings::RelaxationGroupings; verbose::Bool=false, customize::Function=_ -> nothing, parameters...)
+function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
+    verbose::Bool=false, customize::Base.Callable=_ -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     try
         setup_time = @elapsed begin
