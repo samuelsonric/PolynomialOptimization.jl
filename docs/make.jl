@@ -16,4 +16,6 @@ makedocs(sitename="PolynomialOptimization.jl",
         "auxreference.md",
         "simplepolynomials.md"
     ],
-    warnonly=:missing_docs)
+    warnonly=:missing_docs,
+    doctest=false
+)

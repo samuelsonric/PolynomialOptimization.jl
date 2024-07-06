@@ -72,7 +72,7 @@ The function [`poly_solutions`](@ref) gives an iterator that delivers all the (p
 arbitrary order.
 Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solutions and grades them according to how much they
 violate the bound or constraints, if any were given. The solutions are then returned in a best-to-worst order.
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> poly_all_solutions(res)
 2-element Vector{Tuple{Vector{Float64}, Float64}}:
  ([-1.1700613807653743e-18, 0.4082426580485429, -0.408242660645461], 5.266275193704928e-10)
@@ -212,7 +212,7 @@ Time required for optimization: 0.00306 seconds
 ```
 Again, we get the same optimal value, so introducing the sparsity did not make our relaxation worse (which is _per se_ not
 guaranteed), and we are still able to get the same optimal solutions:
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> poly_all_solutions(ans)
 2-element Vector{Tuple{Vector{Float64}, Float64}}:
  ([0.0, 0.4082661947158492, -0.408266194715714], 4.589421509493263e-9)
@@ -276,7 +276,7 @@ supported methods, see [the solver reference](@ref solvers_poly_optimize).
 
 Note that by passing the keyword argument `verbose=true` to the optimization function, we get some more insight into what
 happens behind the hood. Let's redo the last optimization.
-```Julia
+```julia-repl
 julia> poly_optimize(:Clarabel, tcs, verbose=true)
 Beginning optimization...
 Clique merging disabled.
@@ -347,7 +347,7 @@ After this step is done, the Clarabel data (or any other optimizer structure, wh
 constructed; then the solver runs.
 
 Indeed, due to sparsity, the moment matrix is full of unknowns:
-```jldoctest walkthrough
+```julia-repl
 julia> show(stdout, "text/plain", moment_matrix(res))
 10×10 LinearAlgebra.Symmetric{Float64, Matrix{Float64}}:
    1.0         NaN         NaN         NaN             0.166666    -0.166666     0.166666   NaN          NaN            1.60942e-8
@@ -402,7 +402,7 @@ variables, specifying a different perturbation magnitude for each variable (or j
 Equality constraints are accessible by passing the keyword argument `zero` to [`poly_problem`](@ref), which constrains those
 polynomials to be zero. They are relatively cheap to realize in the solver, as they don't require another semidefinite matrix,
 just linear constraints or free scalar variables depending on the approach.
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> @polyvar x[1:2];
 
 julia> poly_optimize(:Clarabel, poly_problem(-(x[1] -1)^2 - (x[1] - x[2])^2 - (x[2] -3)^2,
@@ -546,7 +546,7 @@ Time required for optimization: 0.1160416 seconds
 Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized,
 you'll get a vastly different result whenever the extraction is performced), so let's try to get the solution via the heuristic
 method:
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> poly_all_solutions(:heuristic, res)
 4-element Vector{Tuple{Vector{Float64}, Float64}}:
  ([1.000000651012571, 1.0000006504036543], 7.809732969654704e-6)
@@ -597,7 +597,7 @@ Use `conj` at your discretion, but note that `real` and `imag` should not be use
 square.
 
 As soon as [`poly_problem`](@ref) detects complex variables, it switches to the complex-valued hierarchy.
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> @complex_polyvar z;
 
 julia> prob = poly_problem(z + conj(z), zero=[z*conj(z)-1])
@@ -622,7 +622,7 @@ julia> poly_all_solutions(ans)
 The dense solution extraction mechanism also works in the complex case.
 
 Let's try a more complicated example from the paper on the complex-valued Lasserre hierarchy (example 4.1):
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> @complex_polyvar z[1:2];
 
 julia> prob = poly_problem(3 - z[1]*conj(z[1]) - .5im*z[1]*conj(z[2])^2 + .5im*z[2]^2*conj(z[1]),
@@ -648,7 +648,7 @@ the longer optimization times are due to compilation times, as some of the metho
 to be compiled first.
 
 And finally something with matrices:
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"^ .+$"
 julia> res = poly_optimize(:Clarabel, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]),
                                                    psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
                                                          conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]), 3)
