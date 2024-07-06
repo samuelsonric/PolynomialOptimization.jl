@@ -64,8 +64,8 @@ function Solver.fix_objective!(state::StateMoment{<:Any,K}, indvals::AbstractInd
 end
 
 function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor), customize::Base.Callable=_ -> nothing,
-    linear_solver::Type{<:LinearSolver}=SCS.DirectSolver, parameters...)
+    verbose::Bool=false, customize::Base.Callable=_ -> nothing, linear_solver::Type{<:LinearSolver}=SCS.DirectSolver,
+    parameters...)
     setup_time = @elapsed begin
         I = scsint_t(linear_solver)
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
