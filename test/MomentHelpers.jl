@@ -143,7 +143,7 @@ end
 Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...) =
     @interpret add_constr_quadratic_worker!(state, indvals...)
 
-function Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)
+function Solver.add_constr_quadratic_worker!(state::SolverSetup{false,true,false,false,false}, indvals::AbstractIndvals{BigInt,BigFloat}...)
     @test state.lastcall === :none
     state.lastcall = :quadratic
     if state.instance == 13

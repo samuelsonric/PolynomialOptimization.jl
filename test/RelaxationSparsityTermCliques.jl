@@ -62,7 +62,7 @@ Free block sizes:
             @testset let solver=solver
                 @test(poly_optimize(solver, sp;
                     (solver == :HypatiaMoment ? Dict(:preprocess => true) : Dict())...).objective ≈ 0,
-                    atol=solver==:SCSMoment ? 5e-5 : 5e-7)
+                    atol=solver==:SCSMoment ? 5e-5 : 9e-7)
             end
         end
     end

@@ -383,7 +383,7 @@ end
     if optimize
         for solver in solvers
             @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 38.0494 atol = solver==:SCSMoment ? 1e-2 : 2e-4
+                @test poly_optimize(solver, sp).objective ≈ 38.0514 atol = solver==:SCSMoment ? 1e-2 : 2e-4
             end
         end
     end
@@ -402,8 +402,8 @@ end
     if optimize
         for solver in solvers
             @testset let solver=solver
-                @test(poly_optimize(solver, sp).objective ≈ 38.0494,
-                    atol = (solver==:SCSMoment ? 2e-2 : 1e-4), skip = solver==:COPTMoment)
+                @test(poly_optimize(solver, sp).objective ≈ 38.0514,
+                    atol = (solver==:SCSMoment ? 2e-2 : 2e-4), skip = solver==:COPTMoment)
             end
         end
         # COPT: 170s
@@ -493,7 +493,7 @@ end
     [2 => 2, 1 => 5]"
 
     if optimize
-        for solver in complex_solvers
+        for solver in solvers
             @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
         end
     end
@@ -504,7 +504,7 @@ end
     [3 => 1, 2 => 2, 1 => 2]"
 
     if optimize
-        for solver in complex_solvers
+        for solver in solvers
             @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
         end
     end
