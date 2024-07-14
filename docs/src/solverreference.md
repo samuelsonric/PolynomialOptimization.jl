@@ -56,7 +56,8 @@ number up or down by 100 or more. All solvers may expose options that can influe
 | Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment      | 👍👍👍  | 👍👍👍  | 👍👍    | ~200                    |
 | COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment      | 👍👍👍  | 👍👍👍  | 👍👍👍  | ~700                    |
 | Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment      | 👍👍    | 👍👍     | 👍      | ~100                    |
-| Mosek[^2]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍  | 👍👍    | ~300 - 500              |
+| LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear | n.a.   | n.a.      | 👍👍👍 | n.a.                    |
+| Mosek[^3]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍  | 👍👍    | ~300 - 500              |
 | SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment      | 👍      | 👍       | 👍👍👍  |                         |
 ```@meta
 #| STRIDE      | ∅ (branch `stride`)                                         |            | moment      |       |           |         |                         |
@@ -67,17 +68,17 @@ number up or down by 100 or more. All solvers may expose options that can influe
       one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
       system, the sparse solver will take forever; better pass `dense=true` to the optimization routine. This will then be much
       faster (and always much more accurate).
-[^2]: `:MosekMoment` requires at least version 10, `:MosekSOS` already works with version 9.
+[^2]: LANCELOT is a nonlinear solver that directly works on the problem itself. It does not use a relaxation. Therefore, it
+      cannot provide lower-bound guarantees on the objective value; however, there is no problem with the extraction of a
+      solution, as the solver directly works on the decision variables. When invoking the LANCELOT solver, a function is
+      returned which performs the optimization and which requires a vector of initial values as parameter. This function will
+      then return a 2-tuple with the (locally) optimal objective value and the point of the local optimum.
+      Currently, the LANCELOT interface does not support complex-valued problems.
+[^3]: `:MosekMoment` requires at least version 10, `:MosekSOS` already works with version 9.
       The moment variant is more prone to failure in case of close-to-illposed problems; sometimes, this is an issue of the
       presolver, which can be turned off by passing `MSK_IPAR_PRESOLVE_USE="MSK_PRESOLVE_MODE_OFF"` to [`poly_optimize`](@ref).
       The performance indicators in the table are valid for `:MosekSOS`. The new PSD cone interface of Mosek 10 that is used by
       the moment-based variant proves to be much slower than the old one; therefore, using `:MosekMoment` is not recommended.
-
-```@meta
-#Additionally, the solver method `:LANCELOT` is available (branch `lancelot`, needs to be compiled and installed manually) that
-#solves the polynomial optimization problem without resolving to relaxations, but instead using a nonlinear optimizer without
-#any global guarantees.
-```
 
 ### Solver interface
 In general, a solver implementation can do whatever it wants; it just needs to implement the [`poly_optimize`](@ref) method

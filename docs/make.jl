@@ -1,12 +1,9 @@
 using Documenter
-using PolynomialOptimization
-using MultivariatePolynomials
-using DynamicPolynomials
+using PolynomialOptimization, GALAHAD
+using MultivariatePolynomials, DynamicPolynomials
 
 makedocs(sitename="PolynomialOptimization.jl",
-    modules=[PolynomialOptimization, PolynomialOptimization.SimplePolynomials,
-        PolynomialOptimization.SimplePolynomials.MultivariateExponents, PolynomialOptimization.FastVector,
-        PolynomialOptimization.Newton, PolynomialOptimization.Solver],
+    modules=filter(m -> startswith(string(m), "PolynomialOptimization"), Docs.modules),
     format=Documenter.HTML(prettyurls=false),
     pages=[
         "index.md",
