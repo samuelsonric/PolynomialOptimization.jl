@@ -119,8 +119,8 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
         iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
-        mon.index < cmon.index &&
-            @inbounds return Pair(mon, Complex(d.values[i], d.values[cmon.index])), (i +1, rem, deg, degIncAt)
+        mon.index > cmon.index &&
+            @inbounds return Pair(mon, Complex(d.values[cmon.index], -d.values[i])), (i +1, rem, deg, degIncAt)
         # skip over the conjugates
         i += 1
     end
@@ -159,10 +159,10 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
         iszero(Nc) && @inbounds return Pair(mon, nz[idx]), (idx +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(nz[idx])), (idx +1, rem, deg, degIncAt)
-        if mon.index < cmon.index
+        if mon.index > cmon.index
             cidx = searchsorted(rv, cmon.index)
             @assert(!isempty(cidx))
-            @inbounds return Pair(mon, Complex(nz[idx], nz[cidx[begin]])), (idx +1, rem, deg, degIncAt)
+            @inbounds return Pair(mon, Complex(nz[cidx[begin]], -nz[idx])), (idx +1, rem, deg, degIncAt)
         end
         # skip over the conjugates
         idx += 1
