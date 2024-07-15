@@ -304,9 +304,9 @@ See also [`poly_problem`](@ref).
 """
 function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
     gr = groupings(relaxation)
-    subdegree = v -> maximum(maxdegree_complex, v)
+    subdegree = v -> maximum(maxdegree_complex, v, init=0)
     return max(
-        maximum(maxdegree_complex, gr.obj),
+        maximum(maxdegree_complex, gr.obj, init=0),
         maximum(subdegree, gr.zeros, init=0),
         maximum(subdegree, gr.nonnegs, init=0),
         maximum(subdegree, gr.psds, init=0)
