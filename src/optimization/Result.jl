@@ -80,7 +80,7 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}},
         @assert(!isempty(ridx_c))
         @inbounds idx_re, idx_im = minmax(ridx[begin], ridx_c[begin]) # rowvals is ascending, so this is transitive
         @inbounds val_re, val_im = nz[idx_re], nz[idx_im]
-        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_re : -val_re)
+        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_im : -val_im)
     end
 end
 
