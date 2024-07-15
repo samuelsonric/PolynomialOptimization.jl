@@ -66,6 +66,7 @@ poly_solutions
 poly_solution_badness
 moment_matrix
 MomentVector
+MomentAssociation
 ```
 
 ## Newton polytope construction (manually)
