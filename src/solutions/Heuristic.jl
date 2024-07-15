@@ -33,13 +33,13 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
     relaxation = result.relaxation
     moments = result.moments
     basis = Relaxation.basis(relaxation)
-    deg = 2degree(relaxation)
+    deg = degree(relaxation)
     for i in 1:Nr
         mon = SimpleMonomial(basis.e, SimpleRealVariable{Nr,Nc}(i)) # This may raise an error, but only if the user
                                                                            # provided an insufficient basis manually.
         # The monomial is present in the original basis, so we try to reconstruct it by searching for its powers. We will
         # favor even powers (even over the variable itself), as they are not affected by multiple sign-symmetric solutions
-        for pow in 2:2:deg
+        for pow in 2:2:2deg
             val = moments[mon^pow]
             if !isnan(val)
                 if abs(val) ≤ R(1e-7) # almost zero
@@ -54,7 +54,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
                 # using remaining powers, but the result will probably be useless.
             end
         end
-        for pow in 1:2:deg
+        for pow in 1:2:2deg
             val = moments[mon^pow]
             if !isnan(val)
                 solution[i] = abs(val)^inv(pow)
@@ -107,7 +107,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
                 end
             end
             if isnan(abs_val) || isempty(phase_candidates)
-                push!(zero_checks, var)
+                push!(zero_checks, i)
             elseif isone(length(phase_candidates))
                 solution[i] = abs_val * cis(@inbounds phase_candidates[begin])
             else
