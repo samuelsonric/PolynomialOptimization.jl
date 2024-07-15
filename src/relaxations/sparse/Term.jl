@@ -280,7 +280,7 @@ end
                     end
                     cliques = _extend_graphs!(Val(method), g[igroup])
                     for clique in cliques
-                        (isone(length(clique)) && isconstant(grouping[first(clique)])) ||
+                        ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
                             push!(newgroup, @view(grouping[clique]))
                     end
                     igroup += 1
@@ -300,7 +300,7 @@ end
                     if !ismissing(vcm)
                         cliques = _extend_graphs!(Val(vcm), g[igroup])
                         for clique in cliques
-                            (isone(length(clique)) && isconstant(grouping[first(clique)])) ||
+                            ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
                                 push!(newgroup, @view(grouping[clique]))
                         end
                     end
