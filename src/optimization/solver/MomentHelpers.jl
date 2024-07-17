@@ -494,10 +494,10 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
                 end
             end
         end
-        # In the real case, we can skip the first i-1 entries as they would lead to duplicates.
-        # In the complex case, we can also skip the first i-1 entries, as they would lead to exact conjugates, which in the
-        # end give rise to the same conditions.
-        for g₂ in Iterators.drop(grouping, iszero(Nc) ? i -1 : i)
+        # In the real case, we can skip the entries behind i as they would lead to duplicates.
+        # In the complex case, we can also skip them, as they would lead to exact conjugates, which in the end give rise to the
+        # same conditions (but note that i is already handled above).
+        for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
             # We don't use mindex, as this can have unintended side-effects on the solver state (such as creating a
             # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
             # a constant term, this function must not automatically add all the squared groupings as monomials, even if they

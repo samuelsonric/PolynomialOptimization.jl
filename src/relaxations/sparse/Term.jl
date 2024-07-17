@@ -176,6 +176,29 @@ end
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
     localizing_supports::(Vector{MV} where {MV<:SimpleMonomialVector}), parent::RelaxationGroupings,
     methods::AbstractVector{TermMode}, varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer}
+    # enforce specialization on grouping, which is an abstract type
+    grouping_loop = (grouping, localizing_support, ipoly, igroup) -> begin
+        if methods[ipoly] == TERM_MODE_NONE
+            vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
+            if ismissing(vcm) || vcm == TERM_MODE_NONE
+                return
+            end
+        end
+        graphs[igroup] = graph = Graphs.SimpleGraph(length(grouping))
+        for (exp2, g₂) in enumerate(grouping)
+            r = isreal(g₂)
+            for (exp1, g₁) in enumerate(Iterators.take(grouping, r ? exp2 -1 : typemax(Int)))
+                Graphs.has_edge(graph, exp1, exp2) && continue
+                for supp_constr in localizing_support
+                    if monomial_index(g₁, supp_constr, SimpleConjMonomial(g₂)) ∈ support_union
+                        Graphs.add_edge!(graph, Graphs.Edge(exp1, exp2))
+                        break
+                    end
+                end
+            end
+        end
+        nothing
+    end
     ipoly = 1
     igroup = 1
     @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
@@ -183,26 +206,7 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
             if methods[ipoly] != TERM_MODE_NONE || !ismissing(varclique_methods)
                 localizing_support = localizing_supports[ipoly]
                 for grouping in constr_groupings
-                    if methods[ipoly] == TERM_MODE_NONE
-                        vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
-                        if ismissing(vcm) || vcm == TERM_MODE_NONE
-                            igroup += 1
-                            continue
-                        end
-                    end
-                    graphs[igroup] = graph = Graphs.SimpleGraph(length(grouping))
-                    for (exp2, g₂) in enumerate(grouping)
-                        r = isreal(g₂)
-                        for (exp1, g₁) in zip(Iterators.countfrom(r ? exp2 +1 : 1), @view(grouping[(r ? exp2 +1 : 1):end]))
-                            Graphs.has_edge(graph, exp1, exp2) && continue
-                            for supp_constr in localizing_support
-                                if monomial_index(g₁, supp_constr, SimpleConjMonomial(g₂)) ∈ support_union
-                                    Graphs.add_edge!(graph, Graphs.Edge(exp1, exp2))
-                                    break
-                                end
-                            end
-                        end
-                    end
+                    grouping_loop(grouping, localizing_support, ipoly, igroup)
                     igroup += 1
                 end
             else
@@ -272,6 +276,8 @@ end
             $(name === :obj ? :newobj : :($(Symbol(:new, name))[i])) = if methods[ipoly] != TERM_MODE_NONE
                 newgroup = FastVec{SimpleMonomialVector{Nr,Nc,I}}()
                 for grouping in constr_groupings
+                    # while grouping is generic, we don't gain a lot on inference by putting the loop body in a function
+                    # barrier
                     if !ismissing(varclique_methods)
                         vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
                         method = ismissing(vcm) ? methods[ipoly] : vcm
@@ -348,6 +354,20 @@ end
 function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vector{MV}, g::Vector{G}) where
     {I<:Integer,Nc,MV<:SimpleMonomialVector{<:Any,Nc,I},G<:Graphs.SimpleGraph}
     support_union = Set{I}()
+    grouping_loop = @capture((grouping, localizing_support, graph) -> begin
+        for e in Graphs.edges(graph)
+            for α in localizing_support
+                push!($support_union, monomial_index(grouping[Graphs.src(e)], α,
+                                                     SimpleConjMonomial(grouping[Graphs.dst(e)])))
+                if !iszero(Nc) && Graphs.src(e) != Graphs.dst(e) # or noncommutative
+                    push!(support_union, monomial_index(grouping[Graphs.dst(e)], α,
+                          SimpleConjMonomial(grouping[Graphs.src(e)])))
+                end
+            end
+        end
+        # TODO: check the complex case
+        nothing
+    end)
     ipoly = 1
     igroup = 1
     @inbounds @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
@@ -357,17 +377,7 @@ function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vec
                 graph = g[igroup]
                 sizehint!(support_union, length(support_union) +
                     (iszero(Nc) ? 1 : 2) * Graphs.ne(graph) * length(localizing_support))
-                for e in Graphs.edges(graph)
-                    for α in localizing_support
-                        push!(support_union, monomial_index(grouping[Graphs.src(e)], α,
-                                                            SimpleConjMonomial(grouping[Graphs.dst(e)])))
-                        if !iszero(Nc) && Graphs.src(e) != Graphs.dst(e) # or noncommutative
-                            push!(support_union, monomial_index(grouping[Graphs.dst(e)], α,
-                                SimpleConjMonomial(grouping[Graphs.src(e)])))
-                        end
-                    end
-                end
-                # TODO: check the complex case
+                grouping_loop(grouping, localizing_support, graph) # here a function barrier is good
                 igroup += 1
             end
             ipoly += 1

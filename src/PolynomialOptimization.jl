@@ -19,9 +19,9 @@ include("./helpers/Helpers.jl")
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")
 using .Relaxation
+include("./optimization/Optimization.jl")
 include("./newton/Newton.jl")
 import .Newton
-include("./optimization/Optimization.jl")
 include("./solutions/SolutionExtraction.jl")
 include("./Tightening.jl")
 
