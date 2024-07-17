@@ -44,7 +44,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=
         end
         if verbose
             bs = StatsBase.countmap(length.(groups.obj))
-            for constrs in (groups.nonnegs, groups.psds)
+            @unroll for constrs in (groups.nonnegs, groups.psds)
                 for constr in constrs
                     mergewith!(+, bs, StatsBase.countmap(length.(constr)))
                 end

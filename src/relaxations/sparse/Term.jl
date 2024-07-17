@@ -158,7 +158,7 @@ function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,
         support_union = Set{I}(Iterators.map(monomial_index, monomials(prob.objective)))
         union!(support_union, Iterators.map(monomial_index, monomials(prob.prefactor)))
         # ^ this is for the minimal value that is subtracted from the objective
-        for constrs in (prob.constr_zero, prob.constr_nonneg, prob.constr_psd)
+        @unroll for constrs in (prob.constr_zero, prob.constr_nonneg, prob.constr_psd)
             for constr in constrs
                 union!(support_union, Iterators.map(monomial_index, monomials(constr)))
             end
@@ -178,7 +178,7 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
     methods::AbstractVector{TermMode}, varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer}
     ipoly = 1
     igroup = 1
-    for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
+    @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
         for constr_groupings in constrs
             if methods[ipoly] != TERM_MODE_NONE || !ismissing(varclique_methods)
                 localizing_support = localizing_supports[ipoly]
@@ -350,7 +350,7 @@ function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vec
     support_union = Set{I}()
     ipoly = 1
     igroup = 1
-    @inbounds for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
+    @inbounds @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
         for constr_groupings in constrs
             localizing_support = localizing_supports[ipoly]
             for grouping in constr_groupings
