@@ -156,10 +156,10 @@ x^4 y^2 + x^2 y^4 - 3 x^2 y^2 + 1 = \sum_i (\alpha_i + \beta_i x y + \gamma_i x 
 would have to hold; but expanding the right-hand side will lead to the coefficient ``\sum_i \beta_i^2`` in front of the
 monomial ``x^2 y^2``, which cannot be negative; hence, the Motzkin polynomial is not a sum of squares.
 
-Note that the calculation of the Newton polytope currently requires Mosek. There are some preprocessing options that may be
-able to speed up the calculation, although it is already extremely fast by itself and can calculate the correct basis for
-objectives with hundreds of terms in a decent time (which can be further reduced by multithreading or distributed computing).
-Check out the documentation for [`Newton.halfpolytope`](@ref) for more information.
+Note that the calculation of the Newton polytope currently requires Mosek or COPT. There are some preprocessing options that
+may be able to speed up the calculation, although it is already extremely fast by itself and can calculate the correct basis
+for objectives with hundreds of terms in a decent time (which can be further reduced by multithreading or distributed
+computing). Check out the documentation for [`Newton.halfpolytope`](@ref) for more information.
 
 In case you already happen to know a (better) choice of basis, you may opt for [`Relaxation.Custom`](@ref). Note that
 relaxations are built incrementally, where the only relaxation that can be constructed directly from a problem is the dense
@@ -506,9 +506,10 @@ At second level, we get the optimal solution.
 The problem can be further tightened by a careful analysis, as [Nie](https://doi.org/10.1007/s10107-018-1276-2) noted, by
 rewriting the Lagrange multipliers as polynomials - which will not modify the problem if the minimum is attained at a critical
 point (but not that non-critical global minima will be missed).
-`PolynomialOptimization` is able to automatically analyze the problem and add the tightening constraints (Mosek is required at
-the moment). For this, simply pass `tighter=true` to `poly_problem`. This will result in a preprocessing that adds constraints,
-so expect the problem to grow. To see the progress during the preprocessing stage, use `verbose=true`.
+`PolynomialOptimization` is able to automatically analyze the problem and add the tightening constraints (Mosek or COPT are
+required at the moment). For this, simply pass `tighter=true` (or `tighter=:Mosek` resp. `tighter=:COPT`) to `poly_problem`.
+This will result in a preprocessing that adds constraints, so expect the problem to grow. To see the progress during the
+preprocessing stage, use `verbose=true`.
 It may be the case that the required tightening polynomials cannot be determined since their degree always turns out to be
 insufficient to satisfy the conditions. Since `PolynomialOptimization` cannot distinguish this from the case where the degree
 is just quite high, the procedure may run into an infinite(ly-seeming) loop.

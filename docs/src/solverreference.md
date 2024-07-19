@@ -228,6 +228,7 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
 | Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
 
 ### Solver interface
@@ -259,6 +260,7 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
 | Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
 
 ### Solver interface

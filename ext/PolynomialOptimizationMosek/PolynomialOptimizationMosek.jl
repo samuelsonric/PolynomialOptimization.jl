@@ -1,10 +1,10 @@
 module PolynomialOptimizationMosek
 
-using PolynomialOptimization, Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
-    PolynomialOptimization.Newton
+using Mosek, MultivariatePolynomials, PolynomialOptimization.Solver, PolynomialOptimization.Newton
 using PolynomialOptimization: @assert, @inbounds, @allocdiff
 using PolynomialOptimization.SimplePolynomials: veciter
 using Mosek: msk_global_env, Env, deletetask
+import PolynomialOptimization
 
 printstream(msg::String) = (print(msg); flush(stdout))
 
