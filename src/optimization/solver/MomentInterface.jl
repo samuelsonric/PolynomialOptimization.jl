@@ -1,5 +1,5 @@
 export add_constr_nonnegative!, add_constr_quadratic!, add_constr_psd!, add_constr_psd_complex!,
-    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, fix_objective!
+    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, fix_objective!, add_var_slack!
 
 function add_constr_nonnegative! end
 
@@ -183,3 +183,12 @@ This function will be called exactly once by [`moment_setup!`](@ref) after all v
 See also [`Indvals`](@ref).
 """
 function fix_objective! end
+
+"""
+    add_var_slack!(state, num::Int)
+
+Creates `num` slack variables in the problem. Slack variables can be free or nonnegative, as is more convenient for the
+implementation. The result should be an abstract vector (typically a unit range) that contains the indices of all created slack
+variables. The indices should be of the same type as [`mindex`](@ref).
+"""
+function add_var_slack! end

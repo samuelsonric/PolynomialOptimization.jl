@@ -180,6 +180,7 @@ add_constr_fix_prepare!
 add_constr_fix!
 add_constr_fix_finalize!
 fix_objective!
+add_var_slack!
 ```
 
 #### Interface for the SOS optimization
@@ -201,6 +202,7 @@ add_var_free_prepare!
 add_var_free!
 add_var_free_finalize!
 fix_constraints!
+add_constr_slack!
 ```
 
 #### Helper functions

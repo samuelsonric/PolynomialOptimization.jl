@@ -16,7 +16,7 @@ function Base.append!(state::StateMoment, key)
         Δ = newnum - state.num_solver_vars
         _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
             fill(-COPT_INFINITY, Δ), C_NULL, C_NULL))
-        state.num_solver_vars += Δ
+        state.num_solver_vars = newnum
     end
     return state.mon_to_solver[FastKey(key)] = let uv=state.num_used_vars
         state.num_used_vars += one(Cint)
@@ -27,6 +27,19 @@ end
 Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
+
+function Solver.add_var_slack!(state::StateMoment, num::Int)
+    if state.num_used_vars + num > state.num_solver_vars
+        newnum = overallocation(state.num_solver_vars + Cint(num))
+        Δ = newnum - state.num_solver_vars
+        _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
+            C_NULL))
+        state.num_solver_vars = newnum
+    end
+    result = state.num_used_vars:state.num_used_vars+Cint(num -1)
+    state.num_used_vars += num
+    return result
+end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Cint,Float64})
     _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, 0., COPT_INFINITY,

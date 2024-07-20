@@ -1,5 +1,5 @@
 export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_psd!, add_var_psd_complex!,
-    add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!
+    add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!, add_constr_slack!
 
 function add_var_nonnegative! end
 
@@ -179,3 +179,12 @@ This function will be called exactly once by [`sos_setup!`](@ref) after all vari
 See also [`Indvals`](@ref).
 """
 function fix_constraints! end
+
+"""
+    add_constr_slack!(state, num::Int)
+
+Creates `num` linear nonnegative slack constraints in the problem (i.e., constraints that do not correspond to moments). The
+result should be an abstract vector (typically a unit range) that contains the indices of all created slack constraints. The
+indices should be of the same type as [`mindex`](@ref).
+"""
+function add_constr_slack! end

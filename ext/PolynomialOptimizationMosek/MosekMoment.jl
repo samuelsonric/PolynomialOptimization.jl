@@ -1,27 +1,42 @@
 mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K}
     const task::Mosek.Task
-    num_vars::Int32
+    num_solver_vars::Int32 # total number of variables available in the solver
+    num_used_vars::Int32 # number of variables already used for something (might include scratch variables)
     num_cons::Int32
     num_afes::Int64
     const mon_to_solver::Dict{FastKey{K},Int32}
 
     StateMoment{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
-        task, zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
+        task, zero(Int32), zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
     )
 end
 
 function Base.append!(state::StateMoment, key)
-    if state.num_vars == length(state.mon_to_solver)
-        newnum = overallocation(state.num_vars + one(state.num_vars))
-        appendvars(state.task, newnum - state.num_vars)
-        state.num_vars = newnum
+    if state.num_used_vars == state.num_solver_vars
+        newnum = overallocation(state.num_solver_vars + one(Int32))
+        appendvars(state.task, newnum - state.num_solver_vars)
+        state.num_solver_vars = newnum
     end
-    return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
+    return state.mon_to_solver[FastKey(key)] = let uv=state.num_used_vars
+        state.num_used_vars += one(Int32)
+        uv
+    end
 end
 
 Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
+
+function Solver.add_var_slack!(state::StateMoment, num::Int)
+    if state.num_solver_vars + num > state.num_solver_vars
+        newnum = overallocation(state.num_solver_vars + Int32(num))
+        appendvars(state.task, newnum - state.num_solver_vars)
+        state.num_solver_vars = newnum
+    end
+    result = state.num_used_vars:state.num_used_vars+Int32(num -1)
+    state.num_used_vars += num
+    return result
+end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Int32,Float64})
     appendafes(state.task, 1)
@@ -133,7 +148,7 @@ function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxatio
 
             state = StateMoment{K}(task)
             moment_setup!(state, relaxation, groupings; representation)
-            Mosek.@MSK_putvarboundsliceconst(task.task, 0, length(state.mon_to_solver), MSK_BK_FR.value, -Inf, Inf)
+            Mosek.@MSK_putvarboundsliceconst(task.task, 0, state.num_used_vars, MSK_BK_FR.value, -Inf, Inf)
             customize(state)
         end
         @verbose_info("Setup complete in ", setup_time, " seconds")
@@ -141,7 +156,7 @@ function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxatio
         optimize(task)
         @verbose_info("Optimization complete, retrieving moments")
 
-        x = Vector{Float64}(undef, length(state.mon_to_solver))
+        x = Vector{Float64}(undef, state.num_used_vars)
         Mosek.@MSK_getxxslice(task.task, MSK_SOL_ITR.value, 0, length(x), x)
         return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, x, state)
     finally

@@ -8,6 +8,7 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
     lenzero::I
     const socsizes::FastVec{I}
     const psdsizes::FastVec{I}
+    slack::K
 
     StateMoment{I,K}() where {I<:Integer,K<:Integer} = new{I,K,zero(I)}(
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
@@ -15,7 +16,7 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         (FastVec{Int}(), FastVec{Float64}()),
         Ref{Tuple{Vector{K},Vector{Float64}}}(), 0, 0,
-        FastVec{I}(), FastVec{I}()
+        FastVec{I}(), FastVec{I}(), K <: Signed ? -one(K) : typemax(K)
     )
 end
 
@@ -172,5 +173,5 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
     Base.@_gc_preserve_end _y
     Base.@_gc_preserve_end _s
 
-    return status, scs_info.pobj, MomentVector(relaxation, x, Acoo)
+    return status, scs_info.pobj, MomentVector(relaxation, x, state.slack, Acoo)
 end

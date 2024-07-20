@@ -7,6 +7,8 @@ Superclass for a solver that requires its data in sparse matrix form. The data i
 [`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset})
 and can be converted to CSC form using [`coo_to_csc!`](@ref). The type of the indices in final CSC form is `I`, where the
 monomials during construction will be represented by numbers of type `K`.
+Any type inheriting from this class is supposed to have a field `slack::K` which is initialized to `-one(K)` if `K` is signed
+or `typemax(K)` if it is unsigned.
 
 See also [`SparseMatrixCOO`](@ref).
 """
@@ -14,6 +16,18 @@ abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} end
 
 Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
     monomial_index(monomials...)::K
+
+function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
+    stop = state.slack
+    state.slack -= num
+    return (state.slack + one(K)):stop
+end
+
+function Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
+    stop = state.slack
+    state.slack -= num
+    return (state.slack + one(K)):stop
+end
 
 """
     SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
@@ -191,17 +205,22 @@ end
 
 """
     MomentVector(relaxation::AbstractRelaxation, moments::Vector{<:Real},
-        coo::SparseMatrixCOO...)
+        slack::Integer, coo::SparseMatrixCOO...)
 
 Given the moments vector as obtained from a [`AbstractSparseMatrixSolver`](@ref) solver, convert it to a
 [`MomentVector`](@ref). Note that this function is not fully type-stable, as the result may be based either on a dense or
 sparse vector depending on the relaxation. To establish the mapping between the solver output and the actual moments, all the
 column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the problem construction needs to be passed on.
+`slack` must contain the current value of the `slack` field of the `AbstractSparseMatrixSolver`.
 """
 function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
-    coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+    slack::Integer, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
-    max_mons = max(coo₁.moninds[end], (coo.moninds[end] for coo in cooₙ)...) # the coos are sorted according to the columns
+    coo₁moninds = @view(coo₁.moninds[slack isa Signed ? (-slack:length(coo₁.moninds)) :
+                                                        (1:length(coo₁.moninds)-(typemax(slack)-slack))])
+    cooₙmoninds = ((@view(coo.moninds[slack isa Signed ? (-slack:length(coo.moninds)) :
+                                                         (1:length(coo.moninds)-(typemax(slack)-slack))]) for coo in cooₙ)...,)
+    max_mons = max(coo₁moninds[end], (moninds[end] for moninds in cooₙmoninds)...) # coos are sorted according to the columns
     @assert(length(moments) ≤ max_mons)
     if length(moments) == max_mons # (real) dense case
         solution = moments
@@ -209,12 +228,12 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
         # We need to build the vector of monomial indices.
         mon_pos = Vector{K}(undef, length(moments))
         if length(cooₙ) == 0
-            count_uniques(coo₁.moninds, @capture((index, i) -> @inbounds begin
-                $mon_pos[index] = $coo₁.moninds[i]
+            count_uniques(coo₁moninds, @capture((index, i) -> @inbounds begin
+                $mon_pos[index] = $coo₁moninds[i]
             end))
         elseif length(cooₙ) == 1
-            count_uniques(coo₁.moninds, cooₙ[1].moninds, @capture((index, i₁, i₂) -> @inbounds begin
-                $mon_pos[index] = ismissing(i₁) ? $cooₙ[1].moninds[i₂] : $coo₁.moninds[i₁]
+            count_uniques(coo₁moninds, cooₙmoninds[1], @capture((index, i₁, i₂) -> @inbounds begin
+                $mon_pos[index] = ismissing(i₁) ? $cooₙmoninds[1][i₂] : $coo₁moninds[i₁]
             end))
         else
             throw(MethodError(MomentVector, (relaxation, moments, coo₁, cooₙ...)))

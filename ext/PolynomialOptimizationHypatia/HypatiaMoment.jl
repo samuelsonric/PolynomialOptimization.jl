@@ -4,13 +4,15 @@ struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
     minusGcoo::SparseMatrixCOO{Int,K,V,1}
     c::Ref{Tuple{Vector{K},Vector{V}}}
     cones::FastVec{Cones.Cone{V}}
+    slack::K
 
     StateMoment{K,V}() where {K<:Integer,V<:Real} = new{K,V}(
         SparseMatrixCOO{Int,K,V,1}(),
         (FastVec{Int}(), FastVec{V}()),
         SparseMatrixCOO{Int,K,V,1}(),
         Ref{Tuple{Vector{K},Vector{V}}}(),
-        FastVec{Cones.Cone{V}}()
+        FastVec{Cones.Cone{V}}(),
+        K <: Signed ? -one(K) : typemax(K)
     )
 end
 
@@ -116,5 +118,5 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
     value = Solvers.get_primal_obj(solver)
     @verbose_info("Optimization complete, retrieving moments")
 
-    return status, value, MomentVector(relaxation, Solvers.get_x(solver), state.Acoo, state.minusGcoo)
+    return status, value, MomentVector(relaxation, Solvers.get_x(solver), state.slack, state.Acoo, state.minusGcoo)
 end

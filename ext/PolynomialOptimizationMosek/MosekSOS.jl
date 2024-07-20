@@ -2,26 +2,41 @@ mutable struct StateSOS{K<:Integer} <: AbstractAPISolver{K}
     const task::Mosek.Task
     num_vars::Int32
     num_bar_vars::Int32
-    num_cons::Int32
+    num_solver_cons::Int32 # total number of constraints available in the solver
+    num_used_cons::Int32 # number of constraints already used for something (might include scratch constraints)
     const mon_to_solver::Dict{FastKey{K},Int32}
 
     StateSOS{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
-        task, zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}()
+        task, zero(Int32), zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}()
     )
 end
 
 function Base.append!(state::StateSOS, key)
-    if state.num_cons == length(state.mon_to_solver)
-        newcon = overallocation(state.num_cons + one(state.num_cons))
-        appendcons(state.task, newcon - state.num_cons)
-        state.num_cons = newcon
+    if state.num_used_cons == state.num_solver_cons
+        newcon = overallocation(state.num_solver_cons + one(Int32))
+        appendcons(state.task, newcon - state.num_solver_cons)
+        state.num_solver_cons = newcon
     end
-    return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
+    return state.mon_to_solver[FastKey(key)] = let uc=state.num_used_cons
+        state.num_used_cons += one(Int32)
+        uc
+    end
 end
 
 Solver.supports_rotated_quadratic(::StateSOS) = true
 
 Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(:L, zero(Int32))
+
+function Solver.add_constr_slack!(state::StateSOS, num::Int)
+    if state.num_solver_cons + num > state.num_solver_cons
+        newnum = overallocation(state.num_solver_cons + Int32(num))
+        appendvars(state.task, newnum - state.num_solver_cons)
+        state.num_solver_cons = newnum
+    end
+    result = state.num_used_cons:state.num_used_cons+Int32(num -1)
+    state.num_used_cons += num
+    return result
+end
 
 function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
     N = length(indvals)
