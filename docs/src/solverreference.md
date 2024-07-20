@@ -142,7 +142,7 @@ MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, :
 There are some functions that should be implemented to tell `PolynomialOptimization` what kind of data the solver expects and
 which cones are supported; these should return constants.
 ```@docs
-SolverQuadratic
+supports_rotated_quadratic
 supports_quadratic
 supports_complex_psd
 AbstractPSDIndextype
@@ -172,6 +172,7 @@ moment_add_equality!
 For this to work, the following methods (or a subset as previously indicated) must be implemented.
 ```@docs
 add_constr_nonnegative!
+add_constr_rotated_quadratic!
 add_constr_quadratic!
 add_constr_psd!
 add_constr_psd_complex!
@@ -192,6 +193,7 @@ sos_add_equality!
 The following methods (or a subset as previously indicated) must be implemented.
 ```@docs
 add_var_nonnegative!
+add_var_rotated_quadratic!
 add_var_quadratic!
 add_var_psd!
 add_var_psd_complex!

@@ -1,4 +1,4 @@
-export add_var_nonnegative!, add_var_quadratic!, add_var_psd!, add_var_psd_complex!,
+export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_psd!, add_var_psd_complex!,
     add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!
 
 function add_var_nonnegative! end
@@ -36,10 +36,9 @@ function add_var_quadratic! end
 @doc raw"""
     add_var_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds decision variables in a (rotated) quadratic cone to the solver and put their values into the linear constraints (rows in
-the linear constraint matrix), indexed according to `indvals`. The `N = length(indvals)` variables will satisfy
-``x_1, x_2 \geq 0``, ``2x_1 x_2 \geq \sum_{i = 3}^N x_i^2`` if the solver supports the rotated quadratic cone or
-``x_1 \geq 0``, ``x_1^2 \geq \sum_{i = 2}^N x_i^2`` if it only supports the standard quadratic cone.
+Adds decision variables in a quadratic cone to the solver and put their values into the linear constraints (rows in the linear
+constraint matrix), indexed according to `indvals`. The `N = length(indvals)` variables will satisfy ``x_1 \geq 0``,
+``x_1^2 \geq \sum_{i = 2}^N x_i^2``.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
@@ -48,11 +47,31 @@ See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
     diagonally dominant representation is requested, `indvals` can have any length.
 
 !!! warning
-    This function will only be called if [`supports_quadratic`](@ref) is defined not return
-    [`SOLVER_QUADRATIC_NONE`](@ref SolverQuadratic) for the given state.
-    If it does, a fallback to a 2x2 PSD constraint is used.
+    This function will only be called if [`supports_quadratic`](@ref) returns `true` for the given state.
+    If (rotated) quadratic constraints are unsupported, a fallback to a 2x2 PSD variable is used.
 """
 add_var_quadratic!(::Any, ::IndvalsIterator{<:Any,Real})
+
+function add_var_rotated_quadratic! end
+
+@doc raw"""
+    add_var_rotated_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Adds decision variables in a rotated quadratic cone to the solver and put their values into the linear constraints (rows in
+the linear constraint matrix), indexed according to `indvals`. The `N = length(indvals)` variables will satisfy
+``x_1, x_2 \geq 0``, ``2x_1 x_2 \geq \sum_{i = 3}^N x_i^2``.
+
+See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+
+!!! note "Number of parameters"
+    In the real-valued case, `indvals` is always of length three, in the complex case, it is of length four. If the scaled
+    diagonally dominant representation is requested, `indvals` can have any length.
+
+!!! warning
+    This function will only be called if [`supports_quadratic`](@ref) returns `true` for the given state.
+    If (rotated) quadratic constraints are unsupported, a fallback to a 2x2 PSD variable is used.
+"""
+add_var_rotated_quadratic!(::Any, ::IndvalsIterator{<:Any,Real})
 
 function add_var_psd! end
 

@@ -2,9 +2,13 @@ export moment_add_matrix!, moment_add_equality!, moment_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
 
-function to_soc!(indices, values, lens, type)
-    @assert(length(lens) ≥ 2 && type !== SOLVER_QUADRATIC_NONE)
-    @inbounds if type === SOLVER_QUADRATIC_SOC
+function to_soc!(indices, values, lens, supports_rotated)
+    @assert(length(lens) ≥ 2)
+    @inbounds if supports_rotated
+        for j in length(lens):-1:3
+            iszero(lens[j]) && deleteat!(lens, j)
+        end
+    else
         range₁ = 1:lens[1]
         range₂ = lens[1]+1:lens[1]+lens[2]
         prevlen = last(range₂)
@@ -37,10 +41,6 @@ function to_soc!(indices, values, lens, type)
         for j in length(lens):-1:2
             iszero(lens[j]) && deleteat!(lens, j)
         end
-    else
-        for j in length(lens):-1:3
-            iszero(lens[j]) && deleteat!(lens, j)
-        end
     end
     return IndvalsIterator(indices, values, lens)
 end
@@ -55,7 +55,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
-    if dim == 1 || (dim == 2 && supports_quadratic(state) !== SOLVER_QUADRATIC_NONE)
+    if dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state)))
         matrix_indexing = false
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
     elseif indextype isa PSDIndextypeMatrixCartesian
@@ -100,15 +100,15 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
         # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying the
         # left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
-        if dim == 2
+            rquad = supports_rotated_quadratic(state)
             quad = supports_quadratic(state)
-            if quad === SOLVER_QUADRATIC_SOC
-                sqrt2 = V(2)
+            if !rquad && quad
+                scaling = V(2)
             else
-                sqrt2 = sqrt(V(2))
+                scaling = sqrt(V(2))
             end
         else
-            sqrt2 = sqrt(V(2))
+            scaling = sqrt(V(2))
         end
         lens, indices, values = data
         i = 1
@@ -135,7 +135,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                             mon_constr = monomial(term_constr)
                             coeff_constr = coefficient(term_constr)
                             if tri !== :F && !matrix_indexing && !ondiag
-                                coeff_constr *= sqrt2
+                                coeff_constr *= scaling
                             end
                             recoeff = real(coeff_constr)
                             imcoeff = imag(coeff_constr)
@@ -214,7 +214,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             @inbounds if dim == 1
                 @assert(length(lens) == 1)
                 add_constr_nonnegative!(state, Indvals(indices, values))
-            elseif dim == 2 && quad !== SOLVER_QUADRATIC_NONE
+            elseif dim == 2 && (rquad || quad)
                 @assert(length(lens) == (complex ? 4 : 3))
                 # Note: indices/values represent the vectorized PSD cone (lower triangle) with off-diagonals already
                 # pre-multiplied by sqrt(2). To make this exactly equivalent to a rotated quadratic cone, we must bring the
@@ -229,7 +229,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 else
                     lens[2], lens[3] = lens[3], lens[2]
                 end
-                add_constr_quadratic!(state, to_soc!(indices, values, lens, quad))
+                (rquad ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, rquad))
             else
                 (complex ? add_constr_psd_complex! : add_constr_psd!)(state, dim, IndvalsIterator(indices, values, lens))
             end
@@ -253,12 +253,12 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false))), representation))
         tri = Tri
-        sqrt2 = sqrt(V(2))
+        scaling = sqrt(V(2))
     end
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
-    if dim == 1 || (dim == 2 && supports_quadratic(state) !== SOLVER_QUADRATIC_NONE)
+    if dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state)))
         # in these cases, we will rewrite the Hermitian PSD cone in terms of linear or quadratic constraints, so break off
         return moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, (Val(false), Val(true)), representation)
     end
@@ -306,7 +306,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         if tri !== :F && !matrix_indexing && !ondiag
-                            coeff_constr *= sqrt2
+                            coeff_constr *= scaling
                         end
                         recoeff = real(coeff_constr)
                         imcoeff = imag(coeff_constr)
@@ -444,8 +444,8 @@ solver functions to set up the problem structure according to `representation`.
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
 - [`add_constr_nonnegative!`](@ref)
-- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -637,8 +637,8 @@ second of the equality, the third of the inequality, and the fourth of the PSD c
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)
 - [`add_constr_nonnegative!`](@ref)
-- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)

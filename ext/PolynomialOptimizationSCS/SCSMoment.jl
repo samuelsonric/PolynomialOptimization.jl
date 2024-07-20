@@ -19,7 +19,7 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
     )
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_SOC
+Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 

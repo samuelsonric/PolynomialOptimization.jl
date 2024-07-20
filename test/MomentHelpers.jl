@@ -68,7 +68,7 @@ mutable struct SolverSetup{Linear,Quadratic,PSD,SupportsComplexPSD,Fixed}
 end
 
 Solver.mindex(::SolverSetup, monomials::SimpleMonomialOrConj...) = BigInt(monomial_index(monomials...) + 48)
-Solver.supports_quadratic(::SolverSetup{<:Any,true}) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::SolverSetup{<:Any,true}) = true
 Solver.psd_indextype(::SolverSetup{<:Any,<:Any,psd}) where {psd} = psd
 Solver.psd_indextype(::SolverSetup{<:Any,<:Any,false}) = PSDIndextypeMatrixCartesian(:U, typemin(Int)) # should only be triggered for linear/quadratic case, and then the offset is ignored
 Solver.supports_complex_psd(::SolverSetup{<:Any,<:Any,<:Any,true}) = true
@@ -140,10 +140,10 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
     end
 end
 
-Solver.add_constr_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}...) =
-    @interpret add_constr_quadratic_worker!(state, indvals...)
+Solver.add_constr_rotated_quadratic!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}) =
+    @interpret add_constr_rotated_quadratic_worker!(state, indvals)
 
-function add_constr_quadratic_worker!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}...)
+function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat})
     @test state.lastcall === :none
     state.lastcall = :quadratic
     if state.instance == 13

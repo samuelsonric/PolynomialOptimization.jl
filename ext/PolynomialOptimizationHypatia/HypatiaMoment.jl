@@ -14,7 +14,7 @@ struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
     )
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.supports_complex_psd(::StateMoment) = true
 
@@ -27,6 +27,12 @@ function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::Indval
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
+    push!(state.cones, Cones.EpiNormNucl{V}(length(indvals)))
+    return
+end
+
+function Solver.add_constr_rotated_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiPerSquare{V}(length(indvals)))
     return

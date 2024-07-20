@@ -36,11 +36,10 @@ function add_constr_quadratic! end
 @doc raw"""
     add_constr_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds a (rotated) quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
-linear constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
-``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1, X_2 \geq 0``,
-``2X_1 X_2 \geq \sum_{i = 3}^N X_i^2`` if the solver supports the rotated quadratic cone, or ``X_1 \geq 0``,
-``X_1^2 \geq \sum_{i = 2}^N X_i^2`` if it only supports the standard quadratic cone.
+Adds a quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the linear
+constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1 \geq 0``,
+``X_1^2 \geq \sum_{i = 2}^N X_i^2``.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
@@ -49,11 +48,32 @@ See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
     diagonally dominant representation is requested, `indvals` can have any length.
 
 !!! warning
-    This function will only be called if [`supports_quadratic`](@ref) is defined not return
-    [`SOLVER_QUADRATIC_NONE`](@ref SolverQuadratic) for the given state.
-    If it does, a fallback to a 2x2 PSD constraint is used.
+    This function will only be called if [`supports_quadratic`](@ref) returns `true` for the given state.
+    If (rotated) quadratic constraints are unsupported, a fallback to a 2x2 PSD constraint is used.
 """
 add_constr_quadratic!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
+function add_constr_rotated_quadratic! end
+
+@doc raw"""
+    add_constr_rotated_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Adds a rotated quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
+linear constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1, X_2 \geq 0``,
+``2X_1 X_2 \geq \sum_{i = 3}^N X_i^2``.
+
+See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+
+!!! note "Number of parameters"
+    In the real-valued case, `indvals` is always of length three, in the complex case, it is of length four. If the scaled
+    diagonally dominant representation is requested, `indvals` can have any length.
+
+!!! warning
+    This function will only be called if [`supports_rotated_quadratic`](@ref) returns `true` for the given state.
+    If (rotated) quadratic constraints are unsupported, a fallback to a 2x2 PSD constraint is used.
+"""
+add_constr_rotated_quadratic!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
 function add_constr_psd! end
 

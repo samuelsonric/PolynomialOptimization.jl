@@ -19,7 +19,7 @@ function Base.append!(state::StateSOS, key)
     return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
 end
 
-Solver.supports_quadratic(::StateSOS) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::StateSOS) = true
 
 Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(:L, zero(Int32))
 
@@ -36,6 +36,21 @@ function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{I
 end
 
 function Solver.add_var_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
+    conedim = length(indvals)
+    rhsdim = conedim -2
+    appendvars(state.task, conedim)
+    Mosek.@MSK_putvarbound(state.task.task, state.num_vars, MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(state.task.task, state.num_vars + Int32(1), state.num_vars + Int32(conedim),
+        MSK_BK_FR.value, -Inf, Inf)
+    Mosek.@MSK_appendconeseq(state.task.task, MSK_CT_QUAD.value, 0., conedim, state.num_vars)
+    for indval in indvals
+        Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indval), indval.indices, indval.values)
+        state.num_vars += 1
+    end
+    return
+end
+
+function Solver.add_var_rotated_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
     conedim = length(indvals)
     rhsdim = conedim -2
     appendvars(state.task, conedim)

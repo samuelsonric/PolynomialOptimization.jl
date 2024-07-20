@@ -24,7 +24,7 @@ function Base.append!(state::StateMoment, key)
     end
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
 
@@ -46,7 +46,7 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     return
 end
 
-function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64})
+function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64}, ::Val{rotated}=Val(false)) where {rotated}
     N = length(indvals)
     # COPT does not support an arbitrary-content quadratic cone. Either we put the cone into the form <x, Qx> ≤ b or we
     # need to create more variables that wrap this functionality.
@@ -55,7 +55,7 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
         Δ = newnum - state.num_solver_vars
         lb = fill(-COPT_INFINITY, Δ)
         @inbounds lb[1] = 0.0
-        @inbounds lb[2] = 0.0
+        rotated && @inbounds lb[2] = 0.0
         _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
             lb, C_NULL, C_NULL))
         state.num_solver_vars += Δ
@@ -79,11 +79,14 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
     end
     zv = fill(0., N)
     _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, rowMatIdx, rowMatElem, C_NULL, zv, zv, C_NULL))
-    _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(COPT_CONE_RQUAD)), Ref(Cint(0)), Ref(Cint(N)),
-        [state.num_used_vars + i for i in Cint(0):Cint(N -1)]))
+    _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(rotated ? COPT_CONE_RQUAD : COPT_CONE_QUAD)), Ref(Cint(0)),
+        Ref(Cint(N)), [state.num_used_vars + i for i in Cint(0):Cint(N -1)]))
     state.num_used_vars += N
     return
 end
+
+Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64}) =
+    add_constr_quadratic!(state, indvals, Val(true))
 
 function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDMatrixCartesian{Cint,Float64})
     colIdx = data.rowind    # We can do variable piracy: those vectors have more than sufficient length, and we will only write

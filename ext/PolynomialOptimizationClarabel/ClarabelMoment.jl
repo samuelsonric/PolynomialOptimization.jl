@@ -12,7 +12,7 @@ struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
     )
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_SOC
+Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 

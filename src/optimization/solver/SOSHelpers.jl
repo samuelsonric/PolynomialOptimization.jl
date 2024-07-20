@@ -6,6 +6,7 @@ end
 
 mindex(state::SOSWrapper, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc} = mindex(state.state, monomials...)
 
+supports_rotated_quadratic(state::SOSWrapper) = supports_rotated_quadratic(state.state)
 supports_quadratic(state::SOSWrapper) = supports_quadratic(state.state)
 supports_complex_psd(state::SOSWrapper) = supports_complex_psd(state.state)
 psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
@@ -13,6 +14,7 @@ psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
 # both necessary for disambiguation
 add_constr_nonnegative!(state::SOSWrapper, indvals::Indvals) = add_var_nonnegative!(state.state, indvals)
 add_constr_nonnegative!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_nonnegative!(state.state, indvals)
+add_constr_rotated_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_rotated_quadratic!(state.state, indvals)
 add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
 add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
 add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
@@ -35,8 +37,8 @@ up the problem structure according to `representation`.
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
 - [`add_var_nonnegative!`](@ref)
-- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -77,8 +79,8 @@ second of the equality, the third of the inequality, and the fourth of the PSD c
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)
 - [`add_var_nonnegative!`](@ref)
-- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)

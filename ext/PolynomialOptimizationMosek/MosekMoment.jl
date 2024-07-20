@@ -19,7 +19,7 @@ function Base.append!(state::StateMoment, key)
     return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
@@ -48,7 +48,7 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     return
 end
 
-function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64})
+function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}, ::Val{rotated}=Val(false)) where {rotated}
     conedim = length(indvals)
     appendafes(state.task, conedim)
     for indval in indvals
@@ -56,17 +56,24 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
         state.num_afes += 1
     end
     # TODO: benchmark which approach is better, subsequence putafefrow as here or one putafefrowlist with preprocessing
-    if length(indvals) == 3
+    if rotated && length(indvals) == 3
         Mosek.@MSK_appendaccseq(state.task.task, 1, 3, state.num_afes -3, C_NULL)
-    elseif length(indvals) == 4
+    elseif rotated && length(indvals) == 4
         Mosek.@MSK_appendaccseq(state.task.task, 2, 4, state.num_afes -4, C_NULL)
     else
         dom = Ref{Int64}()
-        Mosek.@MSK_appendrquadraticconedomain(state.task.task, N, dom)
+        if rotated
+            Mosek.@MSK_appendrquadraticconedomain(state.task.task, N, dom)
+        else
+            Mosek.@MSK_appendquadraticconedomain(state.task.task, N, dom)
+        end
         Mosek.@MSK_appendaccseq(state.task.task, dom[], N, state.num_afes - N, C_NULL)
     end
     return
 end
+
+Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}) =
+    add_constr_quadratic!(state, indvals, Val(true))
 
 function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::IndvalsIterator{Int32,Float64})
     n = trisize(dim)

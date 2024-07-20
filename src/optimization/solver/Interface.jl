@@ -1,5 +1,5 @@
-export mindex, SOLVER_QUADRATIC_NONE, SOLVER_QUADRATIC_SOC, SOLVER_QUADRATIC_RSOC, supports_quadratic, Indvals,
-    supports_complex_psd, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, IndvalsIterator
+export mindex, supports_rotated_quadratic, supports_quadratic, Indvals, supports_complex_psd, psd_indextype,
+    PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, IndvalsIterator
 
 """
     mindex(state, monomials::SimpleMonomialOrConj...)
@@ -13,25 +13,22 @@ The returned index is arbitrary as long as it is unique for the total monomial.
     monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)
 
 """
-    enum SolverQuadratic
+    supports_rotated_quadratic(state)
 
-Defines the level of support for quadratic cones in the solver:
-- `SOLVER_QUADRATIC_NONE`: no quadratic cone is explicitly supported
-- `SOLVER_QUADRATIC_SOC`: the second-order cone ``x_1^2 \\geq \\sum_{i \\geq 2} x_i^2`` is supported
-- `SOLVER_QUADRATIC_RSOC`: the rotated second-order cone ``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^3`` is supported
-Note that `SOLVER_QUADRATIC_RSOC` is preferred, i.e., specify the last value if both cones are supported.
+Indicates the solver support for rotated quadratic cones: if `true`, the rotated second-order cone
+``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^3`` is supported.
+The default implementation returns `false`.
 """
-@enum SolverQuadratic SOLVER_QUADRATIC_NONE SOLVER_QUADRATIC_SOC SOLVER_QUADRATIC_RSOC
+supports_rotated_quadratic(state) = false
 
 """
     supports_quadratic(state)
 
-Indicates the solver support for quadratic cones. The return value should be a [`SolverQuadratic`](@ref).
-[`add_var_quadratic!`](@ref) or [`add_constr_quadratic!`](@ref) will only be called if this method returns `true`; else,
-quadratic constraints will also be modeled using the semidefinite cone.
-The default implementation returns `false`.
+Indicates the solver support for the quadratic cone: if `true`, the second-order cone ``x_1^2 \\geq \\sum_{i \\geq 2} x_i^2``
+is supported.
+The default implementation returns the same value as [`supports_rotated_quadratic`](@ref).
 """
-supports_quadratic(_) = SOLVER_QUADRATIC_NONE
+supports_quadratic(state) = supports_rotated_quadratic(state)
 
 """
     Indvals{T,V<:Real}
