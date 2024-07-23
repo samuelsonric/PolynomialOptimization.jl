@@ -145,7 +145,7 @@ which cones are supported; these should return constants.
 supports_rotated_quadratic
 supports_quadratic
 supports_complex_psd
-AbstractPSDIndextype
+PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
 psd_indextype
@@ -255,7 +255,7 @@ which enables this solver to be chosen automatically.
 CurrentModule = PolynomialOptimization
 ```
 Automatic tightening of a polynomial optimization problem requires a linear solver that finds a solution to a system of linear
-equations that minimizes the ℓ₁-norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
+equations that minimizes the ℓ₁ norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
 number of rows is smaller than the number of columns; else, the solution is calculated using SPQR's direct solver.
 
 ### [List of supported solvers](@id solvers_tighten)

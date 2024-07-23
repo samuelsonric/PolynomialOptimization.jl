@@ -1,5 +1,6 @@
-export add_constr_nonnegative!, add_constr_quadratic!, add_constr_psd!, add_constr_psd_complex!,
-    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, fix_objective!, add_var_slack!
+export add_constr_nonnegative!, add_constr_rotated_quadratic!, add_constr_quadratic!, add_constr_l1!, add_constr_l1_complex!,
+    add_constr_psd!, add_constr_psd_complex!, add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!,
+    fix_objective!, add_var_slack!
 
 function add_constr_nonnegative! end
 
@@ -140,6 +141,40 @@ off-diagonal elements, the real part will be followed by the imaginary part. The
     This function will only be called if [`supports_complex_psd`](@ref) is defined to return `true` for the given state.
 """
 add_constr_psd_complex!(::Any, ::Int, ::IndvalsIterator{<:Any,<:Real})
+
+function add_constr_l1! end
+
+@doc raw"""
+    add_constr_l1!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Adds a ℓ₁ norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the linear
+constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
+``X_1 \geq \sum_{i = 2}^N \lvert X_i\rvert``.
+
+See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+
+!!! warning
+    This function will only be called if [`supports_l1`](@ref) returns `true` for the given state.
+    If ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables will be used
+    (see [`add_var_slack!`](@ref)).
+"""
+add_constr_l1!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
+function add_constr_l1_complex! end
+
+@doc raw"""
+    add_constr_l1_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Same as [`add_constr_l1!`](@ref), but now two successive items in `indvals` are interpreted as determining the real and
+imaginary part of a component of the ℓ₁ norm cone.
+
+!!! warning
+    This function will only be called if [`supports_complex_l1`](@ref) returns `true` for the given state.
+    If complex-valued ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables and
+    quadratic cones will be used (see [`add_var_slack!`](@ref)).
+"""
+add_constr_l1_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
 """
     add_constr_fix_prepare!(state, num::Int)

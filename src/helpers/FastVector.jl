@@ -282,6 +282,20 @@ function Base.resize!(v::FastVec, n::Integer)
     return v
 end
 
+"""
+    deleteat!(a::FastVec, i::Integer)
+
+Remove the item at the given `i` and return the modified `a`. Subsequent items are shifted to fill the resulting gap. The
+internal buffer size is not modified. Only the integer argument variant is supported for `FastVec`.
+"""
+function Base.deleteat!(v::FastVec, i::Integer)
+    @inbounds for j in i:v.len-1
+        v.data[j] = v.data[j+1]
+    end
+    v.len -= 1
+    return v
+end
+
 # inspired by KristofferC's PushVector
 """
     finish!(v::FastVec)

@@ -58,7 +58,7 @@ CurrentModule = PolynomialOptimization
 ```
 ```@docs
 poly_optimize
-Solver.AbstractRepresentationMethod
+Solver.RepresentationMethod
 RepresentationPSD
 RepresentationSDSOS
 RepresentationDSOS

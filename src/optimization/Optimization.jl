@@ -5,7 +5,7 @@ include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
-using .Solver: default_solver_method, monomial_count, AbstractRepresentationMethod, RepresentationPSD, RepresentationDSOS,
+using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDSOS,
     RepresentationSDSOS
 import .Solver: poly_optimize
 
@@ -21,10 +21,10 @@ overlap; however, the process itself may be time-consuming and is therefore disa
 
 Instead of modeling the moment/SOS matrices as positive semidefinite, other representations such as the (scaled) diagonally
 dominant description are also possible. The `representation` parameter can be used to define a representation that is employed
-for the individual groupings. This may either be an instance of an [`AbstractRepresentationMethod`](@ref) - which requires the
-method to be independent of the dimension of the grouping - or a callable. In the latter case, it will be passed as a first
-parameter an identifier[^1] of the current conic variable, and as a second parameter the side dimension of its matrix. The
-method must then return an [`AbstractRepresentationMethod`](@ref) instance.
+for the individual groupings. This may either be an instance of a [`RepresentationMethod`](@ref) - which requires the method to
+be independent of the dimension of the grouping - or a callable. In the latter case, it will be passed as a first parameter an
+identifier[^1] of the current conic variable, and as a second parameter the side dimension of its matrix. The method must then
+return a [`RepresentationMethod`](@ref) instance.
 
 `verbose=true` will enable logging; this will print basic information about the relaxation itself as well as instruct the
 solver to output a detailed log. The PSD block sizes reported accurately represent the side dimensions of semidefinite
@@ -42,7 +42,7 @@ solver has been loaded.
       is an `Int` denoting the index of the grouping within the constraint/objective.
 """
 function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false,
-    representation::Union{<:AbstractRepresentationMethod,<:Base.Callable}=RepresentationPSD(),
+    representation::Union{<:RepresentationMethod,<:Base.Callable}=RepresentationPSD(),
     clique_merging::Bool=false, kwargs...) where {S}
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")

@@ -16,7 +16,7 @@ The returned index is arbitrary as long as it is unique for the total monomial.
     supports_rotated_quadratic(state)
 
 Indicates the solver support for rotated quadratic cones: if `true`, the rotated second-order cone
-``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^3`` is supported.
+``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^2`` is supported.
 The default implementation returns `false`.
 """
 supports_rotated_quadratic(state) = false
@@ -29,6 +29,24 @@ is supported.
 The default implementation returns the same value as [`supports_rotated_quadratic`](@ref).
 """
 supports_quadratic(state) = supports_rotated_quadratic(state)
+
+"""
+    supports_l1(state)
+
+Indicates the solver support for ℓ₁ norm cones: if `true`, the cone ``x_1 \\geq \\sum_{i \\geq 2} \\lvert x_i\\rvert`` is
+supported.
+The default implementation returns `false`.
+"""
+supports_l1(state) = false
+
+@doc raw"""
+    supports_complex_l1(state)
+
+Indicates the solver support for complex-valued ℓ₁ norm cones: if `true`, the cone
+``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
+The default implementation returns `false`.
+"""
+supports_complex_l1(state) = false
 
 """
     Indvals{T,V<:Real}
@@ -76,16 +94,7 @@ solver. If the function returns `true`, the solver must additionally implement [
 supports_complex_psd(_) = false
 
 """
-    AbstractPSDIndextype{Tri}
-
-Abstract class for all supported types in which a solver can represent a PSD matrix.
-
-See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
-"""
-abstract type AbstractPSDIndextype{Tri} end
-
-"""
-    PSDIndextypeMatrixCartesian(triangle, offset) <: AbstractPSDIndextype
+    PSDIndextypeMatrixCartesian(triangle, offset) <: PSDIndextype
 
 The solver implements PSD matrix constraints by using a monolithic PSD matrix variable or an LMI-style representation.
 Entries from the variable are obtained (or put into the LMI) by using a cartesian index of two integers of the return type of
@@ -100,7 +109,7 @@ Entries from the variable are obtained (or put into the LMI) by using a cartesia
 
 See also [`PSDMatrixCartesian`](@ref).
 """
-struct PSDIndextypeMatrixCartesian{Tri,Offset} <: AbstractPSDIndextype{Tri}
+struct PSDIndextypeMatrixCartesian{Tri,Offset}
     function PSDIndextypeMatrixCartesian(triangle::Symbol, offset::Integer)
         triangle ∈ (:L, :U) || throw(MethodError(PSDIndextypeMatrixCartesian, (triangle, offset)))
         new{triangle,offset}()
@@ -178,7 +187,7 @@ end
 end
 
 """
-    PSDIndextypeVector(triangle) <: AbstractPSDIndextype
+    PSDIndextypeVector(triangle) <: PSDIndextype
 
 The solver implements PSD matrix constraints by demanding that the matrixization of a vector of decision variables be PSD.
 
@@ -193,7 +202,7 @@ If `triangle === :U`, the columns of the upper triangle are assumed to be stacke
 
 See also [`IndvalsIterator`](@ref).
 """
-struct PSDIndextypeVector{Tri} <: AbstractPSDIndextype{Tri}
+struct PSDIndextypeVector{Tri}
     function PSDIndextypeVector(triangle::Symbol)
         triangle ∈ (:L, :U, :F) || throw(MethodError(PSDIndextypeVector, (triangle,)))
         new{triangle}()
@@ -211,19 +220,18 @@ lengths of the subsequences via `Base.index_lengths`.
 
 See also [`PSDIndextypeVector`](@ref).
 """
-struct IndvalsIterator{T,V,L}
-    indices::Vector{T}
-    values::Vector{V}
+struct IndvalsIterator{T,V,L,VT<:AbstractVector{T},VV<:AbstractVector{V}}
+    indices::VT
+    values::VV
     lens::L
 
-    function IndvalsIterator(indices::Vector{T}, values::Vector{V}, len::I) where {T,V,I<:Integer}
+    function IndvalsIterator(indices::AbstractVector{T}, values::AbstractVector{V}, len::I) where {T,V,I<:Integer}
         length(indices) == length(values) || throw(ArgumentError("Invalid IndvalsIterator construction"))
-        new{T,V,I}(indices, values, len)
+        new{T,V,I,typeof(indices),typeof(values)}(indices, values, len)
     end
-    function IndvalsIterator(indices::Vector{T}, values::Vector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
-        length(indices) == length(values) || error("Invalid IndvalsIterator construction")
-        (isempty(lens) || length(indices) != sum(lens, init=0)) && error("Invalid IndvalsIterator construction")
-        new{T,V,L}(indices, values, lens)
+    function IndvalsIterator(indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
+        length(indices) == length(values) == sum(lens, init=0)|| error("Invalid IndvalsIterator construction")
+        new{T,V,L,typeof(indices),typeof(values)}(indices, values, lens)
     end
 end
 
@@ -253,37 +261,34 @@ Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}) = Iterators.rep
 Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:AbstractVector{<:Integer}}) = psdi.lens
 
 """
+    PSDIndextype{Tri}
+
+Union for all supported types in which a solver can represent a PSD matrix.
+
+See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
+"""
+const PSDIndextype{Tri} = Union{<:PSDIndextypeMatrixCartesian{Tri},PSDIndextypeVector{Tri}}
+
+"""
     psd_indextype(state)
 
 This function must indicate in which format the solver expects its data for PSD variables. The return type must be an instance
-of an [`AbstractPSDIndextype`](@ref) subtype.
+of a [`PSDIndextype`](@ref) subtype.
 
 See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
 """
 function psd_indextype end
 
 """
-    AbstractRepresentationMethod
-
-Abstract base class that defines how the optimizer constraint σ ⪰ 0 is interpreted. Usually, "⪰" means positive semidefinite;
-however, there are various other possibilities giving rise to weaker results, but scale more favorably. The following methods
-are supported:
-- [`RepresentationPSD`](@ref)
-- [`RepresentationSDSOS`](@ref)
-- [`RepresentationDSOS`](@ref)
-"""
-abstract type AbstractRepresentationMethod end
-
-"""
-    RepresentationPSD <: AbstractRepresentationMethod
+    RepresentationPSD <: RepresentationMethod
 
 Model the constraint "σ ⪰ 0" as a positive semidefinite cone membership, `σ ∈ PSD`. This is the strongest possible model, but
 the most resource-intensive.
 """
-struct RepresentationPSD <: AbstractRepresentationMethod end
+struct RepresentationPSD end
 
 """
-    RepresentationSDSOS([u]) <: AbstractRepresentationMethod
+    RepresentationSDSOS([u]) <: RepresentationMethod
 
 Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some
 `Q ∈ SDSOS`. The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix
@@ -291,25 +296,41 @@ of suitable dimension.
 To represent `Q ∈ SDSOS`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
 to a semidefinite formulation if this is not the case, as such a rewrite would defeat the purpose.
 """
-struct RepresentationSDSOS{M} <: AbstractRepresentationMethod
+struct RepresentationSDSOS{M}
     u::M
 
     RepresentationSDSOS(u::M=I) where {M} = new{M}(u)
 end
 
 """
-    RepresentationDSOS([u]) <: AbstractRepresentationMethod
+    RepresentationDSOS([u]; [complex=false]) <: RepresentationMethod
 
 Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some `Q ∈ DSOS`.
 The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix of suitable
 dimension.
 The membership `Q ∈ DSOS` is achieved using linear inequalities only.
+
+If σ is a Hermitian matrix, the DSOS condition will be imposed on the real matrix associated with σ, which has twice its
+dimension. Alternatively, by setting `complex` to `true`, the complex structure will be kept using a complex-valued ℓ₁ cone or
+a quadratic cone (which requires support for this in the solver).
 """
-struct RepresentationDSOS{M} <: AbstractRepresentationMethod
+struct RepresentationDSOS{M,Q}
     u::M
 
-    RepresentationDSOS(u::M=I) where {M} = new{M}(u)
+    RepresentationDSOS(u::M=I; complex=false) where {M} = new{M,complex}(u)
 end
+
+"""
+    RepresentationMethod
+
+Union type that defines how the optimizer constraint σ ⪰ 0 is interpreted. Usually, "⪰" means positive semidefinite;
+however, there are various other possibilities giving rise to weaker results, but scale more favorably. The following methods
+are supported:
+- [`RepresentationPSD`](@ref)
+- [`RepresentationSDSOS`](@ref)
+- [`RepresentationDSOS`](@ref)
+"""
+const RepresentationMethod = Union{RepresentationPSD,<:RepresentationSDSOS,<:RepresentationDSOS}
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")
