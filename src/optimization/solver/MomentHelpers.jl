@@ -392,7 +392,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         # The first entry is already set up to contain the slack variable; as we don't have an imaginary
                         # part here, we can impose two linear constraints.
                         add_constr_nonnegative!(state, Indvals(indices, values))
-                        @inbounds values[1] = -one(V)
+                        rmul!(@view(values[2:end]), -one(V))
                         add_constr_nonnegative!(state, Indvals(indices, values))
                     else
                         # The slack variable should be the absolute value of the complex variable, so we'll need a
@@ -777,7 +777,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                                     values[itemstart-1] = one(V)
                                     iv = Indvals(@view(indices[itemstart-1:j-1]), @view(values[itemstart-1:j-1]))
                                     add_constr_nonnegative!(state, iv)
-                                    values[itemstart-1] = -one(V)
+                                    rmul!(@view(values[itemstart:j-1]), -one(V))
                                     add_constr_nonnegative!(state, iv)
                                 else
                                     indices_buf[1] = slack_indices[slack_i]
@@ -786,7 +786,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                                     copyto!(values_buf, 2, values, itemstart, j - itemstart)
                                     iv = Indvals(@view(indices_buf[1:j-itemstart]), @view(values_buf[1:j-itemstart]))
                                     add_constr_nonnegative!(state, iv)
-                                    values_buf[1] = -one(V)
+                                    rmul!(@view(values_buf[2:j-itemstart]), -one(V))
                                     add_constr_nonnegative!(state, iv)
                                 end
                                 slack_i += 1
