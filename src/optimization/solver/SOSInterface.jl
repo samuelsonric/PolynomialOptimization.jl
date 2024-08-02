@@ -216,7 +216,7 @@ function fix_constraints! end
 """
     add_constr_slack!(state, num::Int)
 
-Creates `num` linear nonnegative slack constraints in the problem (i.e., constraints that do not correspond to moments). The
+Creates `num` linear fix-to-zero slack constraints in the problem (i.e., constraints that do not correspond to moments). The
 result should be an abstract vector (typically a unit range) that contains the indices of all created slack constraints. The
 indices should be of the same type as [`mindex`](@ref).
 """

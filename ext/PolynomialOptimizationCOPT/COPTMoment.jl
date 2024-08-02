@@ -32,8 +32,8 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
     if state.num_used_vars + num > state.num_solver_vars
         newnum = overallocation(state.num_used_vars + Cint(num))
         Δ = newnum - state.num_solver_vars
-        _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
-            C_NULL))
+        _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
+            fill(-COPT_INFINITY, Δ), C_NULL, C_NULL))
         state.num_solver_vars = newnum
     end
     result = state.num_used_vars:state.num_used_vars+Cint(num -1)
