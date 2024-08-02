@@ -48,9 +48,9 @@ macro checkequals(ind, lowerrows, lowercols, lowervals)
     end)
 end
 
-macro checkequals(fullind, fullval)
+macro checkequals(fullind, fullval, exact=:true)
     esc(quote
-        @test checkequality(iter[1], $fullind, $fullval, true)
+        @test checkequality(iter[1], $fullind, $fullval, $exact)
         iter = iterate(data, iter[2])
     end)
 end
@@ -122,6 +122,9 @@ function momenttest(instance, grouping, constraint, type)
             dim *= 2
         end
         states = (SolverSetup(instance, linear=true, quadratic=type===:dsosquad, representation=Solver.RepresentationDSOS(complex=type===:dsosquad), slackvars=div(dim * (dim -1), 2)),)
+    elseif type === :sdsos
+        dim = length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : 1)
+        states = (SolverSetup(instance, linear=true, quadratic=true, fixed=true, representation=Solver.RepresentationSDSOS(), slackvars=dim * (dim -1)),)
     elseif type === :equality
         state = SolverSetup(instance, fixed=true)
         moment_add_equality!(state, grouping, constraint)
@@ -137,10 +140,31 @@ function momenttest(instance, grouping, constraint, type)
     return
 end
 
-Solver.add_constr_nonnegative!(state::SolverSetup{true,false,false,false,false,false}, indvals::Indvals{BigInt,BigFloat}) =
+Solver.add_constr_nonnegative!(state::SolverSetup, indvals::Indvals{BigInt,BigFloat}) =
     @interpret add_constr_nonnegative_worker!(state, indvals)
 
-function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,false,false,false}, indvals::Indvals{BigInt,BigFloat})
+Solver.add_constr_quadratic!(state::SolverSetup, data::IndvalsIterator{BigInt,BigFloat}) =
+    @interpret add_constr_quadratic_worker!(state, data)
+
+Solver.add_constr_rotated_quadratic!(state::SolverSetup, indvals::IndvalsIterator{BigInt,BigFloat}) =
+    @interpret add_constr_rotated_quadratic_worker!(state, indvals)
+
+Solver.add_constr_psd!(state::SolverSetup, dim::Int, data) =
+    @interpret add_constr_psd_worker!(state, dim, psd_indextype(state), data)
+
+Solver.add_constr_psd_complex!(state::SolverSetup, dim::Int, data) =
+    @interpret add_constr_psd_complex_worker!(state, dim, psd_indextype(state), data)
+
+Solver.add_constr_fix!(state::SolverSetup, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat) =
+    @interpret add_constr_fix_helper!(state, constrstate, indvals, rhs)
+
+Solver.add_constr_l1!(state::SolverSetup, data::IndvalsIterator{BigInt,BigFloat}) =
+    @interpret add_constr_l1_helper!(state, data)
+
+Solver.add_constr_l1_complex!(state::SolverSetup, data::IndvalsIterator{BigInt,BigFloat}) =
+    @interpret add_constr_l1_complex_helper!(state, data)
+
+function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,false,false,false}, indvals::Indvals{BigInt,BigFloat})
     @test (state.lastcall === :none && iszero(state.it)) || (state.lastcall === :linear && !iszero(state.it))
     state.lastcall = :linear
     if state.instance == 1
@@ -173,403 +197,331 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,68265], BigFloat[1,17], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,68265], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-1,68265], BigFloat[1,-17], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,169998], BigFloat[-1,17], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 20
+    elseif state.instance == 21
         if state.it == 0
             checkequality(indvals, BigInt[-1,21922], BigFloat[-1,24], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,63204], BigFloat[1,24], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,63204], BigFloat[-1,24], true)
+            checkequality(indvals, BigInt[-1,63204], BigFloat[1,-24], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,151422], BigFloat[-1,24], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 24
+    elseif state.instance == 26
         if state.it == 0
             checkequality(indvals, BigInt[-1,6223,21928], BigFloat[-1,2,8], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,22426,63210], BigFloat[1,2,8], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,22426,63210], BigFloat[-1,2,8], true)
+            checkequality(indvals, BigInt[-1,22426,63210], BigFloat[1,-2,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,63728,151428], BigFloat[-1,2,8], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 28
+    elseif state.instance == 31
         if state.it == 0
             checkequality(indvals, BigInt[-1,5815], BigFloat[-1,6], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,20441], BigFloat[1,6], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,20441], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-1,20441], BigFloat[1,-6], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,55255], BigFloat[-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 32
+    elseif state.instance == 36
         if state.it == 0
             checkequality(indvals, BigInt[-1,21232], BigFloat[-1,14], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,62324], BigFloat[1,14], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,62324], BigFloat[-1,14], true)
+            checkequality(indvals, BigInt[-1,62324], BigFloat[1,-14], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,150102], BigFloat[-1,14], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 36
+    elseif state.instance == 41
         if state.it == 0
             checkequality(indvals, BigInt[-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,8,16,3,4,14,5], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,20441,20442,22426,36378,62322,63210], BigFloat[1,8,16,3,4,14,5], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,20441,20442,22426,36378,62322,63210], BigFloat[-1,8,16,3,4,14,5], true)
+            checkequality(indvals, BigInt[-1,20441,20442,22426,36378,62322,63210], BigFloat[1,-8,-16,-3,-4,-14,-5], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,55255,55256,63728,92459,150100,151428], BigFloat[-1,8,16,3,4,14,5], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 40
+    elseif state.instance == 46
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,20830], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,22409], BigFloat[1,17], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,22409], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-6,22409], BigFloat[1,-17], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,23048], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,22410], BigFloat[1,-17], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,22410], BigFloat[-1,-17], true)
+            checkequality(indvals, BigInt[-4,22410], BigFloat[1,17], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,20830], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,22410], BigFloat[1,17], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,22410], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-3,22410], BigFloat[1,-17], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,22409], BigFloat[1,17], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,22409], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-1,22409], BigFloat[1,-17], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,23048], BigFloat[-1,-1,-1,17], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 47
+    elseif state.instance == 54
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,17744], BigFloat[-1,-1,-1,24], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,20571], BigFloat[1,24], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,20571], BigFloat[-1,24], true)
+            checkequality(indvals, BigInt[-6,20571], BigFloat[1,-24], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,21922], BigFloat[-1,-1,-1,24], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,20574], BigFloat[1,-24], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,20574], BigFloat[-1,-24], true)
+            checkequality(indvals, BigInt[-4,20574], BigFloat[1,24], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,17744], BigFloat[-1,-1,-1,24], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,20574], BigFloat[1,24], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,20574], BigFloat[-1,24], true)
+            checkequality(indvals, BigInt[-3,20574], BigFloat[1,-24], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,20571], BigFloat[1,24], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,20571], BigFloat[-1,24], true)
+            checkequality(indvals, BigInt[-1,20571], BigFloat[1,-24], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,21922], BigFloat[-1,-1,-1,24], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 54
+    elseif state.instance == 62
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,5672,17777], BigFloat[-1,-1,-1,2,8], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,6102,20588], BigFloat[1,2,8], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,6102,20588], BigFloat[-1,2,8], true)
+            checkequality(indvals, BigInt[-6,6102,20588], BigFloat[1,-2,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,6223,21928], BigFloat[-1,-1,-1,2,8], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,6103,20589], BigFloat[1,-2,-8], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,6103,20589], BigFloat[-1,-2,-8], true)
+            checkequality(indvals, BigInt[-4,6103,20589], BigFloat[1,2,8], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,5672,17777], BigFloat[-1,-1,-1,2,8], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,6103,20589], BigFloat[1,2,8], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,6103,20589], BigFloat[-1,2,8], true)
+            checkequality(indvals, BigInt[-3,6103,20589], BigFloat[1,-2,-8], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,6102,20588], BigFloat[1,2,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,6102,20588], BigFloat[-1,2,8], true)
+            checkequality(indvals, BigInt[-1,6102,20588], BigFloat[1,-2,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,6223,21928], BigFloat[-1,-1,-1,2,8], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 61
+    elseif state.instance == 70
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,4699], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,5542,5545], BigFloat[1,3,3], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,5542,5545], BigFloat[-1,3,3], true)
+            checkequality(indvals, BigInt[-6,5542,5545], BigFloat[1,-3,-3], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,5815], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,5546], BigFloat[1,-3], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,5546], BigFloat[-1,-3], true)
+            checkequality(indvals, BigInt[-4,5546], BigFloat[1,3], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,4699], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,5546], BigFloat[1,3], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,5546], BigFloat[-1,3], true)
+            checkequality(indvals, BigInt[-3,5546], BigFloat[1,-3], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,5542,5545], BigFloat[1,3,3], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,5542,5545], BigFloat[-1,3,3], true)
+            checkequality(indvals, BigInt[-1,5542,5545], BigFloat[1,-3,-3], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,5815], BigFloat[-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 68
+    elseif state.instance == 78
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,17502], BigFloat[-1,-1,-1,14], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,20164,20168], BigFloat[1,-7,7], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,20164,20168], BigFloat[-1,-7,7], true)
+            checkequality(indvals, BigInt[-6,20164,20168], BigFloat[1,7,-7], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,21232], BigFloat[-1,-1,-1,14], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,20154,20162], BigFloat[1,7,-7], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,20154,20162], BigFloat[-1,7,-7], true)
+            checkequality(indvals, BigInt[-4,20154,20162], BigFloat[1,-7,7], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,17502], BigFloat[-1,-1,-1,14], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,20154,20162], BigFloat[1,-7,7], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,20154,20162], BigFloat[-1,-7,7], true)
+            checkequality(indvals, BigInt[-3,20154,20162], BigFloat[1,7,-7], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,20164,20168], BigFloat[1,-7,7], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,20164,20168], BigFloat[-1,-7,7], true)
+            checkequality(indvals, BigInt[-1,20164,20168], BigFloat[1,7,-7], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,21232], BigFloat[-1,-1,-1,14], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 75
+    elseif state.instance == 86
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,4699,4702,5672,9297,17496,17777], BigFloat[-1,-1,-1,8,16,3,4,14,5], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[1,4,4,8,3,4,7,7,5], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[-1,4,4,8,3,4,7,7,5], true)
+            checkequality(indvals, BigInt[-6,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[1,-4,-4,-8,-3,-4,-7,-7,-5], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,5815,5816,6223,11399,21230,21928], BigFloat[-1,-1,-1,8,16,3,4,14,5], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[1,8,-8,-4,-3,-4,7,-7,-5], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-1,8,-8,-4,-3,-4,7,-7,-5], true)
+            checkequality(indvals, BigInt[-4,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[1,-8,8,4,3,4,-7,7,5], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,4699,4702,5672,9297,17496,17777], BigFloat[-1,-1,-1,8,16,3,4,14,5], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[1,-8,8,4,3,4,-7,7,5], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-1,-8,8,4,3,4,-7,7,5], true)
+            checkequality(indvals, BigInt[-3,5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[1,8,-8,-4,-3,-4,7,-7,-5], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[1,4,4,8,3,4,7,7,5], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[-1,4,4,8,3,4,7,7,5], true)
+            checkequality(indvals, BigInt[-1,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[1,-4,-4,-8,-3,-4,-7,-7,-5], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,-1,-1,8,16,3,4,14,5], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 82
+    elseif state.instance == 94
         if state.it == 0
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,9460], BigFloat[1,8], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,9460], BigFloat[-1,8], true)
+            checkequality(indvals, BigInt[-1,9460], BigFloat[1,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 86
+    elseif state.instance == 99
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6], BigFloat[1], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-6], BigFloat[1], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,9460], BigFloat[1,8], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,9460], BigFloat[-1,8], true)
+            checkequality(indvals, BigInt[-4,9460], BigFloat[1,-8], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,9460], BigFloat[1,-8], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,9460], BigFloat[-1,-8], true)
+            checkequality(indvals, BigInt[-3,9460], BigFloat[1,8], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1], BigFloat[1], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1], BigFloat[-1], true)
-        elseif state.it == 15
-            checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
-        end
-        state.it += 1
-    elseif state.instance == 93
-        if state.it == 0
-            checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
-        elseif state.it == 1
-            checkequality(indvals, BigInt[-6,9278], BigFloat[1,8], true)
-        elseif state.it == 2
-            checkequality(indvals, BigInt[-6,9278], BigFloat[-1,8], true)
-        elseif state.it == 3
-            checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
-        elseif state.it == 4
-            checkequality(indvals, BigInt[-5], BigFloat[1], true)
-        elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
-        elseif state.it == 6
-            checkequality(indvals, BigInt[-4,9280], BigFloat[1,-8], true)
-        elseif state.it == 7
-            checkequality(indvals, BigInt[-4,9280], BigFloat[-1,-8], true)
-        elseif state.it == 8
-            checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
-        elseif state.it == 9
-            checkequality(indvals, BigInt[-3,9280], BigFloat[1,8], true)
-        elseif state.it == 10
-            checkequality(indvals, BigInt[-3,9280], BigFloat[-1,8], true)
-        elseif state.it == 11
-            checkequality(indvals, BigInt[-2], BigFloat[1], true)
-        elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
-        elseif state.it == 13
-            checkequality(indvals, BigInt[-1,9278], BigFloat[1,8], true)
-        elseif state.it == 14
-            checkequality(indvals, BigInt[-1,9278], BigFloat[-1,8], true)
-        elseif state.it == 15
-            checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
-        end
-        state.it += 1
-    elseif state.instance == 100
-        if state.it == 0
-            checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
-        elseif state.it == 1
-            checkequality(indvals, BigInt[-6,9280], BigFloat[1,8], true)
-        elseif state.it == 2
-            checkequality(indvals, BigInt[-6,9280], BigFloat[-1,8], true)
-        elseif state.it == 3
-            checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
-        elseif state.it == 4
-            checkequality(indvals, BigInt[-5], BigFloat[1], true)
-        elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
-        elseif state.it == 6
-            checkequality(indvals, BigInt[-4,9278], BigFloat[1,8], true)
-        elseif state.it == 7
-            checkequality(indvals, BigInt[-4,9278], BigFloat[-1,8], true)
-        elseif state.it == 8
-            checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
-        elseif state.it == 9
-            checkequality(indvals, BigInt[-3,9278], BigFloat[1,-8], true)
-        elseif state.it == 10
-            checkequality(indvals, BigInt[-3,9278], BigFloat[-1,-8], true)
-        elseif state.it == 11
-            checkequality(indvals, BigInt[-2], BigFloat[1], true)
-        elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
-        elseif state.it == 13
-            checkequality(indvals, BigInt[-1,9280], BigFloat[1,8], true)
-        elseif state.it == 14
-            checkequality(indvals, BigInt[-1,9280], BigFloat[-1,8], true)
+            checkequality(indvals, BigInt[-1], BigFloat[1], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
             state.lastcall = :dsoslin
@@ -579,4015 +531,4095 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 1
-            checkequality(indvals, BigInt[-6,9278,9280], BigFloat[1,8,2], true)
+            checkequality(indvals, BigInt[-6,9278], BigFloat[1,8], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,9278,9280], BigFloat[-1,8,2], true)
+            checkequality(indvals, BigInt[-6,9278], BigFloat[1,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
+        elseif state.it == 6
+            checkequality(indvals, BigInt[-4,9280], BigFloat[1,-8], true)
+        elseif state.it == 7
+            checkequality(indvals, BigInt[-4,9280], BigFloat[1,8], true)
+        elseif state.it == 8
+            checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-3,9280], BigFloat[1,8], true)
+        elseif state.it == 10
+            checkequality(indvals, BigInt[-3,9280], BigFloat[1,-8], true)
+        elseif state.it == 11
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
+        elseif state.it == 13
+            checkequality(indvals, BigInt[-1,9278], BigFloat[1,8], true)
+        elseif state.it == 14
+            checkequality(indvals, BigInt[-1,9278], BigFloat[1,-8], true)
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
+            state.lastcall = :dsoslin
+        end
+        state.it += 1
+    elseif state.instance == 115
+        if state.it == 0
+            checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
+        elseif state.it == 1
+            checkequality(indvals, BigInt[-6,9280], BigFloat[1,8], true)
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-6,9280], BigFloat[1,-8], true)
+        elseif state.it == 3
+            checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
+        elseif state.it == 4
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
+        elseif state.it == 6
+            checkequality(indvals, BigInt[-4,9278], BigFloat[1,8], true)
+        elseif state.it == 7
+            checkequality(indvals, BigInt[-4,9278], BigFloat[1,-8], true)
+        elseif state.it == 8
+            checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-3,9278], BigFloat[1,-8], true)
+        elseif state.it == 10
+            checkequality(indvals, BigInt[-3,9278], BigFloat[1,8], true)
+        elseif state.it == 11
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
+        elseif state.it == 13
+            checkequality(indvals, BigInt[-1,9280], BigFloat[1,8], true)
+        elseif state.it == 14
+            checkequality(indvals, BigInt[-1,9280], BigFloat[1,-8], true)
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
+            state.lastcall = :dsoslin
+        end
+        state.it += 1
+    elseif state.instance == 123
+        if state.it == 0
+            checkequality(indvals, BigInt[-6,-5,-3,31799], BigFloat[-1,-1,-1,17], true)
+        elseif state.it == 1
+            checkequality(indvals, BigInt[-6,9278,9280], BigFloat[1,8,2], true)
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-6,9278,9280], BigFloat[1,-8,-2], true)
+        elseif state.it == 3
+            checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
+        elseif state.it == 4
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,9278,9280], BigFloat[1,2,-8], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,9278,9280], BigFloat[-1,2,-8], true)
+            checkequality(indvals, BigInt[-4,9278,9280], BigFloat[1,-2,8], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,31799], BigFloat[-1,-1,-1,17], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,9278,9280], BigFloat[1,-2,8], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,9278,9280], BigFloat[-1,-2,8], true)
+            checkequality(indvals, BigInt[-3,9278,9280], BigFloat[1,2,-8], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,8,2], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,9278,9280], BigFloat[-1,8,2], true)
+            checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,-8,-2], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 114
+    elseif state.instance == 131
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,9460,31799], BigFloat[-1,-1,-1,5,17], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,9280,9297], BigFloat[1,2,1], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,9280,9297], BigFloat[-1,2,1], true)
+            checkequality(indvals, BigInt[-6,9280,9297], BigFloat[1,-2,-1], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,17770], BigFloat[-1,-1,-1,6], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-5], BigFloat[1], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,5665,9278,9280], BigFloat[1,-3,-2,16], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,5665,9278,9280], BigFloat[-1,-3,-2,16], true)
+            checkequality(indvals, BigInt[-4,5665,9278,9280], BigFloat[1,3,2,-16], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,9460,31799], BigFloat[-1,-1,-1,5,17], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,5665,9278,9280], BigFloat[1,3,2,-16], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,5665,9278,9280], BigFloat[-1,3,2,-16], true)
+            checkequality(indvals, BigInt[-3,5665,9278,9280], BigFloat[1,-3,-2,16], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-2], BigFloat[1], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,9280,9297], BigFloat[1,2,1], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,9280,9297], BigFloat[-1,2,1], true)
+            checkequality(indvals, BigInt[-1,9280,9297], BigFloat[1,-2,-1], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 121
+    elseif state.instance == 139
         if state.it == 0
             checkequality(indvals, BigInt[-1,17669,17845], BigFloat[-1,-34,10], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,16,4], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,9278,9280], BigFloat[-1,16,4], true)
+            checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,-16,-4], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 124
+    elseif state.instance == 143
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,50,51,66,84], BigFloat[-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,171,172,404,422], BigFloat[-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-5,454,455,1069,1181], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-5,454,455,1069,1181], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-5,454,455,1069,1181], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-4,1162,1163,2575,2687], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-4,1162,1163,2575,2687], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-4,1162,1163,2575,2687], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-5,-4,-1,5813,5814,11406,11860], BigFloat[-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-3,2170,2171,4545,4683], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-3,2170,2171,4545,4683], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-3,2170,2171,4545,4683], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-2,4678,4679,9264,9402], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-2,4678,4679,9264,9402], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-2,4678,4679,9264,9402], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-1,20439,20440,36385,36903], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-1,20439,20440,36385,36903], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-1,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,55253,55254,92466,93270], BigFloat[-1,-1,-1,-4,-6,5,3], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 127
+    elseif state.instance == 147
         if state.it == 0
             checkequality(indvals, BigInt[-66,-65,-63,-60,-56,-51,-45,-38,-30,-21,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-66,54], BigFloat[1,17], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-66,54], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-66,54], BigFloat[1,-17], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-66,-64,-62,-59,-55,-50,-44,-37,-29,-20,-10], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-65,57,59], BigFloat[1,10,8], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-65,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-65,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-64,74], BigFloat[1,48], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-64,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-64,74], BigFloat[1,-48], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-65,-64,-61,-58,-54,-49,-43,-36,-28,-19,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-62,83], BigFloat[1,17], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-62,83], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-62,83], BigFloat[1,-17], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-61,92,151], BigFloat[1,10,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-61,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-61,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-63,-62,-61,-57,-53,-48,-42,-35,-27,-18,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-60,83], BigFloat[1,17], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-60,83], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-60,83], BigFloat[1,-17], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-59], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-58,166], BigFloat[1,48], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-58,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-58,166], BigFloat[1,-48], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-57,175], BigFloat[1,17], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-57,175], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-57,175], BigFloat[1,-17], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-60,-59,-58,-57,-52,-47,-41,-34,-26,-17,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-56,92,151], BigFloat[1,10,8], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-56,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-56,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-55,166], BigFloat[1,48], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-55,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-55,166], BigFloat[1,-48], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-54,175], BigFloat[1,6], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-54,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-54,175], BigFloat[1,-6], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-53,205,397], BigFloat[1,10,8], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-53,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-53,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-52,412], BigFloat[1,48], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-52,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-52,412], BigFloat[1,-48], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-56,-55,-54,-53,-52,-46,-40,-33,-25,-16,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 36
             checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 37
-            checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 38
             checkequality(indvals, BigInt[-50,458], BigFloat[1,17], true)
         elseif state.it == 39
-            checkequality(indvals, BigInt[-50,458], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-50,458], BigFloat[1,-17], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-49,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-49,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-49,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 43
-            checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-47,1166], BigFloat[1,17], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-47,1166], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-47,1166], BigFloat[1,-17], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-46,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-46,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-46,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-51,-50,-49,-48,-47,-46,-39,-32,-24,-15,-5,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-45,458], BigFloat[1,17], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-45,458], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-45,458], BigFloat[1,-17], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-43,1107], BigFloat[1,48], true)
         elseif state.it == 54
-            checkequality(indvals, BigInt[-43,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-43,1107], BigFloat[1,-48], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-42,1166], BigFloat[1,17], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-42,1166], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-42,1166], BigFloat[1,-17], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-40,2613], BigFloat[1,48], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-40,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-40,2613], BigFloat[1,-48], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-39,5817], BigFloat[1,17], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-39,5817], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-39,5817], BigFloat[1,-17], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-31,-23,-14,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 64
             checkequality(indvals, BigInt[-38,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 65
-            checkequality(indvals, BigInt[-38,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-38,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 66
             checkequality(indvals, BigInt[-37,1107], BigFloat[1,48], true)
         elseif state.it == 67
-            checkequality(indvals, BigInt[-37,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-37,1107], BigFloat[1,-48], true)
         elseif state.it == 68
             checkequality(indvals, BigInt[-36,1166], BigFloat[1,6], true)
         elseif state.it == 69
-            checkequality(indvals, BigInt[-36,1166], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-36,1166], BigFloat[1,-6], true)
         elseif state.it == 70
             checkequality(indvals, BigInt[-35,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 71
-            checkequality(indvals, BigInt[-35,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-35,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 72
             checkequality(indvals, BigInt[-34,2613], BigFloat[1,48], true)
         elseif state.it == 73
-            checkequality(indvals, BigInt[-34,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-34,2613], BigFloat[1,-48], true)
         elseif state.it == 74
             checkequality(indvals, BigInt[-33,2672], BigFloat[1,6], true)
         elseif state.it == 75
-            checkequality(indvals, BigInt[-33,2672], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-33,2672], BigFloat[1,-6], true)
         elseif state.it == 76
             checkequality(indvals, BigInt[-32,6223,11399], BigFloat[1,10,8], true)
         elseif state.it == 77
-            checkequality(indvals, BigInt[-32,6223,11399], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-32,6223,11399], BigFloat[1,-10,-8], true)
         elseif state.it == 78
             checkequality(indvals, BigInt[-31,11535], BigFloat[1,48], true)
         elseif state.it == 79
-            checkequality(indvals, BigInt[-31,11535], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-31,11535], BigFloat[1,-48], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-38,-37,-36,-35,-34,-33,-32,-31,-22,-13,-3,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 81
             checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 82
-            checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 83
             checkequality(indvals, BigInt[-29,2174], BigFloat[1,17], true)
         elseif state.it == 84
-            checkequality(indvals, BigInt[-29,2174], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-29,2174], BigFloat[1,-17], true)
         elseif state.it == 85
             checkequality(indvals, BigInt[-28,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 86
-            checkequality(indvals, BigInt[-28,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-28,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 88
-            checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-26,4682], BigFloat[1,17], true)
         elseif state.it == 90
-            checkequality(indvals, BigInt[-26,4682], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-26,4682], BigFloat[1,-17], true)
         elseif state.it == 91
             checkequality(indvals, BigInt[-25,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 92
-            checkequality(indvals, BigInt[-25,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-25,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 93
             checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 94
-            checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 95
             checkequality(indvals, BigInt[-23,20443], BigFloat[1,17], true)
         elseif state.it == 96
-            checkequality(indvals, BigInt[-23,20443], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-23,20443], BigFloat[1,-17], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-22,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 98
-            checkequality(indvals, BigInt[-22,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-22,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-30,-29,-28,-27,-26,-25,-24,-23,-22,-12,-2,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 100
             checkequality(indvals, BigInt[-21,2174], BigFloat[1,17], true)
         elseif state.it == 101
-            checkequality(indvals, BigInt[-21,2174], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-21,2174], BigFloat[1,-17], true)
         elseif state.it == 102
             checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 103
-            checkequality(indvals, BigInt[-20], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 104
             checkequality(indvals, BigInt[-19,4553], BigFloat[1,48], true)
         elseif state.it == 105
-            checkequality(indvals, BigInt[-19,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-19,4553], BigFloat[1,-48], true)
         elseif state.it == 106
             checkequality(indvals, BigInt[-18,4682], BigFloat[1,17], true)
         elseif state.it == 107
-            checkequality(indvals, BigInt[-18,4682], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-18,4682], BigFloat[1,-17], true)
         elseif state.it == 108
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 109
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 110
             checkequality(indvals, BigInt[-16,9272], BigFloat[1,48], true)
         elseif state.it == 111
-            checkequality(indvals, BigInt[-16,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-16,9272], BigFloat[1,-48], true)
         elseif state.it == 112
             checkequality(indvals, BigInt[-15,20443], BigFloat[1,17], true)
         elseif state.it == 113
-            checkequality(indvals, BigInt[-15,20443], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-15,20443], BigFloat[1,-17], true)
         elseif state.it == 114
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 115
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 116
             checkequality(indvals, BigInt[-13,36423], BigFloat[1,48], true)
         elseif state.it == 117
-            checkequality(indvals, BigInt[-13,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-13,36423], BigFloat[1,-48], true)
         elseif state.it == 118
             checkequality(indvals, BigInt[-12,55257], BigFloat[1,17], true)
         elseif state.it == 119
-            checkequality(indvals, BigInt[-12,55257], BigFloat[-1,17], true)
+            checkequality(indvals, BigInt[-12,55257], BigFloat[1,-17], true)
         elseif state.it == 120
             checkequality(indvals, BigInt[-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 121
             checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 122
-            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 123
             checkequality(indvals, BigInt[-10,4553], BigFloat[1,48], true)
         elseif state.it == 124
-            checkequality(indvals, BigInt[-10,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-10,4553], BigFloat[1,-48], true)
         elseif state.it == 125
             checkequality(indvals, BigInt[-9,4682], BigFloat[1,6], true)
         elseif state.it == 126
-            checkequality(indvals, BigInt[-9,4682], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-9,4682], BigFloat[1,-6], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 128
-            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 129
             checkequality(indvals, BigInt[-7,9272], BigFloat[1,48], true)
         elseif state.it == 130
-            checkequality(indvals, BigInt[-7,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-7,9272], BigFloat[1,-48], true)
         elseif state.it == 131
             checkequality(indvals, BigInt[-6,9401], BigFloat[1,6], true)
         elseif state.it == 132
-            checkequality(indvals, BigInt[-6,9401], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-6,9401], BigFloat[1,-6], true)
         elseif state.it == 133
             checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 134
-            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 135
             checkequality(indvals, BigInt[-4,36423], BigFloat[1,48], true)
         elseif state.it == 136
-            checkequality(indvals, BigInt[-4,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-4,36423], BigFloat[1,-48], true)
         elseif state.it == 137
             checkequality(indvals, BigInt[-3,36888], BigFloat[1,6], true)
         elseif state.it == 138
-            checkequality(indvals, BigInt[-3,36888], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-3,36888], BigFloat[1,-6], true)
         elseif state.it == 139
             checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,10,8], true)
         elseif state.it == 140
-            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,-10,-8], true)
         elseif state.it == 141
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,48], true)
         elseif state.it == 142
-            checkequality(indvals, BigInt[-1,92474], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 143
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 130
+    elseif state.instance == 151
         if state.it == 0
             checkequality(indvals, BigInt[-276,-275,-273,-270,-266,-261,-255,-248,-240,-231,-221,-210,-198,-185,-171,-156,-140,-123,-105,-86,-66,-45,-23,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-276,60,66], BigFloat[1,2,2], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-276,60,66], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-276,60,66], BigFloat[1,-2,-2], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-276,-274,-272,-269,-265,-260,-254,-247,-239,-230,-220,-209,-197,-184,-170,-155,-139,-122,-104,-85,-65,-44,-22], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-275,57,59], BigFloat[1,10,8], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-275,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-275,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-274,74], BigFloat[1,48], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-274,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-274,74], BigFloat[1,-48], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-275,-274,-271,-268,-264,-259,-253,-246,-238,-229,-219,-208,-196,-183,-169,-154,-138,-121,-103,-84,-64,-43,-21,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-272,152,158], BigFloat[1,2,2], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-272,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-272,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-271,92,151], BigFloat[1,10,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-271,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-271,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-273,-272,-271,-267,-263,-258,-252,-245,-237,-228,-218,-207,-195,-182,-168,-153,-137,-120,-102,-83,-63,-42,-20,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-270,152,158], BigFloat[1,2,2], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-270,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-270,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-269], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-268,166], BigFloat[1,48], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-268,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-268,166], BigFloat[1,-48], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-267,398,404], BigFloat[1,2,2], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-267,398,404], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-267,398,404], BigFloat[1,-2,-2], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-270,-269,-268,-267,-262,-257,-251,-244,-236,-227,-217,-206,-194,-181,-167,-152,-136,-119,-101,-82,-62,-41,-19], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-266,92,151], BigFloat[1,10,8], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-266,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-266,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-265,166], BigFloat[1,48], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-265,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-265,166], BigFloat[1,-48], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-264,175], BigFloat[1,6], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-264,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-264,175], BigFloat[1,-6], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-263,205,397], BigFloat[1,10,8], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-263,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-263,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-262,412], BigFloat[1,48], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-262,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-262,412], BigFloat[1,-48], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-266,-265,-264,-263,-262,-256,-250,-243,-235,-226,-216,-205,-193,-180,-166,-151,-135,-118,-100,-81,-61,-40,-18,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 36
             checkequality(indvals, BigInt[-261,454,455,1069,1181], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 37
-            checkequality(indvals, BigInt[-261,454,455,1069,1181], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-261,454,455,1069,1181], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 38
             checkequality(indvals, BigInt[-260,1063,1069], BigFloat[1,2,2], true)
         elseif state.it == 39
-            checkequality(indvals, BigInt[-260,1063,1069], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-260,1063,1069], BigFloat[1,-2,-2], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-259,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-259,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-259,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-258,1162,1163,2575,2687], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 43
-            checkequality(indvals, BigInt[-258,1162,1163,2575,2687], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-258,1162,1163,2575,2687], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-257,2569,2575], BigFloat[1,2,2], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-257,2569,2575], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-257,2569,2575], BigFloat[1,-2,-2], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-256,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-256,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-256,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-261,-260,-259,-258,-257,-256,-249,-242,-234,-225,-215,-204,-192,-179,-165,-150,-134,-117,-99,-80,-60,-39,-17,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-255,1063,1069], BigFloat[1,2,2], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-255,1063,1069], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-255,1063,1069], BigFloat[1,-2,-2], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-254], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-253,1107], BigFloat[1,48], true)
         elseif state.it == 54
-            checkequality(indvals, BigInt[-253,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-253,1107], BigFloat[1,-48], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-252,2569,2575], BigFloat[1,2,2], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-252,2569,2575], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-252,2569,2575], BigFloat[1,-2,-2], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-251], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-250,2613], BigFloat[1,48], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-250,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-250,2613], BigFloat[1,-48], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-249,11400,11406], BigFloat[1,2,2], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-249,11400,11406], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-249,11400,11406], BigFloat[1,-2,-2], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-255,-254,-253,-252,-251,-250,-249,-241,-233,-224,-214,-203,-191,-178,-164,-149,-133,-116,-98,-79,-59,-38,-16], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 64
             checkequality(indvals, BigInt[-248,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 65
-            checkequality(indvals, BigInt[-248,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-248,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 66
             checkequality(indvals, BigInt[-247,1107], BigFloat[1,48], true)
         elseif state.it == 67
-            checkequality(indvals, BigInt[-247,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-247,1107], BigFloat[1,-48], true)
         elseif state.it == 68
             checkequality(indvals, BigInt[-246,1166], BigFloat[1,6], true)
         elseif state.it == 69
-            checkequality(indvals, BigInt[-246,1166], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-246,1166], BigFloat[1,-6], true)
         elseif state.it == 70
             checkequality(indvals, BigInt[-245,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 71
-            checkequality(indvals, BigInt[-245,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-245,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 72
             checkequality(indvals, BigInt[-244,2613], BigFloat[1,48], true)
         elseif state.it == 73
-            checkequality(indvals, BigInt[-244,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-244,2613], BigFloat[1,-48], true)
         elseif state.it == 74
             checkequality(indvals, BigInt[-243,2672], BigFloat[1,6], true)
         elseif state.it == 75
-            checkequality(indvals, BigInt[-243,2672], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-243,2672], BigFloat[1,-6], true)
         elseif state.it == 76
             checkequality(indvals, BigInt[-242,6223,11399], BigFloat[1,10,8], true)
         elseif state.it == 77
-            checkequality(indvals, BigInt[-242,6223,11399], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-242,6223,11399], BigFloat[1,-10,-8], true)
         elseif state.it == 78
             checkequality(indvals, BigInt[-241,11535], BigFloat[1,48], true)
         elseif state.it == 79
-            checkequality(indvals, BigInt[-241,11535], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-241,11535], BigFloat[1,-48], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-248,-247,-246,-245,-244,-243,-242,-241,-232,-223,-213,-202,-190,-177,-163,-148,-132,-115,-97,-78,-58,-37,-15,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 81
             checkequality(indvals, BigInt[-240,2170,2171,4545,4683], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 82
-            checkequality(indvals, BigInt[-240,2170,2171,4545,4683], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-240,2170,2171,4545,4683], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 83
             checkequality(indvals, BigInt[-239,4539,4545], BigFloat[1,2,2], true)
         elseif state.it == 84
-            checkequality(indvals, BigInt[-239,4539,4545], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-239,4539,4545], BigFloat[1,-2,-2], true)
         elseif state.it == 85
             checkequality(indvals, BigInt[-238,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 86
-            checkequality(indvals, BigInt[-238,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-238,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-237,4678,4679,9264,9402], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 88
-            checkequality(indvals, BigInt[-237,4678,4679,9264,9402], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-237,4678,4679,9264,9402], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-236,9258,9264], BigFloat[1,2,2], true)
         elseif state.it == 90
-            checkequality(indvals, BigInt[-236,9258,9264], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-236,9258,9264], BigFloat[1,-2,-2], true)
         elseif state.it == 91
             checkequality(indvals, BigInt[-235,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 92
-            checkequality(indvals, BigInt[-235,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-235,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 93
             checkequality(indvals, BigInt[-234,20439,20440,36385,36903], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 94
-            checkequality(indvals, BigInt[-234,20439,20440,36385,36903], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-234,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 95
             checkequality(indvals, BigInt[-233,36379,36385], BigFloat[1,2,2], true)
         elseif state.it == 96
-            checkequality(indvals, BigInt[-233,36379,36385], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-233,36379,36385], BigFloat[1,-2,-2], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-232,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 98
-            checkequality(indvals, BigInt[-232,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-232,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-240,-239,-238,-237,-236,-235,-234,-233,-232,-222,-212,-201,-189,-176,-162,-147,-131,-114,-96,-77,-57,-36,-14,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 100
             checkequality(indvals, BigInt[-231,4539,4545], BigFloat[1,2,2], true)
         elseif state.it == 101
-            checkequality(indvals, BigInt[-231,4539,4545], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-231,4539,4545], BigFloat[1,-2,-2], true)
         elseif state.it == 102
             checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 103
-            checkequality(indvals, BigInt[-230], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 104
             checkequality(indvals, BigInt[-229,4553], BigFloat[1,48], true)
         elseif state.it == 105
-            checkequality(indvals, BigInt[-229,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-229,4553], BigFloat[1,-48], true)
         elseif state.it == 106
             checkequality(indvals, BigInt[-228,9258,9264], BigFloat[1,2,2], true)
         elseif state.it == 107
-            checkequality(indvals, BigInt[-228,9258,9264], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-228,9258,9264], BigFloat[1,-2,-2], true)
         elseif state.it == 108
             checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 109
-            checkequality(indvals, BigInt[-227], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 110
             checkequality(indvals, BigInt[-226,9272], BigFloat[1,48], true)
         elseif state.it == 111
-            checkequality(indvals, BigInt[-226,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-226,9272], BigFloat[1,-48], true)
         elseif state.it == 112
             checkequality(indvals, BigInt[-225,36379,36385], BigFloat[1,2,2], true)
         elseif state.it == 113
-            checkequality(indvals, BigInt[-225,36379,36385], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-225,36379,36385], BigFloat[1,-2,-2], true)
         elseif state.it == 114
             checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 115
-            checkequality(indvals, BigInt[-224], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 116
             checkequality(indvals, BigInt[-223,36423], BigFloat[1,48], true)
         elseif state.it == 117
-            checkequality(indvals, BigInt[-223,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-223,36423], BigFloat[1,-48], true)
         elseif state.it == 118
             checkequality(indvals, BigInt[-222,92460,92466], BigFloat[1,2,2], true)
         elseif state.it == 119
-            checkequality(indvals, BigInt[-222,92460,92466], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-222,92460,92466], BigFloat[1,-2,-2], true)
         elseif state.it == 120
             checkequality(indvals, BigInt[-231,-230,-229,-228,-227,-226,-225,-224,-223,-222,-211,-200,-188,-175,-161,-146,-130,-113,-95,-76,-56,-35,-13], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 121
             checkequality(indvals, BigInt[-221,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 122
-            checkequality(indvals, BigInt[-221,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-221,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 123
             checkequality(indvals, BigInt[-220,4553], BigFloat[1,48], true)
         elseif state.it == 124
-            checkequality(indvals, BigInt[-220,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-220,4553], BigFloat[1,-48], true)
         elseif state.it == 125
             checkequality(indvals, BigInt[-219,4682], BigFloat[1,6], true)
         elseif state.it == 126
-            checkequality(indvals, BigInt[-219,4682], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-219,4682], BigFloat[1,-6], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-218,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 128
-            checkequality(indvals, BigInt[-218,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-218,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 129
             checkequality(indvals, BigInt[-217,9272], BigFloat[1,48], true)
         elseif state.it == 130
-            checkequality(indvals, BigInt[-217,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-217,9272], BigFloat[1,-48], true)
         elseif state.it == 131
             checkequality(indvals, BigInt[-216,9401], BigFloat[1,6], true)
         elseif state.it == 132
-            checkequality(indvals, BigInt[-216,9401], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-216,9401], BigFloat[1,-6], true)
         elseif state.it == 133
             checkequality(indvals, BigInt[-215,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 134
-            checkequality(indvals, BigInt[-215,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-215,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 135
             checkequality(indvals, BigInt[-214,36423], BigFloat[1,48], true)
         elseif state.it == 136
-            checkequality(indvals, BigInt[-214,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-214,36423], BigFloat[1,-48], true)
         elseif state.it == 137
             checkequality(indvals, BigInt[-213,36888], BigFloat[1,6], true)
         elseif state.it == 138
-            checkequality(indvals, BigInt[-213,36888], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-213,36888], BigFloat[1,-6], true)
         elseif state.it == 139
             checkequality(indvals, BigInt[-212,63728,92459], BigFloat[1,10,8], true)
         elseif state.it == 140
-            checkequality(indvals, BigInt[-212,63728,92459], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-212,63728,92459], BigFloat[1,-10,-8], true)
         elseif state.it == 141
             checkequality(indvals, BigInt[-211,92474], BigFloat[1,48], true)
         elseif state.it == 142
-            checkequality(indvals, BigInt[-211,92474], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-211,92474], BigFloat[1,-48], true)
         elseif state.it == 143
             checkequality(indvals, BigInt[-221,-220,-219,-218,-217,-216,-215,-214,-213,-212,-211,-199,-187,-174,-160,-145,-129,-112,-94,-75,-55,-34,-12,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 144
             checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 145
-            checkequality(indvals, BigInt[-210], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 146
             checkequality(indvals, BigInt[-209,57,58,60], BigFloat[1,-6,-2,16], true)
         elseif state.it == 147
-            checkequality(indvals, BigInt[-209,57,58,60], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-209,57,58,60], BigFloat[1,6,2,-16], true)
         elseif state.it == 148
             checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 149
-            checkequality(indvals, BigInt[-208], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 150
             checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 151
-            checkequality(indvals, BigInt[-207], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 152
             checkequality(indvals, BigInt[-206,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 153
-            checkequality(indvals, BigInt[-206,92,150,152], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-206,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 154
             checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 155
-            checkequality(indvals, BigInt[-205], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 156
             checkequality(indvals, BigInt[-204], BigFloat[1], true)
         elseif state.it == 157
-            checkequality(indvals, BigInt[-204], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-204], BigFloat[1], true)
         elseif state.it == 158
             checkequality(indvals, BigInt[-203,522,1061,1063], BigFloat[1,-6,-2,16], true)
         elseif state.it == 159
-            checkequality(indvals, BigInt[-203,522,1061,1063], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-203,522,1061,1063], BigFloat[1,6,2,-16], true)
         elseif state.it == 160
             checkequality(indvals, BigInt[-202], BigFloat[1], true)
         elseif state.it == 161
-            checkequality(indvals, BigInt[-202], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-202], BigFloat[1], true)
         elseif state.it == 162
             checkequality(indvals, BigInt[-201], BigFloat[1], true)
         elseif state.it == 163
-            checkequality(indvals, BigInt[-201], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-201], BigFloat[1], true)
         elseif state.it == 164
             checkequality(indvals, BigInt[-200,2693,4537,4539], BigFloat[1,-6,-2,16], true)
         elseif state.it == 165
-            checkequality(indvals, BigInt[-200,2693,4537,4539], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-200,2693,4537,4539], BigFloat[1,6,2,-16], true)
         elseif state.it == 166
             checkequality(indvals, BigInt[-199], BigFloat[1], true)
         elseif state.it == 167
-            checkequality(indvals, BigInt[-199], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-199], BigFloat[1], true)
         elseif state.it == 168
             checkequality(indvals, BigInt[-210,-209,-208,-207,-206,-205,-204,-203,-202,-201,-200,-199,-186,-173,-159,-144,-128,-111,-93,-74,-54,-33,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 169
             checkequality(indvals, BigInt[-198,57,58,60], BigFloat[1,6,2,-16], true)
         elseif state.it == 170
-            checkequality(indvals, BigInt[-198,57,58,60], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-198,57,58,60], BigFloat[1,-6,-2,16], true)
         elseif state.it == 171
             checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 172
-            checkequality(indvals, BigInt[-197], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 173
             checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 174
-            checkequality(indvals, BigInt[-196], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 175
             checkequality(indvals, BigInt[-195,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 176
-            checkequality(indvals, BigInt[-195,92,150,152], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-195,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 177
             checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 178
-            checkequality(indvals, BigInt[-194], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 179
             checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 180
-            checkequality(indvals, BigInt[-193], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 181
             checkequality(indvals, BigInt[-192,522,1061,1063], BigFloat[1,6,2,-16], true)
         elseif state.it == 182
-            checkequality(indvals, BigInt[-192,522,1061,1063], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-192,522,1061,1063], BigFloat[1,-6,-2,16], true)
         elseif state.it == 183
             checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 184
-            checkequality(indvals, BigInt[-191], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 185
             checkequality(indvals, BigInt[-190], BigFloat[1], true)
         elseif state.it == 186
-            checkequality(indvals, BigInt[-190], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-190], BigFloat[1], true)
         elseif state.it == 187
             checkequality(indvals, BigInt[-189,2693,4537,4539], BigFloat[1,6,2,-16], true)
         elseif state.it == 188
-            checkequality(indvals, BigInt[-189,2693,4537,4539], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-189,2693,4537,4539], BigFloat[1,-6,-2,16], true)
         elseif state.it == 189
             checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 190
-            checkequality(indvals, BigInt[-188], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 191
             checkequality(indvals, BigInt[-187], BigFloat[1], true)
         elseif state.it == 192
-            checkequality(indvals, BigInt[-187], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-187], BigFloat[1], true)
         elseif state.it == 193
             checkequality(indvals, BigInt[-186,60,66], BigFloat[1,2,2], true)
         elseif state.it == 194
-            checkequality(indvals, BigInt[-186,60,66], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-186,60,66], BigFloat[1,-2,-2], true)
         elseif state.it == 195
             checkequality(indvals, BigInt[-198,-197,-196,-195,-194,-193,-192,-191,-190,-189,-188,-187,-186,-172,-158,-143,-127,-110,-92,-73,-53,-32,-10], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 196
             checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 197
-            checkequality(indvals, BigInt[-185], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 198
             checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 199
-            checkequality(indvals, BigInt[-184], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 200
             checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 201
-            checkequality(indvals, BigInt[-183], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 202
             checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 203
-            checkequality(indvals, BigInt[-182], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 204
             checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 205
-            checkequality(indvals, BigInt[-181], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 206
             checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 207
-            checkequality(indvals, BigInt[-180], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 208
             checkequality(indvals, BigInt[-179], BigFloat[1], true)
         elseif state.it == 209
-            checkequality(indvals, BigInt[-179], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-179], BigFloat[1], true)
         elseif state.it == 210
             checkequality(indvals, BigInt[-178], BigFloat[1], true)
         elseif state.it == 211
-            checkequality(indvals, BigInt[-178], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-178], BigFloat[1], true)
         elseif state.it == 212
             checkequality(indvals, BigInt[-177], BigFloat[1], true)
         elseif state.it == 213
-            checkequality(indvals, BigInt[-177], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-177], BigFloat[1], true)
         elseif state.it == 214
             checkequality(indvals, BigInt[-176], BigFloat[1], true)
         elseif state.it == 215
-            checkequality(indvals, BigInt[-176], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-176], BigFloat[1], true)
         elseif state.it == 216
             checkequality(indvals, BigInt[-175], BigFloat[1], true)
         elseif state.it == 217
-            checkequality(indvals, BigInt[-175], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-175], BigFloat[1], true)
         elseif state.it == 218
             checkequality(indvals, BigInt[-174], BigFloat[1], true)
         elseif state.it == 219
-            checkequality(indvals, BigInt[-174], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-174], BigFloat[1], true)
         elseif state.it == 220
             checkequality(indvals, BigInt[-173,57,59], BigFloat[1,10,8], true)
         elseif state.it == 221
-            checkequality(indvals, BigInt[-173,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-173,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 222
             checkequality(indvals, BigInt[-172,74], BigFloat[1,48], true)
         elseif state.it == 223
-            checkequality(indvals, BigInt[-172,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-172,74], BigFloat[1,-48], true)
         elseif state.it == 224
             checkequality(indvals, BigInt[-185,-184,-183,-182,-181,-180,-179,-178,-177,-176,-175,-174,-173,-172,-157,-142,-126,-109,-91,-72,-52,-31,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 225
             checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 226
-            checkequality(indvals, BigInt[-171], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 227
             checkequality(indvals, BigInt[-170,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 228
-            checkequality(indvals, BigInt[-170,92,150,152], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-170,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 229
             checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 230
-            checkequality(indvals, BigInt[-169], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 231
             checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 232
-            checkequality(indvals, BigInt[-168], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 233
             checkequality(indvals, BigInt[-167,205,396,398], BigFloat[1,-6,-2,16], true)
         elseif state.it == 234
-            checkequality(indvals, BigInt[-167,205,396,398], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-167,205,396,398], BigFloat[1,6,2,-16], true)
         elseif state.it == 235
             checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 236
-            checkequality(indvals, BigInt[-166], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 237
             checkequality(indvals, BigInt[-165], BigFloat[1], true)
         elseif state.it == 238
-            checkequality(indvals, BigInt[-165], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-165], BigFloat[1], true)
         elseif state.it == 239
             checkequality(indvals, BigInt[-164,1286,2567,2569], BigFloat[1,-6,-2,16], true)
         elseif state.it == 240
-            checkequality(indvals, BigInt[-164,1286,2567,2569], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-164,1286,2567,2569], BigFloat[1,6,2,-16], true)
         elseif state.it == 241
             checkequality(indvals, BigInt[-163], BigFloat[1], true)
         elseif state.it == 242
-            checkequality(indvals, BigInt[-163], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-163], BigFloat[1], true)
         elseif state.it == 243
             checkequality(indvals, BigInt[-162], BigFloat[1], true)
         elseif state.it == 244
-            checkequality(indvals, BigInt[-162], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-162], BigFloat[1], true)
         elseif state.it == 245
             checkequality(indvals, BigInt[-161,5663,9256,9258], BigFloat[1,-6,-2,16], true)
         elseif state.it == 246
-            checkequality(indvals, BigInt[-161,5663,9256,9258], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-161,5663,9256,9258], BigFloat[1,6,2,-16], true)
         elseif state.it == 247
             checkequality(indvals, BigInt[-160], BigFloat[1], true)
         elseif state.it == 248
-            checkequality(indvals, BigInt[-160], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-160], BigFloat[1], true)
         elseif state.it == 249
             checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 250
-            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 251
             checkequality(indvals, BigInt[-158,152,158], BigFloat[1,2,2], true)
         elseif state.it == 252
-            checkequality(indvals, BigInt[-158,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-158,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 253
             checkequality(indvals, BigInt[-157,92,151], BigFloat[1,10,8], true)
         elseif state.it == 254
-            checkequality(indvals, BigInt[-157,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-157,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 255
             checkequality(indvals, BigInt[-171,-170,-169,-168,-167,-166,-165,-164,-163,-162,-161,-160,-159,-158,-157,-141,-125,-108,-90,-71,-51,-30,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 256
             checkequality(indvals, BigInt[-156,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 257
-            checkequality(indvals, BigInt[-156,92,150,152], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-156,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 258
             checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 259
-            checkequality(indvals, BigInt[-155], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 260
             checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 261
-            checkequality(indvals, BigInt[-154], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 262
             checkequality(indvals, BigInt[-153,205,396,398], BigFloat[1,6,2,-16], true)
         elseif state.it == 263
-            checkequality(indvals, BigInt[-153,205,396,398], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-153,205,396,398], BigFloat[1,-6,-2,16], true)
         elseif state.it == 264
             checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 265
-            checkequality(indvals, BigInt[-152], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 266
             checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 267
-            checkequality(indvals, BigInt[-151], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 268
             checkequality(indvals, BigInt[-150,1286,2567,2569], BigFloat[1,6,2,-16], true)
         elseif state.it == 269
-            checkequality(indvals, BigInt[-150,1286,2567,2569], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-150,1286,2567,2569], BigFloat[1,-6,-2,16], true)
         elseif state.it == 270
             checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 271
-            checkequality(indvals, BigInt[-149], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 272
             checkequality(indvals, BigInt[-148], BigFloat[1], true)
         elseif state.it == 273
-            checkequality(indvals, BigInt[-148], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-148], BigFloat[1], true)
         elseif state.it == 274
             checkequality(indvals, BigInt[-147,5663,9256,9258], BigFloat[1,6,2,-16], true)
         elseif state.it == 275
-            checkequality(indvals, BigInt[-147,5663,9256,9258], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-147,5663,9256,9258], BigFloat[1,-6,-2,16], true)
         elseif state.it == 276
             checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 277
-            checkequality(indvals, BigInt[-146], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 278
             checkequality(indvals, BigInt[-145], BigFloat[1], true)
         elseif state.it == 279
-            checkequality(indvals, BigInt[-145], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-145], BigFloat[1], true)
         elseif state.it == 280
             checkequality(indvals, BigInt[-144,152,158], BigFloat[1,2,2], true)
         elseif state.it == 281
-            checkequality(indvals, BigInt[-144,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-144,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 282
             checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 283
-            checkequality(indvals, BigInt[-143], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 284
             checkequality(indvals, BigInt[-142,166], BigFloat[1,48], true)
         elseif state.it == 285
-            checkequality(indvals, BigInt[-142,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-142,166], BigFloat[1,-48], true)
         elseif state.it == 286
             checkequality(indvals, BigInt[-141,398,404], BigFloat[1,2,2], true)
         elseif state.it == 287
-            checkequality(indvals, BigInt[-141,398,404], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-141,398,404], BigFloat[1,-2,-2], true)
         elseif state.it == 288
             checkequality(indvals, BigInt[-156,-155,-154,-153,-152,-151,-150,-149,-148,-147,-146,-145,-144,-143,-142,-141,-124,-107,-89,-70,-50,-29,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 289
             checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 290
-            checkequality(indvals, BigInt[-140], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 291
             checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 292
-            checkequality(indvals, BigInt[-139], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 293
             checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 294
-            checkequality(indvals, BigInt[-138], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 295
             checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 296
-            checkequality(indvals, BigInt[-137], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 297
             checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 298
-            checkequality(indvals, BigInt[-136], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 299
             checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 300
-            checkequality(indvals, BigInt[-135], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 301
             checkequality(indvals, BigInt[-134], BigFloat[1], true)
         elseif state.it == 302
-            checkequality(indvals, BigInt[-134], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-134], BigFloat[1], true)
         elseif state.it == 303
             checkequality(indvals, BigInt[-133], BigFloat[1], true)
         elseif state.it == 304
-            checkequality(indvals, BigInt[-133], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-133], BigFloat[1], true)
         elseif state.it == 305
             checkequality(indvals, BigInt[-132], BigFloat[1], true)
         elseif state.it == 306
-            checkequality(indvals, BigInt[-132], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-132], BigFloat[1], true)
         elseif state.it == 307
             checkequality(indvals, BigInt[-131], BigFloat[1], true)
         elseif state.it == 308
-            checkequality(indvals, BigInt[-131], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-131], BigFloat[1], true)
         elseif state.it == 309
             checkequality(indvals, BigInt[-130], BigFloat[1], true)
         elseif state.it == 310
-            checkequality(indvals, BigInt[-130], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-130], BigFloat[1], true)
         elseif state.it == 311
             checkequality(indvals, BigInt[-129], BigFloat[1], true)
         elseif state.it == 312
-            checkequality(indvals, BigInt[-129], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-129], BigFloat[1], true)
         elseif state.it == 313
             checkequality(indvals, BigInt[-128,92,151], BigFloat[1,10,8], true)
         elseif state.it == 314
-            checkequality(indvals, BigInt[-128,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-128,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 315
             checkequality(indvals, BigInt[-127,166], BigFloat[1,48], true)
         elseif state.it == 316
-            checkequality(indvals, BigInt[-127,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-127,166], BigFloat[1,-48], true)
         elseif state.it == 317
             checkequality(indvals, BigInt[-126,175], BigFloat[1,6], true)
         elseif state.it == 318
-            checkequality(indvals, BigInt[-126,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-126,175], BigFloat[1,-6], true)
         elseif state.it == 319
             checkequality(indvals, BigInt[-125,205,397], BigFloat[1,10,8], true)
         elseif state.it == 320
-            checkequality(indvals, BigInt[-125,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-125,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 321
             checkequality(indvals, BigInt[-124,412], BigFloat[1,48], true)
         elseif state.it == 322
-            checkequality(indvals, BigInt[-124,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-124,412], BigFloat[1,-48], true)
         elseif state.it == 323
             checkequality(indvals, BigInt[-140,-139,-138,-137,-136,-135,-134,-133,-132,-131,-130,-129,-128,-127,-126,-125,-124,-106,-88,-69,-49,-28,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 324
             checkequality(indvals, BigInt[-123], BigFloat[1], true)
         elseif state.it == 325
-            checkequality(indvals, BigInt[-123], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-123], BigFloat[1], true)
         elseif state.it == 326
             checkequality(indvals, BigInt[-122,522,1061,1063], BigFloat[1,-6,-2,16], true)
         elseif state.it == 327
-            checkequality(indvals, BigInt[-122,522,1061,1063], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-122,522,1061,1063], BigFloat[1,6,2,-16], true)
         elseif state.it == 328
             checkequality(indvals, BigInt[-121], BigFloat[1], true)
         elseif state.it == 329
-            checkequality(indvals, BigInt[-121], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-121], BigFloat[1], true)
         elseif state.it == 330
             checkequality(indvals, BigInt[-120], BigFloat[1], true)
         elseif state.it == 331
-            checkequality(indvals, BigInt[-120], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-120], BigFloat[1], true)
         elseif state.it == 332
             checkequality(indvals, BigInt[-119,1286,2567,2569], BigFloat[1,-6,-2,16], true)
         elseif state.it == 333
-            checkequality(indvals, BigInt[-119,1286,2567,2569], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-119,1286,2567,2569], BigFloat[1,6,2,-16], true)
         elseif state.it == 334
             checkequality(indvals, BigInt[-118], BigFloat[1], true)
         elseif state.it == 335
-            checkequality(indvals, BigInt[-118], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-118], BigFloat[1], true)
         elseif state.it == 336
             checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 337
-            checkequality(indvals, BigInt[-117], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 338
             checkequality(indvals, BigInt[-116,6223,11398,11400], BigFloat[1,-6,-2,16], true)
         elseif state.it == 339
-            checkequality(indvals, BigInt[-116,6223,11398,11400], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-116,6223,11398,11400], BigFloat[1,6,2,-16], true)
         elseif state.it == 340
             checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 341
-            checkequality(indvals, BigInt[-115], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 342
             checkequality(indvals, BigInt[-114], BigFloat[1], true)
         elseif state.it == 343
-            checkequality(indvals, BigInt[-114], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-114], BigFloat[1], true)
         elseif state.it == 344
             checkequality(indvals, BigInt[-113,22426,36377,36379], BigFloat[1,-6,-2,16], true)
         elseif state.it == 345
-            checkequality(indvals, BigInt[-113,22426,36377,36379], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-113,22426,36377,36379], BigFloat[1,6,2,-16], true)
         elseif state.it == 346
             checkequality(indvals, BigInt[-112], BigFloat[1], true)
         elseif state.it == 347
-            checkequality(indvals, BigInt[-112], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-112], BigFloat[1], true)
         elseif state.it == 348
             checkequality(indvals, BigInt[-111,454,455,1069,1181], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 349
-            checkequality(indvals, BigInt[-111,454,455,1069,1181], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-111,454,455,1069,1181], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 350
             checkequality(indvals, BigInt[-110,1063,1069], BigFloat[1,2,2], true)
         elseif state.it == 351
-            checkequality(indvals, BigInt[-110,1063,1069], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-110,1063,1069], BigFloat[1,-2,-2], true)
         elseif state.it == 352
             checkequality(indvals, BigInt[-109,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 353
-            checkequality(indvals, BigInt[-109,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-109,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 354
             checkequality(indvals, BigInt[-108,1162,1163,2575,2687], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 355
-            checkequality(indvals, BigInt[-108,1162,1163,2575,2687], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-108,1162,1163,2575,2687], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 356
             checkequality(indvals, BigInt[-107,2569,2575], BigFloat[1,2,2], true)
         elseif state.it == 357
-            checkequality(indvals, BigInt[-107,2569,2575], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-107,2569,2575], BigFloat[1,-2,-2], true)
         elseif state.it == 358
             checkequality(indvals, BigInt[-106,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 359
-            checkequality(indvals, BigInt[-106,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-106,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 360
             checkequality(indvals, BigInt[-123,-122,-121,-120,-119,-118,-117,-116,-115,-114,-113,-112,-111,-110,-109,-108,-107,-106,-87,-68,-48,-27,-5,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 361
             checkequality(indvals, BigInt[-105,522,1061,1063], BigFloat[1,6,2,-16], true)
         elseif state.it == 362
-            checkequality(indvals, BigInt[-105,522,1061,1063], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-105,522,1061,1063], BigFloat[1,-6,-2,16], true)
         elseif state.it == 363
             checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 364
-            checkequality(indvals, BigInt[-104], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 365
             checkequality(indvals, BigInt[-103], BigFloat[1], true)
         elseif state.it == 366
-            checkequality(indvals, BigInt[-103], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-103], BigFloat[1], true)
         elseif state.it == 367
             checkequality(indvals, BigInt[-102,1286,2567,2569], BigFloat[1,6,2,-16], true)
         elseif state.it == 368
-            checkequality(indvals, BigInt[-102,1286,2567,2569], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-102,1286,2567,2569], BigFloat[1,-6,-2,16], true)
         elseif state.it == 369
             checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 370
-            checkequality(indvals, BigInt[-101], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 371
             checkequality(indvals, BigInt[-100], BigFloat[1], true)
         elseif state.it == 372
-            checkequality(indvals, BigInt[-100], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-100], BigFloat[1], true)
         elseif state.it == 373
             checkequality(indvals, BigInt[-99,6223,11398,11400], BigFloat[1,6,2,-16], true)
         elseif state.it == 374
-            checkequality(indvals, BigInt[-99,6223,11398,11400], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-99,6223,11398,11400], BigFloat[1,-6,-2,16], true)
         elseif state.it == 375
             checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 376
-            checkequality(indvals, BigInt[-98], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 377
             checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 378
-            checkequality(indvals, BigInt[-97], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 379
             checkequality(indvals, BigInt[-96,22426,36377,36379], BigFloat[1,6,2,-16], true)
         elseif state.it == 380
-            checkequality(indvals, BigInt[-96,22426,36377,36379], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-96,22426,36377,36379], BigFloat[1,-6,-2,16], true)
         elseif state.it == 381
             checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 382
-            checkequality(indvals, BigInt[-95], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 383
             checkequality(indvals, BigInt[-94], BigFloat[1], true)
         elseif state.it == 384
-            checkequality(indvals, BigInt[-94], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-94], BigFloat[1], true)
         elseif state.it == 385
             checkequality(indvals, BigInt[-93,1063,1069], BigFloat[1,2,2], true)
         elseif state.it == 386
-            checkequality(indvals, BigInt[-93,1063,1069], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-93,1063,1069], BigFloat[1,-2,-2], true)
         elseif state.it == 387
             checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 388
-            checkequality(indvals, BigInt[-92], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 389
             checkequality(indvals, BigInt[-91,1107], BigFloat[1,48], true)
         elseif state.it == 390
-            checkequality(indvals, BigInt[-91,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-91,1107], BigFloat[1,-48], true)
         elseif state.it == 391
             checkequality(indvals, BigInt[-90,2569,2575], BigFloat[1,2,2], true)
         elseif state.it == 392
-            checkequality(indvals, BigInt[-90,2569,2575], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-90,2569,2575], BigFloat[1,-2,-2], true)
         elseif state.it == 393
             checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 394
-            checkequality(indvals, BigInt[-89], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 395
             checkequality(indvals, BigInt[-88,2613], BigFloat[1,48], true)
         elseif state.it == 396
-            checkequality(indvals, BigInt[-88,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-88,2613], BigFloat[1,-48], true)
         elseif state.it == 397
             checkequality(indvals, BigInt[-87,11400,11406], BigFloat[1,2,2], true)
         elseif state.it == 398
-            checkequality(indvals, BigInt[-87,11400,11406], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-87,11400,11406], BigFloat[1,-2,-2], true)
         elseif state.it == 399
             checkequality(indvals, BigInt[-105,-104,-103,-102,-101,-100,-99,-98,-97,-96,-95,-94,-93,-92,-91,-90,-89,-88,-87,-67,-47,-26,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 400
             checkequality(indvals, BigInt[-86], BigFloat[1], true)
         elseif state.it == 401
-            checkequality(indvals, BigInt[-86], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-86], BigFloat[1], true)
         elseif state.it == 402
             checkequality(indvals, BigInt[-85], BigFloat[1], true)
         elseif state.it == 403
-            checkequality(indvals, BigInt[-85], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-85], BigFloat[1], true)
         elseif state.it == 404
             checkequality(indvals, BigInt[-84], BigFloat[1], true)
         elseif state.it == 405
-            checkequality(indvals, BigInt[-84], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-84], BigFloat[1], true)
         elseif state.it == 406
             checkequality(indvals, BigInt[-83], BigFloat[1], true)
         elseif state.it == 407
-            checkequality(indvals, BigInt[-83], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-83], BigFloat[1], true)
         elseif state.it == 408
             checkequality(indvals, BigInt[-82], BigFloat[1], true)
         elseif state.it == 409
-            checkequality(indvals, BigInt[-82], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-82], BigFloat[1], true)
         elseif state.it == 410
             checkequality(indvals, BigInt[-81], BigFloat[1], true)
         elseif state.it == 411
-            checkequality(indvals, BigInt[-81], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-81], BigFloat[1], true)
         elseif state.it == 412
             checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 413
-            checkequality(indvals, BigInt[-80], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 414
             checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 415
-            checkequality(indvals, BigInt[-79], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 416
             checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 417
-            checkequality(indvals, BigInt[-78], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 418
             checkequality(indvals, BigInt[-77], BigFloat[1], true)
         elseif state.it == 419
-            checkequality(indvals, BigInt[-77], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-77], BigFloat[1], true)
         elseif state.it == 420
             checkequality(indvals, BigInt[-76], BigFloat[1], true)
         elseif state.it == 421
-            checkequality(indvals, BigInt[-76], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-76], BigFloat[1], true)
         elseif state.it == 422
             checkequality(indvals, BigInt[-75], BigFloat[1], true)
         elseif state.it == 423
-            checkequality(indvals, BigInt[-75], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-75], BigFloat[1], true)
         elseif state.it == 424
             checkequality(indvals, BigInt[-74,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 425
-            checkequality(indvals, BigInt[-74,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-74,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 426
             checkequality(indvals, BigInt[-73,1107], BigFloat[1,48], true)
         elseif state.it == 427
-            checkequality(indvals, BigInt[-73,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-73,1107], BigFloat[1,-48], true)
         elseif state.it == 428
             checkequality(indvals, BigInt[-72,1166], BigFloat[1,6], true)
         elseif state.it == 429
-            checkequality(indvals, BigInt[-72,1166], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-72,1166], BigFloat[1,-6], true)
         elseif state.it == 430
             checkequality(indvals, BigInt[-71,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 431
-            checkequality(indvals, BigInt[-71,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-71,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 432
             checkequality(indvals, BigInt[-70,2613], BigFloat[1,48], true)
         elseif state.it == 433
-            checkequality(indvals, BigInt[-70,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-70,2613], BigFloat[1,-48], true)
         elseif state.it == 434
             checkequality(indvals, BigInt[-69,2672], BigFloat[1,6], true)
         elseif state.it == 435
-            checkequality(indvals, BigInt[-69,2672], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-69,2672], BigFloat[1,-6], true)
         elseif state.it == 436
             checkequality(indvals, BigInt[-68,6223,11399], BigFloat[1,10,8], true)
         elseif state.it == 437
-            checkequality(indvals, BigInt[-68,6223,11399], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-68,6223,11399], BigFloat[1,-10,-8], true)
         elseif state.it == 438
             checkequality(indvals, BigInt[-67,11535], BigFloat[1,48], true)
         elseif state.it == 439
-            checkequality(indvals, BigInt[-67,11535], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-67,11535], BigFloat[1,-48], true)
         elseif state.it == 440
             checkequality(indvals, BigInt[-86,-85,-84,-83,-82,-81,-80,-79,-78,-77,-76,-75,-74,-73,-72,-71,-70,-69,-68,-67,-46,-25,-3,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 441
             checkequality(indvals, BigInt[-66], BigFloat[1], true)
         elseif state.it == 442
-            checkequality(indvals, BigInt[-66], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-66], BigFloat[1], true)
         elseif state.it == 443
             checkequality(indvals, BigInt[-65,2693,4537,4539], BigFloat[1,-6,-2,16], true)
         elseif state.it == 444
-            checkequality(indvals, BigInt[-65,2693,4537,4539], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-65,2693,4537,4539], BigFloat[1,6,2,-16], true)
         elseif state.it == 445
             checkequality(indvals, BigInt[-64], BigFloat[1], true)
         elseif state.it == 446
-            checkequality(indvals, BigInt[-64], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-64], BigFloat[1], true)
         elseif state.it == 447
             checkequality(indvals, BigInt[-63], BigFloat[1], true)
         elseif state.it == 448
-            checkequality(indvals, BigInt[-63], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-63], BigFloat[1], true)
         elseif state.it == 449
             checkequality(indvals, BigInt[-62,5663,9256,9258], BigFloat[1,-6,-2,16], true)
         elseif state.it == 450
-            checkequality(indvals, BigInt[-62,5663,9256,9258], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-62,5663,9256,9258], BigFloat[1,6,2,-16], true)
         elseif state.it == 451
             checkequality(indvals, BigInt[-61], BigFloat[1], true)
         elseif state.it == 452
-            checkequality(indvals, BigInt[-61], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-61], BigFloat[1], true)
         elseif state.it == 453
             checkequality(indvals, BigInt[-60], BigFloat[1], true)
         elseif state.it == 454
-            checkequality(indvals, BigInt[-60], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-60], BigFloat[1], true)
         elseif state.it == 455
             checkequality(indvals, BigInt[-59,22426,36377,36379], BigFloat[1,-6,-2,16], true)
         elseif state.it == 456
-            checkequality(indvals, BigInt[-59,22426,36377,36379], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-59,22426,36377,36379], BigFloat[1,6,2,-16], true)
         elseif state.it == 457
             checkequality(indvals, BigInt[-58], BigFloat[1], true)
         elseif state.it == 458
-            checkequality(indvals, BigInt[-58], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-58], BigFloat[1], true)
         elseif state.it == 459
             checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 460
-            checkequality(indvals, BigInt[-57], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 461
             checkequality(indvals, BigInt[-56,63728,92458,92460], BigFloat[1,-6,-2,16], true)
         elseif state.it == 462
-            checkequality(indvals, BigInt[-56,63728,92458,92460], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-56,63728,92458,92460], BigFloat[1,6,2,-16], true)
         elseif state.it == 463
             checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 464
-            checkequality(indvals, BigInt[-55], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 465
             checkequality(indvals, BigInt[-54,2170,2171,4545,4683], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 466
-            checkequality(indvals, BigInt[-54,2170,2171,4545,4683], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-54,2170,2171,4545,4683], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 467
             checkequality(indvals, BigInt[-53,4539,4545], BigFloat[1,2,2], true)
         elseif state.it == 468
-            checkequality(indvals, BigInt[-53,4539,4545], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-53,4539,4545], BigFloat[1,-2,-2], true)
         elseif state.it == 469
             checkequality(indvals, BigInt[-52,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 470
-            checkequality(indvals, BigInt[-52,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-52,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 471
             checkequality(indvals, BigInt[-51,4678,4679,9264,9402], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 472
-            checkequality(indvals, BigInt[-51,4678,4679,9264,9402], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-51,4678,4679,9264,9402], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 473
             checkequality(indvals, BigInt[-50,9258,9264], BigFloat[1,2,2], true)
         elseif state.it == 474
-            checkequality(indvals, BigInt[-50,9258,9264], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-50,9258,9264], BigFloat[1,-2,-2], true)
         elseif state.it == 475
             checkequality(indvals, BigInt[-49,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 476
-            checkequality(indvals, BigInt[-49,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-49,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 477
             checkequality(indvals, BigInt[-48,20439,20440,36385,36903], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 478
-            checkequality(indvals, BigInt[-48,20439,20440,36385,36903], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-48,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 479
             checkequality(indvals, BigInt[-47,36379,36385], BigFloat[1,2,2], true)
         elseif state.it == 480
-            checkequality(indvals, BigInt[-47,36379,36385], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-47,36379,36385], BigFloat[1,-2,-2], true)
         elseif state.it == 481
             checkequality(indvals, BigInt[-46,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 482
-            checkequality(indvals, BigInt[-46,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-46,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 483
             checkequality(indvals, BigInt[-66,-65,-64,-63,-62,-61,-60,-59,-58,-57,-56,-55,-54,-53,-52,-51,-50,-49,-48,-47,-46,-24,-2,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 484
             checkequality(indvals, BigInt[-45,2693,4537,4539], BigFloat[1,6,2,-16], true)
         elseif state.it == 485
-            checkequality(indvals, BigInt[-45,2693,4537,4539], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-45,2693,4537,4539], BigFloat[1,-6,-2,16], true)
         elseif state.it == 486
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 487
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 488
             checkequality(indvals, BigInt[-43], BigFloat[1], true)
         elseif state.it == 489
-            checkequality(indvals, BigInt[-43], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-43], BigFloat[1], true)
         elseif state.it == 490
             checkequality(indvals, BigInt[-42,5663,9256,9258], BigFloat[1,6,2,-16], true)
         elseif state.it == 491
-            checkequality(indvals, BigInt[-42,5663,9256,9258], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-42,5663,9256,9258], BigFloat[1,-6,-2,16], true)
         elseif state.it == 492
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 493
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 494
             checkequality(indvals, BigInt[-40], BigFloat[1], true)
         elseif state.it == 495
-            checkequality(indvals, BigInt[-40], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-40], BigFloat[1], true)
         elseif state.it == 496
             checkequality(indvals, BigInt[-39,22426,36377,36379], BigFloat[1,6,2,-16], true)
         elseif state.it == 497
-            checkequality(indvals, BigInt[-39,22426,36377,36379], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-39,22426,36377,36379], BigFloat[1,-6,-2,16], true)
         elseif state.it == 498
             checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 499
-            checkequality(indvals, BigInt[-38], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 500
             checkequality(indvals, BigInt[-37], BigFloat[1], true)
         elseif state.it == 501
-            checkequality(indvals, BigInt[-37], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-37], BigFloat[1], true)
         elseif state.it == 502
             checkequality(indvals, BigInt[-36,63728,92458,92460], BigFloat[1,6,2,-16], true)
         elseif state.it == 503
-            checkequality(indvals, BigInt[-36,63728,92458,92460], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-36,63728,92458,92460], BigFloat[1,-6,-2,16], true)
         elseif state.it == 504
             checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 505
-            checkequality(indvals, BigInt[-35], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 506
             checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 507
-            checkequality(indvals, BigInt[-34], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 508
             checkequality(indvals, BigInt[-33,4539,4545], BigFloat[1,2,2], true)
         elseif state.it == 509
-            checkequality(indvals, BigInt[-33,4539,4545], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-33,4539,4545], BigFloat[1,-2,-2], true)
         elseif state.it == 510
             checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 511
-            checkequality(indvals, BigInt[-32], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 512
             checkequality(indvals, BigInt[-31,4553], BigFloat[1,48], true)
         elseif state.it == 513
-            checkequality(indvals, BigInt[-31,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-31,4553], BigFloat[1,-48], true)
         elseif state.it == 514
             checkequality(indvals, BigInt[-30,9258,9264], BigFloat[1,2,2], true)
         elseif state.it == 515
-            checkequality(indvals, BigInt[-30,9258,9264], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-30,9258,9264], BigFloat[1,-2,-2], true)
         elseif state.it == 516
             checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 517
-            checkequality(indvals, BigInt[-29], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 518
             checkequality(indvals, BigInt[-28,9272], BigFloat[1,48], true)
         elseif state.it == 519
-            checkequality(indvals, BigInt[-28,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-28,9272], BigFloat[1,-48], true)
         elseif state.it == 520
             checkequality(indvals, BigInt[-27,36379,36385], BigFloat[1,2,2], true)
         elseif state.it == 521
-            checkequality(indvals, BigInt[-27,36379,36385], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-27,36379,36385], BigFloat[1,-2,-2], true)
         elseif state.it == 522
             checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 523
-            checkequality(indvals, BigInt[-26], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 524
             checkequality(indvals, BigInt[-25,36423], BigFloat[1,48], true)
         elseif state.it == 525
-            checkequality(indvals, BigInt[-25,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-25,36423], BigFloat[1,-48], true)
         elseif state.it == 526
             checkequality(indvals, BigInt[-24,92460,92466], BigFloat[1,2,2], true)
         elseif state.it == 527
-            checkequality(indvals, BigInt[-24,92460,92466], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-24,92460,92466], BigFloat[1,-2,-2], true)
         elseif state.it == 528
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 529
             checkequality(indvals, BigInt[-23], BigFloat[1], true)
         elseif state.it == 530
-            checkequality(indvals, BigInt[-23], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-23], BigFloat[1], true)
         elseif state.it == 531
             checkequality(indvals, BigInt[-22], BigFloat[1], true)
         elseif state.it == 532
-            checkequality(indvals, BigInt[-22], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-22], BigFloat[1], true)
         elseif state.it == 533
             checkequality(indvals, BigInt[-21], BigFloat[1], true)
         elseif state.it == 534
-            checkequality(indvals, BigInt[-21], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-21], BigFloat[1], true)
         elseif state.it == 535
             checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 536
-            checkequality(indvals, BigInt[-20], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 537
             checkequality(indvals, BigInt[-19], BigFloat[1], true)
         elseif state.it == 538
-            checkequality(indvals, BigInt[-19], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-19], BigFloat[1], true)
         elseif state.it == 539
             checkequality(indvals, BigInt[-18], BigFloat[1], true)
         elseif state.it == 540
-            checkequality(indvals, BigInt[-18], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-18], BigFloat[1], true)
         elseif state.it == 541
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 542
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 543
             checkequality(indvals, BigInt[-16], BigFloat[1], true)
         elseif state.it == 544
-            checkequality(indvals, BigInt[-16], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-16], BigFloat[1], true)
         elseif state.it == 545
             checkequality(indvals, BigInt[-15], BigFloat[1], true)
         elseif state.it == 546
-            checkequality(indvals, BigInt[-15], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-15], BigFloat[1], true)
         elseif state.it == 547
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 548
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 549
             checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 550
-            checkequality(indvals, BigInt[-13], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 551
             checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 552
-            checkequality(indvals, BigInt[-12], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 553
             checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 554
-            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 555
             checkequality(indvals, BigInt[-10,4553], BigFloat[1,48], true)
         elseif state.it == 556
-            checkequality(indvals, BigInt[-10,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-10,4553], BigFloat[1,-48], true)
         elseif state.it == 557
             checkequality(indvals, BigInt[-9,4682], BigFloat[1,6], true)
         elseif state.it == 558
-            checkequality(indvals, BigInt[-9,4682], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-9,4682], BigFloat[1,-6], true)
         elseif state.it == 559
             checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 560
-            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 561
             checkequality(indvals, BigInt[-7,9272], BigFloat[1,48], true)
         elseif state.it == 562
-            checkequality(indvals, BigInt[-7,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-7,9272], BigFloat[1,-48], true)
         elseif state.it == 563
             checkequality(indvals, BigInt[-6,9401], BigFloat[1,6], true)
         elseif state.it == 564
-            checkequality(indvals, BigInt[-6,9401], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-6,9401], BigFloat[1,-6], true)
         elseif state.it == 565
             checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 566
-            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 567
             checkequality(indvals, BigInt[-4,36423], BigFloat[1,48], true)
         elseif state.it == 568
-            checkequality(indvals, BigInt[-4,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-4,36423], BigFloat[1,-48], true)
         elseif state.it == 569
             checkequality(indvals, BigInt[-3,36888], BigFloat[1,6], true)
         elseif state.it == 570
-            checkequality(indvals, BigInt[-3,36888], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-3,36888], BigFloat[1,-6], true)
         elseif state.it == 571
             checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,10,8], true)
         elseif state.it == 572
-            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,-10,-8], true)
         elseif state.it == 573
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,48], true)
         elseif state.it == 574
-            checkequality(indvals, BigInt[-1,92474], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 136
+    elseif state.instance == 158
         if state.it == 0
             checkequality(indvals, BigInt[-28,-27,-25,-22,-18,-13,-7,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-28,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-28,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-28,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-28,-26,-24,-21,-17,-12,-6,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-27,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-27,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-27,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-26,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-26,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-26,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-27,-26,-23,-20,-16,-11,-5,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-25,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-25,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-25,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-24,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-24,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-24,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-23,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-23,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-23,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-25,-24,-23,-19,-15,-10,-4,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-22], BigFloat[1], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-22], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-22], BigFloat[1], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-21], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-21], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-21], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-20,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-20,272,273,275,276,653,899], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-20,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-19,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-19,1742,1743,1744,1745,3739,4287], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-19,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-22,-21,-20,-19,-14,-9,-3,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-18], BigFloat[1], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-18], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-18], BigFloat[1], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-16,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-16,854,855,857,858,1907,2153], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-16,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-15,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-15,4250,4251,4252,4253,8458,9006], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-15,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-14,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-14,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-14,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-18,-17,-16,-15,-14,-8,-2,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 36
             checkequality(indvals, BigInt[-13,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 37
-            checkequality(indvals, BigInt[-13,272,273,275,276,653,899], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-13,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 38
             checkequality(indvals, BigInt[-12,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 39
-            checkequality(indvals, BigInt[-12,854,855,857,858,1907,2153], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-12,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-11], BigFloat[1], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-11], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-11], BigFloat[1], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-10,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 43
-            checkequality(indvals, BigInt[-10,14606,14607,14614,14615,26814,29213], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-10,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-9,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-9,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-9,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-8,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-8,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-8,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-13,-12,-11,-10,-9,-8,-1,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-7,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-7,1742,1743,1744,1745,3739,4287], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-7,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-6,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-6,4250,4251,4252,4253,8458,9006], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-6,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-5,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 54
-            checkequality(indvals, BigInt[-5,14606,14607,14614,14615,26814,29213], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-5,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-4], BigFloat[1], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-4], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-4], BigFloat[1], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-3,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-3,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-3,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-2,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-2,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-2,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-1,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-1,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-1,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-7,-6,-5,-4,-3,-2,-1,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 142
+    elseif state.instance == 165
         if state.it == 0
             checkequality(indvals, BigInt[-276,-275,-273,-270,-266,-261,-255,-248,-240,-231,-221,-210,-198,-185,-171,-156,-140,-123,-105,-86,-66,-45,-23,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-276,54], BigFloat[1,18], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-276,54], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-276,54], BigFloat[1,-18], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-276,-274,-272,-269,-265,-260,-254,-247,-239,-230,-220,-209,-197,-184,-170,-155,-139,-122,-104,-85,-65,-44,-22], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-275,57,59], BigFloat[1,10,8], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-275,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-275,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-274,74], BigFloat[1,48], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-274,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-274,74], BigFloat[1,-48], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-275,-274,-271,-268,-264,-259,-253,-246,-238,-229,-219,-208,-196,-183,-169,-154,-138,-121,-103,-84,-64,-43,-21,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-272,83], BigFloat[1,18], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-272,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-272,83], BigFloat[1,-18], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-271,92,151], BigFloat[1,10,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-271,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-271,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-273,-272,-271,-267,-263,-258,-252,-245,-237,-228,-218,-207,-195,-182,-168,-153,-137,-120,-102,-83,-63,-42,-20,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-270,83], BigFloat[1,18], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-270,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-270,83], BigFloat[1,-18], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-269], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-268,166], BigFloat[1,48], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-268,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-268,166], BigFloat[1,-48], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-267,175], BigFloat[1,18], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-267,175], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-267,175], BigFloat[1,-18], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-270,-269,-268,-267,-262,-257,-251,-244,-236,-227,-217,-206,-194,-181,-167,-152,-136,-119,-101,-82,-62,-41,-19], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-266,92,151], BigFloat[1,10,8], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-266,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-266,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-265,166], BigFloat[1,48], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-265,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-265,166], BigFloat[1,-48], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-264,175], BigFloat[1,6], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-264,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-264,175], BigFloat[1,-6], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-263,205,397], BigFloat[1,10,8], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-263,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-263,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-262,412], BigFloat[1,48], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-262,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-262,412], BigFloat[1,-48], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-266,-265,-264,-263,-262,-256,-250,-243,-235,-226,-216,-205,-193,-180,-166,-151,-135,-118,-100,-81,-61,-40,-18,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 36
             checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 37
-            checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 38
             checkequality(indvals, BigInt[-260,281], BigFloat[1,18], true)
         elseif state.it == 39
-            checkequality(indvals, BigInt[-260,281], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-260,281], BigFloat[1,-18], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-259,456,640], BigFloat[1,10,8], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-259,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-259,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 43
-            checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-257,863], BigFloat[1,18], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-257,863], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-257,863], BigFloat[1,-18], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-256,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-256,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-256,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-261,-260,-259,-258,-257,-256,-249,-242,-234,-225,-215,-204,-192,-179,-165,-150,-134,-117,-99,-80,-60,-39,-17,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-255,281], BigFloat[1,18], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-255,281], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-255,281], BigFloat[1,-18], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-254], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-253,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 54
-            checkequality(indvals, BigInt[-253,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-253,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-252,863], BigFloat[1,18], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-252,863], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-252,863], BigFloat[1,-18], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-251], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-250,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-250,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-250,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-249,3375], BigFloat[1,18], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-249,3375], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-249,3375], BigFloat[1,-18], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-255,-254,-253,-252,-251,-250,-249,-241,-233,-224,-214,-203,-191,-178,-164,-149,-133,-116,-98,-79,-59,-38,-16], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 64
             checkequality(indvals, BigInt[-248,456,640], BigFloat[1,10,8], true)
         elseif state.it == 65
-            checkequality(indvals, BigInt[-248,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-248,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 66
             checkequality(indvals, BigInt[-247,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 67
-            checkequality(indvals, BigInt[-247,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-247,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 68
             checkequality(indvals, BigInt[-246,863], BigFloat[1,6], true)
         elseif state.it == 69
-            checkequality(indvals, BigInt[-246,863], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-246,863], BigFloat[1,-6], true)
         elseif state.it == 70
             checkequality(indvals, BigInt[-245,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 71
-            checkequality(indvals, BigInt[-245,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-245,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 72
             checkequality(indvals, BigInt[-244,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 73
-            checkequality(indvals, BigInt[-244,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-244,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 74
             checkequality(indvals, BigInt[-243,2117], BigFloat[1,6], true)
         elseif state.it == 75
-            checkequality(indvals, BigInt[-243,2117], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-243,2117], BigFloat[1,-6], true)
         elseif state.it == 76
             checkequality(indvals, BigInt[-242,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 77
-            checkequality(indvals, BigInt[-242,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-242,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 78
             checkequality(indvals, BigInt[-241,7288], BigFloat[1,48], true)
         elseif state.it == 79
-            checkequality(indvals, BigInt[-241,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-241,7288], BigFloat[1,-48], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-248,-247,-246,-245,-244,-243,-242,-241,-232,-223,-213,-202,-190,-177,-163,-148,-132,-115,-97,-78,-58,-37,-15,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 81
             checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 82
-            checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 83
             checkequality(indvals, BigInt[-239,1762], BigFloat[1,18], true)
         elseif state.it == 84
-            checkequality(indvals, BigInt[-239,1762], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-239,1762], BigFloat[1,-18], true)
         elseif state.it == 85
             checkequality(indvals, BigInt[-238,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 86
-            checkequality(indvals, BigInt[-238,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-238,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 88
-            checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-236,4270], BigFloat[1,18], true)
         elseif state.it == 90
-            checkequality(indvals, BigInt[-236,4270], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-236,4270], BigFloat[1,-18], true)
         elseif state.it == 91
             checkequality(indvals, BigInt[-235,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 92
-            checkequality(indvals, BigInt[-235,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-235,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 93
             checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 94
-            checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 95
             checkequality(indvals, BigInt[-233,14640], BigFloat[1,18], true)
         elseif state.it == 96
-            checkequality(indvals, BigInt[-233,14640], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-233,14640], BigFloat[1,-18], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-232,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 98
-            checkequality(indvals, BigInt[-232,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-232,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-240,-239,-238,-237,-236,-235,-234,-233,-232,-222,-212,-201,-189,-176,-162,-147,-131,-114,-96,-77,-57,-36,-14,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 100
             checkequality(indvals, BigInt[-231,1762], BigFloat[1,18], true)
         elseif state.it == 101
-            checkequality(indvals, BigInt[-231,1762], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-231,1762], BigFloat[1,-18], true)
         elseif state.it == 102
             checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 103
-            checkequality(indvals, BigInt[-230], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 104
             checkequality(indvals, BigInt[-229,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 105
-            checkequality(indvals, BigInt[-229,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-229,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 106
             checkequality(indvals, BigInt[-228,4270], BigFloat[1,18], true)
         elseif state.it == 107
-            checkequality(indvals, BigInt[-228,4270], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-228,4270], BigFloat[1,-18], true)
         elseif state.it == 108
             checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 109
-            checkequality(indvals, BigInt[-227], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 110
             checkequality(indvals, BigInt[-226,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 111
-            checkequality(indvals, BigInt[-226,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-226,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 112
             checkequality(indvals, BigInt[-225,14640], BigFloat[1,18], true)
         elseif state.it == 113
-            checkequality(indvals, BigInt[-225,14640], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-225,14640], BigFloat[1,-18], true)
         elseif state.it == 114
             checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 115
-            checkequality(indvals, BigInt[-224], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 116
             checkequality(indvals, BigInt[-223,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 117
-            checkequality(indvals, BigInt[-223,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-223,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 118
             checkequality(indvals, BigInt[-222,47981], BigFloat[1,18], true)
         elseif state.it == 119
-            checkequality(indvals, BigInt[-222,47981], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-222,47981], BigFloat[1,-18], true)
         elseif state.it == 120
             checkequality(indvals, BigInt[-231,-230,-229,-228,-227,-226,-225,-224,-223,-222,-211,-200,-188,-175,-161,-146,-130,-113,-95,-76,-56,-35,-13], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 121
             checkequality(indvals, BigInt[-221,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 122
-            checkequality(indvals, BigInt[-221,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-221,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 123
             checkequality(indvals, BigInt[-220,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 124
-            checkequality(indvals, BigInt[-220,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-220,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 125
             checkequality(indvals, BigInt[-219,4270], BigFloat[1,6], true)
         elseif state.it == 126
-            checkequality(indvals, BigInt[-219,4270], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-219,4270], BigFloat[1,-6], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-218,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 128
-            checkequality(indvals, BigInt[-218,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-218,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 129
             checkequality(indvals, BigInt[-217,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 130
-            checkequality(indvals, BigInt[-217,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-217,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 131
             checkequality(indvals, BigInt[-216,8989], BigFloat[1,6], true)
         elseif state.it == 132
-            checkequality(indvals, BigInt[-216,8989], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-216,8989], BigFloat[1,-6], true)
         elseif state.it == 133
             checkequality(indvals, BigInt[-215,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 134
-            checkequality(indvals, BigInt[-215,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-215,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 135
             checkequality(indvals, BigInt[-214,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 136
-            checkequality(indvals, BigInt[-214,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-214,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 137
             checkequality(indvals, BigInt[-213,29083], BigFloat[1,6], true)
         elseif state.it == 138
-            checkequality(indvals, BigInt[-213,29083], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-213,29083], BigFloat[1,-6], true)
         elseif state.it == 139
             checkequality(indvals, BigInt[-212,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 140
-            checkequality(indvals, BigInt[-212,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-212,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 141
             checkequality(indvals, BigInt[-211,81570], BigFloat[1,48], true)
         elseif state.it == 142
-            checkequality(indvals, BigInt[-211,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-211,81570], BigFloat[1,-48], true)
         elseif state.it == 143
             checkequality(indvals, BigInt[-221,-220,-219,-218,-217,-216,-215,-214,-213,-212,-211,-199,-187,-174,-160,-145,-129,-112,-94,-75,-55,-34,-12,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 144
             checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 145
-            checkequality(indvals, BigInt[-210], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 146
             checkequality(indvals, BigInt[-209], BigFloat[1], true)
         elseif state.it == 147
-            checkequality(indvals, BigInt[-209], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-209], BigFloat[1], true)
         elseif state.it == 148
             checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 149
-            checkequality(indvals, BigInt[-208], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 150
             checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 151
-            checkequality(indvals, BigInt[-207], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 152
             checkequality(indvals, BigInt[-206], BigFloat[1], true)
         elseif state.it == 153
-            checkequality(indvals, BigInt[-206], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-206], BigFloat[1], true)
         elseif state.it == 154
             checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 155
-            checkequality(indvals, BigInt[-205], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 156
             checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 157
-            checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 158
             checkequality(indvals, BigInt[-203,282], BigFloat[1,18], true)
         elseif state.it == 159
-            checkequality(indvals, BigInt[-203,282], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-203,282], BigFloat[1,-18], true)
         elseif state.it == 160
             checkequality(indvals, BigInt[-202,457,646], BigFloat[1,10,8], true)
         elseif state.it == 161
-            checkequality(indvals, BigInt[-202,457,646], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-202,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 162
             checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 163
-            checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 164
             checkequality(indvals, BigInt[-200,1764], BigFloat[1,18], true)
         elseif state.it == 165
-            checkequality(indvals, BigInt[-200,1764], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-200,1764], BigFloat[1,-18], true)
         elseif state.it == 166
             checkequality(indvals, BigInt[-199,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 167
-            checkequality(indvals, BigInt[-199,2493,3721], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-199,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 168
             checkequality(indvals, BigInt[-210,-209,-208,-207,-206,-205,-204,-203,-202,-201,-200,-199,-186,-173,-159,-144,-128,-111,-93,-74,-54,-33,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 169
             checkequality(indvals, BigInt[-198], BigFloat[1], true)
         elseif state.it == 170
-            checkequality(indvals, BigInt[-198], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-198], BigFloat[1], true)
         elseif state.it == 171
             checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 172
-            checkequality(indvals, BigInt[-197], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 173
             checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 174
-            checkequality(indvals, BigInt[-196], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 175
             checkequality(indvals, BigInt[-195], BigFloat[1], true)
         elseif state.it == 176
-            checkequality(indvals, BigInt[-195], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-195], BigFloat[1], true)
         elseif state.it == 177
             checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 178
-            checkequality(indvals, BigInt[-194], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 179
             checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 180
-            checkequality(indvals, BigInt[-193], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 181
             checkequality(indvals, BigInt[-192,282], BigFloat[1,18], true)
         elseif state.it == 182
-            checkequality(indvals, BigInt[-192,282], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-192,282], BigFloat[1,-18], true)
         elseif state.it == 183
             checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 184
-            checkequality(indvals, BigInt[-191], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 185
             checkequality(indvals, BigInt[-190,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 186
-            checkequality(indvals, BigInt[-190,728,729], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-190,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 187
             checkequality(indvals, BigInt[-189,1764], BigFloat[1,18], true)
         elseif state.it == 188
-            checkequality(indvals, BigInt[-189,1764], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-189,1764], BigFloat[1,-18], true)
         elseif state.it == 189
             checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 190
-            checkequality(indvals, BigInt[-188], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 191
             checkequality(indvals, BigInt[-187,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 192
-            checkequality(indvals, BigInt[-187,3788,3789], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-187,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 193
             checkequality(indvals, BigInt[-186,54], BigFloat[1,18], true)
         elseif state.it == 194
-            checkequality(indvals, BigInt[-186,54], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-186,54], BigFloat[1,-18], true)
         elseif state.it == 195
             checkequality(indvals, BigInt[-198,-197,-196,-195,-194,-193,-192,-191,-190,-189,-188,-187,-186,-172,-158,-143,-127,-110,-92,-73,-53,-32,-10], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 196
             checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 197
-            checkequality(indvals, BigInt[-185], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 198
             checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 199
-            checkequality(indvals, BigInt[-184], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 200
             checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 201
-            checkequality(indvals, BigInt[-183], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 202
             checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 203
-            checkequality(indvals, BigInt[-182], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 204
             checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 205
-            checkequality(indvals, BigInt[-181], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 206
             checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 207
-            checkequality(indvals, BigInt[-180], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 208
             checkequality(indvals, BigInt[-179,457,646], BigFloat[1,10,8], true)
         elseif state.it == 209
-            checkequality(indvals, BigInt[-179,457,646], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-179,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 210
             checkequality(indvals, BigInt[-178,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 211
-            checkequality(indvals, BigInt[-178,728,729], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-178,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 212
             checkequality(indvals, BigInt[-177,864], BigFloat[1,6], true)
         elseif state.it == 213
-            checkequality(indvals, BigInt[-177,864], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-177,864], BigFloat[1,-6], true)
         elseif state.it == 214
             checkequality(indvals, BigInt[-176,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 215
-            checkequality(indvals, BigInt[-176,2493,3721], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-176,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 216
             checkequality(indvals, BigInt[-175,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 217
-            checkequality(indvals, BigInt[-175,3788,3789], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-175,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 218
             checkequality(indvals, BigInt[-174,4272], BigFloat[1,6], true)
         elseif state.it == 219
-            checkequality(indvals, BigInt[-174,4272], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-174,4272], BigFloat[1,-6], true)
         elseif state.it == 220
             checkequality(indvals, BigInt[-173,57,59], BigFloat[1,10,8], true)
         elseif state.it == 221
-            checkequality(indvals, BigInt[-173,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-173,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 222
             checkequality(indvals, BigInt[-172,74], BigFloat[1,48], true)
         elseif state.it == 223
-            checkequality(indvals, BigInt[-172,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-172,74], BigFloat[1,-48], true)
         elseif state.it == 224
             checkequality(indvals, BigInt[-185,-184,-183,-182,-181,-180,-179,-178,-177,-176,-175,-174,-173,-172,-157,-142,-126,-109,-91,-72,-52,-31,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 225
             checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 226
-            checkequality(indvals, BigInt[-171], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 227
             checkequality(indvals, BigInt[-170], BigFloat[1], true)
         elseif state.it == 228
-            checkequality(indvals, BigInt[-170], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-170], BigFloat[1], true)
         elseif state.it == 229
             checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 230
-            checkequality(indvals, BigInt[-169], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 231
             checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 232
-            checkequality(indvals, BigInt[-168], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 233
             checkequality(indvals, BigInt[-167], BigFloat[1], true)
         elseif state.it == 234
-            checkequality(indvals, BigInt[-167], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-167], BigFloat[1], true)
         elseif state.it == 235
             checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 236
-            checkequality(indvals, BigInt[-166], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 237
             checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 238
-            checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 239
             checkequality(indvals, BigInt[-164,864], BigFloat[1,18], true)
         elseif state.it == 240
-            checkequality(indvals, BigInt[-164,864], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-164,864], BigFloat[1,-18], true)
         elseif state.it == 241
             checkequality(indvals, BigInt[-163,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 242
-            checkequality(indvals, BigInt[-163,1165,1900], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-163,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 243
             checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 244
-            checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 245
             checkequality(indvals, BigInt[-161,4272], BigFloat[1,18], true)
         elseif state.it == 246
-            checkequality(indvals, BigInt[-161,4272], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-161,4272], BigFloat[1,-18], true)
         elseif state.it == 247
             checkequality(indvals, BigInt[-160,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 248
-            checkequality(indvals, BigInt[-160,5463,8440], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-160,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 249
             checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 250
-            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 251
             checkequality(indvals, BigInt[-158,83], BigFloat[1,18], true)
         elseif state.it == 252
-            checkequality(indvals, BigInt[-158,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-158,83], BigFloat[1,-18], true)
         elseif state.it == 253
             checkequality(indvals, BigInt[-157,92,151], BigFloat[1,10,8], true)
         elseif state.it == 254
-            checkequality(indvals, BigInt[-157,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-157,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 255
             checkequality(indvals, BigInt[-171,-170,-169,-168,-167,-166,-165,-164,-163,-162,-161,-160,-159,-158,-157,-141,-125,-108,-90,-71,-51,-30,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 256
             checkequality(indvals, BigInt[-156], BigFloat[1], true)
         elseif state.it == 257
-            checkequality(indvals, BigInt[-156], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-156], BigFloat[1], true)
         elseif state.it == 258
             checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 259
-            checkequality(indvals, BigInt[-155], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 260
             checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 261
-            checkequality(indvals, BigInt[-154], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 262
             checkequality(indvals, BigInt[-153], BigFloat[1], true)
         elseif state.it == 263
-            checkequality(indvals, BigInt[-153], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-153], BigFloat[1], true)
         elseif state.it == 264
             checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 265
-            checkequality(indvals, BigInt[-152], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 266
             checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 267
-            checkequality(indvals, BigInt[-151], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 268
             checkequality(indvals, BigInt[-150,864], BigFloat[1,18], true)
         elseif state.it == 269
-            checkequality(indvals, BigInt[-150,864], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-150,864], BigFloat[1,-18], true)
         elseif state.it == 270
             checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 271
-            checkequality(indvals, BigInt[-149], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 272
             checkequality(indvals, BigInt[-148,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 273
-            checkequality(indvals, BigInt[-148,1982,1983], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-148,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 274
             checkequality(indvals, BigInt[-147,4272], BigFloat[1,18], true)
         elseif state.it == 275
-            checkequality(indvals, BigInt[-147,4272], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-147,4272], BigFloat[1,-18], true)
         elseif state.it == 276
             checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 277
-            checkequality(indvals, BigInt[-146], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 278
             checkequality(indvals, BigInt[-145,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 279
-            checkequality(indvals, BigInt[-145,8507,8508], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-145,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 280
             checkequality(indvals, BigInt[-144,83], BigFloat[1,18], true)
         elseif state.it == 281
-            checkequality(indvals, BigInt[-144,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-144,83], BigFloat[1,-18], true)
         elseif state.it == 282
             checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 283
-            checkequality(indvals, BigInt[-143], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 284
             checkequality(indvals, BigInt[-142,166], BigFloat[1,48], true)
         elseif state.it == 285
-            checkequality(indvals, BigInt[-142,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-142,166], BigFloat[1,-48], true)
         elseif state.it == 286
             checkequality(indvals, BigInt[-141,175], BigFloat[1,18], true)
         elseif state.it == 287
-            checkequality(indvals, BigInt[-141,175], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-141,175], BigFloat[1,-18], true)
         elseif state.it == 288
             checkequality(indvals, BigInt[-156,-155,-154,-153,-152,-151,-150,-149,-148,-147,-146,-145,-144,-143,-142,-141,-124,-107,-89,-70,-50,-29,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 289
             checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 290
-            checkequality(indvals, BigInt[-140], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 291
             checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 292
-            checkequality(indvals, BigInt[-139], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 293
             checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 294
-            checkequality(indvals, BigInt[-138], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 295
             checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 296
-            checkequality(indvals, BigInt[-137], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 297
             checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 298
-            checkequality(indvals, BigInt[-136], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 299
             checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 300
-            checkequality(indvals, BigInt[-135], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 301
             checkequality(indvals, BigInt[-134,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 302
-            checkequality(indvals, BigInt[-134,1165,1900], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-134,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 303
             checkequality(indvals, BigInt[-133,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 304
-            checkequality(indvals, BigInt[-133,1982,1983], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-133,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 305
             checkequality(indvals, BigInt[-132,2118], BigFloat[1,6], true)
         elseif state.it == 306
-            checkequality(indvals, BigInt[-132,2118], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-132,2118], BigFloat[1,-6], true)
         elseif state.it == 307
             checkequality(indvals, BigInt[-131,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 308
-            checkequality(indvals, BigInt[-131,5463,8440], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-131,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 309
             checkequality(indvals, BigInt[-130,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 310
-            checkequality(indvals, BigInt[-130,8507,8508], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-130,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 311
             checkequality(indvals, BigInt[-129,8991], BigFloat[1,6], true)
         elseif state.it == 312
-            checkequality(indvals, BigInt[-129,8991], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-129,8991], BigFloat[1,-6], true)
         elseif state.it == 313
             checkequality(indvals, BigInt[-128,92,151], BigFloat[1,10,8], true)
         elseif state.it == 314
-            checkequality(indvals, BigInt[-128,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-128,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 315
             checkequality(indvals, BigInt[-127,166], BigFloat[1,48], true)
         elseif state.it == 316
-            checkequality(indvals, BigInt[-127,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-127,166], BigFloat[1,-48], true)
         elseif state.it == 317
             checkequality(indvals, BigInt[-126,175], BigFloat[1,6], true)
         elseif state.it == 318
-            checkequality(indvals, BigInt[-126,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-126,175], BigFloat[1,-6], true)
         elseif state.it == 319
             checkequality(indvals, BigInt[-125,205,397], BigFloat[1,10,8], true)
         elseif state.it == 320
-            checkequality(indvals, BigInt[-125,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-125,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 321
             checkequality(indvals, BigInt[-124,412], BigFloat[1,48], true)
         elseif state.it == 322
-            checkequality(indvals, BigInt[-124,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-124,412], BigFloat[1,-48], true)
         elseif state.it == 323
             checkequality(indvals, BigInt[-140,-139,-138,-137,-136,-135,-134,-133,-132,-131,-130,-129,-128,-127,-126,-125,-124,-106,-88,-69,-49,-28,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 324
             checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 325
-            checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 326
             checkequality(indvals, BigInt[-122,282], BigFloat[1,-18], true)
         elseif state.it == 327
-            checkequality(indvals, BigInt[-122,282], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-122,282], BigFloat[1,18], true)
         elseif state.it == 328
             checkequality(indvals, BigInt[-121,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 329
-            checkequality(indvals, BigInt[-121,457,646], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-121,457,646], BigFloat[1,10,8], true)
         elseif state.it == 330
             checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 331
-            checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 332
             checkequality(indvals, BigInt[-119,864], BigFloat[1,-18], true)
         elseif state.it == 333
-            checkequality(indvals, BigInt[-119,864], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-119,864], BigFloat[1,18], true)
         elseif state.it == 334
             checkequality(indvals, BigInt[-118,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 335
-            checkequality(indvals, BigInt[-118,1165,1900], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-118,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 336
             checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 337
-            checkequality(indvals, BigInt[-117], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 338
             checkequality(indvals, BigInt[-116], BigFloat[1], true)
         elseif state.it == 339
-            checkequality(indvals, BigInt[-116], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-116], BigFloat[1], true)
         elseif state.it == 340
             checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 341
-            checkequality(indvals, BigInt[-115], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 342
             checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 343
-            checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 344
             checkequality(indvals, BigInt[-113,14644], BigFloat[1,-18], true)
         elseif state.it == 345
-            checkequality(indvals, BigInt[-113,14644], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-113,14644], BigFloat[1,18], true)
         elseif state.it == 346
             checkequality(indvals, BigInt[-112,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 347
-            checkequality(indvals, BigInt[-112,19060,26796], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-112,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 348
             checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 349
-            checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 350
             checkequality(indvals, BigInt[-110,281], BigFloat[1,18], true)
         elseif state.it == 351
-            checkequality(indvals, BigInt[-110,281], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-110,281], BigFloat[1,-18], true)
         elseif state.it == 352
             checkequality(indvals, BigInt[-109,456,640], BigFloat[1,10,8], true)
         elseif state.it == 353
-            checkequality(indvals, BigInt[-109,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-109,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 354
             checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 355
-            checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 356
             checkequality(indvals, BigInt[-107,863], BigFloat[1,18], true)
         elseif state.it == 357
-            checkequality(indvals, BigInt[-107,863], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-107,863], BigFloat[1,-18], true)
         elseif state.it == 358
             checkequality(indvals, BigInt[-106,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 359
-            checkequality(indvals, BigInt[-106,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-106,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 360
             checkequality(indvals, BigInt[-123,-122,-121,-120,-119,-118,-117,-116,-115,-114,-113,-112,-111,-110,-109,-108,-107,-106,-87,-68,-48,-27,-5,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 361
             checkequality(indvals, BigInt[-105,282], BigFloat[1,-18], true)
         elseif state.it == 362
-            checkequality(indvals, BigInt[-105,282], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-105,282], BigFloat[1,18], true)
         elseif state.it == 363
             checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 364
-            checkequality(indvals, BigInt[-104], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 365
             checkequality(indvals, BigInt[-103,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 366
-            checkequality(indvals, BigInt[-103,728,729], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-103,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 367
             checkequality(indvals, BigInt[-102,864], BigFloat[1,-18], true)
         elseif state.it == 368
-            checkequality(indvals, BigInt[-102,864], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-102,864], BigFloat[1,18], true)
         elseif state.it == 369
             checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 370
-            checkequality(indvals, BigInt[-101], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 371
             checkequality(indvals, BigInt[-100,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 372
-            checkequality(indvals, BigInt[-100,1982,1983], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-100,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 373
             checkequality(indvals, BigInt[-99], BigFloat[1], true)
         elseif state.it == 374
-            checkequality(indvals, BigInt[-99], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-99], BigFloat[1], true)
         elseif state.it == 375
             checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 376
-            checkequality(indvals, BigInt[-98], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 377
             checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 378
-            checkequality(indvals, BigInt[-97], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 379
             checkequality(indvals, BigInt[-96,14644], BigFloat[1,-18], true)
         elseif state.it == 380
-            checkequality(indvals, BigInt[-96,14644], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-96,14644], BigFloat[1,18], true)
         elseif state.it == 381
             checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 382
-            checkequality(indvals, BigInt[-95], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 383
             checkequality(indvals, BigInt[-94,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 384
-            checkequality(indvals, BigInt[-94,27047,27048], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-94,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 385
             checkequality(indvals, BigInt[-93,281], BigFloat[1,18], true)
         elseif state.it == 386
-            checkequality(indvals, BigInt[-93,281], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-93,281], BigFloat[1,-18], true)
         elseif state.it == 387
             checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 388
-            checkequality(indvals, BigInt[-92], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 389
             checkequality(indvals, BigInt[-91,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 390
-            checkequality(indvals, BigInt[-91,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-91,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 391
             checkequality(indvals, BigInt[-90,863], BigFloat[1,18], true)
         elseif state.it == 392
-            checkequality(indvals, BigInt[-90,863], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-90,863], BigFloat[1,-18], true)
         elseif state.it == 393
             checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 394
-            checkequality(indvals, BigInt[-89], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 395
             checkequality(indvals, BigInt[-88,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 396
-            checkequality(indvals, BigInt[-88,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-88,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 397
             checkequality(indvals, BigInt[-87,3375], BigFloat[1,18], true)
         elseif state.it == 398
-            checkequality(indvals, BigInt[-87,3375], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-87,3375], BigFloat[1,-18], true)
         elseif state.it == 399
             checkequality(indvals, BigInt[-105,-104,-103,-102,-101,-100,-99,-98,-97,-96,-95,-94,-93,-92,-91,-90,-89,-88,-87,-67,-47,-26,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 400
             checkequality(indvals, BigInt[-86,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 401
-            checkequality(indvals, BigInt[-86,457,646], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-86,457,646], BigFloat[1,10,8], true)
         elseif state.it == 402
             checkequality(indvals, BigInt[-85,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 403
-            checkequality(indvals, BigInt[-85,728,729], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-85,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 404
             checkequality(indvals, BigInt[-84,864], BigFloat[1,-6], true)
         elseif state.it == 405
-            checkequality(indvals, BigInt[-84,864], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-84,864], BigFloat[1,6], true)
         elseif state.it == 406
             checkequality(indvals, BigInt[-83,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 407
-            checkequality(indvals, BigInt[-83,1165,1900], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-83,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 408
             checkequality(indvals, BigInt[-82,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 409
-            checkequality(indvals, BigInt[-82,1982,1983], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-82,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 410
             checkequality(indvals, BigInt[-81,2118], BigFloat[1,-6], true)
         elseif state.it == 411
-            checkequality(indvals, BigInt[-81,2118], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-81,2118], BigFloat[1,6], true)
         elseif state.it == 412
             checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 413
-            checkequality(indvals, BigInt[-80], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 414
             checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 415
-            checkequality(indvals, BigInt[-79], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 416
             checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 417
-            checkequality(indvals, BigInt[-78], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 418
             checkequality(indvals, BigInt[-77,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 419
-            checkequality(indvals, BigInt[-77,19060,26796], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-77,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 420
             checkequality(indvals, BigInt[-76,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 421
-            checkequality(indvals, BigInt[-76,27047,27048], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-76,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 422
             checkequality(indvals, BigInt[-75,29087], BigFloat[1,-6], true)
         elseif state.it == 423
-            checkequality(indvals, BigInt[-75,29087], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-75,29087], BigFloat[1,6], true)
         elseif state.it == 424
             checkequality(indvals, BigInt[-74,456,640], BigFloat[1,10,8], true)
         elseif state.it == 425
-            checkequality(indvals, BigInt[-74,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-74,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 426
             checkequality(indvals, BigInt[-73,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 427
-            checkequality(indvals, BigInt[-73,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-73,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 428
             checkequality(indvals, BigInt[-72,863], BigFloat[1,6], true)
         elseif state.it == 429
-            checkequality(indvals, BigInt[-72,863], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-72,863], BigFloat[1,-6], true)
         elseif state.it == 430
             checkequality(indvals, BigInt[-71,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 431
-            checkequality(indvals, BigInt[-71,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-71,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 432
             checkequality(indvals, BigInt[-70,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 433
-            checkequality(indvals, BigInt[-70,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-70,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 434
             checkequality(indvals, BigInt[-69,2117], BigFloat[1,6], true)
         elseif state.it == 435
-            checkequality(indvals, BigInt[-69,2117], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-69,2117], BigFloat[1,-6], true)
         elseif state.it == 436
             checkequality(indvals, BigInt[-68,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 437
-            checkequality(indvals, BigInt[-68,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-68,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 438
             checkequality(indvals, BigInt[-67,7288], BigFloat[1,48], true)
         elseif state.it == 439
-            checkequality(indvals, BigInt[-67,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-67,7288], BigFloat[1,-48], true)
         elseif state.it == 440
             checkequality(indvals, BigInt[-86,-85,-84,-83,-82,-81,-80,-79,-78,-77,-76,-75,-74,-73,-72,-71,-70,-69,-68,-67,-46,-25,-3,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 441
             checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 442
-            checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 443
             checkequality(indvals, BigInt[-65,1764], BigFloat[1,-18], true)
         elseif state.it == 444
-            checkequality(indvals, BigInt[-65,1764], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-65,1764], BigFloat[1,18], true)
         elseif state.it == 445
             checkequality(indvals, BigInt[-64,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 446
-            checkequality(indvals, BigInt[-64,2493,3721], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-64,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 447
             checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 448
-            checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 449
             checkequality(indvals, BigInt[-62,4272], BigFloat[1,-18], true)
         elseif state.it == 450
-            checkequality(indvals, BigInt[-62,4272], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-62,4272], BigFloat[1,18], true)
         elseif state.it == 451
             checkequality(indvals, BigInt[-61,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 452
-            checkequality(indvals, BigInt[-61,5463,8440], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-61,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 453
             checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 454
-            checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 455
             checkequality(indvals, BigInt[-59,14644], BigFloat[1,18], true)
         elseif state.it == 456
-            checkequality(indvals, BigInt[-59,14644], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-59,14644], BigFloat[1,-18], true)
         elseif state.it == 457
             checkequality(indvals, BigInt[-58,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 458
-            checkequality(indvals, BigInt[-58,19060,26796], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-58,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 459
             checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 460
-            checkequality(indvals, BigInt[-57], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 461
             checkequality(indvals, BigInt[-56], BigFloat[1], true)
         elseif state.it == 462
-            checkequality(indvals, BigInt[-56], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-56], BigFloat[1], true)
         elseif state.it == 463
             checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 464
-            checkequality(indvals, BigInt[-55], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 465
             checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 466
-            checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 467
             checkequality(indvals, BigInt[-53,1762], BigFloat[1,18], true)
         elseif state.it == 468
-            checkequality(indvals, BigInt[-53,1762], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-53,1762], BigFloat[1,-18], true)
         elseif state.it == 469
             checkequality(indvals, BigInt[-52,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 470
-            checkequality(indvals, BigInt[-52,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-52,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 471
             checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 472
-            checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 473
             checkequality(indvals, BigInt[-50,4270], BigFloat[1,18], true)
         elseif state.it == 474
-            checkequality(indvals, BigInt[-50,4270], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-50,4270], BigFloat[1,-18], true)
         elseif state.it == 475
             checkequality(indvals, BigInt[-49,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 476
-            checkequality(indvals, BigInt[-49,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-49,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 477
             checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 478
-            checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 479
             checkequality(indvals, BigInt[-47,14640], BigFloat[1,18], true)
         elseif state.it == 480
-            checkequality(indvals, BigInt[-47,14640], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-47,14640], BigFloat[1,-18], true)
         elseif state.it == 481
             checkequality(indvals, BigInt[-46,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 482
-            checkequality(indvals, BigInt[-46,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-46,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 483
             checkequality(indvals, BigInt[-66,-65,-64,-63,-62,-61,-60,-59,-58,-57,-56,-55,-54,-53,-52,-51,-50,-49,-48,-47,-46,-24,-2,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 484
             checkequality(indvals, BigInt[-45,1764], BigFloat[1,-18], true)
         elseif state.it == 485
-            checkequality(indvals, BigInt[-45,1764], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-45,1764], BigFloat[1,18], true)
         elseif state.it == 486
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 487
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 488
             checkequality(indvals, BigInt[-43,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 489
-            checkequality(indvals, BigInt[-43,3788,3789], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-43,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 490
             checkequality(indvals, BigInt[-42,4272], BigFloat[1,-18], true)
         elseif state.it == 491
-            checkequality(indvals, BigInt[-42,4272], BigFloat[-1,-18], true)
+            checkequality(indvals, BigInt[-42,4272], BigFloat[1,18], true)
         elseif state.it == 492
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 493
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 494
             checkequality(indvals, BigInt[-40,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 495
-            checkequality(indvals, BigInt[-40,8507,8508], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-40,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 496
             checkequality(indvals, BigInt[-39,14644], BigFloat[1,18], true)
         elseif state.it == 497
-            checkequality(indvals, BigInt[-39,14644], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-39,14644], BigFloat[1,-18], true)
         elseif state.it == 498
             checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 499
-            checkequality(indvals, BigInt[-38], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 500
             checkequality(indvals, BigInt[-37,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 501
-            checkequality(indvals, BigInt[-37,27047,27048], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-37,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 502
             checkequality(indvals, BigInt[-36], BigFloat[1], true)
         elseif state.it == 503
-            checkequality(indvals, BigInt[-36], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-36], BigFloat[1], true)
         elseif state.it == 504
             checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 505
-            checkequality(indvals, BigInt[-35], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 506
             checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 507
-            checkequality(indvals, BigInt[-34], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 508
             checkequality(indvals, BigInt[-33,1762], BigFloat[1,18], true)
         elseif state.it == 509
-            checkequality(indvals, BigInt[-33,1762], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-33,1762], BigFloat[1,-18], true)
         elseif state.it == 510
             checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 511
-            checkequality(indvals, BigInt[-32], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 512
             checkequality(indvals, BigInt[-31,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 513
-            checkequality(indvals, BigInt[-31,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-31,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 514
             checkequality(indvals, BigInt[-30,4270], BigFloat[1,18], true)
         elseif state.it == 515
-            checkequality(indvals, BigInt[-30,4270], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-30,4270], BigFloat[1,-18], true)
         elseif state.it == 516
             checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 517
-            checkequality(indvals, BigInt[-29], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 518
             checkequality(indvals, BigInt[-28,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 519
-            checkequality(indvals, BigInt[-28,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-28,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 520
             checkequality(indvals, BigInt[-27,14640], BigFloat[1,18], true)
         elseif state.it == 521
-            checkequality(indvals, BigInt[-27,14640], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-27,14640], BigFloat[1,-18], true)
         elseif state.it == 522
             checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 523
-            checkequality(indvals, BigInt[-26], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 524
             checkequality(indvals, BigInt[-25,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 525
-            checkequality(indvals, BigInt[-25,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-25,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 526
             checkequality(indvals, BigInt[-24,47981], BigFloat[1,18], true)
         elseif state.it == 527
-            checkequality(indvals, BigInt[-24,47981], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-24,47981], BigFloat[1,-18], true)
         elseif state.it == 528
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 529
             checkequality(indvals, BigInt[-23,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 530
-            checkequality(indvals, BigInt[-23,2493,3721], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-23,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 531
             checkequality(indvals, BigInt[-22,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 532
-            checkequality(indvals, BigInt[-22,3788,3789], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-22,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 533
             checkequality(indvals, BigInt[-21,4272], BigFloat[1,-6], true)
         elseif state.it == 534
-            checkequality(indvals, BigInt[-21,4272], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-21,4272], BigFloat[1,6], true)
         elseif state.it == 535
             checkequality(indvals, BigInt[-20,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 536
-            checkequality(indvals, BigInt[-20,5463,8440], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-20,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 537
             checkequality(indvals, BigInt[-19,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 538
-            checkequality(indvals, BigInt[-19,8507,8508], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-19,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 539
             checkequality(indvals, BigInt[-18,8991], BigFloat[1,-6], true)
         elseif state.it == 540
-            checkequality(indvals, BigInt[-18,8991], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-18,8991], BigFloat[1,6], true)
         elseif state.it == 541
             checkequality(indvals, BigInt[-17,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 542
-            checkequality(indvals, BigInt[-17,19060,26796], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-17,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 543
             checkequality(indvals, BigInt[-16,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 544
-            checkequality(indvals, BigInt[-16,27047,27048], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-16,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 545
             checkequality(indvals, BigInt[-15,29087], BigFloat[1,6], true)
         elseif state.it == 546
-            checkequality(indvals, BigInt[-15,29087], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-15,29087], BigFloat[1,-6], true)
         elseif state.it == 547
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 548
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 549
             checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 550
-            checkequality(indvals, BigInt[-13], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 551
             checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 552
-            checkequality(indvals, BigInt[-12], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 553
             checkequality(indvals, BigInt[-11,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 554
-            checkequality(indvals, BigInt[-11,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-11,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 555
             checkequality(indvals, BigInt[-10,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 556
-            checkequality(indvals, BigInt[-10,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-10,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 557
             checkequality(indvals, BigInt[-9,4270], BigFloat[1,6], true)
         elseif state.it == 558
-            checkequality(indvals, BigInt[-9,4270], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-9,4270], BigFloat[1,-6], true)
         elseif state.it == 559
             checkequality(indvals, BigInt[-8,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 560
-            checkequality(indvals, BigInt[-8,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-8,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 561
             checkequality(indvals, BigInt[-7,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 562
-            checkequality(indvals, BigInt[-7,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-7,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 563
             checkequality(indvals, BigInt[-6,8989], BigFloat[1,6], true)
         elseif state.it == 564
-            checkequality(indvals, BigInt[-6,8989], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-6,8989], BigFloat[1,-6], true)
         elseif state.it == 565
             checkequality(indvals, BigInt[-5,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 566
-            checkequality(indvals, BigInt[-5,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-5,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 567
             checkequality(indvals, BigInt[-4,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 568
-            checkequality(indvals, BigInt[-4,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-4,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 569
             checkequality(indvals, BigInt[-3,29083], BigFloat[1,6], true)
         elseif state.it == 570
-            checkequality(indvals, BigInt[-3,29083], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-3,29083], BigFloat[1,-6], true)
         elseif state.it == 571
             checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 572
-            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 573
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,48], true)
         elseif state.it == 574
-            checkequality(indvals, BigInt[-1,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 148
+    elseif state.instance == 172
         if state.it == 0
             checkequality(indvals, BigInt[-276,-275,-273,-270,-266,-261,-255,-248,-240,-231,-221,-210,-198,-185,-171,-156,-140,-123,-105,-86,-66,-45,-23,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-276,60,66], BigFloat[1,2,2], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-276,60,66], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-276,60,66], BigFloat[1,-2,-2], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-276,-274,-272,-269,-265,-260,-254,-247,-239,-230,-220,-209,-197,-184,-170,-155,-139,-122,-104,-85,-65,-44,-22], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-275,57,59], BigFloat[1,10,8], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-275,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-275,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-274,74], BigFloat[1,48], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-274,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-274,74], BigFloat[1,-48], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-275,-274,-271,-268,-264,-259,-253,-246,-238,-229,-219,-208,-196,-183,-169,-154,-138,-121,-103,-84,-64,-43,-21,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-273,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-272,152,158], BigFloat[1,2,2], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-272,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-272,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-271,92,151], BigFloat[1,10,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-271,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-271,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-273,-272,-271,-267,-263,-258,-252,-245,-237,-228,-218,-207,-195,-182,-168,-153,-137,-120,-102,-83,-63,-42,-20,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-270,152,158], BigFloat[1,2,2], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-270,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-270,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-269], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-269], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-268,166], BigFloat[1,48], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-268,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-268,166], BigFloat[1,-48], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-267,398,404], BigFloat[1,2,2], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-267,398,404], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-267,398,404], BigFloat[1,-2,-2], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-270,-269,-268,-267,-262,-257,-251,-244,-236,-227,-217,-206,-194,-181,-167,-152,-136,-119,-101,-82,-62,-41,-19], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-266,92,151], BigFloat[1,10,8], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-266,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-266,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-265,166], BigFloat[1,48], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-265,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-265,166], BigFloat[1,-48], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-264,175], BigFloat[1,6], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-264,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-264,175], BigFloat[1,-6], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-263,205,397], BigFloat[1,10,8], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-263,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-263,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-262,412], BigFloat[1,48], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-262,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-262,412], BigFloat[1,-48], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-266,-265,-264,-263,-262,-256,-250,-243,-235,-226,-216,-205,-193,-180,-166,-151,-135,-118,-100,-81,-61,-40,-18,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 36
             checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 37
-            checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-261,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 38
             checkequality(indvals, BigInt[-260,457,639,641,645,650], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 39
-            checkequality(indvals, BigInt[-260,457,639,641,645,650], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-260,457,639,641,645,650], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-259,456,640], BigFloat[1,10,8], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-259,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-259,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 43
-            checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-258,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-257,1165,1893,1895,1899,1904], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-257,1165,1893,1895,1899,1904], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-257,1165,1893,1895,1899,1904], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-256,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-256,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-256,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-261,-260,-259,-258,-257,-256,-249,-242,-234,-225,-215,-204,-192,-179,-165,-150,-134,-117,-99,-80,-60,-39,-17,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-255,457,639,641,647,650], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-255,457,639,641,647,650], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-255,457,639,641,647,650], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-254], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-254], BigFloat[1], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-253,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 54
-            checkequality(indvals, BigInt[-253,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-253,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-252,1165,1893,1895,1901,1904], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-252,1165,1893,1895,1901,1904], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-252,1165,1893,1895,1901,1904], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-251], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-251], BigFloat[1], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-250,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-250,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-250,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-249,6930,6939], BigFloat[1,2,2], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-249,6930,6939], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-249,6930,6939], BigFloat[1,-2,-2], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-255,-254,-253,-252,-251,-250,-249,-241,-233,-224,-214,-203,-191,-178,-164,-149,-133,-116,-98,-79,-59,-38,-16], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 64
             checkequality(indvals, BigInt[-248,456,640], BigFloat[1,10,8], true)
         elseif state.it == 65
-            checkequality(indvals, BigInt[-248,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-248,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 66
             checkequality(indvals, BigInt[-247,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 67
-            checkequality(indvals, BigInt[-247,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-247,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 68
             checkequality(indvals, BigInt[-246,863], BigFloat[1,6], true)
         elseif state.it == 69
-            checkequality(indvals, BigInt[-246,863], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-246,863], BigFloat[1,-6], true)
         elseif state.it == 70
             checkequality(indvals, BigInt[-245,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 71
-            checkequality(indvals, BigInt[-245,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-245,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 72
             checkequality(indvals, BigInt[-244,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 73
-            checkequality(indvals, BigInt[-244,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-244,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 74
             checkequality(indvals, BigInt[-243,2117], BigFloat[1,6], true)
         elseif state.it == 75
-            checkequality(indvals, BigInt[-243,2117], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-243,2117], BigFloat[1,-6], true)
         elseif state.it == 76
             checkequality(indvals, BigInt[-242,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 77
-            checkequality(indvals, BigInt[-242,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-242,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 78
             checkequality(indvals, BigInt[-241,7288], BigFloat[1,48], true)
         elseif state.it == 79
-            checkequality(indvals, BigInt[-241,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-241,7288], BigFloat[1,-48], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-248,-247,-246,-245,-244,-243,-242,-241,-232,-223,-213,-202,-190,-177,-163,-148,-132,-115,-97,-78,-58,-37,-15,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 81
             checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 82
-            checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-240,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 83
             checkequality(indvals, BigInt[-239,2493,3718,3720,3737], BigFloat[1,-6,-8,8,2], true)
         elseif state.it == 84
-            checkequality(indvals, BigInt[-239,2493,3718,3720,3737], BigFloat[-1,-6,-8,8,2], true)
+            checkequality(indvals, BigInt[-239,2493,3718,3720,3737], BigFloat[1,6,8,-8,-2], true)
         elseif state.it == 85
             checkequality(indvals, BigInt[-238,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 86
-            checkequality(indvals, BigInt[-238,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-238,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 88
-            checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-237,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-236,5463,8437,8439,8456], BigFloat[1,-6,-8,8,2], true)
         elseif state.it == 90
-            checkequality(indvals, BigInt[-236,5463,8437,8439,8456], BigFloat[-1,-6,-8,8,2], true)
+            checkequality(indvals, BigInt[-236,5463,8437,8439,8456], BigFloat[1,6,8,-8,-2], true)
         elseif state.it == 91
             checkequality(indvals, BigInt[-235,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 92
-            checkequality(indvals, BigInt[-235,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-235,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 93
             checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 94
-            checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-234,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 95
             checkequality(indvals, BigInt[-233,19060,26782,26784,26797,26806], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 96
-            checkequality(indvals, BigInt[-233,19060,26782,26784,26797,26806], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-233,19060,26782,26784,26797,26806], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-232,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 98
-            checkequality(indvals, BigInt[-232,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-232,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-240,-239,-238,-237,-236,-235,-234,-233,-232,-222,-212,-201,-189,-176,-162,-147,-131,-114,-96,-77,-57,-36,-14,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 100
             checkequality(indvals, BigInt[-231,2493,3718,3720,3722,3737], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 101
-            checkequality(indvals, BigInt[-231,2493,3718,3720,3722,3737], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-231,2493,3718,3720,3722,3737], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 102
             checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 103
-            checkequality(indvals, BigInt[-230], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-230], BigFloat[1], true)
         elseif state.it == 104
             checkequality(indvals, BigInt[-229,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 105
-            checkequality(indvals, BigInt[-229,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-229,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 106
             checkequality(indvals, BigInt[-228,5463,8437,8439,8441,8456], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 107
-            checkequality(indvals, BigInt[-228,5463,8437,8439,8441,8456], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-228,5463,8437,8439,8441,8456], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 108
             checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 109
-            checkequality(indvals, BigInt[-227], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-227], BigFloat[1], true)
         elseif state.it == 110
             checkequality(indvals, BigInt[-226,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 111
-            checkequality(indvals, BigInt[-226,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-226,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 112
             checkequality(indvals, BigInt[-225,19060,26782,26784,26795,26806], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 113
-            checkequality(indvals, BigInt[-225,19060,26782,26784,26795,26806], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-225,19060,26782,26784,26795,26806], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 114
             checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 115
-            checkequality(indvals, BigInt[-224], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-224], BigFloat[1], true)
         elseif state.it == 116
             checkequality(indvals, BigInt[-223,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 117
-            checkequality(indvals, BigInt[-223,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-223,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 118
             checkequality(indvals, BigInt[-222,81361,81393], BigFloat[1,2,2], true)
         elseif state.it == 119
-            checkequality(indvals, BigInt[-222,81361,81393], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-222,81361,81393], BigFloat[1,-2,-2], true)
         elseif state.it == 120
             checkequality(indvals, BigInt[-231,-230,-229,-228,-227,-226,-225,-224,-223,-222,-211,-200,-188,-175,-161,-146,-130,-113,-95,-76,-56,-35,-13], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 121
             checkequality(indvals, BigInt[-221,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 122
-            checkequality(indvals, BigInt[-221,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-221,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 123
             checkequality(indvals, BigInt[-220,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 124
-            checkequality(indvals, BigInt[-220,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-220,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 125
             checkequality(indvals, BigInt[-219,4270], BigFloat[1,6], true)
         elseif state.it == 126
-            checkequality(indvals, BigInt[-219,4270], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-219,4270], BigFloat[1,-6], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-218,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 128
-            checkequality(indvals, BigInt[-218,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-218,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 129
             checkequality(indvals, BigInt[-217,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 130
-            checkequality(indvals, BigInt[-217,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-217,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 131
             checkequality(indvals, BigInt[-216,8989], BigFloat[1,6], true)
         elseif state.it == 132
-            checkequality(indvals, BigInt[-216,8989], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-216,8989], BigFloat[1,-6], true)
         elseif state.it == 133
             checkequality(indvals, BigInt[-215,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 134
-            checkequality(indvals, BigInt[-215,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-215,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 135
             checkequality(indvals, BigInt[-214,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 136
-            checkequality(indvals, BigInt[-214,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-214,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 137
             checkequality(indvals, BigInt[-213,29083], BigFloat[1,6], true)
         elseif state.it == 138
-            checkequality(indvals, BigInt[-213,29083], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-213,29083], BigFloat[1,-6], true)
         elseif state.it == 139
             checkequality(indvals, BigInt[-212,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 140
-            checkequality(indvals, BigInt[-212,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-212,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 141
             checkequality(indvals, BigInt[-211,81570], BigFloat[1,48], true)
         elseif state.it == 142
-            checkequality(indvals, BigInt[-211,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-211,81570], BigFloat[1,-48], true)
         elseif state.it == 143
             checkequality(indvals, BigInt[-221,-220,-219,-218,-217,-216,-215,-214,-213,-212,-211,-199,-187,-174,-160,-145,-129,-112,-94,-75,-55,-34,-12,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 144
             checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 145
-            checkequality(indvals, BigInt[-210], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-210], BigFloat[1], true)
         elseif state.it == 146
             checkequality(indvals, BigInt[-209,57,58,60], BigFloat[1,-6,-2,16], true)
         elseif state.it == 147
-            checkequality(indvals, BigInt[-209,57,58,60], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-209,57,58,60], BigFloat[1,6,2,-16], true)
         elseif state.it == 148
             checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 149
-            checkequality(indvals, BigInt[-208], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-208], BigFloat[1], true)
         elseif state.it == 150
             checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 151
-            checkequality(indvals, BigInt[-207], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-207], BigFloat[1], true)
         elseif state.it == 152
             checkequality(indvals, BigInt[-206,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 153
-            checkequality(indvals, BigInt[-206,92,150,152], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-206,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 154
             checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 155
-            checkequality(indvals, BigInt[-205], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-205], BigFloat[1], true)
         elseif state.it == 156
             checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 157
-            checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-204,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 158
             checkequality(indvals, BigInt[-203,456,639,645,647,653], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 159
-            checkequality(indvals, BigInt[-203,456,639,645,647,653], BigFloat[-1,-6,-2,-8,8,2], true)
+            checkequality(indvals, BigInt[-203,456,639,645,647,653], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 160
             checkequality(indvals, BigInt[-202,457,646], BigFloat[1,10,8], true)
         elseif state.it == 161
-            checkequality(indvals, BigInt[-202,457,646], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-202,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 162
             checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 163
-            checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-201,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 164
             checkequality(indvals, BigInt[-200,2491,3718,3722,3739], BigFloat[1,-6,-2,8,2], true)
         elseif state.it == 165
-            checkequality(indvals, BigInt[-200,2491,3718,3722,3739], BigFloat[-1,-6,-2,8,2], true)
+            checkequality(indvals, BigInt[-200,2491,3718,3722,3739], BigFloat[1,6,2,-8,-2], true)
         elseif state.it == 166
             checkequality(indvals, BigInt[-199,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 167
-            checkequality(indvals, BigInt[-199,2493,3721], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-199,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 168
             checkequality(indvals, BigInt[-210,-209,-208,-207,-206,-205,-204,-203,-202,-201,-200,-199,-186,-173,-159,-144,-128,-111,-93,-74,-54,-33,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 169
             checkequality(indvals, BigInt[-198,57,58,60], BigFloat[1,6,2,-16], true)
         elseif state.it == 170
-            checkequality(indvals, BigInt[-198,57,58,60], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-198,57,58,60], BigFloat[1,-6,-2,16], true)
         elseif state.it == 171
             checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 172
-            checkequality(indvals, BigInt[-197], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-197], BigFloat[1], true)
         elseif state.it == 173
             checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 174
-            checkequality(indvals, BigInt[-196], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-196], BigFloat[1], true)
         elseif state.it == 175
             checkequality(indvals, BigInt[-195,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 176
-            checkequality(indvals, BigInt[-195,92,150,152], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-195,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 177
             checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 178
-            checkequality(indvals, BigInt[-194], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-194], BigFloat[1], true)
         elseif state.it == 179
             checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 180
-            checkequality(indvals, BigInt[-193], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-193], BigFloat[1], true)
         elseif state.it == 181
             checkequality(indvals, BigInt[-192,456,641,645,647,653], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 182
-            checkequality(indvals, BigInt[-192,456,641,645,647,653], BigFloat[-1,6,2,8,-8,2], true)
+            checkequality(indvals, BigInt[-192,456,641,645,647,653], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 183
             checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 184
-            checkequality(indvals, BigInt[-191], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-191], BigFloat[1], true)
         elseif state.it == 185
             checkequality(indvals, BigInt[-190,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 186
-            checkequality(indvals, BigInt[-190,728,729], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-190,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 187
             checkequality(indvals, BigInt[-189,2491,3720,3722,3739], BigFloat[1,6,2,-8,2], true)
         elseif state.it == 188
-            checkequality(indvals, BigInt[-189,2491,3720,3722,3739], BigFloat[-1,6,2,-8,2], true)
+            checkequality(indvals, BigInt[-189,2491,3720,3722,3739], BigFloat[1,-6,-2,8,-2], true)
         elseif state.it == 189
             checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 190
-            checkequality(indvals, BigInt[-188], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-188], BigFloat[1], true)
         elseif state.it == 191
             checkequality(indvals, BigInt[-187,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 192
-            checkequality(indvals, BigInt[-187,3788,3789], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-187,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 193
             checkequality(indvals, BigInt[-186,60,66], BigFloat[1,2,2], true)
         elseif state.it == 194
-            checkequality(indvals, BigInt[-186,60,66], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-186,60,66], BigFloat[1,-2,-2], true)
         elseif state.it == 195
             checkequality(indvals, BigInt[-198,-197,-196,-195,-194,-193,-192,-191,-190,-189,-188,-187,-186,-172,-158,-143,-127,-110,-92,-73,-53,-32,-10], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 196
             checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 197
-            checkequality(indvals, BigInt[-185], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-185], BigFloat[1], true)
         elseif state.it == 198
             checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 199
-            checkequality(indvals, BigInt[-184], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-184], BigFloat[1], true)
         elseif state.it == 200
             checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 201
-            checkequality(indvals, BigInt[-183], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-183], BigFloat[1], true)
         elseif state.it == 202
             checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 203
-            checkequality(indvals, BigInt[-182], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-182], BigFloat[1], true)
         elseif state.it == 204
             checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 205
-            checkequality(indvals, BigInt[-181], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-181], BigFloat[1], true)
         elseif state.it == 206
             checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 207
-            checkequality(indvals, BigInt[-180], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-180], BigFloat[1], true)
         elseif state.it == 208
             checkequality(indvals, BigInt[-179,457,646], BigFloat[1,10,8], true)
         elseif state.it == 209
-            checkequality(indvals, BigInt[-179,457,646], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-179,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 210
             checkequality(indvals, BigInt[-178,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 211
-            checkequality(indvals, BigInt[-178,728,729], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-178,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 212
             checkequality(indvals, BigInt[-177,864], BigFloat[1,6], true)
         elseif state.it == 213
-            checkequality(indvals, BigInt[-177,864], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-177,864], BigFloat[1,-6], true)
         elseif state.it == 214
             checkequality(indvals, BigInt[-176,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 215
-            checkequality(indvals, BigInt[-176,2493,3721], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-176,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 216
             checkequality(indvals, BigInt[-175,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 217
-            checkequality(indvals, BigInt[-175,3788,3789], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-175,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 218
             checkequality(indvals, BigInt[-174,4272], BigFloat[1,6], true)
         elseif state.it == 219
-            checkequality(indvals, BigInt[-174,4272], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-174,4272], BigFloat[1,-6], true)
         elseif state.it == 220
             checkequality(indvals, BigInt[-173,57,59], BigFloat[1,10,8], true)
         elseif state.it == 221
-            checkequality(indvals, BigInt[-173,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-173,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 222
             checkequality(indvals, BigInt[-172,74], BigFloat[1,48], true)
         elseif state.it == 223
-            checkequality(indvals, BigInt[-172,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-172,74], BigFloat[1,-48], true)
         elseif state.it == 224
             checkequality(indvals, BigInt[-185,-184,-183,-182,-181,-180,-179,-178,-177,-176,-175,-174,-173,-172,-157,-142,-126,-109,-91,-72,-52,-31,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 225
             checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 226
-            checkequality(indvals, BigInt[-171], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-171], BigFloat[1], true)
         elseif state.it == 227
             checkequality(indvals, BigInt[-170,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 228
-            checkequality(indvals, BigInt[-170,92,150,152], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-170,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 229
             checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 230
-            checkequality(indvals, BigInt[-169], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-169], BigFloat[1], true)
         elseif state.it == 231
             checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 232
-            checkequality(indvals, BigInt[-168], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-168], BigFloat[1], true)
         elseif state.it == 233
             checkequality(indvals, BigInt[-167,205,396,398], BigFloat[1,-6,-2,16], true)
         elseif state.it == 234
-            checkequality(indvals, BigInt[-167,205,396,398], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-167,205,396,398], BigFloat[1,6,2,-16], true)
         elseif state.it == 235
             checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 236
-            checkequality(indvals, BigInt[-166], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-166], BigFloat[1], true)
         elseif state.it == 237
             checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 238
-            checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-165,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 239
             checkequality(indvals, BigInt[-164,1164,1893,1899,1901,1907], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 240
-            checkequality(indvals, BigInt[-164,1164,1893,1899,1901,1907], BigFloat[-1,-6,-2,-8,8,2], true)
+            checkequality(indvals, BigInt[-164,1164,1893,1899,1901,1907], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 241
             checkequality(indvals, BigInt[-163,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 242
-            checkequality(indvals, BigInt[-163,1165,1900], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-163,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 243
             checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 244
-            checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-162,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 245
             checkequality(indvals, BigInt[-161,5461,8437,8441,8458], BigFloat[1,-6,-2,8,2], true)
         elseif state.it == 246
-            checkequality(indvals, BigInt[-161,5461,8437,8441,8458], BigFloat[-1,-6,-2,8,2], true)
+            checkequality(indvals, BigInt[-161,5461,8437,8441,8458], BigFloat[1,6,2,-8,-2], true)
         elseif state.it == 247
             checkequality(indvals, BigInt[-160,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 248
-            checkequality(indvals, BigInt[-160,5463,8440], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-160,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 249
             checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 250
-            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-159,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 251
             checkequality(indvals, BigInt[-158,152,158], BigFloat[1,2,2], true)
         elseif state.it == 252
-            checkequality(indvals, BigInt[-158,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-158,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 253
             checkequality(indvals, BigInt[-157,92,151], BigFloat[1,10,8], true)
         elseif state.it == 254
-            checkequality(indvals, BigInt[-157,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-157,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 255
             checkequality(indvals, BigInt[-171,-170,-169,-168,-167,-166,-165,-164,-163,-162,-161,-160,-159,-158,-157,-141,-125,-108,-90,-71,-51,-30,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 256
             checkequality(indvals, BigInt[-156,92,150,152], BigFloat[1,6,2,-16], true)
         elseif state.it == 257
-            checkequality(indvals, BigInt[-156,92,150,152], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-156,92,150,152], BigFloat[1,-6,-2,16], true)
         elseif state.it == 258
             checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 259
-            checkequality(indvals, BigInt[-155], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-155], BigFloat[1], true)
         elseif state.it == 260
             checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 261
-            checkequality(indvals, BigInt[-154], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-154], BigFloat[1], true)
         elseif state.it == 262
             checkequality(indvals, BigInt[-153,205,396,398], BigFloat[1,6,2,-16], true)
         elseif state.it == 263
-            checkequality(indvals, BigInt[-153,205,396,398], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-153,205,396,398], BigFloat[1,-6,-2,16], true)
         elseif state.it == 264
             checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 265
-            checkequality(indvals, BigInt[-152], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-152], BigFloat[1], true)
         elseif state.it == 266
             checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 267
-            checkequality(indvals, BigInt[-151], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-151], BigFloat[1], true)
         elseif state.it == 268
             checkequality(indvals, BigInt[-150,1164,1895,1899,1901,1907], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 269
-            checkequality(indvals, BigInt[-150,1164,1895,1899,1901,1907], BigFloat[-1,6,2,8,-8,2], true)
+            checkequality(indvals, BigInt[-150,1164,1895,1899,1901,1907], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 270
             checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 271
-            checkequality(indvals, BigInt[-149], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-149], BigFloat[1], true)
         elseif state.it == 272
             checkequality(indvals, BigInt[-148,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 273
-            checkequality(indvals, BigInt[-148,1982,1983], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-148,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 274
             checkequality(indvals, BigInt[-147,5461,8439,8441,8458], BigFloat[1,6,2,-8,2], true)
         elseif state.it == 275
-            checkequality(indvals, BigInt[-147,5461,8439,8441,8458], BigFloat[-1,6,2,-8,2], true)
+            checkequality(indvals, BigInt[-147,5461,8439,8441,8458], BigFloat[1,-6,-2,8,-2], true)
         elseif state.it == 276
             checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 277
-            checkequality(indvals, BigInt[-146], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-146], BigFloat[1], true)
         elseif state.it == 278
             checkequality(indvals, BigInt[-145,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 279
-            checkequality(indvals, BigInt[-145,8507,8508], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-145,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 280
             checkequality(indvals, BigInt[-144,152,158], BigFloat[1,2,2], true)
         elseif state.it == 281
-            checkequality(indvals, BigInt[-144,152,158], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-144,152,158], BigFloat[1,-2,-2], true)
         elseif state.it == 282
             checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 283
-            checkequality(indvals, BigInt[-143], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-143], BigFloat[1], true)
         elseif state.it == 284
             checkequality(indvals, BigInt[-142,166], BigFloat[1,48], true)
         elseif state.it == 285
-            checkequality(indvals, BigInt[-142,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-142,166], BigFloat[1,-48], true)
         elseif state.it == 286
             checkequality(indvals, BigInt[-141,398,404], BigFloat[1,2,2], true)
         elseif state.it == 287
-            checkequality(indvals, BigInt[-141,398,404], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-141,398,404], BigFloat[1,-2,-2], true)
         elseif state.it == 288
             checkequality(indvals, BigInt[-156,-155,-154,-153,-152,-151,-150,-149,-148,-147,-146,-145,-144,-143,-142,-141,-124,-107,-89,-70,-50,-29,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 289
             checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 290
-            checkequality(indvals, BigInt[-140], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-140], BigFloat[1], true)
         elseif state.it == 291
             checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 292
-            checkequality(indvals, BigInt[-139], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-139], BigFloat[1], true)
         elseif state.it == 293
             checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 294
-            checkequality(indvals, BigInt[-138], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-138], BigFloat[1], true)
         elseif state.it == 295
             checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 296
-            checkequality(indvals, BigInt[-137], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-137], BigFloat[1], true)
         elseif state.it == 297
             checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 298
-            checkequality(indvals, BigInt[-136], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-136], BigFloat[1], true)
         elseif state.it == 299
             checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 300
-            checkequality(indvals, BigInt[-135], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-135], BigFloat[1], true)
         elseif state.it == 301
             checkequality(indvals, BigInt[-134,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 302
-            checkequality(indvals, BigInt[-134,1165,1900], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-134,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 303
             checkequality(indvals, BigInt[-133,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 304
-            checkequality(indvals, BigInt[-133,1982,1983], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-133,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 305
             checkequality(indvals, BigInt[-132,2118], BigFloat[1,6], true)
         elseif state.it == 306
-            checkequality(indvals, BigInt[-132,2118], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-132,2118], BigFloat[1,-6], true)
         elseif state.it == 307
             checkequality(indvals, BigInt[-131,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 308
-            checkequality(indvals, BigInt[-131,5463,8440], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-131,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 309
             checkequality(indvals, BigInt[-130,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 310
-            checkequality(indvals, BigInt[-130,8507,8508], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-130,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 311
             checkequality(indvals, BigInt[-129,8991], BigFloat[1,6], true)
         elseif state.it == 312
-            checkequality(indvals, BigInt[-129,8991], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-129,8991], BigFloat[1,-6], true)
         elseif state.it == 313
             checkequality(indvals, BigInt[-128,92,151], BigFloat[1,10,8], true)
         elseif state.it == 314
-            checkequality(indvals, BigInt[-128,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-128,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 315
             checkequality(indvals, BigInt[-127,166], BigFloat[1,48], true)
         elseif state.it == 316
-            checkequality(indvals, BigInt[-127,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-127,166], BigFloat[1,-48], true)
         elseif state.it == 317
             checkequality(indvals, BigInt[-126,175], BigFloat[1,6], true)
         elseif state.it == 318
-            checkequality(indvals, BigInt[-126,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-126,175], BigFloat[1,-6], true)
         elseif state.it == 319
             checkequality(indvals, BigInt[-125,205,397], BigFloat[1,10,8], true)
         elseif state.it == 320
-            checkequality(indvals, BigInt[-125,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-125,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 321
             checkequality(indvals, BigInt[-124,412], BigFloat[1,48], true)
         elseif state.it == 322
-            checkequality(indvals, BigInt[-124,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-124,412], BigFloat[1,-48], true)
         elseif state.it == 323
             checkequality(indvals, BigInt[-140,-139,-138,-137,-136,-135,-134,-133,-132,-131,-130,-129,-128,-127,-126,-125,-124,-106,-88,-69,-49,-28,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 324
             checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 325
-            checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-123,272,273,275,276,653,899], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 326
             checkequality(indvals, BigInt[-122,456,641,645,647,653], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 327
-            checkequality(indvals, BigInt[-122,456,641,645,647,653], BigFloat[-1,-6,-2,-8,8,-2], true)
+            checkequality(indvals, BigInt[-122,456,641,645,647,653], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 328
             checkequality(indvals, BigInt[-121,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 329
-            checkequality(indvals, BigInt[-121,457,646], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-121,457,646], BigFloat[1,10,8], true)
         elseif state.it == 330
             checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 331
-            checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-120,854,855,857,858,1907,2153], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 332
             checkequality(indvals, BigInt[-119,1164,1895,1899,1901,1907], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 333
-            checkequality(indvals, BigInt[-119,1164,1895,1899,1901,1907], BigFloat[-1,-6,-2,-8,8,-2], true)
+            checkequality(indvals, BigInt[-119,1164,1895,1899,1901,1907], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 334
             checkequality(indvals, BigInt[-118,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 335
-            checkequality(indvals, BigInt[-118,1165,1900], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-118,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 336
             checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 337
-            checkequality(indvals, BigInt[-117], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
         elseif state.it == 338
             checkequality(indvals, BigInt[-116,4971,6928,6930], BigFloat[1,-6,-2,16], true)
         elseif state.it == 339
-            checkequality(indvals, BigInt[-116,4971,6928,6930], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-116,4971,6928,6930], BigFloat[1,6,2,-16], true)
         elseif state.it == 340
             checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 341
-            checkequality(indvals, BigInt[-115], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-115], BigFloat[1], true)
         elseif state.it == 342
             checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 343
-            checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-114,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 344
             checkequality(indvals, BigInt[-113,19056,26784,26795,26797,26814], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 345
-            checkequality(indvals, BigInt[-113,19056,26784,26795,26797,26814], BigFloat[-1,-6,-2,-8,8,-2], true)
+            checkequality(indvals, BigInt[-113,19056,26784,26795,26797,26814], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 346
             checkequality(indvals, BigInt[-112,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 347
-            checkequality(indvals, BigInt[-112,19060,26796], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-112,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 348
             checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 349
-            checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-111,272,273,275,276,650,898], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 350
             checkequality(indvals, BigInt[-110,457,639,641,645,650], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 351
-            checkequality(indvals, BigInt[-110,457,639,641,645,650], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-110,457,639,641,645,650], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 352
             checkequality(indvals, BigInt[-109,456,640], BigFloat[1,10,8], true)
         elseif state.it == 353
-            checkequality(indvals, BigInt[-109,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-109,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 354
             checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 355
-            checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-108,854,855,857,858,1904,2152], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 356
             checkequality(indvals, BigInt[-107,1165,1893,1895,1899,1904], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 357
-            checkequality(indvals, BigInt[-107,1165,1893,1895,1899,1904], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-107,1165,1893,1895,1899,1904], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 358
             checkequality(indvals, BigInt[-106,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 359
-            checkequality(indvals, BigInt[-106,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-106,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 360
             checkequality(indvals, BigInt[-123,-122,-121,-120,-119,-118,-117,-116,-115,-114,-113,-112,-111,-110,-109,-108,-107,-106,-87,-68,-48,-27,-5,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 361
             checkequality(indvals, BigInt[-105,456,639,645,647,653], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 362
-            checkequality(indvals, BigInt[-105,456,639,645,647,653], BigFloat[-1,6,2,8,-8,-2], true)
+            checkequality(indvals, BigInt[-105,456,639,645,647,653], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 363
             checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 364
-            checkequality(indvals, BigInt[-104], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-104], BigFloat[1], true)
         elseif state.it == 365
             checkequality(indvals, BigInt[-103,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 366
-            checkequality(indvals, BigInt[-103,728,729], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-103,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 367
             checkequality(indvals, BigInt[-102,1164,1893,1899,1901,1907], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 368
-            checkequality(indvals, BigInt[-102,1164,1893,1899,1901,1907], BigFloat[-1,6,2,8,-8,-2], true)
+            checkequality(indvals, BigInt[-102,1164,1893,1899,1901,1907], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 369
             checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 370
-            checkequality(indvals, BigInt[-101], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-101], BigFloat[1], true)
         elseif state.it == 371
             checkequality(indvals, BigInt[-100,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 372
-            checkequality(indvals, BigInt[-100,1982,1983], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-100,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 373
             checkequality(indvals, BigInt[-99,4971,6928,6930], BigFloat[1,6,2,-16], true)
         elseif state.it == 374
-            checkequality(indvals, BigInt[-99,4971,6928,6930], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-99,4971,6928,6930], BigFloat[1,-6,-2,16], true)
         elseif state.it == 375
             checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 376
-            checkequality(indvals, BigInt[-98], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-98], BigFloat[1], true)
         elseif state.it == 377
             checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 378
-            checkequality(indvals, BigInt[-97], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-97], BigFloat[1], true)
         elseif state.it == 379
             checkequality(indvals, BigInt[-96,19056,26782,26795,26797,26814], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 380
-            checkequality(indvals, BigInt[-96,19056,26782,26795,26797,26814], BigFloat[-1,6,2,8,-8,-2], true)
+            checkequality(indvals, BigInt[-96,19056,26782,26795,26797,26814], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 381
             checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 382
-            checkequality(indvals, BigInt[-95], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-95], BigFloat[1], true)
         elseif state.it == 383
             checkequality(indvals, BigInt[-94,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 384
-            checkequality(indvals, BigInt[-94,27047,27048], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-94,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 385
             checkequality(indvals, BigInt[-93,457,639,641,647,650], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 386
-            checkequality(indvals, BigInt[-93,457,639,641,647,650], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-93,457,639,641,647,650], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 387
             checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 388
-            checkequality(indvals, BigInt[-92], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-92], BigFloat[1], true)
         elseif state.it == 389
             checkequality(indvals, BigInt[-91,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 390
-            checkequality(indvals, BigInt[-91,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-91,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 391
             checkequality(indvals, BigInt[-90,1165,1893,1895,1901,1904], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 392
-            checkequality(indvals, BigInt[-90,1165,1893,1895,1901,1904], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-90,1165,1893,1895,1901,1904], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 393
             checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 394
-            checkequality(indvals, BigInt[-89], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-89], BigFloat[1], true)
         elseif state.it == 395
             checkequality(indvals, BigInt[-88,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 396
-            checkequality(indvals, BigInt[-88,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-88,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 397
             checkequality(indvals, BigInt[-87,6930,6939], BigFloat[1,2,2], true)
         elseif state.it == 398
-            checkequality(indvals, BigInt[-87,6930,6939], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-87,6930,6939], BigFloat[1,-2,-2], true)
         elseif state.it == 399
             checkequality(indvals, BigInt[-105,-104,-103,-102,-101,-100,-99,-98,-97,-96,-95,-94,-93,-92,-91,-90,-89,-88,-87,-67,-47,-26,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 400
             checkequality(indvals, BigInt[-86,457,646], BigFloat[1,-10,-8], true)
         elseif state.it == 401
-            checkequality(indvals, BigInt[-86,457,646], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-86,457,646], BigFloat[1,10,8], true)
         elseif state.it == 402
             checkequality(indvals, BigInt[-85,728,729], BigFloat[1,24,-24], true)
         elseif state.it == 403
-            checkequality(indvals, BigInt[-85,728,729], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-85,728,729], BigFloat[1,-24,24], true)
         elseif state.it == 404
             checkequality(indvals, BigInt[-84,864], BigFloat[1,-6], true)
         elseif state.it == 405
-            checkequality(indvals, BigInt[-84,864], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-84,864], BigFloat[1,6], true)
         elseif state.it == 406
             checkequality(indvals, BigInt[-83,1165,1900], BigFloat[1,-10,-8], true)
         elseif state.it == 407
-            checkequality(indvals, BigInt[-83,1165,1900], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-83,1165,1900], BigFloat[1,10,8], true)
         elseif state.it == 408
             checkequality(indvals, BigInt[-82,1982,1983], BigFloat[1,24,-24], true)
         elseif state.it == 409
-            checkequality(indvals, BigInt[-82,1982,1983], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-82,1982,1983], BigFloat[1,-24,24], true)
         elseif state.it == 410
             checkequality(indvals, BigInt[-81,2118], BigFloat[1,-6], true)
         elseif state.it == 411
-            checkequality(indvals, BigInt[-81,2118], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-81,2118], BigFloat[1,6], true)
         elseif state.it == 412
             checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 413
-            checkequality(indvals, BigInt[-80], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-80], BigFloat[1], true)
         elseif state.it == 414
             checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 415
-            checkequality(indvals, BigInt[-79], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-79], BigFloat[1], true)
         elseif state.it == 416
             checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 417
-            checkequality(indvals, BigInt[-78], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-78], BigFloat[1], true)
         elseif state.it == 418
             checkequality(indvals, BigInt[-77,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 419
-            checkequality(indvals, BigInt[-77,19060,26796], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-77,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 420
             checkequality(indvals, BigInt[-76,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 421
-            checkequality(indvals, BigInt[-76,27047,27048], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-76,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 422
             checkequality(indvals, BigInt[-75,29087], BigFloat[1,-6], true)
         elseif state.it == 423
-            checkequality(indvals, BigInt[-75,29087], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-75,29087], BigFloat[1,6], true)
         elseif state.it == 424
             checkequality(indvals, BigInt[-74,456,640], BigFloat[1,10,8], true)
         elseif state.it == 425
-            checkequality(indvals, BigInt[-74,456,640], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-74,456,640], BigFloat[1,-10,-8], true)
         elseif state.it == 426
             checkequality(indvals, BigInt[-73,731,732], BigFloat[1,-24,24], true)
         elseif state.it == 427
-            checkequality(indvals, BigInt[-73,731,732], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-73,731,732], BigFloat[1,24,-24], true)
         elseif state.it == 428
             checkequality(indvals, BigInt[-72,863], BigFloat[1,6], true)
         elseif state.it == 429
-            checkequality(indvals, BigInt[-72,863], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-72,863], BigFloat[1,-6], true)
         elseif state.it == 430
             checkequality(indvals, BigInt[-71,1164,1894], BigFloat[1,10,8], true)
         elseif state.it == 431
-            checkequality(indvals, BigInt[-71,1164,1894], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-71,1164,1894], BigFloat[1,-10,-8], true)
         elseif state.it == 432
             checkequality(indvals, BigInt[-70,1985,1986], BigFloat[1,-24,24], true)
         elseif state.it == 433
-            checkequality(indvals, BigInt[-70,1985,1986], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-70,1985,1986], BigFloat[1,24,-24], true)
         elseif state.it == 434
             checkequality(indvals, BigInt[-69,2117], BigFloat[1,6], true)
         elseif state.it == 435
-            checkequality(indvals, BigInt[-69,2117], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-69,2117], BigFloat[1,-6], true)
         elseif state.it == 436
             checkequality(indvals, BigInt[-68,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 437
-            checkequality(indvals, BigInt[-68,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-68,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 438
             checkequality(indvals, BigInt[-67,7288], BigFloat[1,48], true)
         elseif state.it == 439
-            checkequality(indvals, BigInt[-67,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-67,7288], BigFloat[1,-48], true)
         elseif state.it == 440
             checkequality(indvals, BigInt[-86,-85,-84,-83,-82,-81,-80,-79,-78,-77,-76,-75,-74,-73,-72,-71,-70,-69,-68,-67,-46,-25,-3,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 441
             checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 442
-            checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-66,1742,1743,1744,1745,3739,4287], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 443
             checkequality(indvals, BigInt[-65,2491,3720,3722,3739], BigFloat[1,-6,-2,8,-2], true)
         elseif state.it == 444
-            checkequality(indvals, BigInt[-65,2491,3720,3722,3739], BigFloat[-1,-6,-2,8,-2], true)
+            checkequality(indvals, BigInt[-65,2491,3720,3722,3739], BigFloat[1,6,2,-8,2], true)
         elseif state.it == 445
             checkequality(indvals, BigInt[-64,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 446
-            checkequality(indvals, BigInt[-64,2493,3721], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-64,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 447
             checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 448
-            checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[-1,-6,6,2,2,-8,-4], true)
+            checkequality(indvals, BigInt[-63,4250,4251,4252,4253,8458,9006], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 449
             checkequality(indvals, BigInt[-62,5461,8439,8441,8458], BigFloat[1,-6,-2,8,-2], true)
         elseif state.it == 450
-            checkequality(indvals, BigInt[-62,5461,8439,8441,8458], BigFloat[-1,-6,-2,8,-2], true)
+            checkequality(indvals, BigInt[-62,5461,8439,8441,8458], BigFloat[1,6,2,-8,2], true)
         elseif state.it == 451
             checkequality(indvals, BigInt[-61,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 452
-            checkequality(indvals, BigInt[-61,5463,8440], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-61,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 453
             checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[1,6,-6,-2,-2,8,4], true)
         elseif state.it == 454
-            checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[-1,6,-6,-2,-2,8,4], true)
+            checkequality(indvals, BigInt[-60,14606,14607,14614,14615,26814,29213], BigFloat[1,-6,6,2,2,-8,-4], true)
         elseif state.it == 455
             checkequality(indvals, BigInt[-59,19056,26782,26795,26797,26814], BigFloat[1,-6,-2,-8,8,2], true)
         elseif state.it == 456
-            checkequality(indvals, BigInt[-59,19056,26782,26795,26797,26814], BigFloat[-1,-6,-2,-8,8,2], true)
+            checkequality(indvals, BigInt[-59,19056,26782,26795,26797,26814], BigFloat[1,6,2,8,-8,-2], true)
         elseif state.it == 457
             checkequality(indvals, BigInt[-58,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 458
-            checkequality(indvals, BigInt[-58,19060,26796], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-58,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 459
             checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 460
-            checkequality(indvals, BigInt[-57], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-57], BigFloat[1], true)
         elseif state.it == 461
             checkequality(indvals, BigInt[-56,59062,81359,81361], BigFloat[1,-6,-2,16], true)
         elseif state.it == 462
-            checkequality(indvals, BigInt[-56,59062,81359,81361], BigFloat[-1,-6,-2,16], true)
+            checkequality(indvals, BigInt[-56,59062,81359,81361], BigFloat[1,6,2,-16], true)
         elseif state.it == 463
             checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 464
-            checkequality(indvals, BigInt[-55], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-55], BigFloat[1], true)
         elseif state.it == 465
             checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 466
-            checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-54,1742,1743,1744,1745,3737,4285], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 467
             checkequality(indvals, BigInt[-53,2493,3718,3720,3737], BigFloat[1,-6,-8,8,2], true)
         elseif state.it == 468
-            checkequality(indvals, BigInt[-53,2493,3718,3720,3737], BigFloat[-1,-6,-8,8,2], true)
+            checkequality(indvals, BigInt[-53,2493,3718,3720,3737], BigFloat[1,6,8,-8,-2], true)
         elseif state.it == 469
             checkequality(indvals, BigInt[-52,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 470
-            checkequality(indvals, BigInt[-52,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-52,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 471
             checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 472
-            checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-51,4250,4251,4252,4253,8456,9004], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 473
             checkequality(indvals, BigInt[-50,5463,8437,8439,8456], BigFloat[1,-6,-8,8,2], true)
         elseif state.it == 474
-            checkequality(indvals, BigInt[-50,5463,8437,8439,8456], BigFloat[-1,-6,-8,8,2], true)
+            checkequality(indvals, BigInt[-50,5463,8437,8439,8456], BigFloat[1,6,8,-8,-2], true)
         elseif state.it == 475
             checkequality(indvals, BigInt[-49,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 476
-            checkequality(indvals, BigInt[-49,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-49,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 477
             checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[1,-2,-2,6,-6,8,4], true)
         elseif state.it == 478
-            checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[-1,-2,-2,6,-6,8,4], true)
+            checkequality(indvals, BigInt[-48,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 479
             checkequality(indvals, BigInt[-47,19060,26782,26784,26797,26806], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 480
-            checkequality(indvals, BigInt[-47,19060,26782,26784,26797,26806], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-47,19060,26782,26784,26797,26806], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 481
             checkequality(indvals, BigInt[-46,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 482
-            checkequality(indvals, BigInt[-46,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-46,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 483
             checkequality(indvals, BigInt[-66,-65,-64,-63,-62,-61,-60,-59,-58,-57,-56,-55,-54,-53,-52,-51,-50,-49,-48,-47,-46,-24,-2,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 484
             checkequality(indvals, BigInt[-45,2491,3718,3722,3739], BigFloat[1,6,2,-8,-2], true)
         elseif state.it == 485
-            checkequality(indvals, BigInt[-45,2491,3718,3722,3739], BigFloat[-1,6,2,-8,-2], true)
+            checkequality(indvals, BigInt[-45,2491,3718,3722,3739], BigFloat[1,-6,-2,8,2], true)
         elseif state.it == 486
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 487
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 488
             checkequality(indvals, BigInt[-43,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 489
-            checkequality(indvals, BigInt[-43,3788,3789], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-43,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 490
             checkequality(indvals, BigInt[-42,5461,8437,8441,8458], BigFloat[1,6,2,-8,-2], true)
         elseif state.it == 491
-            checkequality(indvals, BigInt[-42,5461,8437,8441,8458], BigFloat[-1,6,2,-8,-2], true)
+            checkequality(indvals, BigInt[-42,5461,8437,8441,8458], BigFloat[1,-6,-2,8,2], true)
         elseif state.it == 492
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 493
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 494
             checkequality(indvals, BigInt[-40,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 495
-            checkequality(indvals, BigInt[-40,8507,8508], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-40,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 496
             checkequality(indvals, BigInt[-39,19056,26784,26795,26797,26814], BigFloat[1,6,2,8,-8,2], true)
         elseif state.it == 497
-            checkequality(indvals, BigInt[-39,19056,26784,26795,26797,26814], BigFloat[-1,6,2,8,-8,2], true)
+            checkequality(indvals, BigInt[-39,19056,26784,26795,26797,26814], BigFloat[1,-6,-2,-8,8,-2], true)
         elseif state.it == 498
             checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 499
-            checkequality(indvals, BigInt[-38], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-38], BigFloat[1], true)
         elseif state.it == 500
             checkequality(indvals, BigInt[-37,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 501
-            checkequality(indvals, BigInt[-37,27047,27048], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-37,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 502
             checkequality(indvals, BigInt[-36,59062,81359,81361], BigFloat[1,6,2,-16], true)
         elseif state.it == 503
-            checkequality(indvals, BigInt[-36,59062,81359,81361], BigFloat[-1,6,2,-16], true)
+            checkequality(indvals, BigInt[-36,59062,81359,81361], BigFloat[1,-6,-2,16], true)
         elseif state.it == 504
             checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 505
-            checkequality(indvals, BigInt[-35], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-35], BigFloat[1], true)
         elseif state.it == 506
             checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 507
-            checkequality(indvals, BigInt[-34], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
         elseif state.it == 508
             checkequality(indvals, BigInt[-33,2493,3718,3720,3722,3737], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 509
-            checkequality(indvals, BigInt[-33,2493,3718,3720,3722,3737], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-33,2493,3718,3720,3722,3737], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 510
             checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 511
-            checkequality(indvals, BigInt[-32], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-32], BigFloat[1], true)
         elseif state.it == 512
             checkequality(indvals, BigInt[-31,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 513
-            checkequality(indvals, BigInt[-31,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-31,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 514
             checkequality(indvals, BigInt[-30,5463,8437,8439,8441,8456], BigFloat[1,6,8,-8,2,2], true)
         elseif state.it == 515
-            checkequality(indvals, BigInt[-30,5463,8437,8439,8441,8456], BigFloat[-1,6,8,-8,2,2], true)
+            checkequality(indvals, BigInt[-30,5463,8437,8439,8441,8456], BigFloat[1,-6,-8,8,-2,-2], true)
         elseif state.it == 516
             checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 517
-            checkequality(indvals, BigInt[-29], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-29], BigFloat[1], true)
         elseif state.it == 518
             checkequality(indvals, BigInt[-28,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 519
-            checkequality(indvals, BigInt[-28,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-28,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 520
             checkequality(indvals, BigInt[-27,19060,26782,26784,26795,26806], BigFloat[1,-6,-8,8,-2,2], true)
         elseif state.it == 521
-            checkequality(indvals, BigInt[-27,19060,26782,26784,26795,26806], BigFloat[-1,-6,-8,8,-2,2], true)
+            checkequality(indvals, BigInt[-27,19060,26782,26784,26795,26806], BigFloat[1,6,8,-8,2,-2], true)
         elseif state.it == 522
             checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 523
-            checkequality(indvals, BigInt[-26], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-26], BigFloat[1], true)
         elseif state.it == 524
             checkequality(indvals, BigInt[-25,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 525
-            checkequality(indvals, BigInt[-25,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-25,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 526
             checkequality(indvals, BigInt[-24,81361,81393], BigFloat[1,2,2], true)
         elseif state.it == 527
-            checkequality(indvals, BigInt[-24,81361,81393], BigFloat[-1,2,2], true)
+            checkequality(indvals, BigInt[-24,81361,81393], BigFloat[1,-2,-2], true)
         elseif state.it == 528
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 529
             checkequality(indvals, BigInt[-23,2493,3721], BigFloat[1,-10,-8], true)
         elseif state.it == 530
-            checkequality(indvals, BigInt[-23,2493,3721], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-23,2493,3721], BigFloat[1,10,8], true)
         elseif state.it == 531
             checkequality(indvals, BigInt[-22,3788,3789], BigFloat[1,24,-24], true)
         elseif state.it == 532
-            checkequality(indvals, BigInt[-22,3788,3789], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-22,3788,3789], BigFloat[1,-24,24], true)
         elseif state.it == 533
             checkequality(indvals, BigInt[-21,4272], BigFloat[1,-6], true)
         elseif state.it == 534
-            checkequality(indvals, BigInt[-21,4272], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-21,4272], BigFloat[1,6], true)
         elseif state.it == 535
             checkequality(indvals, BigInt[-20,5463,8440], BigFloat[1,-10,-8], true)
         elseif state.it == 536
-            checkequality(indvals, BigInt[-20,5463,8440], BigFloat[-1,-10,-8], true)
+            checkequality(indvals, BigInt[-20,5463,8440], BigFloat[1,10,8], true)
         elseif state.it == 537
             checkequality(indvals, BigInt[-19,8507,8508], BigFloat[1,24,-24], true)
         elseif state.it == 538
-            checkequality(indvals, BigInt[-19,8507,8508], BigFloat[-1,24,-24], true)
+            checkequality(indvals, BigInt[-19,8507,8508], BigFloat[1,-24,24], true)
         elseif state.it == 539
             checkequality(indvals, BigInt[-18,8991], BigFloat[1,-6], true)
         elseif state.it == 540
-            checkequality(indvals, BigInt[-18,8991], BigFloat[-1,-6], true)
+            checkequality(indvals, BigInt[-18,8991], BigFloat[1,6], true)
         elseif state.it == 541
             checkequality(indvals, BigInt[-17,19060,26796], BigFloat[1,10,8], true)
         elseif state.it == 542
-            checkequality(indvals, BigInt[-17,19060,26796], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-17,19060,26796], BigFloat[1,-10,-8], true)
         elseif state.it == 543
             checkequality(indvals, BigInt[-16,27047,27048], BigFloat[1,-24,24], true)
         elseif state.it == 544
-            checkequality(indvals, BigInt[-16,27047,27048], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-16,27047,27048], BigFloat[1,24,-24], true)
         elseif state.it == 545
             checkequality(indvals, BigInt[-15,29087], BigFloat[1,6], true)
         elseif state.it == 546
-            checkequality(indvals, BigInt[-15,29087], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-15,29087], BigFloat[1,-6], true)
         elseif state.it == 547
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 548
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 549
             checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 550
-            checkequality(indvals, BigInt[-13], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-13], BigFloat[1], true)
         elseif state.it == 551
             checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 552
-            checkequality(indvals, BigInt[-12], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-12], BigFloat[1], true)
         elseif state.it == 553
             checkequality(indvals, BigInt[-11,2491,3719], BigFloat[1,10,8], true)
         elseif state.it == 554
-            checkequality(indvals, BigInt[-11,2491,3719], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-11,2491,3719], BigFloat[1,-10,-8], true)
         elseif state.it == 555
             checkequality(indvals, BigInt[-10,3790,3791], BigFloat[1,-24,24], true)
         elseif state.it == 556
-            checkequality(indvals, BigInt[-10,3790,3791], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-10,3790,3791], BigFloat[1,24,-24], true)
         elseif state.it == 557
             checkequality(indvals, BigInt[-9,4270], BigFloat[1,6], true)
         elseif state.it == 558
-            checkequality(indvals, BigInt[-9,4270], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-9,4270], BigFloat[1,-6], true)
         elseif state.it == 559
             checkequality(indvals, BigInt[-8,5461,8438], BigFloat[1,10,8], true)
         elseif state.it == 560
-            checkequality(indvals, BigInt[-8,5461,8438], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-8,5461,8438], BigFloat[1,-10,-8], true)
         elseif state.it == 561
             checkequality(indvals, BigInt[-7,8509,8510], BigFloat[1,-24,24], true)
         elseif state.it == 562
-            checkequality(indvals, BigInt[-7,8509,8510], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-7,8509,8510], BigFloat[1,24,-24], true)
         elseif state.it == 563
             checkequality(indvals, BigInt[-6,8989], BigFloat[1,6], true)
         elseif state.it == 564
-            checkequality(indvals, BigInt[-6,8989], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-6,8989], BigFloat[1,-6], true)
         elseif state.it == 565
             checkequality(indvals, BigInt[-5,19056,26783], BigFloat[1,10,8], true)
         elseif state.it == 566
-            checkequality(indvals, BigInt[-5,19056,26783], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-5,19056,26783], BigFloat[1,-10,-8], true)
         elseif state.it == 567
             checkequality(indvals, BigInt[-4,27055,27056], BigFloat[1,-24,24], true)
         elseif state.it == 568
-            checkequality(indvals, BigInt[-4,27055,27056], BigFloat[-1,-24,24], true)
+            checkequality(indvals, BigInt[-4,27055,27056], BigFloat[1,24,-24], true)
         elseif state.it == 569
             checkequality(indvals, BigInt[-3,29083], BigFloat[1,6], true)
         elseif state.it == 570
-            checkequality(indvals, BigInt[-3,29083], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-3,29083], BigFloat[1,-6], true)
         elseif state.it == 571
             checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 572
-            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 573
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,48], true)
         elseif state.it == 574
-            checkequality(indvals, BigInt[-1,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsoslin
         end
         state.it += 1
-    elseif state.instance == 42
+    else
+        @test false
+    end
+end
+
+function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false,false,false}, indvals::Indvals{BigInt,BigFloat})
+    @test (state.lastcall === :none && iszero(state.it)) || (state.lastcall === :linear && !iszero(state.it))
+    state.lastcall = :linear
+    if state.instance == 49
         if state.it == 0
             checkequality(indvals, BigInt[-1,20830], BigFloat[-1,17], true)
         elseif state.it == 2
@@ -4595,7 +4627,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 49
+    elseif state.instance == 57
         if state.it == 0
             checkequality(indvals, BigInt[-1,17744], BigFloat[-1,24], true)
         elseif state.it == 2
@@ -4603,7 +4635,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 56
+    elseif state.instance == 65
         if state.it == 0
             checkequality(indvals, BigInt[-1,5672,17777], BigFloat[-1,2,8], true)
         elseif state.it == 2
@@ -4611,7 +4643,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 63
+    elseif state.instance == 73
         if state.it == 0
             checkequality(indvals, BigInt[-1,4699], BigFloat[-1,6], true)
         elseif state.it == 2
@@ -4619,7 +4651,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 70
+    elseif state.instance == 81
         if state.it == 0
             checkequality(indvals, BigInt[-1,17502], BigFloat[-1,14], true)
         elseif state.it == 2
@@ -4627,7 +4659,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 77
+    elseif state.instance == 89
         if state.it == 0
             checkequality(indvals, BigInt[-1,4699,4702,5672,9297,17496,17777], BigFloat[-1,8,16,3,4,14,5], true)
         elseif state.it == 2
@@ -4635,19 +4667,19 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 88
+    elseif state.instance == 102
         if state.it == 0
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-1,9460], BigFloat[1,8], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-1,9460], BigFloat[-1,8], true)
+            checkequality(indvals, BigInt[-1,9460], BigFloat[1,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 95
+    elseif state.instance == 110
         if state.it == 0
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
@@ -4655,7 +4687,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 102
+    elseif state.instance == 118
         if state.it == 0
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
@@ -4663,7 +4695,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 109
+    elseif state.instance == 126
         if state.it == 0
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
@@ -4671,7 +4703,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 116
+    elseif state.instance == 134
         if state.it == 0
             checkequality(indvals, BigInt[-1,9460,31799], BigFloat[-1,5,17], true)
         elseif state.it == 2
@@ -4679,7 +4711,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 132
+    elseif state.instance == 154
         if state.it == 0
             checkequality(indvals, BigInt[-66,-65,-63,-60,-56,-51,-45,-38,-30,-21,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 2
@@ -4687,233 +4719,233 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 3
             checkequality(indvals, BigInt[-65,57,59], BigFloat[1,10,8], true)
         elseif state.it == 4
-            checkequality(indvals, BigInt[-65,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-65,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 5
             checkequality(indvals, BigInt[-64,74], BigFloat[1,48], true)
         elseif state.it == 6
-            checkequality(indvals, BigInt[-64,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-64,74], BigFloat[1,-48], true)
         elseif state.it == 7
             checkequality(indvals, BigInt[-65,-64,-61,-58,-54,-49,-43,-36,-28,-19,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 9
-            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-61,92,151], BigFloat[1,10,8], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-61,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-61,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-63,-62,-61,-57,-53,-48,-42,-35,-27,-18,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 16
-            checkequality(indvals, BigInt[-59], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 17
             checkequality(indvals, BigInt[-58,166], BigFloat[1,48], true)
         elseif state.it == 18
-            checkequality(indvals, BigInt[-58,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-58,166], BigFloat[1,-48], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-60,-59,-58,-57,-52,-47,-41,-34,-26,-17,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 21
             checkequality(indvals, BigInt[-56,92,151], BigFloat[1,10,8], true)
         elseif state.it == 22
-            checkequality(indvals, BigInt[-56,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-56,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 23
             checkequality(indvals, BigInt[-55,166], BigFloat[1,48], true)
         elseif state.it == 24
-            checkequality(indvals, BigInt[-55,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-55,166], BigFloat[1,-48], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-54,175], BigFloat[1,6], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-54,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-54,175], BigFloat[1,-6], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-53,205,397], BigFloat[1,10,8], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-53,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-53,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-52,412], BigFloat[1,48], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-52,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-52,412], BigFloat[1,-48], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-56,-55,-54,-53,-52,-46,-40,-33,-25,-16,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 32
             checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 33
-            checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-51,454,455,1069,1181], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-49,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 36
-            checkequality(indvals, BigInt[-49,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-49,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 37
             checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 38
-            checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-48,1162,1163,2575,2687], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 40
             checkequality(indvals, BigInt[-46,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-46,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-46,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 42
             checkequality(indvals, BigInt[-51,-50,-49,-48,-47,-46,-39,-32,-24,-15,-5,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 46
             checkequality(indvals, BigInt[-43,1107], BigFloat[1,48], true)
         elseif state.it == 47
-            checkequality(indvals, BigInt[-43,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-43,1107], BigFloat[1,-48], true)
         elseif state.it == 49
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 50
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-40,2613], BigFloat[1,48], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-40,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-40,2613], BigFloat[1,-48], true)
         elseif state.it == 54
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-31,-23,-14,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-38,522,1062], BigFloat[1,10,8], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-38,522,1062], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-38,522,1062], BigFloat[1,-10,-8], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-37,1107], BigFloat[1,48], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-37,1107], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-37,1107], BigFloat[1,-48], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-36,1166], BigFloat[1,6], true)
         elseif state.it == 60
-            checkequality(indvals, BigInt[-36,1166], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-36,1166], BigFloat[1,-6], true)
         elseif state.it == 61
             checkequality(indvals, BigInt[-35,1286,2568], BigFloat[1,10,8], true)
         elseif state.it == 62
-            checkequality(indvals, BigInt[-35,1286,2568], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-35,1286,2568], BigFloat[1,-10,-8], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-34,2613], BigFloat[1,48], true)
         elseif state.it == 64
-            checkequality(indvals, BigInt[-34,2613], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-34,2613], BigFloat[1,-48], true)
         elseif state.it == 65
             checkequality(indvals, BigInt[-33,2672], BigFloat[1,6], true)
         elseif state.it == 66
-            checkequality(indvals, BigInt[-33,2672], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-33,2672], BigFloat[1,-6], true)
         elseif state.it == 67
             checkequality(indvals, BigInt[-32,6223,11399], BigFloat[1,10,8], true)
         elseif state.it == 68
-            checkequality(indvals, BigInt[-32,6223,11399], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-32,6223,11399], BigFloat[1,-10,-8], true)
         elseif state.it == 69
             checkequality(indvals, BigInt[-31,11535], BigFloat[1,48], true)
         elseif state.it == 70
-            checkequality(indvals, BigInt[-31,11535], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-31,11535], BigFloat[1,-48], true)
         elseif state.it == 71
             checkequality(indvals, BigInt[-38,-37,-36,-35,-34,-33,-32,-31,-22,-13,-3,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 72
             checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 73
-            checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-30,2170,2171,4545,4683], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 75
             checkequality(indvals, BigInt[-28,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 76
-            checkequality(indvals, BigInt[-28,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-28,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 77
             checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 78
-            checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-27,4678,4679,9264,9402], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-25,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 81
-            checkequality(indvals, BigInt[-25,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-25,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 82
             checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[1,-4,-6,5,3], true)
         elseif state.it == 83
-            checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[-1,-4,-6,5,3], true)
+            checkequality(indvals, BigInt[-24,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 85
             checkequality(indvals, BigInt[-22,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 86
-            checkequality(indvals, BigInt[-22,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-22,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-30,-29,-28,-27,-26,-25,-24,-23,-22,-12,-2,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 90
-            checkequality(indvals, BigInt[-20], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 91
             checkequality(indvals, BigInt[-19,4553], BigFloat[1,48], true)
         elseif state.it == 92
-            checkequality(indvals, BigInt[-19,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-19,4553], BigFloat[1,-48], true)
         elseif state.it == 94
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 95
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 96
             checkequality(indvals, BigInt[-16,9272], BigFloat[1,48], true)
         elseif state.it == 97
-            checkequality(indvals, BigInt[-16,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-16,9272], BigFloat[1,-48], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 100
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 101
             checkequality(indvals, BigInt[-13,36423], BigFloat[1,48], true)
         elseif state.it == 102
-            checkequality(indvals, BigInt[-13,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-13,36423], BigFloat[1,-48], true)
         elseif state.it == 104
             checkequality(indvals, BigInt[-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 105
             checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,10,8], true)
         elseif state.it == 106
-            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-11,2693,4538], BigFloat[1,-10,-8], true)
         elseif state.it == 107
             checkequality(indvals, BigInt[-10,4553], BigFloat[1,48], true)
         elseif state.it == 108
-            checkequality(indvals, BigInt[-10,4553], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-10,4553], BigFloat[1,-48], true)
         elseif state.it == 109
             checkequality(indvals, BigInt[-9,4682], BigFloat[1,6], true)
         elseif state.it == 110
-            checkequality(indvals, BigInt[-9,4682], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-9,4682], BigFloat[1,-6], true)
         elseif state.it == 111
             checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,10,8], true)
         elseif state.it == 112
-            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-8,5663,9257], BigFloat[1,-10,-8], true)
         elseif state.it == 113
             checkequality(indvals, BigInt[-7,9272], BigFloat[1,48], true)
         elseif state.it == 114
-            checkequality(indvals, BigInt[-7,9272], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-7,9272], BigFloat[1,-48], true)
         elseif state.it == 115
             checkequality(indvals, BigInt[-6,9401], BigFloat[1,6], true)
         elseif state.it == 116
-            checkequality(indvals, BigInt[-6,9401], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-6,9401], BigFloat[1,-6], true)
         elseif state.it == 117
             checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,10,8], true)
         elseif state.it == 118
-            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-5,22426,36378], BigFloat[1,-10,-8], true)
         elseif state.it == 119
             checkequality(indvals, BigInt[-4,36423], BigFloat[1,48], true)
         elseif state.it == 120
-            checkequality(indvals, BigInt[-4,36423], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-4,36423], BigFloat[1,-48], true)
         elseif state.it == 121
             checkequality(indvals, BigInt[-3,36888], BigFloat[1,6], true)
         elseif state.it == 122
-            checkequality(indvals, BigInt[-3,36888], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-3,36888], BigFloat[1,-6], true)
         elseif state.it == 123
             checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,10,8], true)
         elseif state.it == 124
-            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,63728,92459], BigFloat[1,-10,-8], true)
         elseif state.it == 125
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,48], true)
         elseif state.it == 126
-            checkequality(indvals, BigInt[-1,92474], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 138
+    elseif state.instance == 161
         if state.it == 0
             checkequality(indvals, BigInt[-6,-5,-3,50,51,66,84], BigFloat[-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-6,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-6,-4,-2,171,172,404,422], BigFloat[-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 6
@@ -4923,77 +4955,77 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 144
+    elseif state.instance == 168
         if state.it == 0
             checkequality(indvals, BigInt[-66,-65,-63,-60,-56,-51,-45,-38,-30,-21,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 1
             checkequality(indvals, BigInt[-66,54], BigFloat[1,18], true)
         elseif state.it == 2
-            checkequality(indvals, BigInt[-66,54], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-66,54], BigFloat[1,-18], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-66,-64,-62,-59,-55,-50,-44,-37,-29,-20,-10], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 4
             checkequality(indvals, BigInt[-65,57,59], BigFloat[1,10,8], true)
         elseif state.it == 5
-            checkequality(indvals, BigInt[-65,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-65,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 6
             checkequality(indvals, BigInt[-64,74], BigFloat[1,48], true)
         elseif state.it == 7
-            checkequality(indvals, BigInt[-64,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-64,74], BigFloat[1,-48], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-65,-64,-61,-58,-54,-49,-43,-36,-28,-19,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 9
             checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 10
-            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-62,83], BigFloat[1,18], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-62,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-62,83], BigFloat[1,-18], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-61,92,151], BigFloat[1,10,8], true)
         elseif state.it == 14
-            checkequality(indvals, BigInt[-61,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-61,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-63,-62,-61,-57,-53,-48,-42,-35,-27,-18,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 16
             checkequality(indvals, BigInt[-60,83], BigFloat[1,18], true)
         elseif state.it == 17
-            checkequality(indvals, BigInt[-60,83], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-60,83], BigFloat[1,-18], true)
         elseif state.it == 18
             checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 19
-            checkequality(indvals, BigInt[-59], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-58,166], BigFloat[1,48], true)
         elseif state.it == 21
-            checkequality(indvals, BigInt[-58,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-58,166], BigFloat[1,-48], true)
         elseif state.it == 22
             checkequality(indvals, BigInt[-57,175], BigFloat[1,18], true)
         elseif state.it == 23
-            checkequality(indvals, BigInt[-57,175], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-57,175], BigFloat[1,-18], true)
         elseif state.it == 24
             checkequality(indvals, BigInt[-60,-59,-58,-57,-52,-47,-41,-34,-26,-17,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-56,92,151], BigFloat[1,10,8], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-56,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-56,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-55,166], BigFloat[1,48], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-55,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-55,166], BigFloat[1,-48], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-54,175], BigFloat[1,6], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-54,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-54,175], BigFloat[1,-6], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-53,205,397], BigFloat[1,10,8], true)
         elseif state.it == 32
-            checkequality(indvals, BigInt[-53,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-53,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 33
             checkequality(indvals, BigInt[-52,412], BigFloat[1,48], true)
         elseif state.it == 34
-            checkequality(indvals, BigInt[-52,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-52,412], BigFloat[1,-48], true)
         elseif state.it == 35
             checkequality(indvals, BigInt[-56,-55,-54,-53,-52,-46,-40,-33,-25,-16,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 42
@@ -5001,25 +5033,25 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 44
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 49
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 51
             checkequality(indvals, BigInt[-39,3375], BigFloat[1,18], true)
         elseif state.it == 52
-            checkequality(indvals, BigInt[-39,3375], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-39,3375], BigFloat[1,-18], true)
         elseif state.it == 53
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-31,-23,-14,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 60
             checkequality(indvals, BigInt[-32,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 61
-            checkequality(indvals, BigInt[-32,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-32,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 62
             checkequality(indvals, BigInt[-31,7288], BigFloat[1,48], true)
         elseif state.it == 63
-            checkequality(indvals, BigInt[-31,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-31,7288], BigFloat[1,-48], true)
         elseif state.it == 64
             checkequality(indvals, BigInt[-38,-37,-36,-35,-34,-33,-32,-31,-22,-13,-3,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 74
@@ -5027,35 +5059,35 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 76
             checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 77
-            checkequality(indvals, BigInt[-20], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 80
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 81
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 84
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 85
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 87
             checkequality(indvals, BigInt[-12,47981], BigFloat[1,18], true)
         elseif state.it == 88
-            checkequality(indvals, BigInt[-12,47981], BigFloat[-1,18], true)
+            checkequality(indvals, BigInt[-12,47981], BigFloat[1,-18], true)
         elseif state.it == 89
             checkequality(indvals, BigInt[-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 99
             checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 100
-            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 101
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,48], true)
         elseif state.it == 102
-            checkequality(indvals, BigInt[-1,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 103
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsosquad
         end
         state.it += 1
-    elseif state.instance == 150
+    elseif state.instance == 175
         if state.it == 0
             checkequality(indvals, BigInt[-66,-65,-63,-60,-56,-51,-45,-38,-30,-21,-11,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 2
@@ -5063,53 +5095,53 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 3
             checkequality(indvals, BigInt[-65,57,59], BigFloat[1,10,8], true)
         elseif state.it == 4
-            checkequality(indvals, BigInt[-65,57,59], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-65,57,59], BigFloat[1,-10,-8], true)
         elseif state.it == 5
             checkequality(indvals, BigInt[-64,74], BigFloat[1,48], true)
         elseif state.it == 6
-            checkequality(indvals, BigInt[-64,74], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-64,74], BigFloat[1,-48], true)
         elseif state.it == 7
             checkequality(indvals, BigInt[-65,-64,-61,-58,-54,-49,-43,-36,-28,-19,-9,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 8
             checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,-4,-12,8,4], true)
         elseif state.it == 9
-            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[-1,-4,-12,8,4], true)
+            checkequality(indvals, BigInt[-63,79,80,158,176], BigFloat[1,4,12,-8,-4], true)
         elseif state.it == 11
             checkequality(indvals, BigInt[-61,92,151], BigFloat[1,10,8], true)
         elseif state.it == 12
-            checkequality(indvals, BigInt[-61,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-61,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 13
             checkequality(indvals, BigInt[-63,-62,-61,-57,-53,-48,-42,-35,-27,-18,-8,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 16
-            checkequality(indvals, BigInt[-59], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-59], BigFloat[1], true)
         elseif state.it == 17
             checkequality(indvals, BigInt[-58,166], BigFloat[1,48], true)
         elseif state.it == 18
-            checkequality(indvals, BigInt[-58,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-58,166], BigFloat[1,-48], true)
         elseif state.it == 20
             checkequality(indvals, BigInt[-60,-59,-58,-57,-52,-47,-41,-34,-26,-17,-7], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 21
             checkequality(indvals, BigInt[-56,92,151], BigFloat[1,10,8], true)
         elseif state.it == 22
-            checkequality(indvals, BigInt[-56,92,151], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-56,92,151], BigFloat[1,-10,-8], true)
         elseif state.it == 23
             checkequality(indvals, BigInt[-55,166], BigFloat[1,48], true)
         elseif state.it == 24
-            checkequality(indvals, BigInt[-55,166], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-55,166], BigFloat[1,-48], true)
         elseif state.it == 25
             checkequality(indvals, BigInt[-54,175], BigFloat[1,6], true)
         elseif state.it == 26
-            checkequality(indvals, BigInt[-54,175], BigFloat[-1,6], true)
+            checkequality(indvals, BigInt[-54,175], BigFloat[1,-6], true)
         elseif state.it == 27
             checkequality(indvals, BigInt[-53,205,397], BigFloat[1,10,8], true)
         elseif state.it == 28
-            checkequality(indvals, BigInt[-53,205,397], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-53,205,397], BigFloat[1,-10,-8], true)
         elseif state.it == 29
             checkequality(indvals, BigInt[-52,412], BigFloat[1,48], true)
         elseif state.it == 30
-            checkequality(indvals, BigInt[-52,412], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-52,412], BigFloat[1,-48], true)
         elseif state.it == 31
             checkequality(indvals, BigInt[-56,-55,-54,-53,-52,-46,-40,-33,-25,-16,-6,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 38
@@ -5117,21 +5149,21 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 40
             checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 41
-            checkequality(indvals, BigInt[-44], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-44], BigFloat[1], true)
         elseif state.it == 44
             checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 45
-            checkequality(indvals, BigInt[-41], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-41], BigFloat[1], true)
         elseif state.it == 48
             checkequality(indvals, BigInt[-45,-44,-43,-42,-41,-40,-39,-31,-23,-14,-4], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 55
             checkequality(indvals, BigInt[-32,4971,6929], BigFloat[1,10,8], true)
         elseif state.it == 56
-            checkequality(indvals, BigInt[-32,4971,6929], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-32,4971,6929], BigFloat[1,-10,-8], true)
         elseif state.it == 57
             checkequality(indvals, BigInt[-31,7288], BigFloat[1,48], true)
         elseif state.it == 58
-            checkequality(indvals, BigInt[-31,7288], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-31,7288], BigFloat[1,-48], true)
         elseif state.it == 59
             checkequality(indvals, BigInt[-38,-37,-36,-35,-34,-33,-32,-31,-22,-13,-3,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
         elseif state.it == 69
@@ -5139,25 +5171,25 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
         elseif state.it == 71
             checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 72
-            checkequality(indvals, BigInt[-20], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-20], BigFloat[1], true)
         elseif state.it == 75
             checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 76
-            checkequality(indvals, BigInt[-17], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-17], BigFloat[1], true)
         elseif state.it == 79
             checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 80
-            checkequality(indvals, BigInt[-14], BigFloat[-1], true)
+            checkequality(indvals, BigInt[-14], BigFloat[1], true)
         elseif state.it == 83
             checkequality(indvals, BigInt[-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-1], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
         elseif state.it == 93
             checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,10,8], true)
         elseif state.it == 94
-            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[-1,10,8], true)
+            checkequality(indvals, BigInt[-2,59062,81360], BigFloat[1,-10,-8], true)
         elseif state.it == 95
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,48], true)
         elseif state.it == 96
-            checkequality(indvals, BigInt[-1,81570], BigFloat[-1,48], true)
+            checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             state.lastcall = :dsosquad
@@ -5168,15 +5200,173 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,<:Any,false,fals
     end
 end
 
-Solver.add_constr_nonnegative!(state::SolverSetup{true,true,false,false,false,false}, indvals::Indvals{BigInt,BigFloat}) =
-    @interpret add_constr_nonnegative_worker!(state, indvals)
-
-Solver.add_constr_quadratic!(state::SolverSetup{true,true,false,false,false,false}, data::IndvalsIterator{BigInt,BigFloat}) =
-    @interpret add_constr_quadratic_worker!(state, data)
+function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false,true,false}, indvals::Indvals{BigInt,BigFloat})
+    if state.instance == 17
+        @test false
+    elseif state.instance == 22
+        @test false
+    elseif state.instance == 27
+        @test false
+    elseif state.instance == 32
+        @test false
+    elseif state.instance == 37
+        @test false
+    elseif state.instance == 42
+        @test false
+    elseif state.instance == 47
+        @test false
+    elseif state.instance == 55
+        @test false
+    elseif state.instance == 63
+        @test false
+    elseif state.instance == 71
+        @test false
+    elseif state.instance == 79
+        @test false
+    elseif state.instance == 87
+        @test false
+    elseif state.instance == 95
+        @test false
+    elseif state.instance == 100
+        @test false
+    elseif state.instance == 108
+        @test false
+    elseif state.instance == 116
+        @test false
+    elseif state.instance == 124
+        @test false
+    elseif state.instance == 132
+        @test false
+    elseif state.instance == 140
+        @test false
+    elseif state.instance == 144
+        @test false
+    elseif state.instance == 148
+        if state.it == 11
+            checkequality(indvals, BigInt[-118], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
+        elseif state.it == 30
+            checkequality(indvals, BigInt[-88], BigFloat[1], true)
+        elseif state.it == 31
+            checkequality(indvals, BigInt[-87], BigFloat[1], true)
+        elseif state.it == 34
+            checkequality(indvals, BigInt[-82], BigFloat[1], true)
+        elseif state.it == 35
+            checkequality(indvals, BigInt[-81], BigFloat[1], true)
+        elseif state.it == 59
+            checkequality(indvals, BigInt[-40], BigFloat[1], true)
+        elseif state.it == 60
+            checkequality(indvals, BigInt[-39], BigFloat[1], true)
+        elseif state.it == 63
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
+        elseif state.it == 64
+            checkequality(indvals, BigInt[-33], BigFloat[1], true)
+        elseif state.it == 67
+            checkequality(indvals, BigInt[-28], BigFloat[1], true)
+        elseif state.it == 68
+            checkequality(indvals, BigInt[-27], BigFloat[1], true)
+        else
+            @test false
+        end
+        state.it += 1
+    elseif state.instance == 152
+        if state.it == 11
+            checkequality(indvals, BigInt[-118], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
+        elseif state.it == 30
+            checkequality(indvals, BigInt[-88], BigFloat[1], true)
+        elseif state.it == 31
+            checkequality(indvals, BigInt[-87], BigFloat[1], true)
+        elseif state.it == 34
+            checkequality(indvals, BigInt[-82], BigFloat[1], true)
+        elseif state.it == 35
+            checkequality(indvals, BigInt[-81], BigFloat[1], true)
+        elseif state.it == 59
+            checkequality(indvals, BigInt[-40], BigFloat[1], true)
+        elseif state.it == 60
+            checkequality(indvals, BigInt[-39], BigFloat[1], true)
+        elseif state.it == 63
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
+        elseif state.it == 64
+            checkequality(indvals, BigInt[-33], BigFloat[1], true)
+        elseif state.it == 67
+            checkequality(indvals, BigInt[-28], BigFloat[1], true)
+        elseif state.it == 68
+            checkequality(indvals, BigInt[-27], BigFloat[1], true)
+        else
+            @test false
+        end
+        state.it += 1
+    elseif state.instance == 159
+        @test false
+    elseif state.instance == 166
+        if state.it == 11
+            checkequality(indvals, BigInt[-118], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
+        elseif state.it == 30
+            checkequality(indvals, BigInt[-88], BigFloat[1], true)
+        elseif state.it == 31
+            checkequality(indvals, BigInt[-87], BigFloat[1], true)
+        elseif state.it == 34
+            checkequality(indvals, BigInt[-82], BigFloat[1], true)
+        elseif state.it == 35
+            checkequality(indvals, BigInt[-81], BigFloat[1], true)
+        elseif state.it == 59
+            checkequality(indvals, BigInt[-40], BigFloat[1], true)
+        elseif state.it == 60
+            checkequality(indvals, BigInt[-39], BigFloat[1], true)
+        elseif state.it == 63
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
+        elseif state.it == 64
+            checkequality(indvals, BigInt[-33], BigFloat[1], true)
+        elseif state.it == 67
+            checkequality(indvals, BigInt[-28], BigFloat[1], true)
+        elseif state.it == 68
+            checkequality(indvals, BigInt[-27], BigFloat[1], true)
+        else
+            @test false
+        end
+        state.it += 1
+    elseif state.instance == 173
+        if state.it == 11
+            checkequality(indvals, BigInt[-118], BigFloat[1], true)
+        elseif state.it == 12
+            checkequality(indvals, BigInt[-117], BigFloat[1], true)
+        elseif state.it == 30
+            checkequality(indvals, BigInt[-88], BigFloat[1], true)
+        elseif state.it == 31
+            checkequality(indvals, BigInt[-87], BigFloat[1], true)
+        elseif state.it == 34
+            checkequality(indvals, BigInt[-82], BigFloat[1], true)
+        elseif state.it == 35
+            checkequality(indvals, BigInt[-81], BigFloat[1], true)
+        elseif state.it == 59
+            checkequality(indvals, BigInt[-40], BigFloat[1], true)
+        elseif state.it == 60
+            checkequality(indvals, BigInt[-39], BigFloat[1], true)
+        elseif state.it == 63
+            checkequality(indvals, BigInt[-34], BigFloat[1], true)
+        elseif state.it == 64
+            checkequality(indvals, BigInt[-33], BigFloat[1], true)
+        elseif state.it == 67
+            checkequality(indvals, BigInt[-28], BigFloat[1], true)
+        elseif state.it == 68
+            checkequality(indvals, BigInt[-27], BigFloat[1], true)
+        else
+            @test false
+        end
+        state.it += 1
+    else
+        @test false
+    end
+end
 
 function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,false,false}, data::IndvalsIterator{BigInt,BigFloat})
     @test state.lastcall === :linear # this is only called in combination with the linear one (complex-valued DSOS)
-    if state.instance == 42
+    if state.instance == 49
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5185,7 +5375,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 49
+    elseif state.instance == 57
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5194,7 +5384,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 56
+    elseif state.instance == 65
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5203,7 +5393,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 63
+    elseif state.instance == 73
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5212,7 +5402,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 70
+    elseif state.instance == 81
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5221,7 +5411,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 77
+    elseif state.instance == 89
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5230,7 +5420,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 88
+    elseif state.instance == 102
         iter = iterate(data)
         if state.it == 1
             state.it += 1
@@ -5240,7 +5430,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 95
+    elseif state.instance == 110
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5249,7 +5439,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 102
+    elseif state.instance == 118
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5258,7 +5448,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 109
+    elseif state.instance == 126
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5267,7 +5457,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 116
+    elseif state.instance == 134
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-1], BigFloat[1])
@@ -5276,7 +5466,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 132
+    elseif state.instance == 154
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-66], BigFloat[1])
@@ -5595,7 +5785,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 138
+    elseif state.instance == 161
         iter = iterate(data)
         if state.it == 1
             state.it += 1
@@ -5625,7 +5815,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 144
+    elseif state.instance == 168
         iter = iterate(data)
         if state.it == 1
             state.it += 1
@@ -5920,7 +6110,7 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
         end
         @test isnothing(iter)
         state.it += 1
-    elseif state.instance == 150
+    elseif state.instance == 175
         iter = iterate(data)
         if state.it == 1
             @checkequals(BigInt[-66], BigFloat[1])
@@ -6214,9 +6404,6 @@ function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,f
     end
 end
 
-Solver.add_constr_rotated_quadratic!(state::SolverSetup{false,true,false,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}) =
-    @interpret add_constr_rotated_quadratic_worker!(state, indvals)
-
 function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,false,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat})
     @test state.lastcall === :none
     state.lastcall = :rquadratic
@@ -6229,7 +6416,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[68265], BigFloat[24.041630560342618])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 17
+    elseif state.instance == 18
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[21922], BigFloat[24], true)
@@ -6238,7 +6425,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[63204], BigFloat[33.941125496954285])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 21
+    elseif state.instance == 23
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[6223,21928], BigFloat[2,8], true)
@@ -6247,7 +6434,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[22426,63210], BigFloat[2.8284271247461903,11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 25
+    elseif state.instance == 28
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[5815], BigFloat[6], true)
@@ -6256,7 +6443,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[20441], BigFloat[8.485281374238571])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 29
+    elseif state.instance == 33
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[21232], BigFloat[14], true)
@@ -6265,7 +6452,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[62324], BigFloat[19.79898987322333])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 33
+    elseif state.instance == 38
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], true)
@@ -6274,7 +6461,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[20441,20442,22426,36378,62322,63210], BigFloat[11.313708498984761,22.627416997969522,4.242640687119286,5.656854249492381,19.79898987322333,7.0710678118654755])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 37
+    elseif state.instance == 43
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[20830], BigFloat[17], true)
@@ -6285,7 +6472,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[22410], BigFloat[-24.041630560342618])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 44
+    elseif state.instance == 51
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[17744], BigFloat[24], true)
@@ -6296,7 +6483,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[20574], BigFloat[-33.941125496954285])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 51
+    elseif state.instance == 59
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[5672,17777], BigFloat[2,8], true)
@@ -6307,7 +6494,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[6103,20589], BigFloat[-2.8284271247461903,-11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 58
+    elseif state.instance == 67
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[4699], BigFloat[6], true)
@@ -6318,7 +6505,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[5546], BigFloat[-4.242640687119286])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 65
+    elseif state.instance == 75
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[17502], BigFloat[14], true)
@@ -6329,7 +6516,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[20154,20162], BigFloat[9.899494936611665,-9.899494936611665])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 72
+    elseif state.instance == 83
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], true)
@@ -6340,7 +6527,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[11.313708498984761,-11.313708498984761,-5.656854249492381,-4.242640687119286,-5.656854249492381,9.899494936611665,-9.899494936611665,-7.0710678118654755])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 79
+    elseif state.instance == 91
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[31799], BigFloat[17], true)
@@ -6349,7 +6536,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[9460], BigFloat[11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 83
+    elseif state.instance == 96
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[31799], BigFloat[17], true)
@@ -6358,7 +6545,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[9460], BigFloat[11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 90
+    elseif state.instance == 104
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[31799], BigFloat[17], true)
@@ -6369,7 +6556,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[9280], BigFloat[-11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 97
+    elseif state.instance == 112
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[31799], BigFloat[17], true)
@@ -6380,7 +6567,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[9278], BigFloat[11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 104
+    elseif state.instance == 120
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[31799], BigFloat[17], true)
@@ -6391,7 +6578,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[9278,9280], BigFloat[2.8284271247461903,-11.313708498984761])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 111
+    elseif state.instance == 128
         @test length(indvals) == 4
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[9460,31799], BigFloat[5,17], true)
@@ -6402,7 +6589,7 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
         indval, iterstate = iterate(indvals, iterstate)
         @test checkequality(indval, BigInt[5665,9278,9280], BigFloat[-4.242640687119286,-2.8284271247461903,22.627416997969522])
         @test isnothing(iterate(indvals, iterstate))
-    elseif state.instance == 118
+    elseif state.instance == 136
         @test length(indvals) == 3
         indval, iterstate = iterate(indvals)
         @test checkequality(indval, BigInt[17669,17845], BigFloat[-34,10], true)
@@ -6416,8 +6603,1635 @@ function add_constr_rotated_quadratic_worker!(state::SolverSetup{false,true,fals
     end
 end
 
-Solver.add_constr_psd!(state::SolverSetup{false,false,<:Any,false,false,false}, dim::Int, data) =
-    @interpret add_constr_psd_worker!(state, dim, psd_indextype(state), data)
+function add_constr_rotated_quadratic_worker!(state::SolverSetup{true,true,false,false,true,false}, data::IndvalsIterator{BigInt,BigFloat})
+    if state.instance == 17
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[68265], BigFloat[24.041630560342618], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 22
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[63204], BigFloat[33.941125496954285], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 27
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[22426,63210], BigFloat[2.8284271247461903,11.313708498984761], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 32
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[20441], BigFloat[8.485281374238571], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 37
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[62324], BigFloat[19.79898987322333], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 42
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[20441,20442,22426,36378,62322,63210], BigFloat[11.313708498984761,22.627416997969522,4.242640687119286,5.656854249492381,19.79898987322333,7.0710678118654755], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 47
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[22409], BigFloat[24.041630560342618], false)
+            @checkequals(BigInt[22410], BigFloat[-24.041630560342618], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 55
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[20571], BigFloat[33.941125496954285], false)
+            @checkequals(BigInt[20574], BigFloat[-33.941125496954285], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 63
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[6102,20588], BigFloat[2.8284271247461903,11.313708498984761], false)
+            @checkequals(BigInt[6103,20589], BigFloat[-2.8284271247461903,-11.313708498984761], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 71
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[5542,5545], BigFloat[4.242640687119286,4.242640687119286], false)
+            @checkequals(BigInt[5546], BigFloat[-4.242640687119286], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 79
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[20164,20168], BigFloat[-9.899494936611665,9.899494936611665], false)
+            @checkequals(BigInt[20154,20162], BigFloat[9.899494936611665,-9.899494936611665], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 87
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[5.656854249492381,5.656854249492381,11.313708498984761,4.242640687119286,5.656854249492381,9.899494936611665,9.899494936611665,7.0710678118654755], false)
+            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[11.313708498984761,-11.313708498984761,-5.656854249492381,-4.242640687119286,-5.656854249492381,9.899494936611665,-9.899494936611665,-7.0710678118654755], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 95
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9460], BigFloat[11.313708498984761], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 100
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @skipempty()
+            @checkequals(BigInt[9460], BigFloat[11.313708498984761], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 108
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9278], BigFloat[11.313708498984761], false)
+            @checkequals(BigInt[9280], BigFloat[-11.313708498984761], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 116
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9280], BigFloat[11.313708498984761], false)
+            @checkequals(BigInt[9278], BigFloat[11.313708498984761], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 124
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9278,9280], BigFloat[11.313708498984761,2.8284271247461903], false)
+            @checkequals(BigInt[9278,9280], BigFloat[2.8284271247461903,-11.313708498984761], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 132
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9280,9297], BigFloat[2.8284271247461903,1.4142135623730951], false)
+            @checkequals(BigInt[5665,9278,9280], BigFloat[-4.242640687119286,-2.8284271247461903,22.627416997969522], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 140
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[9278,9280], BigFloat[22.627416997969522,5.656854249492381], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 144
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 3
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[454,455,1069,1181], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 4
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[1162,1163,2575,2687], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 6
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[2170,2171,4545,4683], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 7
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[4678,4679,9264,9402], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 8
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[20439,20440,36385,36903], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 148
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-132], BigFloat[1])
+            @checkequals(BigInt[-131], BigFloat[1])
+            @checkequals(BigInt[54], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 3
+            @checkequals(BigInt[-130], BigFloat[1])
+            @checkequals(BigInt[-129], BigFloat[1])
+            @checkequals(BigInt[57,59], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 4
+            @checkequals(BigInt[-128], BigFloat[1])
+            @checkequals(BigInt[-127], BigFloat[1])
+            @checkequals(BigInt[74], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 6
+            @checkequals(BigInt[-126], BigFloat[1])
+            @checkequals(BigInt[-125], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 7
+            @checkequals(BigInt[-124], BigFloat[1])
+            @checkequals(BigInt[-123], BigFloat[1])
+            @checkequals(BigInt[83], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 8
+            @checkequals(BigInt[-122], BigFloat[1])
+            @checkequals(BigInt[-121], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 10
+            @checkequals(BigInt[-120], BigFloat[1])
+            @checkequals(BigInt[-119], BigFloat[1])
+            @checkequals(BigInt[83], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 11
+            state.it += 1
+            @checkequals(BigInt[-118], BigFloat[1])
+            @checkequals(BigInt[-117], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 13
+            @checkequals(BigInt[-116], BigFloat[1])
+            @checkequals(BigInt[-115], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 14
+            @checkequals(BigInt[-114], BigFloat[1])
+            @checkequals(BigInt[-113], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 16
+            @checkequals(BigInt[-112], BigFloat[1])
+            @checkequals(BigInt[-111], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 17
+            @checkequals(BigInt[-110], BigFloat[1])
+            @checkequals(BigInt[-109], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 18
+            @checkequals(BigInt[-108], BigFloat[1])
+            @checkequals(BigInt[-107], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 19
+            @checkequals(BigInt[-106], BigFloat[1])
+            @checkequals(BigInt[-105], BigFloat[1])
+            @checkequals(BigInt[205,397], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 20
+            @checkequals(BigInt[-104], BigFloat[1])
+            @checkequals(BigInt[-103], BigFloat[1])
+            @checkequals(BigInt[412], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 22
+            @checkequals(BigInt[-102], BigFloat[1])
+            @checkequals(BigInt[-101], BigFloat[1])
+            @checkequals(BigInt[454,455,1069,1181], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 23
+            @checkequals(BigInt[-100], BigFloat[1])
+            @checkequals(BigInt[-99], BigFloat[1])
+            @checkequals(BigInt[458], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 24
+            @checkequals(BigInt[-98], BigFloat[1])
+            @checkequals(BigInt[-97], BigFloat[1])
+            @checkequals(BigInt[522,1062], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 25
+            @checkequals(BigInt[-96], BigFloat[1])
+            @checkequals(BigInt[-95], BigFloat[1])
+            @checkequals(BigInt[1162,1163,2575,2687], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 26
+            @checkequals(BigInt[-94], BigFloat[1])
+            @checkequals(BigInt[-93], BigFloat[1])
+            @checkequals(BigInt[1166], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 27
+            @checkequals(BigInt[-92], BigFloat[1])
+            @checkequals(BigInt[-91], BigFloat[1])
+            @checkequals(BigInt[1286,2568], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 29
+            @checkequals(BigInt[-90], BigFloat[1])
+            @checkequals(BigInt[-89], BigFloat[1])
+            @checkequals(BigInt[458], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 30
+            state.it += 1
+            @checkequals(BigInt[-88], BigFloat[1])
+            @checkequals(BigInt[-87], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 32
+            @checkequals(BigInt[-86], BigFloat[1])
+            @checkequals(BigInt[-85], BigFloat[1])
+            @checkequals(BigInt[1107], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 33
+            @checkequals(BigInt[-84], BigFloat[1])
+            @checkequals(BigInt[-83], BigFloat[1])
+            @checkequals(BigInt[1166], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 34
+            state.it += 1
+            @checkequals(BigInt[-82], BigFloat[1])
+            @checkequals(BigInt[-81], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 36
+            @checkequals(BigInt[-80], BigFloat[1])
+            @checkequals(BigInt[-79], BigFloat[1])
+            @checkequals(BigInt[2613], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 37
+            @checkequals(BigInt[-78], BigFloat[1])
+            @checkequals(BigInt[-77], BigFloat[1])
+            @checkequals(BigInt[5817], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 39
+            @checkequals(BigInt[-76], BigFloat[1])
+            @checkequals(BigInt[-75], BigFloat[1])
+            @checkequals(BigInt[522,1062], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 40
+            @checkequals(BigInt[-74], BigFloat[1])
+            @checkequals(BigInt[-73], BigFloat[1])
+            @checkequals(BigInt[1107], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 41
+            @checkequals(BigInt[-72], BigFloat[1])
+            @checkequals(BigInt[-71], BigFloat[1])
+            @checkequals(BigInt[1166], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 42
+            @checkequals(BigInt[-70], BigFloat[1])
+            @checkequals(BigInt[-69], BigFloat[1])
+            @checkequals(BigInt[1286,2568], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 43
+            @checkequals(BigInt[-68], BigFloat[1])
+            @checkequals(BigInt[-67], BigFloat[1])
+            @checkequals(BigInt[2613], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 44
+            @checkequals(BigInt[-66], BigFloat[1])
+            @checkequals(BigInt[-65], BigFloat[1])
+            @checkequals(BigInt[2672], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 45
+            @checkequals(BigInt[-64], BigFloat[1])
+            @checkequals(BigInt[-63], BigFloat[1])
+            @checkequals(BigInt[6223,11399], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 46
+            @checkequals(BigInt[-62], BigFloat[1])
+            @checkequals(BigInt[-61], BigFloat[1])
+            @checkequals(BigInt[11535], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 48
+            @checkequals(BigInt[-60], BigFloat[1])
+            @checkequals(BigInt[-59], BigFloat[1])
+            @checkequals(BigInt[2170,2171,4545,4683], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 49
+            @checkequals(BigInt[-58], BigFloat[1])
+            @checkequals(BigInt[-57], BigFloat[1])
+            @checkequals(BigInt[2174], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 50
+            @checkequals(BigInt[-56], BigFloat[1])
+            @checkequals(BigInt[-55], BigFloat[1])
+            @checkequals(BigInt[2693,4538], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 51
+            @checkequals(BigInt[-54], BigFloat[1])
+            @checkequals(BigInt[-53], BigFloat[1])
+            @checkequals(BigInt[4678,4679,9264,9402], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 52
+            @checkequals(BigInt[-52], BigFloat[1])
+            @checkequals(BigInt[-51], BigFloat[1])
+            @checkequals(BigInt[4682], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 53
+            @checkequals(BigInt[-50], BigFloat[1])
+            @checkequals(BigInt[-49], BigFloat[1])
+            @checkequals(BigInt[5663,9257], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 54
+            @checkequals(BigInt[-48], BigFloat[1])
+            @checkequals(BigInt[-47], BigFloat[1])
+            @checkequals(BigInt[20439,20440,36385,36903], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 55
+            @checkequals(BigInt[-46], BigFloat[1])
+            @checkequals(BigInt[-45], BigFloat[1])
+            @checkequals(BigInt[20443], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 56
+            @checkequals(BigInt[-44], BigFloat[1])
+            @checkequals(BigInt[-43], BigFloat[1])
+            @checkequals(BigInt[22426,36378], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 58
+            @checkequals(BigInt[-42], BigFloat[1])
+            @checkequals(BigInt[-41], BigFloat[1])
+            @checkequals(BigInt[2174], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 59
+            state.it += 1
+            @checkequals(BigInt[-40], BigFloat[1])
+            @checkequals(BigInt[-39], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 61
+            @checkequals(BigInt[-38], BigFloat[1])
+            @checkequals(BigInt[-37], BigFloat[1])
+            @checkequals(BigInt[4553], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 62
+            @checkequals(BigInt[-36], BigFloat[1])
+            @checkequals(BigInt[-35], BigFloat[1])
+            @checkequals(BigInt[4682], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 63
+            state.it += 1
+            @checkequals(BigInt[-34], BigFloat[1])
+            @checkequals(BigInt[-33], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 65
+            @checkequals(BigInt[-32], BigFloat[1])
+            @checkequals(BigInt[-31], BigFloat[1])
+            @checkequals(BigInt[9272], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 66
+            @checkequals(BigInt[-30], BigFloat[1])
+            @checkequals(BigInt[-29], BigFloat[1])
+            @checkequals(BigInt[20443], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 67
+            state.it += 1
+            @checkequals(BigInt[-28], BigFloat[1])
+            @checkequals(BigInt[-27], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 69
+            @checkequals(BigInt[-26], BigFloat[1])
+            @checkequals(BigInt[-25], BigFloat[1])
+            @checkequals(BigInt[36423], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 70
+            @checkequals(BigInt[-24], BigFloat[1])
+            @checkequals(BigInt[-23], BigFloat[1])
+            @checkequals(BigInt[55257], BigFloat[24.041630560342618], false)
+            @skipempty()
+        elseif state.it == 72
+            @checkequals(BigInt[-22], BigFloat[1])
+            @checkequals(BigInt[-21], BigFloat[1])
+            @checkequals(BigInt[2693,4538], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 73
+            @checkequals(BigInt[-20], BigFloat[1])
+            @checkequals(BigInt[-19], BigFloat[1])
+            @checkequals(BigInt[4553], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 74
+            @checkequals(BigInt[-18], BigFloat[1])
+            @checkequals(BigInt[-17], BigFloat[1])
+            @checkequals(BigInt[4682], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 75
+            @checkequals(BigInt[-16], BigFloat[1])
+            @checkequals(BigInt[-15], BigFloat[1])
+            @checkequals(BigInt[5663,9257], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 76
+            @checkequals(BigInt[-14], BigFloat[1])
+            @checkequals(BigInt[-13], BigFloat[1])
+            @checkequals(BigInt[9272], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 77
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[9401], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 78
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[22426,36378], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 79
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[36423], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 80
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[36888], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 81
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[63728,92459], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 82
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[92474], BigFloat[67.88225099390857], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 152
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-132], BigFloat[1])
+            @checkequals(BigInt[-131], BigFloat[1])
+            @checkequals(BigInt[60,66], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[57,58,60], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 3
+            @checkequals(BigInt[-130], BigFloat[1])
+            @checkequals(BigInt[-129], BigFloat[1])
+            @checkequals(BigInt[57,59], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 4
+            @checkequals(BigInt[-128], BigFloat[1])
+            @checkequals(BigInt[-127], BigFloat[1])
+            @checkequals(BigInt[74], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 6
+            @checkequals(BigInt[-126], BigFloat[1])
+            @checkequals(BigInt[-125], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 7
+            @checkequals(BigInt[-124], BigFloat[1])
+            @checkequals(BigInt[-123], BigFloat[1])
+            @checkequals(BigInt[152,158], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[92,150,152], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 8
+            @checkequals(BigInt[-122], BigFloat[1])
+            @checkequals(BigInt[-121], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 10
+            @checkequals(BigInt[-120], BigFloat[1])
+            @checkequals(BigInt[-119], BigFloat[1])
+            @checkequals(BigInt[152,158], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[92,150,152], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 11
+            state.it += 1
+            @checkequals(BigInt[-118], BigFloat[1])
+            @checkequals(BigInt[-117], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 13
+            @checkequals(BigInt[-116], BigFloat[1])
+            @checkequals(BigInt[-115], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 14
+            @checkequals(BigInt[-114], BigFloat[1])
+            @checkequals(BigInt[-113], BigFloat[1])
+            @checkequals(BigInt[398,404], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[205,396,398], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 16
+            @checkequals(BigInt[-112], BigFloat[1])
+            @checkequals(BigInt[-111], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 17
+            @checkequals(BigInt[-110], BigFloat[1])
+            @checkequals(BigInt[-109], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 18
+            @checkequals(BigInt[-108], BigFloat[1])
+            @checkequals(BigInt[-107], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 19
+            @checkequals(BigInt[-106], BigFloat[1])
+            @checkequals(BigInt[-105], BigFloat[1])
+            @checkequals(BigInt[205,397], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 20
+            @checkequals(BigInt[-104], BigFloat[1])
+            @checkequals(BigInt[-103], BigFloat[1])
+            @checkequals(BigInt[412], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 22
+            @checkequals(BigInt[-102], BigFloat[1])
+            @checkequals(BigInt[-101], BigFloat[1])
+            @checkequals(BigInt[454,455,1069,1181], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 23
+            @checkequals(BigInt[-100], BigFloat[1])
+            @checkequals(BigInt[-99], BigFloat[1])
+            @checkequals(BigInt[1063,1069], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[522,1061,1063], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 24
+            @checkequals(BigInt[-98], BigFloat[1])
+            @checkequals(BigInt[-97], BigFloat[1])
+            @checkequals(BigInt[522,1062], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 25
+            @checkequals(BigInt[-96], BigFloat[1])
+            @checkequals(BigInt[-95], BigFloat[1])
+            @checkequals(BigInt[1162,1163,2575,2687], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 26
+            @checkequals(BigInt[-94], BigFloat[1])
+            @checkequals(BigInt[-93], BigFloat[1])
+            @checkequals(BigInt[2569,2575], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[1286,2567,2569], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 27
+            @checkequals(BigInt[-92], BigFloat[1])
+            @checkequals(BigInt[-91], BigFloat[1])
+            @checkequals(BigInt[1286,2568], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 29
+            @checkequals(BigInt[-90], BigFloat[1])
+            @checkequals(BigInt[-89], BigFloat[1])
+            @checkequals(BigInt[1063,1069], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[522,1061,1063], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 30
+            state.it += 1
+            @checkequals(BigInt[-88], BigFloat[1])
+            @checkequals(BigInt[-87], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 32
+            @checkequals(BigInt[-86], BigFloat[1])
+            @checkequals(BigInt[-85], BigFloat[1])
+            @checkequals(BigInt[1107], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 33
+            @checkequals(BigInt[-84], BigFloat[1])
+            @checkequals(BigInt[-83], BigFloat[1])
+            @checkequals(BigInt[2569,2575], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[1286,2567,2569], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 34
+            state.it += 1
+            @checkequals(BigInt[-82], BigFloat[1])
+            @checkequals(BigInt[-81], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 36
+            @checkequals(BigInt[-80], BigFloat[1])
+            @checkequals(BigInt[-79], BigFloat[1])
+            @checkequals(BigInt[2613], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 37
+            @checkequals(BigInt[-78], BigFloat[1])
+            @checkequals(BigInt[-77], BigFloat[1])
+            @checkequals(BigInt[11400,11406], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[6223,11398,11400], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 39
+            @checkequals(BigInt[-76], BigFloat[1])
+            @checkequals(BigInt[-75], BigFloat[1])
+            @checkequals(BigInt[522,1062], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 40
+            @checkequals(BigInt[-74], BigFloat[1])
+            @checkequals(BigInt[-73], BigFloat[1])
+            @checkequals(BigInt[1107], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 41
+            @checkequals(BigInt[-72], BigFloat[1])
+            @checkequals(BigInt[-71], BigFloat[1])
+            @checkequals(BigInt[1166], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 42
+            @checkequals(BigInt[-70], BigFloat[1])
+            @checkequals(BigInt[-69], BigFloat[1])
+            @checkequals(BigInt[1286,2568], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 43
+            @checkequals(BigInt[-68], BigFloat[1])
+            @checkequals(BigInt[-67], BigFloat[1])
+            @checkequals(BigInt[2613], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 44
+            @checkequals(BigInt[-66], BigFloat[1])
+            @checkequals(BigInt[-65], BigFloat[1])
+            @checkequals(BigInt[2672], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 45
+            @checkequals(BigInt[-64], BigFloat[1])
+            @checkequals(BigInt[-63], BigFloat[1])
+            @checkequals(BigInt[6223,11399], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 46
+            @checkequals(BigInt[-62], BigFloat[1])
+            @checkequals(BigInt[-61], BigFloat[1])
+            @checkequals(BigInt[11535], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 48
+            @checkequals(BigInt[-60], BigFloat[1])
+            @checkequals(BigInt[-59], BigFloat[1])
+            @checkequals(BigInt[2170,2171,4545,4683], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 49
+            @checkequals(BigInt[-58], BigFloat[1])
+            @checkequals(BigInt[-57], BigFloat[1])
+            @checkequals(BigInt[4539,4545], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[2693,4537,4539], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 50
+            @checkequals(BigInt[-56], BigFloat[1])
+            @checkequals(BigInt[-55], BigFloat[1])
+            @checkequals(BigInt[2693,4538], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 51
+            @checkequals(BigInt[-54], BigFloat[1])
+            @checkequals(BigInt[-53], BigFloat[1])
+            @checkequals(BigInt[4678,4679,9264,9402], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 52
+            @checkequals(BigInt[-52], BigFloat[1])
+            @checkequals(BigInt[-51], BigFloat[1])
+            @checkequals(BigInt[9258,9264], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[5663,9256,9258], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 53
+            @checkequals(BigInt[-50], BigFloat[1])
+            @checkequals(BigInt[-49], BigFloat[1])
+            @checkequals(BigInt[5663,9257], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 54
+            @checkequals(BigInt[-48], BigFloat[1])
+            @checkequals(BigInt[-47], BigFloat[1])
+            @checkequals(BigInt[20439,20440,36385,36903], BigFloat[-5.656854249492381,-8.485281374238571,7.0710678118654755,4.242640687119286], false)
+            @skipempty()
+        elseif state.it == 55
+            @checkequals(BigInt[-46], BigFloat[1])
+            @checkequals(BigInt[-45], BigFloat[1])
+            @checkequals(BigInt[36379,36385], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[22426,36377,36379], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 56
+            @checkequals(BigInt[-44], BigFloat[1])
+            @checkequals(BigInt[-43], BigFloat[1])
+            @checkequals(BigInt[22426,36378], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 58
+            @checkequals(BigInt[-42], BigFloat[1])
+            @checkequals(BigInt[-41], BigFloat[1])
+            @checkequals(BigInt[4539,4545], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[2693,4537,4539], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 59
+            state.it += 1
+            @checkequals(BigInt[-40], BigFloat[1])
+            @checkequals(BigInt[-39], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 61
+            @checkequals(BigInt[-38], BigFloat[1])
+            @checkequals(BigInt[-37], BigFloat[1])
+            @checkequals(BigInt[4553], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 62
+            @checkequals(BigInt[-36], BigFloat[1])
+            @checkequals(BigInt[-35], BigFloat[1])
+            @checkequals(BigInt[9258,9264], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[5663,9256,9258], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 63
+            state.it += 1
+            @checkequals(BigInt[-34], BigFloat[1])
+            @checkequals(BigInt[-33], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 65
+            @checkequals(BigInt[-32], BigFloat[1])
+            @checkequals(BigInt[-31], BigFloat[1])
+            @checkequals(BigInt[9272], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 66
+            @checkequals(BigInt[-30], BigFloat[1])
+            @checkequals(BigInt[-29], BigFloat[1])
+            @checkequals(BigInt[36379,36385], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[22426,36377,36379], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 67
+            state.it += 1
+            @checkequals(BigInt[-28], BigFloat[1])
+            @checkequals(BigInt[-27], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 69
+            @checkequals(BigInt[-26], BigFloat[1])
+            @checkequals(BigInt[-25], BigFloat[1])
+            @checkequals(BigInt[36423], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 70
+            @checkequals(BigInt[-24], BigFloat[1])
+            @checkequals(BigInt[-23], BigFloat[1])
+            @checkequals(BigInt[92460,92466], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[63728,92458,92460], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 72
+            @checkequals(BigInt[-22], BigFloat[1])
+            @checkequals(BigInt[-21], BigFloat[1])
+            @checkequals(BigInt[2693,4538], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 73
+            @checkequals(BigInt[-20], BigFloat[1])
+            @checkequals(BigInt[-19], BigFloat[1])
+            @checkequals(BigInt[4553], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 74
+            @checkequals(BigInt[-18], BigFloat[1])
+            @checkequals(BigInt[-17], BigFloat[1])
+            @checkequals(BigInt[4682], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 75
+            @checkequals(BigInt[-16], BigFloat[1])
+            @checkequals(BigInt[-15], BigFloat[1])
+            @checkequals(BigInt[5663,9257], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 76
+            @checkequals(BigInt[-14], BigFloat[1])
+            @checkequals(BigInt[-13], BigFloat[1])
+            @checkequals(BigInt[9272], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 77
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[9401], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 78
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[22426,36378], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 79
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[36423], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 80
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[36888], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 81
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[63728,92459], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 82
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[92474], BigFloat[67.88225099390857], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 159
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-16.970562748477143,11.313708498984761,5.656854249492381], false)
+            @skipempty()
+        elseif state.it == 3
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[272,273,275,276,650,898], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[272,273,275,276,653,899], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 4
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[854,855,857,858,1904,2152], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[854,855,857,858,1907,2153], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 6
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[1742,1743,1744,1745,3737,4285], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[1742,1743,1744,1745,3739,4287], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 7
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[4250,4251,4252,4253,8456,9004], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[4250,4251,4252,4253,8458,9006], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 8
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[14606,14607,14614,14615,26806,29209], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[14606,14607,14614,14615,26814,29213], BigFloat[-8.485281374238571,8.485281374238571,2.8284271247461903,2.8284271247461903,-11.313708498984761,-5.656854249492381], false)
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 166
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-132], BigFloat[1])
+            @checkequals(BigInt[-131], BigFloat[1])
+            @checkequals(BigInt[54], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 3
+            @checkequals(BigInt[-130], BigFloat[1])
+            @checkequals(BigInt[-129], BigFloat[1])
+            @checkequals(BigInt[57,59], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 4
+            @checkequals(BigInt[-128], BigFloat[1])
+            @checkequals(BigInt[-127], BigFloat[1])
+            @checkequals(BigInt[74], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 6
+            @checkequals(BigInt[-126], BigFloat[1])
+            @checkequals(BigInt[-125], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-16.970562748477143,11.313708498984761,5.656854249492381], false)
+            @skipempty()
+        elseif state.it == 7
+            @checkequals(BigInt[-124], BigFloat[1])
+            @checkequals(BigInt[-123], BigFloat[1])
+            @checkequals(BigInt[83], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 8
+            @checkequals(BigInt[-122], BigFloat[1])
+            @checkequals(BigInt[-121], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 10
+            @checkequals(BigInt[-120], BigFloat[1])
+            @checkequals(BigInt[-119], BigFloat[1])
+            @checkequals(BigInt[83], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 11
+            state.it += 1
+            @checkequals(BigInt[-118], BigFloat[1])
+            @checkequals(BigInt[-117], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 13
+            @checkequals(BigInt[-116], BigFloat[1])
+            @checkequals(BigInt[-115], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 14
+            @checkequals(BigInt[-114], BigFloat[1])
+            @checkequals(BigInt[-113], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 16
+            @checkequals(BigInt[-112], BigFloat[1])
+            @checkequals(BigInt[-111], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 17
+            @checkequals(BigInt[-110], BigFloat[1])
+            @checkequals(BigInt[-109], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 18
+            @checkequals(BigInt[-108], BigFloat[1])
+            @checkequals(BigInt[-107], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 19
+            @checkequals(BigInt[-106], BigFloat[1])
+            @checkequals(BigInt[-105], BigFloat[1])
+            @checkequals(BigInt[205,397], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 20
+            @checkequals(BigInt[-104], BigFloat[1])
+            @checkequals(BigInt[-103], BigFloat[1])
+            @checkequals(BigInt[412], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 22
+            @checkequals(BigInt[-102], BigFloat[1])
+            @checkequals(BigInt[-101], BigFloat[1])
+            @checkequals(BigInt[272,273,275,276,650,898], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[272,273,275,276,653,899], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 23
+            @checkequals(BigInt[-100], BigFloat[1])
+            @checkequals(BigInt[-99], BigFloat[1])
+            @checkequals(BigInt[281], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[282], BigFloat[25.455844122715714], false)
+        elseif state.it == 24
+            @checkequals(BigInt[-98], BigFloat[1])
+            @checkequals(BigInt[-97], BigFloat[1])
+            @checkequals(BigInt[456,640], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[457,646], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 25
+            @checkequals(BigInt[-96], BigFloat[1])
+            @checkequals(BigInt[-95], BigFloat[1])
+            @checkequals(BigInt[854,855,857,858,1904,2152], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[854,855,857,858,1907,2153], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 26
+            @checkequals(BigInt[-94], BigFloat[1])
+            @checkequals(BigInt[-93], BigFloat[1])
+            @checkequals(BigInt[863], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[864], BigFloat[25.455844122715714], false)
+        elseif state.it == 27
+            @checkequals(BigInt[-92], BigFloat[1])
+            @checkequals(BigInt[-91], BigFloat[1])
+            @checkequals(BigInt[1164,1894], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[1165,1900], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 29
+            @checkequals(BigInt[-90], BigFloat[1])
+            @checkequals(BigInt[-89], BigFloat[1])
+            @checkequals(BigInt[281], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[282], BigFloat[25.455844122715714], false)
+        elseif state.it == 30
+            state.it += 1
+            @checkequals(BigInt[-88], BigFloat[1])
+            @checkequals(BigInt[-87], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 32
+            @checkequals(BigInt[-86], BigFloat[1])
+            @checkequals(BigInt[-85], BigFloat[1])
+            @checkequals(BigInt[731,732], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[728,729], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 33
+            @checkequals(BigInt[-84], BigFloat[1])
+            @checkequals(BigInt[-83], BigFloat[1])
+            @checkequals(BigInt[863], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[864], BigFloat[25.455844122715714], false)
+        elseif state.it == 34
+            state.it += 1
+            @checkequals(BigInt[-82], BigFloat[1])
+            @checkequals(BigInt[-81], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 36
+            @checkequals(BigInt[-80], BigFloat[1])
+            @checkequals(BigInt[-79], BigFloat[1])
+            @checkequals(BigInt[1985,1986], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[1982,1983], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 37
+            @checkequals(BigInt[-78], BigFloat[1])
+            @checkequals(BigInt[-77], BigFloat[1])
+            @checkequals(BigInt[3375], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 39
+            @checkequals(BigInt[-76], BigFloat[1])
+            @checkequals(BigInt[-75], BigFloat[1])
+            @checkequals(BigInt[456,640], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[457,646], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 40
+            @checkequals(BigInt[-74], BigFloat[1])
+            @checkequals(BigInt[-73], BigFloat[1])
+            @checkequals(BigInt[731,732], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[728,729], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 41
+            @checkequals(BigInt[-72], BigFloat[1])
+            @checkequals(BigInt[-71], BigFloat[1])
+            @checkequals(BigInt[863], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[864], BigFloat[8.485281374238571], false)
+        elseif state.it == 42
+            @checkequals(BigInt[-70], BigFloat[1])
+            @checkequals(BigInt[-69], BigFloat[1])
+            @checkequals(BigInt[1164,1894], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[1165,1900], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 43
+            @checkequals(BigInt[-68], BigFloat[1])
+            @checkequals(BigInt[-67], BigFloat[1])
+            @checkequals(BigInt[1985,1986], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[1982,1983], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 44
+            @checkequals(BigInt[-66], BigFloat[1])
+            @checkequals(BigInt[-65], BigFloat[1])
+            @checkequals(BigInt[2117], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[2118], BigFloat[8.485281374238571], false)
+        elseif state.it == 45
+            @checkequals(BigInt[-64], BigFloat[1])
+            @checkequals(BigInt[-63], BigFloat[1])
+            @checkequals(BigInt[4971,6929], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 46
+            @checkequals(BigInt[-62], BigFloat[1])
+            @checkequals(BigInt[-61], BigFloat[1])
+            @checkequals(BigInt[7288], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 48
+            @checkequals(BigInt[-60], BigFloat[1])
+            @checkequals(BigInt[-59], BigFloat[1])
+            @checkequals(BigInt[1742,1743,1744,1745,3737,4285], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[1742,1743,1744,1745,3739,4287], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 49
+            @checkequals(BigInt[-58], BigFloat[1])
+            @checkequals(BigInt[-57], BigFloat[1])
+            @checkequals(BigInt[1762], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[1764], BigFloat[25.455844122715714], false)
+        elseif state.it == 50
+            @checkequals(BigInt[-56], BigFloat[1])
+            @checkequals(BigInt[-55], BigFloat[1])
+            @checkequals(BigInt[2491,3719], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[2493,3721], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 51
+            @checkequals(BigInt[-54], BigFloat[1])
+            @checkequals(BigInt[-53], BigFloat[1])
+            @checkequals(BigInt[4250,4251,4252,4253,8456,9004], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[4250,4251,4252,4253,8458,9006], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 52
+            @checkequals(BigInt[-52], BigFloat[1])
+            @checkequals(BigInt[-51], BigFloat[1])
+            @checkequals(BigInt[4270], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[4272], BigFloat[25.455844122715714], false)
+        elseif state.it == 53
+            @checkequals(BigInt[-50], BigFloat[1])
+            @checkequals(BigInt[-49], BigFloat[1])
+            @checkequals(BigInt[5461,8438], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[5463,8440], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 54
+            @checkequals(BigInt[-48], BigFloat[1])
+            @checkequals(BigInt[-47], BigFloat[1])
+            @checkequals(BigInt[14606,14607,14614,14615,26806,29209], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[14606,14607,14614,14615,26814,29213], BigFloat[-8.485281374238571,8.485281374238571,2.8284271247461903,2.8284271247461903,-11.313708498984761,-5.656854249492381], false)
+        elseif state.it == 55
+            @checkequals(BigInt[-46], BigFloat[1])
+            @checkequals(BigInt[-45], BigFloat[1])
+            @checkequals(BigInt[14640], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[14644], BigFloat[-25.455844122715714], false)
+        elseif state.it == 56
+            @checkequals(BigInt[-44], BigFloat[1])
+            @checkequals(BigInt[-43], BigFloat[1])
+            @checkequals(BigInt[19056,26783], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[19060,26796], BigFloat[-14.142135623730951,-11.313708498984761], false)
+        elseif state.it == 58
+            @checkequals(BigInt[-42], BigFloat[1])
+            @checkequals(BigInt[-41], BigFloat[1])
+            @checkequals(BigInt[1762], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[1764], BigFloat[25.455844122715714], false)
+        elseif state.it == 59
+            state.it += 1
+            @checkequals(BigInt[-40], BigFloat[1])
+            @checkequals(BigInt[-39], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 61
+            @checkequals(BigInt[-38], BigFloat[1])
+            @checkequals(BigInt[-37], BigFloat[1])
+            @checkequals(BigInt[3790,3791], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[3788,3789], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 62
+            @checkequals(BigInt[-36], BigFloat[1])
+            @checkequals(BigInt[-35], BigFloat[1])
+            @checkequals(BigInt[4270], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[4272], BigFloat[25.455844122715714], false)
+        elseif state.it == 63
+            state.it += 1
+            @checkequals(BigInt[-34], BigFloat[1])
+            @checkequals(BigInt[-33], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 65
+            @checkequals(BigInt[-32], BigFloat[1])
+            @checkequals(BigInt[-31], BigFloat[1])
+            @checkequals(BigInt[8509,8510], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[8507,8508], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 66
+            @checkequals(BigInt[-30], BigFloat[1])
+            @checkequals(BigInt[-29], BigFloat[1])
+            @checkequals(BigInt[14640], BigFloat[25.455844122715714], false)
+            @checkequals(BigInt[14644], BigFloat[-25.455844122715714], false)
+        elseif state.it == 67
+            state.it += 1
+            @checkequals(BigInt[-28], BigFloat[1])
+            @checkequals(BigInt[-27], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 69
+            @checkequals(BigInt[-26], BigFloat[1])
+            @checkequals(BigInt[-25], BigFloat[1])
+            @checkequals(BigInt[27055,27056], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[27047,27048], BigFloat[33.941125496954285,-33.941125496954285], false)
+        elseif state.it == 70
+            @checkequals(BigInt[-24], BigFloat[1])
+            @checkequals(BigInt[-23], BigFloat[1])
+            @checkequals(BigInt[47981], BigFloat[25.455844122715714], false)
+            @skipempty()
+        elseif state.it == 72
+            @checkequals(BigInt[-22], BigFloat[1])
+            @checkequals(BigInt[-21], BigFloat[1])
+            @checkequals(BigInt[2491,3719], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[2493,3721], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 73
+            @checkequals(BigInt[-20], BigFloat[1])
+            @checkequals(BigInt[-19], BigFloat[1])
+            @checkequals(BigInt[3790,3791], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[3788,3789], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 74
+            @checkequals(BigInt[-18], BigFloat[1])
+            @checkequals(BigInt[-17], BigFloat[1])
+            @checkequals(BigInt[4270], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[4272], BigFloat[8.485281374238571], false)
+        elseif state.it == 75
+            @checkequals(BigInt[-16], BigFloat[1])
+            @checkequals(BigInt[-15], BigFloat[1])
+            @checkequals(BigInt[5461,8438], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[5463,8440], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 76
+            @checkequals(BigInt[-14], BigFloat[1])
+            @checkequals(BigInt[-13], BigFloat[1])
+            @checkequals(BigInt[8509,8510], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[8507,8508], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 77
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[8989], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[8991], BigFloat[8.485281374238571], false)
+        elseif state.it == 78
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[19056,26783], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[19060,26796], BigFloat[-14.142135623730951,-11.313708498984761], false)
+        elseif state.it == 79
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[27055,27056], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[27047,27048], BigFloat[33.941125496954285,-33.941125496954285], false)
+        elseif state.it == 80
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[29083], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[29087], BigFloat[-8.485281374238571], false)
+        elseif state.it == 81
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[59062,81360], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 82
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[81570], BigFloat[67.88225099390857], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    elseif state.instance == 173
+        iter = iterate(data)
+        if state.it == 1
+            @checkequals(BigInt[-132], BigFloat[1])
+            @checkequals(BigInt[-131], BigFloat[1])
+            @checkequals(BigInt[60,66], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[57,58,60], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 3
+            @checkequals(BigInt[-130], BigFloat[1])
+            @checkequals(BigInt[-129], BigFloat[1])
+            @checkequals(BigInt[57,59], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 4
+            @checkequals(BigInt[-128], BigFloat[1])
+            @checkequals(BigInt[-127], BigFloat[1])
+            @checkequals(BigInt[74], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 6
+            @checkequals(BigInt[-126], BigFloat[1])
+            @checkequals(BigInt[-125], BigFloat[1])
+            @checkequals(BigInt[79,80,158,176], BigFloat[-5.656854249492381,-16.970562748477143,11.313708498984761,5.656854249492381], false)
+            @skipempty()
+        elseif state.it == 7
+            @checkequals(BigInt[-124], BigFloat[1])
+            @checkequals(BigInt[-123], BigFloat[1])
+            @checkequals(BigInt[152,158], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[92,150,152], BigFloat[8.485281374238571,2.8284271247461903,-22.627416997969522], false)
+        elseif state.it == 8
+            @checkequals(BigInt[-122], BigFloat[1])
+            @checkequals(BigInt[-121], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 10
+            @checkequals(BigInt[-120], BigFloat[1])
+            @checkequals(BigInt[-119], BigFloat[1])
+            @checkequals(BigInt[152,158], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[92,150,152], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 11
+            state.it += 1
+            @checkequals(BigInt[-118], BigFloat[1])
+            @checkequals(BigInt[-117], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 13
+            @checkequals(BigInt[-116], BigFloat[1])
+            @checkequals(BigInt[-115], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 14
+            @checkequals(BigInt[-114], BigFloat[1])
+            @checkequals(BigInt[-113], BigFloat[1])
+            @checkequals(BigInt[398,404], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[205,396,398], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 16
+            @checkequals(BigInt[-112], BigFloat[1])
+            @checkequals(BigInt[-111], BigFloat[1])
+            @checkequals(BigInt[92,151], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 17
+            @checkequals(BigInt[-110], BigFloat[1])
+            @checkequals(BigInt[-109], BigFloat[1])
+            @checkequals(BigInt[166], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 18
+            @checkequals(BigInt[-108], BigFloat[1])
+            @checkequals(BigInt[-107], BigFloat[1])
+            @checkequals(BigInt[175], BigFloat[8.485281374238571], false)
+            @skipempty()
+        elseif state.it == 19
+            @checkequals(BigInt[-106], BigFloat[1])
+            @checkequals(BigInt[-105], BigFloat[1])
+            @checkequals(BigInt[205,397], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 20
+            @checkequals(BigInt[-104], BigFloat[1])
+            @checkequals(BigInt[-103], BigFloat[1])
+            @checkequals(BigInt[412], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 22
+            @checkequals(BigInt[-102], BigFloat[1])
+            @checkequals(BigInt[-101], BigFloat[1])
+            @checkequals(BigInt[272,273,275,276,650,898], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[272,273,275,276,653,899], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 23
+            @checkequals(BigInt[-100], BigFloat[1])
+            @checkequals(BigInt[-99], BigFloat[1])
+            @checkequals(BigInt[457,639,641,645,650], BigFloat[-8.485281374238571,-11.313708498984761,11.313708498984761,-2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[456,641,645,647,653], BigFloat[8.485281374238571,2.8284271247461903,11.313708498984761,-11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 24
+            @checkequals(BigInt[-98], BigFloat[1])
+            @checkequals(BigInt[-97], BigFloat[1])
+            @checkequals(BigInt[456,640], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[457,646], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 25
+            @checkequals(BigInt[-96], BigFloat[1])
+            @checkequals(BigInt[-95], BigFloat[1])
+            @checkequals(BigInt[854,855,857,858,1904,2152], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[854,855,857,858,1907,2153], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 26
+            @checkequals(BigInt[-94], BigFloat[1])
+            @checkequals(BigInt[-93], BigFloat[1])
+            @checkequals(BigInt[1165,1893,1895,1899,1904], BigFloat[-8.485281374238571,-11.313708498984761,11.313708498984761,-2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[1164,1895,1899,1901,1907], BigFloat[8.485281374238571,2.8284271247461903,11.313708498984761,-11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 27
+            @checkequals(BigInt[-92], BigFloat[1])
+            @checkequals(BigInt[-91], BigFloat[1])
+            @checkequals(BigInt[1164,1894], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[1165,1900], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 29
+            @checkequals(BigInt[-90], BigFloat[1])
+            @checkequals(BigInt[-89], BigFloat[1])
+            @checkequals(BigInt[457,639,641,647,650], BigFloat[8.485281374238571,11.313708498984761,-11.313708498984761,2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[456,639,645,647,653], BigFloat[-8.485281374238571,-2.8284271247461903,-11.313708498984761,11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 30
+            state.it += 1
+            @checkequals(BigInt[-88], BigFloat[1])
+            @checkequals(BigInt[-87], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 32
+            @checkequals(BigInt[-86], BigFloat[1])
+            @checkequals(BigInt[-85], BigFloat[1])
+            @checkequals(BigInt[731,732], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[728,729], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 33
+            @checkequals(BigInt[-84], BigFloat[1])
+            @checkequals(BigInt[-83], BigFloat[1])
+            @checkequals(BigInt[1165,1893,1895,1901,1904], BigFloat[8.485281374238571,11.313708498984761,-11.313708498984761,2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[1164,1893,1899,1901,1907], BigFloat[-8.485281374238571,-2.8284271247461903,-11.313708498984761,11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 34
+            state.it += 1
+            @checkequals(BigInt[-82], BigFloat[1])
+            @checkequals(BigInt[-81], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 36
+            @checkequals(BigInt[-80], BigFloat[1])
+            @checkequals(BigInt[-79], BigFloat[1])
+            @checkequals(BigInt[1985,1986], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[1982,1983], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 37
+            @checkequals(BigInt[-78], BigFloat[1])
+            @checkequals(BigInt[-77], BigFloat[1])
+            @checkequals(BigInt[6930,6939], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[4971,6928,6930], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 39
+            @checkequals(BigInt[-76], BigFloat[1])
+            @checkequals(BigInt[-75], BigFloat[1])
+            @checkequals(BigInt[456,640], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[457,646], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 40
+            @checkequals(BigInt[-74], BigFloat[1])
+            @checkequals(BigInt[-73], BigFloat[1])
+            @checkequals(BigInt[731,732], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[728,729], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 41
+            @checkequals(BigInt[-72], BigFloat[1])
+            @checkequals(BigInt[-71], BigFloat[1])
+            @checkequals(BigInt[863], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[864], BigFloat[8.485281374238571], false)
+        elseif state.it == 42
+            @checkequals(BigInt[-70], BigFloat[1])
+            @checkequals(BigInt[-69], BigFloat[1])
+            @checkequals(BigInt[1164,1894], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[1165,1900], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 43
+            @checkequals(BigInt[-68], BigFloat[1])
+            @checkequals(BigInt[-67], BigFloat[1])
+            @checkequals(BigInt[1985,1986], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[1982,1983], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 44
+            @checkequals(BigInt[-66], BigFloat[1])
+            @checkequals(BigInt[-65], BigFloat[1])
+            @checkequals(BigInt[2117], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[2118], BigFloat[8.485281374238571], false)
+        elseif state.it == 45
+            @checkequals(BigInt[-64], BigFloat[1])
+            @checkequals(BigInt[-63], BigFloat[1])
+            @checkequals(BigInt[4971,6929], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 46
+            @checkequals(BigInt[-62], BigFloat[1])
+            @checkequals(BigInt[-61], BigFloat[1])
+            @checkequals(BigInt[7288], BigFloat[67.88225099390857], false)
+            @skipempty()
+        elseif state.it == 48
+            @checkequals(BigInt[-60], BigFloat[1])
+            @checkequals(BigInt[-59], BigFloat[1])
+            @checkequals(BigInt[1742,1743,1744,1745,3737,4285], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[1742,1743,1744,1745,3739,4287], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 49
+            @checkequals(BigInt[-58], BigFloat[1])
+            @checkequals(BigInt[-57], BigFloat[1])
+            @checkequals(BigInt[2493,3718,3720,3737], BigFloat[-8.485281374238571,-11.313708498984761,11.313708498984761,2.8284271247461903], false)
+            @checkequals(BigInt[2491,3720,3722,3739], BigFloat[8.485281374238571,2.8284271247461903,-11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 50
+            @checkequals(BigInt[-56], BigFloat[1])
+            @checkequals(BigInt[-55], BigFloat[1])
+            @checkequals(BigInt[2491,3719], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[2493,3721], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 51
+            @checkequals(BigInt[-54], BigFloat[1])
+            @checkequals(BigInt[-53], BigFloat[1])
+            @checkequals(BigInt[4250,4251,4252,4253,8456,9004], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[4250,4251,4252,4253,8458,9006], BigFloat[8.485281374238571,-8.485281374238571,-2.8284271247461903,-2.8284271247461903,11.313708498984761,5.656854249492381], false)
+        elseif state.it == 52
+            @checkequals(BigInt[-52], BigFloat[1])
+            @checkequals(BigInt[-51], BigFloat[1])
+            @checkequals(BigInt[5463,8437,8439,8456], BigFloat[-8.485281374238571,-11.313708498984761,11.313708498984761,2.8284271247461903], false)
+            @checkequals(BigInt[5461,8439,8441,8458], BigFloat[8.485281374238571,2.8284271247461903,-11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 53
+            @checkequals(BigInt[-50], BigFloat[1])
+            @checkequals(BigInt[-49], BigFloat[1])
+            @checkequals(BigInt[5461,8438], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[5463,8440], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 54
+            @checkequals(BigInt[-48], BigFloat[1])
+            @checkequals(BigInt[-47], BigFloat[1])
+            @checkequals(BigInt[14606,14607,14614,14615,26806,29209], BigFloat[-2.8284271247461903,-2.8284271247461903,8.485281374238571,-8.485281374238571,11.313708498984761,5.656854249492381], false)
+            @checkequals(BigInt[14606,14607,14614,14615,26814,29213], BigFloat[-8.485281374238571,8.485281374238571,2.8284271247461903,2.8284271247461903,-11.313708498984761,-5.656854249492381], false)
+        elseif state.it == 55
+            @checkequals(BigInt[-46], BigFloat[1])
+            @checkequals(BigInt[-45], BigFloat[1])
+            @checkequals(BigInt[19060,26782,26784,26797,26806], BigFloat[8.485281374238571,11.313708498984761,-11.313708498984761,2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[19056,26782,26795,26797,26814], BigFloat[8.485281374238571,2.8284271247461903,11.313708498984761,-11.313708498984761,-2.8284271247461903], false)
+        elseif state.it == 56
+            @checkequals(BigInt[-44], BigFloat[1])
+            @checkequals(BigInt[-43], BigFloat[1])
+            @checkequals(BigInt[19056,26783], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[19060,26796], BigFloat[-14.142135623730951,-11.313708498984761], false)
+        elseif state.it == 58
+            @checkequals(BigInt[-42], BigFloat[1])
+            @checkequals(BigInt[-41], BigFloat[1])
+            @checkequals(BigInt[2493,3718,3720,3722,3737], BigFloat[8.485281374238571,11.313708498984761,-11.313708498984761,2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[2491,3718,3722,3739], BigFloat[-8.485281374238571,-2.8284271247461903,11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 59
+            state.it += 1
+            @checkequals(BigInt[-40], BigFloat[1])
+            @checkequals(BigInt[-39], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 61
+            @checkequals(BigInt[-38], BigFloat[1])
+            @checkequals(BigInt[-37], BigFloat[1])
+            @checkequals(BigInt[3790,3791], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[3788,3789], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 62
+            @checkequals(BigInt[-36], BigFloat[1])
+            @checkequals(BigInt[-35], BigFloat[1])
+            @checkequals(BigInt[5463,8437,8439,8441,8456], BigFloat[8.485281374238571,11.313708498984761,-11.313708498984761,2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[5461,8437,8441,8458], BigFloat[-8.485281374238571,-2.8284271247461903,11.313708498984761,2.8284271247461903], false)
+        elseif state.it == 63
+            state.it += 1
+            @checkequals(BigInt[-34], BigFloat[1])
+            @checkequals(BigInt[-33], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 65
+            @checkequals(BigInt[-32], BigFloat[1])
+            @checkequals(BigInt[-31], BigFloat[1])
+            @checkequals(BigInt[8509,8510], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[8507,8508], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 66
+            @checkequals(BigInt[-30], BigFloat[1])
+            @checkequals(BigInt[-29], BigFloat[1])
+            @checkequals(BigInt[19060,26782,26784,26795,26806], BigFloat[-8.485281374238571,-11.313708498984761,11.313708498984761,-2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[19056,26784,26795,26797,26814], BigFloat[-8.485281374238571,-2.8284271247461903,-11.313708498984761,11.313708498984761,-2.8284271247461903], false)
+        elseif state.it == 67
+            state.it += 1
+            @checkequals(BigInt[-28], BigFloat[1])
+            @checkequals(BigInt[-27], BigFloat[1])
+            @skipempty()
+            @skipempty()
+        elseif state.it == 69
+            @checkequals(BigInt[-26], BigFloat[1])
+            @checkequals(BigInt[-25], BigFloat[1])
+            @checkequals(BigInt[27055,27056], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[27047,27048], BigFloat[33.941125496954285,-33.941125496954285], false)
+        elseif state.it == 70
+            @checkequals(BigInt[-24], BigFloat[1])
+            @checkequals(BigInt[-23], BigFloat[1])
+            @checkequals(BigInt[81361,81393], BigFloat[2.8284271247461903,2.8284271247461903], false)
+            @checkequals(BigInt[59062,81359,81361], BigFloat[-8.485281374238571,-2.8284271247461903,22.627416997969522], false)
+        elseif state.it == 72
+            @checkequals(BigInt[-22], BigFloat[1])
+            @checkequals(BigInt[-21], BigFloat[1])
+            @checkequals(BigInt[2491,3719], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[2493,3721], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 73
+            @checkequals(BigInt[-20], BigFloat[1])
+            @checkequals(BigInt[-19], BigFloat[1])
+            @checkequals(BigInt[3790,3791], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[3788,3789], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 74
+            @checkequals(BigInt[-18], BigFloat[1])
+            @checkequals(BigInt[-17], BigFloat[1])
+            @checkequals(BigInt[4270], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[4272], BigFloat[8.485281374238571], false)
+        elseif state.it == 75
+            @checkequals(BigInt[-16], BigFloat[1])
+            @checkequals(BigInt[-15], BigFloat[1])
+            @checkequals(BigInt[5461,8438], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[5463,8440], BigFloat[14.142135623730951,11.313708498984761], false)
+        elseif state.it == 76
+            @checkequals(BigInt[-14], BigFloat[1])
+            @checkequals(BigInt[-13], BigFloat[1])
+            @checkequals(BigInt[8509,8510], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[8507,8508], BigFloat[-33.941125496954285,33.941125496954285], false)
+        elseif state.it == 77
+            @checkequals(BigInt[-12], BigFloat[1])
+            @checkequals(BigInt[-11], BigFloat[1])
+            @checkequals(BigInt[8989], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[8991], BigFloat[8.485281374238571], false)
+        elseif state.it == 78
+            @checkequals(BigInt[-10], BigFloat[1])
+            @checkequals(BigInt[-9], BigFloat[1])
+            @checkequals(BigInt[19056,26783], BigFloat[14.142135623730951,11.313708498984761], false)
+            @checkequals(BigInt[19060,26796], BigFloat[-14.142135623730951,-11.313708498984761], false)
+        elseif state.it == 79
+            @checkequals(BigInt[-8], BigFloat[1])
+            @checkequals(BigInt[-7], BigFloat[1])
+            @checkequals(BigInt[27055,27056], BigFloat[-33.941125496954285,33.941125496954285], false)
+            @checkequals(BigInt[27047,27048], BigFloat[33.941125496954285,-33.941125496954285], false)
+        elseif state.it == 80
+            @checkequals(BigInt[-6], BigFloat[1])
+            @checkequals(BigInt[-5], BigFloat[1])
+            @checkequals(BigInt[29083], BigFloat[8.485281374238571], false)
+            @checkequals(BigInt[29087], BigFloat[-8.485281374238571], false)
+        elseif state.it == 81
+            @checkequals(BigInt[-4], BigFloat[1])
+            @checkequals(BigInt[-3], BigFloat[1])
+            @checkequals(BigInt[59062,81360], BigFloat[14.142135623730951,11.313708498984761], false)
+            @skipempty()
+        elseif state.it == 82
+            @checkequals(BigInt[-2], BigFloat[1])
+            @checkequals(BigInt[-1], BigFloat[1])
+            @checkequals(BigInt[81570], BigFloat[67.88225099390857], false)
+            @skipempty()
+        end
+        @test isnothing(iter)
+        state.it += 1
+    else
+        @test false
+    end
+end
 
 function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false,false}, dim::Int, ::PSDIndextypeVector{tri}, data::IndvalsIterator{BigInt,BigFloat}) where {tri}
     @test state.lastcall === :none
@@ -6432,7 +8246,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[169998], BigFloat[17])
         end
         @test isnothing(iter)
-    elseif state.instance == 18
+    elseif state.instance == 19
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[21922], BigFloat[24], BigInt[21922], BigFloat[24], BigInt[21922], BigFloat[24])
@@ -6442,7 +8256,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[151422], BigFloat[24])
         end
         @test isnothing(iter)
-    elseif state.instance == 22
+    elseif state.instance == 24
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[6223,21928], BigFloat[2,8], BigInt[6223,21928], BigFloat[2,8], BigInt[6223,21928], BigFloat[2,8])
@@ -6452,7 +8266,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[63728,151428], BigFloat[2,8])
         end
         @test isnothing(iter)
-    elseif state.instance == 26
+    elseif state.instance == 29
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[5815], BigFloat[6], BigInt[5815], BigFloat[6], BigInt[5815], BigFloat[6])
@@ -6462,7 +8276,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[55255], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 30
+    elseif state.instance == 34
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[21232], BigFloat[14], BigInt[21232], BigFloat[14], BigInt[21232], BigFloat[14])
@@ -6472,7 +8286,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[150102], BigFloat[14])
         end
         @test isnothing(iter)
-    elseif state.instance == 34
+    elseif state.instance == 39
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5], BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
@@ -6482,7 +8296,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[55255,55256,63728,92459,150100,151428], BigFloat[8,16,3,4,14,5])
         end
         @test isnothing(iter)
-    elseif state.instance == 38
+    elseif state.instance == 44
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[20830], BigFloat[17], BigInt[20830], BigFloat[17], BigInt[20830], BigFloat[17])
@@ -6504,7 +8318,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[23048], BigFloat[17])
         end
         @test isnothing(iter)
-    elseif state.instance == 45
+    elseif state.instance == 52
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[17744], BigFloat[24], BigInt[17744], BigFloat[24], BigInt[17744], BigFloat[24])
@@ -6526,7 +8340,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[21922], BigFloat[24])
         end
         @test isnothing(iter)
-    elseif state.instance == 52
+    elseif state.instance == 60
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[5672,17777], BigFloat[2,8], BigInt[5672,17777], BigFloat[2,8], BigInt[5672,17777], BigFloat[2,8])
@@ -6548,7 +8362,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[6223,21928], BigFloat[2,8])
         end
         @test isnothing(iter)
-    elseif state.instance == 59
+    elseif state.instance == 68
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[4699], BigFloat[6], BigInt[4699], BigFloat[6], BigInt[4699], BigFloat[6])
@@ -6570,7 +8384,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[5815], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 66
+    elseif state.instance == 76
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[17502], BigFloat[14], BigInt[17502], BigFloat[14], BigInt[17502], BigFloat[14])
@@ -6592,7 +8406,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[21232], BigFloat[14])
         end
         @test isnothing(iter)
-    elseif state.instance == 73
+    elseif state.instance == 84
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
@@ -6614,7 +8428,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
         end
         @test isnothing(iter)
-    elseif state.instance == 80
+    elseif state.instance == 92
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -6624,7 +8438,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 84
+    elseif state.instance == 97
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -6646,7 +8460,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 91
+    elseif state.instance == 105
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -6668,7 +8482,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 98
+    elseif state.instance == 113
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -6690,7 +8504,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 105
+    elseif state.instance == 121
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -6712,7 +8526,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 112
+    elseif state.instance == 129
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[9460,31799], BigFloat[5,17], BigInt[9460,31799], BigFloat[5,17], BigInt[9460,31799], BigFloat[5,17])
@@ -6734,7 +8548,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 119
+    elseif state.instance == 137
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[17669,17845], BigFloat[-34,10], BigInt[17669,17845], BigFloat[-34,10], BigInt[17669,17845], BigFloat[-34,10])
@@ -6744,7 +8558,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 122
+    elseif state.instance == 141
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -6766,7 +8580,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[55253,55254,92466,93270], BigFloat[-4,-6,5,3])
         end
         @test isnothing(iter)
-    elseif state.instance == 125
+    elseif state.instance == 145
         @test dim == 12
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -6916,7 +8730,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[93269], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 128
+    elseif state.instance == 149
         @test dim == 24
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -7498,7 +9312,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[93269], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 134
+    elseif state.instance == 156
         @test dim == 8
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -7568,7 +9382,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[47925,47926,81393,86063], BigFloat[-4,-12,8,4])
         end
         @test isnothing(iter)
-    elseif state.instance == 140
+    elseif state.instance == 163
         @test dim == 24
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -8150,7 +9964,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
             @checkequals(BigInt[85993], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 146
+    elseif state.instance == 170
         @test dim == 24
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -8747,14 +10561,14 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(68265, [18], [17], BigFloat[17])
         @checkequals(169998, [18], [18], BigFloat[17])
         @test isnothing(iter)
-    elseif state.instance == 18
+    elseif state.instance == 19
         @test dim == 2
         iter = iterate(data)
         @checkequals(21922, [17], [17], BigFloat[24])
         @checkequals(63204, [18], [17], BigFloat[24])
         @checkequals(151422, [18], [18], BigFloat[24])
         @test isnothing(iter)
-    elseif state.instance == 22
+    elseif state.instance == 24
         @test dim == 2
         iter = iterate(data)
         @checkequals(6223, [17], [17], BigFloat[2])
@@ -8764,21 +10578,21 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(63728, [18], [18], BigFloat[2])
         @checkequals(151428, [18], [18], BigFloat[8])
         @test isnothing(iter)
-    elseif state.instance == 26
+    elseif state.instance == 29
         @test dim == 2
         iter = iterate(data)
         @checkequals(5815, [17], [17], BigFloat[6])
         @checkequals(20441, [18], [17], BigFloat[6])
         @checkequals(55255, [18], [18], BigFloat[6])
         @test isnothing(iter)
-    elseif state.instance == 30
+    elseif state.instance == 34
         @test dim == 2
         iter = iterate(data)
         @checkequals(21232, [17], [17], BigFloat[14])
         @checkequals(62324, [18], [17], BigFloat[14])
         @checkequals(150102, [18], [18], BigFloat[14])
         @test isnothing(iter)
-    elseif state.instance == 34
+    elseif state.instance == 39
         @test dim == 2
         iter = iterate(data)
         @checkequals(5815, [17], [17], BigFloat[8])
@@ -8800,7 +10614,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(150100, [18], [18], BigFloat[14])
         @checkequals(151428, [18], [18], BigFloat[5])
         @test isnothing(iter)
-    elseif state.instance == 38
+    elseif state.instance == 44
         @test dim == 4
         iter = iterate(data)
         @checkequals(20830, [17,19], [17,19], BigFloat[17,17])
@@ -8808,7 +10622,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(22410, [19,20], [18,17], BigFloat[-17,17])
         @checkequals(23048, [18,20], [18,20], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 45
+    elseif state.instance == 52
         @test dim == 4
         iter = iterate(data)
         @checkequals(17744, [17,19], [17,19], BigFloat[24,24])
@@ -8816,7 +10630,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(20574, [19,20], [18,17], BigFloat[-24,24])
         @checkequals(21922, [18,20], [18,20], BigFloat[24,24])
         @test isnothing(iter)
-    elseif state.instance == 52
+    elseif state.instance == 60
         @test dim == 4
         iter = iterate(data)
         @checkequals(5672, [17,19], [17,19], BigFloat[2,2])
@@ -8828,7 +10642,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(20589, [19,20], [18,17], BigFloat[-8,8])
         @checkequals(21928, [18,20], [18,20], BigFloat[8,8])
         @test isnothing(iter)
-    elseif state.instance == 59
+    elseif state.instance == 68
         @test dim == 4
         iter = iterate(data)
         @checkequals(4699, [17,19], [17,19], BigFloat[6,6])
@@ -8837,7 +10651,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(5546, [19,20], [18,17], BigFloat[-3,3])
         @checkequals(5815, [18,20], [18,20], BigFloat[6,6])
         @test isnothing(iter)
-    elseif state.instance == 66
+    elseif state.instance == 76
         @test dim == 4
         iter = iterate(data)
         @checkequals(17502, [17,19], [17,19], BigFloat[14,14])
@@ -8847,7 +10661,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(20168, [18,20], [17,19], BigFloat[7,7])
         @checkequals(21232, [18,20], [18,20], BigFloat[14,14])
         @test isnothing(iter)
-    elseif state.instance == 73
+    elseif state.instance == 84
         @test dim == 4
         iter = iterate(data)
         @checkequals(4699, [17,19], [17,19], BigFloat[8,8])
@@ -8876,21 +10690,21 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(21230, [18,20], [18,20], BigFloat[14,14])
         @checkequals(21928, [18,20], [18,20], BigFloat[5,5])
         @test isnothing(iter)
-    elseif state.instance == 80
+    elseif state.instance == 92
         @test dim == 2
         iter = iterate(data)
         @checkequals(9460, [18], [17], BigFloat[8])
         @checkequals(17770, [18], [18], BigFloat[6])
         @checkequals(31799, [17], [17], BigFloat[17])
         @test isnothing(iter)
-    elseif state.instance == 84
+    elseif state.instance == 97
         @test dim == 4
         iter = iterate(data)
         @checkequals(9460, [19,20], [18,17], BigFloat[8,-8])
         @checkequals(17770, [18,20], [18,20], BigFloat[6,6])
         @checkequals(31799, [17,19], [17,19], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 91
+    elseif state.instance == 105
         @test dim == 4
         iter = iterate(data)
         @checkequals(9278, [18,20], [17,19], BigFloat[8,8])
@@ -8898,7 +10712,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(17770, [18,20], [18,20], BigFloat[6,6])
         @checkequals(31799, [17,19], [17,19], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 98
+    elseif state.instance == 113
         @test dim == 4
         iter = iterate(data)
         @checkequals(9278, [19,20], [18,17], BigFloat[8,-8])
@@ -8906,7 +10720,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(17770, [18,20], [18,20], BigFloat[6,6])
         @checkequals(31799, [17,19], [17,19], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 105
+    elseif state.instance == 121
         @test dim == 4
         iter = iterate(data)
         @checkequals(9278, [18,19,20,20], [17,18,17,19], BigFloat[8,2,-2,8])
@@ -8914,7 +10728,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(17770, [18,20], [18,20], BigFloat[6,6])
         @checkequals(31799, [17,19], [17,19], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 112
+    elseif state.instance == 129
         @test dim == 4
         iter = iterate(data)
         @checkequals(5665, [19,20], [18,17], BigFloat[-3,3])
@@ -8925,7 +10739,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(17770, [18,20], [18,20], BigFloat[6,6])
         @checkequals(31799, [17,19], [17,19], BigFloat[17,17])
         @test isnothing(iter)
-    elseif state.instance == 119
+    elseif state.instance == 137
         @test dim == 2
         iter = iterate(data)
         @checkequals(9278, [18], [17], BigFloat[16])
@@ -8934,7 +10748,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(17770, [18], [18], BigFloat[6])
         @checkequals(17845, [17], [17], BigFloat[10])
         @test isnothing(iter)
-    elseif state.instance == 122
+    elseif state.instance == 141
         @test dim == 4
         iter = iterate(data)
         @checkequals(50, [17], [17], BigFloat[-4])
@@ -8978,7 +10792,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(92466, [20], [20], BigFloat[5])
         @checkequals(93270, [20], [20], BigFloat[3])
         @test isnothing(iter)
-    elseif state.instance == 125
+    elseif state.instance == 145
         @test dim == 12
         iter = iterate(data)
         @checkequals(50, [17], [17], BigFloat[-4])
@@ -9068,7 +10882,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(93269, [28], [28], BigFloat[6])
         @checkequals(93270, [26], [26], BigFloat[3])
         @test isnothing(iter)
-    elseif state.instance == 128
+    elseif state.instance == 149
         @test dim == 24
         iter = iterate(data)
         @checkequals(50, [17,29], [17,29], BigFloat[-4,-4])
@@ -9172,7 +10986,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(93269, [28,40], [28,40], BigFloat[6,6])
         @checkequals(93270, [26,38], [26,38], BigFloat[3,3])
         @test isnothing(iter)
-    elseif state.instance == 134
+    elseif state.instance == 156
         @test dim == 8
         iter = iterate(data)
         @checkequals(50, [17,21], [17,21], BigFloat[-4,-4])
@@ -9236,7 +11050,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(81393, [20,24], [20,24], BigFloat[8,8])
         @checkequals(86063, [20,24], [20,24], BigFloat[4,4])
         @test isnothing(iter)
-    elseif state.instance == 140
+    elseif state.instance == 163
         @test dim == 24
         iter = iterate(data)
         @checkequals(50, [17,29], [17,29], BigFloat[-4,-4])
@@ -9379,7 +11193,7 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
         @checkequals(85993, [28,40], [28,40], BigFloat[6,6])
         @checkequals(86063, [26,38], [26,38], BigFloat[4,4])
         @test isnothing(iter)
-    elseif state.instance == 146
+    elseif state.instance == 170
         @test dim == 24
         iter = iterate(data)
         @checkequals(50, [17,29], [17,29], BigFloat[-4,-4])
@@ -9546,13 +11360,10 @@ function add_constr_psd_worker!(state::SolverSetup{false,false,<:Any,false,false
     end
 end
 
-Solver.add_constr_psd_complex!(state::SolverSetup{false,false,<:Any,true,false,false}, dim::Int, data) =
-    @interpret add_constr_psd_complex_worker!(state, dim, psd_indextype(state), data)
-
 function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,true,false,false}, dim::Int, ::PSDIndextypeVector{tri}, data::IndvalsIterator{BigInt,BigFloat}) where {tri}
     @test state.lastcall === :none
     state.lastcall = :psdc
-    if state.instance == 41
+    if state.instance == 48
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[20830], BigFloat[17], BigInt[20830], BigFloat[17], BigInt[20830], BigFloat[17])
@@ -9564,7 +11375,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[23048], BigFloat[17])
         end
         @test isnothing(iter)
-    elseif state.instance == 48
+    elseif state.instance == 56
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[17744], BigFloat[24], BigInt[17744], BigFloat[24], BigInt[17744], BigFloat[24])
@@ -9576,7 +11387,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[21922], BigFloat[24])
         end
         @test isnothing(iter)
-    elseif state.instance == 55
+    elseif state.instance == 64
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[5672,17777], BigFloat[2,8], BigInt[5672,17777], BigFloat[2,8], BigInt[5672,17777], BigFloat[2,8])
@@ -9588,7 +11399,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[6223,21928], BigFloat[2,8])
         end
         @test isnothing(iter)
-    elseif state.instance == 62
+    elseif state.instance == 72
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[4699], BigFloat[6], BigInt[4699], BigFloat[6], BigInt[4699], BigFloat[6])
@@ -9600,7 +11411,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[5815], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 69
+    elseif state.instance == 80
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[17502], BigFloat[14], BigInt[17502], BigFloat[14], BigInt[17502], BigFloat[14])
@@ -9612,7 +11423,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[21232], BigFloat[14])
         end
         @test isnothing(iter)
-    elseif state.instance == 76
+    elseif state.instance == 88
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5], BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
@@ -9624,7 +11435,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
         end
         @test isnothing(iter)
-    elseif state.instance == 87
+    elseif state.instance == 101
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -9636,7 +11447,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 94
+    elseif state.instance == 109
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -9648,7 +11459,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 101
+    elseif state.instance == 117
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -9660,7 +11471,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 108
+    elseif state.instance == 125
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17], BigInt[31799], BigFloat[17])
@@ -9672,7 +11483,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 115
+    elseif state.instance == 133
         @test dim == 2
         iter = iterate(data)
         @checkequals(BigInt[9460,31799], BigFloat[5,17], BigInt[9460,31799], BigFloat[5,17], BigInt[9460,31799], BigFloat[5,17])
@@ -9684,7 +11495,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[17770], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 131
+    elseif state.instance == 153
         @test dim == 12
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3], BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -9966,7 +11777,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[93269], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 137
+    elseif state.instance == 160
         @test dim == 4
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -10000,7 +11811,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[47925,47926,81393,86063], BigFloat[-4,-12,8,4])
         end
         @test isnothing(iter)
-    elseif state.instance == 143
+    elseif state.instance == 167
         @test dim == 12
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -10282,7 +12093,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
             @checkequals(BigInt[85993], BigFloat[6])
         end
         @test isnothing(iter)
-    elseif state.instance == 149
+    elseif state.instance == 174
         @test dim == 12
         iter = iterate(data)
         @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4], BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -10572,7 +12383,7 @@ end
 function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,true,false,false}, dim::Int, ::PSDIndextypeMatrixCartesian{tri,17}, data::PSDMatrixCartesian{BigInt,Complex{BigFloat}}) where {tri}
     @test state.lastcall === :none
     state.lastcall = :psdc
-    if state.instance == 41
+    if state.instance == 48
         @test dim == 2
         iter = iterate(data)
         @checkequals(20830, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
@@ -10580,7 +12391,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(22410, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(17))])
         @checkequals(23048, [18], [18], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 48
+    elseif state.instance == 56
         @test dim == 2
         iter = iterate(data)
         @checkequals(17744, [17], [17], Complex{BigFloat}[Complex(BigFloat(24), BigFloat(0))])
@@ -10588,7 +12399,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(20574, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(24))])
         @checkequals(21922, [18], [18], Complex{BigFloat}[Complex(BigFloat(24), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 55
+    elseif state.instance == 64
         @test dim == 2
         iter = iterate(data)
         @checkequals(5672, [17], [17], Complex{BigFloat}[Complex(BigFloat(2), BigFloat(0))])
@@ -10600,7 +12411,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(20589, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(8))])
         @checkequals(21928, [18], [18], Complex{BigFloat}[Complex(BigFloat(8), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 62
+    elseif state.instance == 72
         @test dim == 2
         iter = iterate(data)
         @checkequals(4699, [17], [17], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
@@ -10609,7 +12420,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(5546, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(3))])
         @checkequals(5815, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 69
+    elseif state.instance == 80
         @test dim == 2
         iter = iterate(data)
         @checkequals(17502, [17], [17], Complex{BigFloat}[Complex(BigFloat(14), BigFloat(0))])
@@ -10619,7 +12430,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(20168, [18], [17], Complex{BigFloat}[Complex(BigFloat(7), BigFloat(0))])
         @checkequals(21232, [18], [18], Complex{BigFloat}[Complex(BigFloat(14), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 76
+    elseif state.instance == 88
         @test dim == 2
         iter = iterate(data)
         @checkequals(4699, [17], [17], Complex{BigFloat}[Complex(BigFloat(8), BigFloat(0))])
@@ -10648,14 +12459,14 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(21230, [18], [18], Complex{BigFloat}[Complex(BigFloat(14), BigFloat(0))])
         @checkequals(21928, [18], [18], Complex{BigFloat}[Complex(BigFloat(5), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 87
+    elseif state.instance == 101
         @test dim == 2
         iter = iterate(data)
         @checkequals(9460, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(-8))])
         @checkequals(17770, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(31799, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 94
+    elseif state.instance == 109
         @test dim == 2
         iter = iterate(data)
         @checkequals(9278, [18], [17], Complex{BigFloat}[Complex(BigFloat(8), BigFloat(0))])
@@ -10663,7 +12474,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(17770, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(31799, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 101
+    elseif state.instance == 117
         @test dim == 2
         iter = iterate(data)
         @checkequals(9278, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(-8))])
@@ -10671,7 +12482,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(17770, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(31799, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 108
+    elseif state.instance == 125
         @test dim == 2
         iter = iterate(data)
         @checkequals(9278, [18], [17], Complex{BigFloat}[Complex(BigFloat(8), BigFloat(-2))])
@@ -10679,7 +12490,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(17770, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(31799, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 115
+    elseif state.instance == 133
         @test dim == 2
         iter = iterate(data)
         @checkequals(5665, [18], [17], Complex{BigFloat}[Complex(BigFloat(0), BigFloat(3))])
@@ -10690,7 +12501,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(17770, [18], [18], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(31799, [17], [17], Complex{BigFloat}[Complex(BigFloat(17), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 131
+    elseif state.instance == 153
         @test dim == 12
         iter = iterate(data)
         @checkequals(50, [17], [17], Complex{BigFloat}[Complex(BigFloat(-4), BigFloat(0))])
@@ -10794,7 +12605,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(93269, [28], [28], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(93270, [26], [26], Complex{BigFloat}[Complex(BigFloat(3), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 137
+    elseif state.instance == 160
         @test dim == 4
         iter = iterate(data)
         @checkequals(50, [17], [17], Complex{BigFloat}[Complex(BigFloat(-4), BigFloat(0))])
@@ -10858,7 +12669,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(81393, [20], [20], Complex{BigFloat}[Complex(BigFloat(8), BigFloat(0))])
         @checkequals(86063, [20], [20], Complex{BigFloat}[Complex(BigFloat(4), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 143
+    elseif state.instance == 167
         @test dim == 12
         iter = iterate(data)
         @checkequals(50, [17], [17], Complex{BigFloat}[Complex(BigFloat(-4), BigFloat(0))])
@@ -11001,7 +12812,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
         @checkequals(85993, [28], [28], Complex{BigFloat}[Complex(BigFloat(6), BigFloat(0))])
         @checkequals(86063, [26], [26], Complex{BigFloat}[Complex(BigFloat(4), BigFloat(0))])
         @test isnothing(iter)
-    elseif state.instance == 149
+    elseif state.instance == 174
         @test dim == 12
         iter = iterate(data)
         @checkequals(50, [17], [17], Complex{BigFloat}[Complex(BigFloat(-4), BigFloat(0))])
@@ -11168,29 +12979,30 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
     end
 end
 
-function Solver.add_constr_fix_prepare!(state::SolverSetup{false,false,false,false,true,false}, num::Int)
-    @test state.lastcall === :none
+function Solver.add_constr_fix_prepare!(state::SolverSetup{<:Any,<:Any,false,false,true,false}, num::Int)
+    @test state.lastcall === :none || sstate.lastcall === :add_constr_fix_finalize # for SDSOS
     @test isempty(state.fixed_available)
     state.lastcall = :add_constr_fix_prepare
     union!(state.fixed_available, UInt(1):UInt(num))
     return UInt(num)
 end
 
-function Solver.add_constr_fix_finalize!(state::SolverSetup{false,false,false,false,true,false}, constrstate::UInt)
-    @test state.lastcall === :add_constr_fix
-    state.lastcall = :add_constr_fix_finalize
+function Solver.add_constr_fix_finalize!(state::SolverSetup{<:Any,<:Any,false,false,true,false}, constrstate::UInt)
+    if state.lastcall === :fix_sdsos
+        state.lastcall = :sdsos
+    else
+        @test state.lastcall === :add_constr_fix
+        state.lastcall = :add_constr_fix_finalize
+    end
     @test iszero(constrstate)
     @test isempty(state.fixed_available)
 end
 
-Solver.add_constr_fix!(state::SolverSetup{false,false,false,false,true,false}, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat) =
-    @interpret add_constr_fix_helper!(state, constrstate, indvals, rhs)
-
-function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,false}, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat)
+function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,false}, constrstate::UInt, indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat)
     @test in(state.lastcall, (:add_constr_fix_prepare, :add_constr_fix))
     state.lastcall = :add_constr_fix
     @test iszero(rhs)
-    if state.instance == 152
+    if state.instance == 177
         if checkequality(indvals, BigInt[57], BigFloat[5], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[93], BigFloat[5], true)
@@ -11198,7 +13010,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[213], BigFloat[5], true)
             pop!(state.fixed_available, UInt(3))
         end
-    elseif state.instance == 153
+    elseif state.instance == 178
         if checkequality(indvals, BigInt[57], BigFloat[5], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[88], BigFloat[5], true)
@@ -11208,7 +13020,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[186], BigFloat[5], true)
             pop!(state.fixed_available, UInt(4))
         end
-    elseif state.instance == 154
+    elseif state.instance == 179
         if checkequality(indvals, BigInt[52,53], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[88,89], BigFloat[12,-16], true)
@@ -11216,7 +13028,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[208,209], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(3))
         end
-    elseif state.instance == 155
+    elseif state.instance == 180
         if checkequality(indvals, BigInt[52,53], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[63,66,67], BigFloat[6,6,-8], true)
@@ -11226,7 +13038,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[109,112], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(4))
         end
-    elseif state.instance == 156
+    elseif state.instance == 181
         if checkequality(indvals, BigInt[52,53], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[61,62,64,65], BigFloat[6,6,-8,-8], true)
@@ -11236,7 +13048,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[99,105], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(4))
         end
-    elseif state.instance == 157
+    elseif state.instance == 182
         if checkequality(indvals, BigInt[52,53], BigFloat[6,-8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[8,6], true)
@@ -11250,7 +13062,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[208,209], BigFloat[8,6], true)
             pop!(state.fixed_available, UInt(6))
         end
-    elseif state.instance == 158
+    elseif state.instance == 183
         if checkequality(indvals, BigInt[52,53], BigFloat[6,-8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[8,6], true)
@@ -11268,7 +13080,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[109,112], BigFloat[8,6], true)
             pop!(state.fixed_available, UInt(8))
         end
-    elseif state.instance == 159
+    elseif state.instance == 184
         if checkequality(indvals, BigInt[52,53], BigFloat[6,-8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[8,6], true)
@@ -11286,55 +13098,55 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[99,105], BigFloat[8,6], true)
             pop!(state.fixed_available, UInt(8))
         end
-    elseif state.instance == 160
+    elseif state.instance == 185
         if checkequality(indvals, BigInt[57], BigFloat[6], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 161
+    elseif state.instance == 186
         if checkequality(indvals, BigInt[52,53], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 162
+    elseif state.instance == 187
         if checkequality(indvals, BigInt[52,53], BigFloat[6,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[4,-6], true)
             pop!(state.fixed_available, UInt(2))
         end
-    elseif state.instance == 163
+    elseif state.instance == 188
         if checkequality(indvals, BigInt[52,53], BigFloat[14,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53,55], BigFloat[4,2,2], true)
             pop!(state.fixed_available, UInt(2))
         end
-    elseif state.instance == 164
+    elseif state.instance == 189
         if checkequality(indvals, BigInt[49,58,59], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 165
+    elseif state.instance == 190
         if checkequality(indvals, BigInt[57], BigFloat[6], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 166
+    elseif state.instance == 191
         if checkequality(indvals, BigInt[52,53], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 167
+    elseif state.instance == 192
         if checkequality(indvals, BigInt[52,53], BigFloat[6,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[4,-6], true)
             pop!(state.fixed_available, UInt(2))
         end
-    elseif state.instance == 168
+    elseif state.instance == 193
         if checkequality(indvals, BigInt[52,53], BigFloat[14,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53,55], BigFloat[4,2,2], true)
             pop!(state.fixed_available, UInt(2))
         end
-    elseif state.instance == 169
+    elseif state.instance == 194
         if checkequality(indvals, BigInt[49,58,59], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(1))
         end
-    elseif state.instance == 170
+    elseif state.instance == 195
         if checkequality(indvals, BigInt[57], BigFloat[6], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[93], BigFloat[6], true)
@@ -11348,7 +13160,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1215], BigFloat[6], true)
             pop!(state.fixed_available, UInt(6))
         end
-    elseif state.instance == 171
+    elseif state.instance == 196
         if checkequality(indvals, BigInt[52,53], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[88,89], BigFloat[12,8], true)
@@ -11362,7 +13174,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1001,1002], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(6))
         end
-    elseif state.instance == 172
+    elseif state.instance == 197
         if checkequality(indvals, BigInt[52,53], BigFloat[6,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[4,-6], true)
@@ -11388,7 +13200,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1001,1002], BigFloat[4,-6], true)
             pop!(state.fixed_available, UInt(12))
         end
-    elseif state.instance == 173
+    elseif state.instance == 198
         if checkequality(indvals, BigInt[52,53], BigFloat[14,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53,55], BigFloat[4,2,2], true)
@@ -11414,7 +13226,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1001,1002,1004], BigFloat[4,2,2], true)
             pop!(state.fixed_available, UInt(12))
         end
-    elseif state.instance == 174
+    elseif state.instance == 199
         if checkequality(indvals, BigInt[49,58,59], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[57,178,179], BigFloat[-10,-4,8], true)
@@ -11428,7 +13240,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[423,2232,2233], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(6))
         end
-    elseif state.instance == 175
+    elseif state.instance == 200
         if checkequality(indvals, BigInt[57], BigFloat[6], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[93], BigFloat[6], true)
@@ -11446,7 +13258,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1008], BigFloat[6], true)
             pop!(state.fixed_available, UInt(8))
         end
-    elseif state.instance == 176
+    elseif state.instance == 201
         if checkequality(indvals, BigInt[52,53], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[88,89], BigFloat[12,8], true)
@@ -11464,7 +13276,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[552,567], BigFloat[12,8], true)
             pop!(state.fixed_available, UInt(8))
         end
-    elseif state.instance == 177
+    elseif state.instance == 202
         if checkequality(indvals, BigInt[52,53], BigFloat[6,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[4,-6], true)
@@ -11498,7 +13310,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[552,567], BigFloat[4,-6], true)
             pop!(state.fixed_available, UInt(16))
         end
-    elseif state.instance == 178
+    elseif state.instance == 203
         if checkequality(indvals, BigInt[52,53], BigFloat[14,4], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53,55], BigFloat[4,2,2], true)
@@ -11532,7 +13344,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[552,567,672], BigFloat[4,2,2], true)
             pop!(state.fixed_available, UInt(16))
         end
-    elseif state.instance == 179
+    elseif state.instance == 204
         if checkequality(indvals, BigInt[49,58,59], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[57,178,179], BigFloat[-10,-4,8], true)
@@ -11550,7 +13362,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[216,1338,1339], BigFloat[-10,-4,8], true)
             pop!(state.fixed_available, UInt(8))
         end
-    elseif state.instance == 180
+    elseif state.instance == 205
         if checkequality(indvals, BigInt[57], BigFloat[5], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[92], BigFloat[5], true)
@@ -11582,7 +13394,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1335], BigFloat[5], true)
             pop!(state.fixed_available, UInt(15))
         end
-    elseif state.instance == 181
+    elseif state.instance == 206
         if checkequality(indvals, BigInt[52,53], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[81,82], BigFloat[12,-16], true)
@@ -11614,7 +13426,7 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1330,1331], BigFloat[12,-16], true)
             pop!(state.fixed_available, UInt(15))
         end
-    elseif state.instance == 182
+    elseif state.instance == 207
         if checkequality(indvals, BigInt[52,53], BigFloat[6,-8], true)
             pop!(state.fixed_available, UInt(1))
         elseif checkequality(indvals, BigInt[52,53], BigFloat[8,6], true)
@@ -11676,14 +13488,393 @@ function add_constr_fix_helper!(state::SolverSetup{false,false,false,false,true,
         elseif checkequality(indvals, BigInt[1330,1331], BigFloat[8,6], true)
             pop!(state.fixed_available, UInt(30))
         end
+    elseif state.instance == 17
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,23048], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,169998], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 22
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,21922], BigFloat[-1,24], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,151422], BigFloat[-1,24], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 27
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,6223,21928], BigFloat[-1,2,8], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,63728,151428], BigFloat[-1,2,8], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 32
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,5815], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,55255], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 37
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,21232], BigFloat[-1,14], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,150102], BigFloat[-1,14], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 42
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,5815,5816,6223,11399,21230,21928], BigFloat[-1,8,16,3,4,14,5], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,55255,55256,63728,92459,150100,151428], BigFloat[-1,8,16,3,4,14,5], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 47
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,20830], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,23048], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 55
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,17744], BigFloat[-1,24], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,21922], BigFloat[-1,24], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 63
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,5672,17777], BigFloat[-1,2,8], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,6223,21928], BigFloat[-1,2,8], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 71
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,4699], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,5815], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 79
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,17502], BigFloat[-1,14], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,21232], BigFloat[-1,14], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 87
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,4699,4702,5672,9297,17496,17777], BigFloat[-1,8,16,3,4,14,5], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,8,16,3,4,14,5], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 95
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,31799], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 100
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,31799], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 108
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,31799], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 116
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,31799], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 124
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,31799], BigFloat[-1,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 132
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,9460,31799], BigFloat[-1,5,17], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 140
+        if state.it == 0
+            checkequality(indvals, BigInt[-2,17669,17845], BigFloat[-1,-34,10], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
+            pop!(state.fixed_available, UInt(2))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 144
+        if state.it == 0
+            checkequality(indvals, BigInt[-12,-10,-6,50,51,66,84], BigFloat[-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-11,-8,-4,171,172,404,422], BigFloat[-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-9,-7,-2,5813,5814,11406,11860], BigFloat[-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-5,-3,-1,55253,55254,92466,93270], BigFloat[-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(4))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 148
+        if state.it == 0
+            checkequality(indvals, BigInt[-132,-130,-126,-120,-112,-102,-90,-76,-60,-42,-22,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-131,-128,-124,-118,-110,-100,-88,-74,-58,-40,-20], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-129,-127,-122,-116,-108,-98,-86,-72,-56,-38,-18,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-125,-123,-121,-114,-106,-96,-84,-70,-54,-36,-16,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(4))
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-119,-117,-115,-113,-104,-94,-82,-68,-52,-34,-14], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(5))
+        elseif state.it == 21
+            checkequality(indvals, BigInt[-111,-109,-107,-105,-103,-92,-80,-66,-50,-32,-12,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(6))
+        elseif state.it == 28
+            checkequality(indvals, BigInt[-101,-99,-97,-95,-93,-91,-78,-64,-48,-30,-10,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(7))
+        elseif state.it == 38
+            checkequality(indvals, BigInt[-89,-87,-85,-83,-81,-79,-77,-62,-46,-28,-8], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(8))
+        elseif state.it == 47
+            checkequality(indvals, BigInt[-75,-73,-71,-69,-67,-65,-63,-61,-44,-26,-6,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(9))
+        elseif state.it == 57
+            checkequality(indvals, BigInt[-59,-57,-55,-53,-51,-49,-47,-45,-43,-24,-4,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(10))
+        elseif state.it == 71
+            checkequality(indvals, BigInt[-41,-39,-37,-35,-33,-31,-29,-27,-25,-23,-2], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(11))
+        elseif state.it == 83
+            checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(12))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 152
+        if state.it == 0
+            checkequality(indvals, BigInt[-132,-130,-126,-120,-112,-102,-90,-76,-60,-42,-22,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-131,-128,-124,-118,-110,-100,-88,-74,-58,-40,-20], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-129,-127,-122,-116,-108,-98,-86,-72,-56,-38,-18,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-125,-123,-121,-114,-106,-96,-84,-70,-54,-36,-16,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(4))
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-119,-117,-115,-113,-104,-94,-82,-68,-52,-34,-14], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(5))
+        elseif state.it == 21
+            checkequality(indvals, BigInt[-111,-109,-107,-105,-103,-92,-80,-66,-50,-32,-12,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(6))
+        elseif state.it == 28
+            checkequality(indvals, BigInt[-101,-99,-97,-95,-93,-91,-78,-64,-48,-30,-10,5813,5814,11406,11860], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(7))
+        elseif state.it == 38
+            checkequality(indvals, BigInt[-89,-87,-85,-83,-81,-79,-77,-62,-46,-28,-8], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(8))
+        elseif state.it == 47
+            checkequality(indvals, BigInt[-75,-73,-71,-69,-67,-65,-63,-61,-44,-26,-6,11790], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(9))
+        elseif state.it == 57
+            checkequality(indvals, BigInt[-59,-57,-55,-53,-51,-49,-47,-45,-43,-24,-4,55253,55254,92466,93270], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-6,5,3], true)
+            pop!(state.fixed_available, UInt(10))
+        elseif state.it == 71
+            checkequality(indvals, BigInt[-41,-39,-37,-35,-33,-31,-29,-27,-25,-23,-2], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(11))
+        elseif state.it == 83
+            checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(12))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 159
+        if state.it == 0
+            checkequality(indvals, BigInt[-12,-10,-6,50,51,66,84], BigFloat[-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-11,-8,-4,171,172,404,422], BigFloat[-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-9,-7,-2,3360,3361,6939,8304], BigFloat[-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-5,-3,-1,47925,47926,81393,86063], BigFloat[-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(4))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 166
+        if state.it == 0
+            checkequality(indvals, BigInt[-132,-130,-126,-120,-112,-102,-90,-76,-60,-42,-22,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-131,-128,-124,-118,-110,-100,-88,-74,-58,-40,-20], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-129,-127,-122,-116,-108,-98,-86,-72,-56,-38,-18,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-125,-123,-121,-114,-106,-96,-84,-70,-54,-36,-16,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(4))
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-119,-117,-115,-113,-104,-94,-82,-68,-52,-34,-14], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(5))
+        elseif state.it == 21
+            checkequality(indvals, BigInt[-111,-109,-107,-105,-103,-92,-80,-66,-50,-32,-12,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(6))
+        elseif state.it == 28
+            checkequality(indvals, BigInt[-101,-99,-97,-95,-93,-91,-78,-64,-48,-30,-10,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(7))
+        elseif state.it == 38
+            checkequality(indvals, BigInt[-89,-87,-85,-83,-81,-79,-77,-62,-46,-28,-8], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(8))
+        elseif state.it == 47
+            checkequality(indvals, BigInt[-75,-73,-71,-69,-67,-65,-63,-61,-44,-26,-6,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(9))
+        elseif state.it == 57
+            checkequality(indvals, BigInt[-59,-57,-55,-53,-51,-49,-47,-45,-43,-24,-4,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(10))
+        elseif state.it == 71
+            checkequality(indvals, BigInt[-41,-39,-37,-35,-33,-31,-29,-27,-25,-23,-2], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(11))
+        elseif state.it == 83
+            checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(12))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
+    elseif state.instance == 173
+        if state.it == 0
+            checkequality(indvals, BigInt[-132,-130,-126,-120,-112,-102,-90,-76,-60,-42,-22,50,51,66,84], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(1))
+        elseif state.it == 2
+            checkequality(indvals, BigInt[-131,-128,-124,-118,-110,-100,-88,-74,-58,-40,-20], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(2))
+        elseif state.it == 5
+            checkequality(indvals, BigInt[-129,-127,-122,-116,-108,-98,-86,-72,-56,-38,-18,83], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(3))
+        elseif state.it == 9
+            checkequality(indvals, BigInt[-125,-123,-121,-114,-106,-96,-84,-70,-54,-36,-16,171,172,404,422], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(4))
+        elseif state.it == 15
+            checkequality(indvals, BigInt[-119,-117,-115,-113,-104,-94,-82,-68,-52,-34,-14], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(5))
+        elseif state.it == 21
+            checkequality(indvals, BigInt[-111,-109,-107,-105,-103,-92,-80,-66,-50,-32,-12,421], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(6))
+        elseif state.it == 28
+            checkequality(indvals, BigInt[-101,-99,-97,-95,-93,-91,-78,-64,-48,-30,-10,3360,3361,6939,8304], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(7))
+        elseif state.it == 38
+            checkequality(indvals, BigInt[-89,-87,-85,-83,-81,-79,-77,-62,-46,-28,-8], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(8))
+        elseif state.it == 47
+            checkequality(indvals, BigInt[-75,-73,-71,-69,-67,-65,-63,-61,-44,-26,-6,8094], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(9))
+        elseif state.it == 57
+            checkequality(indvals, BigInt[-59,-57,-55,-53,-51,-49,-47,-45,-43,-24,-4,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
+            pop!(state.fixed_available, UInt(10))
+        elseif state.it == 71
+            checkequality(indvals, BigInt[-41,-39,-37,-35,-33,-31,-29,-27,-25,-23,-2], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], true)
+            pop!(state.fixed_available, UInt(11))
+        elseif state.it == 83
+            checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
+            pop!(state.fixed_available, UInt(12))
+            state.lastcall = :fix_sdsos
+        end
+        state.it += 1
     end
     constrstate -= one(UInt)
     @test constrstate == length(state.fixed_available)
     return constrstate
 end
-
-Solver.add_constr_l1!(state::SolverSetup{false,false,false,false,false,true}, data::IndvalsIterator{BigInt,BigFloat}) =
-    @interpret add_constr_l1_helper!(state, data)
 
 function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,true}, data::IndvalsIterator{BigInt,BigFloat})
     @test state.lastcall === :none
@@ -11699,7 +13890,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 19
+    elseif state.instance == 20
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[21922], BigFloat[24])
@@ -11711,7 +13902,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 23
+    elseif state.instance == 25
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[6223,21928], BigFloat[2,8])
@@ -11723,7 +13914,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 27
+    elseif state.instance == 30
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[5815], BigFloat[6])
@@ -11735,7 +13926,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 31
+    elseif state.instance == 35
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[21232], BigFloat[14])
@@ -11747,7 +13938,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 35
+    elseif state.instance == 40
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
@@ -11759,7 +13950,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 39
+    elseif state.instance == 45
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[20830], BigFloat[17])
@@ -11784,40 +13975,40 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[22410], BigFloat[17])
             @skipempty()
             @checkequals(BigInt[22409], BigFloat[17])
-            @test isnothing(iter)
-            state.lastcall = :dsosl1
-        end
-    elseif state.instance == 46
-        iter = iterate(data)
-        if state.it == 0
-            @checkequals(BigInt[17744], BigFloat[24])
-            @checkequals(BigInt[20571], BigFloat[24])
-            @skipempty()
-            @checkequals(BigInt[20574], BigFloat[24])
-            @test isnothing(iter)
-        elseif state.it == 1
-            @checkequals(BigInt[21922], BigFloat[24])
-            @checkequals(BigInt[20571], BigFloat[24])
-            @checkequals(BigInt[20574], BigFloat[-24])
-            @skipempty()
-            @test isnothing(iter)
-        elseif state.it == 2
-            @checkequals(BigInt[17744], BigFloat[24])
-            @skipempty()
-            @checkequals(BigInt[20574], BigFloat[-24])
-            @checkequals(BigInt[20571], BigFloat[24])
-            @test isnothing(iter)
-        elseif state.it == 3
-            @checkequals(BigInt[21922], BigFloat[24])
-            @checkequals(BigInt[20574], BigFloat[24])
-            @skipempty()
-            @checkequals(BigInt[20571], BigFloat[24])
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
     elseif state.instance == 53
         iter = iterate(data)
         if state.it == 0
+            @checkequals(BigInt[17744], BigFloat[24])
+            @checkequals(BigInt[20571], BigFloat[24])
+            @skipempty()
+            @checkequals(BigInt[20574], BigFloat[24])
+            @test isnothing(iter)
+        elseif state.it == 1
+            @checkequals(BigInt[21922], BigFloat[24])
+            @checkequals(BigInt[20571], BigFloat[24])
+            @checkequals(BigInt[20574], BigFloat[-24])
+            @skipempty()
+            @test isnothing(iter)
+        elseif state.it == 2
+            @checkequals(BigInt[17744], BigFloat[24])
+            @skipempty()
+            @checkequals(BigInt[20574], BigFloat[-24])
+            @checkequals(BigInt[20571], BigFloat[24])
+            @test isnothing(iter)
+        elseif state.it == 3
+            @checkequals(BigInt[21922], BigFloat[24])
+            @checkequals(BigInt[20574], BigFloat[24])
+            @skipempty()
+            @checkequals(BigInt[20571], BigFloat[24])
+            @test isnothing(iter)
+            state.lastcall = :dsosl1
+        end
+    elseif state.instance == 61
+        iter = iterate(data)
+        if state.it == 0
             @checkequals(BigInt[5672,17777], BigFloat[2,8])
             @checkequals(BigInt[6102,20588], BigFloat[2,8])
             @skipempty()
@@ -11843,7 +14034,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 60
+    elseif state.instance == 69
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[4699], BigFloat[6])
@@ -11871,7 +14062,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 67
+    elseif state.instance == 77
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[17502], BigFloat[14])
@@ -11896,52 +14087,52 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[20154,20162], BigFloat[-7,7])
             @skipempty()
             @checkequals(BigInt[20164,20168], BigFloat[-7,7])
-            @test isnothing(iter)
-            state.lastcall = :dsosl1
-        end
-    elseif state.instance == 74
-        iter = iterate(data)
-        if state.it == 0
-            @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
-            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
-            @skipempty()
-            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-8,8,4,3,4,-7,7,5])
-            @test isnothing(iter)
-        elseif state.it == 1
-            @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
-            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
-            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[8,-8,-4,-3,-4,7,-7,-5])
-            @skipempty()
-            @test isnothing(iter)
-        elseif state.it == 2
-            @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
-            @skipempty()
-            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[8,-8,-4,-3,-4,7,-7,-5])
-            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
-            @test isnothing(iter)
-        elseif state.it == 3
-            @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
-            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-8,8,4,3,4,-7,7,5])
-            @skipempty()
-            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
-            @test isnothing(iter)
-            state.lastcall = :dsosl1
-        end
-    elseif state.instance == 81
-        iter = iterate(data)
-        if state.it == 0
-            @checkequals(BigInt[31799], BigFloat[17])
-            @checkequals(BigInt[9460], BigFloat[8])
-            @test isnothing(iter)
-        elseif state.it == 1
-            @checkequals(BigInt[17770], BigFloat[6])
-            @checkequals(BigInt[9460], BigFloat[8])
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
     elseif state.instance == 85
         iter = iterate(data)
         if state.it == 0
+            @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
+            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
+            @skipempty()
+            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-8,8,4,3,4,-7,7,5])
+            @test isnothing(iter)
+        elseif state.it == 1
+            @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
+            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
+            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[8,-8,-4,-3,-4,7,-7,-5])
+            @skipempty()
+            @test isnothing(iter)
+        elseif state.it == 2
+            @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
+            @skipempty()
+            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[8,-8,-4,-3,-4,7,-7,-5])
+            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
+            @test isnothing(iter)
+        elseif state.it == 3
+            @checkequals(BigInt[5815,5816,6223,11399,21230,21928], BigFloat[8,16,3,4,14,5])
+            @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[-8,8,4,3,4,-7,7,5])
+            @skipempty()
+            @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
+            @test isnothing(iter)
+            state.lastcall = :dsosl1
+        end
+    elseif state.instance == 93
+        iter = iterate(data)
+        if state.it == 0
+            @checkequals(BigInt[31799], BigFloat[17])
+            @checkequals(BigInt[9460], BigFloat[8])
+            @test isnothing(iter)
+        elseif state.it == 1
+            @checkequals(BigInt[17770], BigFloat[6])
+            @checkequals(BigInt[9460], BigFloat[8])
+            @test isnothing(iter)
+            state.lastcall = :dsosl1
+        end
+    elseif state.instance == 98
+        iter = iterate(data)
+        if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
             @skipempty()
             @skipempty()
@@ -11964,62 +14155,6 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[9460], BigFloat[-8])
             @skipempty()
             @skipempty()
-            @test isnothing(iter)
-            state.lastcall = :dsosl1
-        end
-    elseif state.instance == 92
-        iter = iterate(data)
-        if state.it == 0
-            @checkequals(BigInt[31799], BigFloat[17])
-            @checkequals(BigInt[9278], BigFloat[8])
-            @skipempty()
-            @checkequals(BigInt[9280], BigFloat[8])
-            @test isnothing(iter)
-        elseif state.it == 1
-            @checkequals(BigInt[17770], BigFloat[6])
-            @checkequals(BigInt[9278], BigFloat[8])
-            @checkequals(BigInt[9280], BigFloat[-8])
-            @skipempty()
-            @test isnothing(iter)
-        elseif state.it == 2
-            @checkequals(BigInt[31799], BigFloat[17])
-            @skipempty()
-            @checkequals(BigInt[9280], BigFloat[-8])
-            @checkequals(BigInt[9278], BigFloat[8])
-            @test isnothing(iter)
-        elseif state.it == 3
-            @checkequals(BigInt[17770], BigFloat[6])
-            @checkequals(BigInt[9280], BigFloat[8])
-            @skipempty()
-            @checkequals(BigInt[9278], BigFloat[8])
-            @test isnothing(iter)
-            state.lastcall = :dsosl1
-        end
-    elseif state.instance == 99
-        iter = iterate(data)
-        if state.it == 0
-            @checkequals(BigInt[31799], BigFloat[17])
-            @checkequals(BigInt[9280], BigFloat[8])
-            @skipempty()
-            @checkequals(BigInt[9278], BigFloat[-8])
-            @test isnothing(iter)
-        elseif state.it == 1
-            @checkequals(BigInt[17770], BigFloat[6])
-            @checkequals(BigInt[9280], BigFloat[8])
-            @checkequals(BigInt[9278], BigFloat[8])
-            @skipempty()
-            @test isnothing(iter)
-        elseif state.it == 2
-            @checkequals(BigInt[31799], BigFloat[17])
-            @skipempty()
-            @checkequals(BigInt[9278], BigFloat[8])
-            @checkequals(BigInt[9280], BigFloat[8])
-            @test isnothing(iter)
-        elseif state.it == 3
-            @checkequals(BigInt[17770], BigFloat[6])
-            @checkequals(BigInt[9278], BigFloat[-8])
-            @skipempty()
-            @checkequals(BigInt[9280], BigFloat[8])
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
@@ -12027,6 +14162,62 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
+            @checkequals(BigInt[9278], BigFloat[8])
+            @skipempty()
+            @checkequals(BigInt[9280], BigFloat[8])
+            @test isnothing(iter)
+        elseif state.it == 1
+            @checkequals(BigInt[17770], BigFloat[6])
+            @checkequals(BigInt[9278], BigFloat[8])
+            @checkequals(BigInt[9280], BigFloat[-8])
+            @skipempty()
+            @test isnothing(iter)
+        elseif state.it == 2
+            @checkequals(BigInt[31799], BigFloat[17])
+            @skipempty()
+            @checkequals(BigInt[9280], BigFloat[-8])
+            @checkequals(BigInt[9278], BigFloat[8])
+            @test isnothing(iter)
+        elseif state.it == 3
+            @checkequals(BigInt[17770], BigFloat[6])
+            @checkequals(BigInt[9280], BigFloat[8])
+            @skipempty()
+            @checkequals(BigInt[9278], BigFloat[8])
+            @test isnothing(iter)
+            state.lastcall = :dsosl1
+        end
+    elseif state.instance == 114
+        iter = iterate(data)
+        if state.it == 0
+            @checkequals(BigInt[31799], BigFloat[17])
+            @checkequals(BigInt[9280], BigFloat[8])
+            @skipempty()
+            @checkequals(BigInt[9278], BigFloat[-8])
+            @test isnothing(iter)
+        elseif state.it == 1
+            @checkequals(BigInt[17770], BigFloat[6])
+            @checkequals(BigInt[9280], BigFloat[8])
+            @checkequals(BigInt[9278], BigFloat[8])
+            @skipempty()
+            @test isnothing(iter)
+        elseif state.it == 2
+            @checkequals(BigInt[31799], BigFloat[17])
+            @skipempty()
+            @checkequals(BigInt[9278], BigFloat[8])
+            @checkequals(BigInt[9280], BigFloat[8])
+            @test isnothing(iter)
+        elseif state.it == 3
+            @checkequals(BigInt[17770], BigFloat[6])
+            @checkequals(BigInt[9278], BigFloat[-8])
+            @skipempty()
+            @checkequals(BigInt[9280], BigFloat[8])
+            @test isnothing(iter)
+            state.lastcall = :dsosl1
+        end
+    elseif state.instance == 122
+        iter = iterate(data)
+        if state.it == 0
+            @checkequals(BigInt[31799], BigFloat[17])
             @checkequals(BigInt[9278,9280], BigFloat[8,2])
             @skipempty()
             @checkequals(BigInt[9278,9280], BigFloat[-2,8])
@@ -12051,7 +14242,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 113
+    elseif state.instance == 130
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[9460,31799], BigFloat[5,17])
@@ -12079,7 +14270,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 120
+    elseif state.instance == 138
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[17669,17845], BigFloat[-34,10])
@@ -12091,7 +14282,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 123
+    elseif state.instance == 142
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -12119,7 +14310,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 126
+    elseif state.instance == 146
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -12291,7 +14482,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 129
+    elseif state.instance == 150
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -12919,7 +15110,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 135
+    elseif state.instance == 157
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -13003,7 +15194,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 141
+    elseif state.instance == 164
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -13631,7 +15822,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @test isnothing(iter)
             state.lastcall = :dsosl1
         end
-    elseif state.instance == 147
+    elseif state.instance == 171
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -14265,12 +16456,9 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
     state.it += 1
 end
 
-Solver.add_constr_l1_complex!(state::SolverSetup{false,false,false,true,false,true}, data::IndvalsIterator{BigInt,BigFloat}) =
-    @interpret add_constr_l1_complex_helper!(state, data)
-
 function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true,false,true}, data::IndvalsIterator{BigInt,BigFloat})
     @test state.lastcall === :none
-    if state.instance == 43
+    if state.instance == 50
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[20830], BigFloat[17])
@@ -14284,7 +16472,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 50
+    elseif state.instance == 58
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[17744], BigFloat[24])
@@ -14298,7 +16486,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 57
+    elseif state.instance == 66
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[5672,17777], BigFloat[2,8])
@@ -14312,7 +16500,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 64
+    elseif state.instance == 74
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[4699], BigFloat[6])
@@ -14326,7 +16514,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 71
+    elseif state.instance == 82
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[17502], BigFloat[14])
@@ -14340,7 +16528,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 78
+    elseif state.instance == 90
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[4699,4702,5672,9297,17496,17777], BigFloat[8,16,3,4,14,5])
@@ -14354,7 +16542,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 89
+    elseif state.instance == 103
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
@@ -14368,7 +16556,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 96
+    elseif state.instance == 111
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
@@ -14382,7 +16570,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 103
+    elseif state.instance == 119
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
@@ -14396,7 +16584,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 110
+    elseif state.instance == 127
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[31799], BigFloat[17])
@@ -14410,7 +16598,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 117
+    elseif state.instance == 135
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[9460,31799], BigFloat[5,17])
@@ -14424,7 +16612,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 133
+    elseif state.instance == 155
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-6,5,3])
@@ -14728,7 +16916,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 139
+    elseif state.instance == 162
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -14768,7 +16956,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 145
+    elseif state.instance == 169
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -15072,7 +17260,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @test isnothing(iter)
             state.lastcall = :dsosl1c
         end
-    elseif state.instance == 151
+    elseif state.instance == 176
         iter = iterate(data)
         if state.it == 0
             @checkequals(BigInt[50,51,66,84], BigFloat[-4,-12,8,4])
@@ -15387,28 +17575,28 @@ end
     @testset let grouping=SimpleMonomialVector{4,2}(UInt[1])
         # the constraint is 6x₁
         @testset let constraint=SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(160, grouping, constraint, :equality)
-            momenttest(165, grouping, constraint, :equality)
+            momenttest(185, grouping, constraint, :equality)
+            momenttest(190, grouping, constraint, :equality)
         end
         # the constraint is (6 + 4I)z₁
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+4im], SimpleMonomialVector{4,2}(UInt[5]))
-            momenttest(162, grouping, constraint, :equality)
-            momenttest(167, grouping, constraint, :equality)
+            momenttest(187, grouping, constraint, :equality)
+            momenttest(192, grouping, constraint, :equality)
         end
         # the constraint is (6 + 4I)z₁ + (6 - 4I)z̄₁
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[6-4im,6+4im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(161, grouping, constraint, :equality)
-            momenttest(166, grouping, constraint, :equality)
+            momenttest(186, grouping, constraint, :equality)
+            momenttest(191, grouping, constraint, :equality)
         end
         # the constraint is (2I)x₃ + (6 + 4I)z₁ + 8z̄₁
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[8,6+4im,2im], SimpleMonomialVector{4,2}(UInt[4, 5, 7]))
-            momenttest(163, grouping, constraint, :equality)
-            momenttest(168, grouping, constraint, :equality)
+            momenttest(188, grouping, constraint, :equality)
+            momenttest(193, grouping, constraint, :equality)
         end
         # the constraint is -10 - 2z₂² + 8z₂z̄₂ - 2z̄₂²
         @testset let constraint=SimplePolynomial(BigFloat[-10,-2,8,-2], SimpleMonomialVector{4,2}(UInt[1, 10, 11, 12]))
-            momenttest(164, grouping, constraint, :equality)
-            momenttest(169, grouping, constraint, :equality)
+            momenttest(189, grouping, constraint, :equality)
+            momenttest(194, grouping, constraint, :equality)
         end
     end
 
@@ -15472,67 +17660,74 @@ end
     @testset let grouping=SimpleMonomialVector{4,2}(UInt[124])
         # the constraint is {{17x₃²z₁z̄₁, (8I)x₂²}, {(-8I)x₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8im], SimpleMonomialVector{4,2}(UInt[37])); SimplePolynomial(Complex{BigFloat}[-8im], SimpleMonomialVector{4,2}(UInt[37])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(83, grouping, constraint, :rquadratic)
-            momenttest(84, grouping, constraint, :psdr)
-            momenttest(85, grouping, constraint, :dsosl1)
-            momenttest(86, grouping, constraint, :dsoslin)
-            momenttest(87, grouping, constraint, :psdc)
-            momenttest(88, grouping, constraint, :dsosquad)
-            momenttest(89, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is {{17x₃²z₁z̄₁, 8x₂²}, {8x₂², 6x₂x₄²}}
-        @testset let constraint=[SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])); SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])) SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(79, grouping, constraint, :rquadratic)
-            momenttest(80, grouping, constraint, :psdr)
-            momenttest(81, grouping, constraint, :dsosl1)
-            momenttest(82, grouping, constraint, :dsoslin)
-        end
-        # the constraint is {{17x₃²z₁z̄₁, (8I)z₂²}, {(-8I)z̄₂², 6x₂x₄²}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[-8im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(97, grouping, constraint, :rquadratic)
-            momenttest(98, grouping, constraint, :psdr)
-            momenttest(99, grouping, constraint, :dsosl1)
-            momenttest(100, grouping, constraint, :dsoslin)
+            momenttest(96, grouping, constraint, :rquadratic)
+            momenttest(97, grouping, constraint, :psdr)
+            momenttest(98, grouping, constraint, :dsosl1)
+            momenttest(99, grouping, constraint, :dsoslin)
+            momenttest(100, grouping, constraint, :sdsos)
             momenttest(101, grouping, constraint, :psdc)
             momenttest(102, grouping, constraint, :dsosquad)
             momenttest(103, grouping, constraint, :dsosl1c)
         end
+        # the constraint is {{17x₃²z₁z̄₁, 8x₂²}, {8x₂², 6x₂x₄²}}
+        @testset let constraint=[SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])); SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])) SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[116]))]
+            momenttest(91, grouping, constraint, :rquadratic)
+            momenttest(92, grouping, constraint, :psdr)
+            momenttest(93, grouping, constraint, :dsosl1)
+            momenttest(94, grouping, constraint, :dsoslin)
+            momenttest(95, grouping, constraint, :sdsos)
+        end
+        # the constraint is {{17x₃²z₁z̄₁, (8I)z₂²}, {(-8I)z̄₂², 6x₂x₄²}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[-8im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
+            momenttest(112, grouping, constraint, :rquadratic)
+            momenttest(113, grouping, constraint, :psdr)
+            momenttest(114, grouping, constraint, :dsosl1)
+            momenttest(115, grouping, constraint, :dsoslin)
+            momenttest(116, grouping, constraint, :sdsos)
+            momenttest(117, grouping, constraint, :psdc)
+            momenttest(118, grouping, constraint, :dsosquad)
+            momenttest(119, grouping, constraint, :dsosl1c)
+        end
         # the constraint is {{17x₃²z₁z̄₁, 8z₂²}, {8z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(90, grouping, constraint, :rquadratic)
-            momenttest(91, grouping, constraint, :psdr)
-            momenttest(92, grouping, constraint, :dsosl1)
-            momenttest(93, grouping, constraint, :dsoslin)
-            momenttest(94, grouping, constraint, :psdc)
-            momenttest(95, grouping, constraint, :dsosquad)
-            momenttest(96, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is {{17x₃²z₁z̄₁, (8 + 2I)z₂²}, {(8 - 2I)z̄₂², 6x₂x₄²}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8+2im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[8-2im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(104, grouping, constraint, :rquadratic)
             momenttest(105, grouping, constraint, :psdr)
             momenttest(106, grouping, constraint, :dsosl1)
             momenttest(107, grouping, constraint, :dsoslin)
-            momenttest(108, grouping, constraint, :psdc)
-            momenttest(109, grouping, constraint, :dsosquad)
-            momenttest(110, grouping, constraint, :dsosl1c)
+            momenttest(108, grouping, constraint, :sdsos)
+            momenttest(109, grouping, constraint, :psdc)
+            momenttest(110, grouping, constraint, :dsosquad)
+            momenttest(111, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is {{17x₃²z₁z̄₁, (8 + 2I)z₂²}, {(8 - 2I)z̄₂², 6x₂x₄²}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8+2im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[8-2im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
+            momenttest(120, grouping, constraint, :rquadratic)
+            momenttest(121, grouping, constraint, :psdr)
+            momenttest(122, grouping, constraint, :dsosl1)
+            momenttest(123, grouping, constraint, :dsoslin)
+            momenttest(124, grouping, constraint, :sdsos)
+            momenttest(125, grouping, constraint, :psdc)
+            momenttest(126, grouping, constraint, :dsosquad)
+            momenttest(127, grouping, constraint, :dsosl1c)
         end
         # the constraint is {{5x₂²z₁ - (17I)x₃²z₁ + 5x₂²z̄₁ + (17I)x₃²z̄₁, (8 + 2I)z₂² + (8 - 2I)z̄₂²}, {(8 + 2I)z₂² + (8 - 2I)z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17im,-17im,5,5], SimpleMonomialVector{4,2}(UInt[98, 99, 125, 126])) SimplePolynomial(Complex{BigFloat}[8-2im,8+2im], SimpleMonomialVector{4,2}(UInt[10, 12])); SimplePolynomial(Complex{BigFloat}[8-2im,8+2im], SimpleMonomialVector{4,2}(UInt[10, 12])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(118, grouping, constraint, :rquadratic)
-            momenttest(119, grouping, constraint, :psdr)
-            momenttest(120, grouping, constraint, :dsosl1)
-            momenttest(121, grouping, constraint, :dsoslin)
+            momenttest(136, grouping, constraint, :rquadratic)
+            momenttest(137, grouping, constraint, :psdr)
+            momenttest(138, grouping, constraint, :dsosl1)
+            momenttest(139, grouping, constraint, :dsoslin)
+            momenttest(140, grouping, constraint, :sdsos)
         end
         # the constraint is {{5x₂² + 17x₃²z₁z̄₁, (-3I)x₁ - 8z₂² + z₁z̄₁ + (8 - 2I)z̄₂²}, {(3I)x₁ + (8 + 2I)z₂² + z₁z̄₁ - 8z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[5,17], SimpleMonomialVector{4,2}(UInt[37, 279])) SimplePolynomial(Complex{BigFloat}[-3im,8-2im,-8,1], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])); SimplePolynomial(Complex{BigFloat}[3im,-8,8+2im,1], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
-            momenttest(111, grouping, constraint, :rquadratic)
-            momenttest(112, grouping, constraint, :psdr)
-            momenttest(113, grouping, constraint, :dsosl1)
-            momenttest(114, grouping, constraint, :dsoslin)
-            momenttest(115, grouping, constraint, :psdc)
-            momenttest(116, grouping, constraint, :dsosquad)
-            momenttest(117, grouping, constraint, :dsosl1c)
+            momenttest(128, grouping, constraint, :rquadratic)
+            momenttest(129, grouping, constraint, :psdr)
+            momenttest(130, grouping, constraint, :dsosl1)
+            momenttest(131, grouping, constraint, :dsoslin)
+            momenttest(132, grouping, constraint, :sdsos)
+            momenttest(133, grouping, constraint, :psdc)
+            momenttest(134, grouping, constraint, :dsosquad)
+            momenttest(135, grouping, constraint, :dsosl1c)
         end
     end
 
@@ -15540,265 +17735,7 @@ end
     @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 9])
         # the constraint is 5x₁
         @testset let constraint=SimplePolynomial(BigFloat[5], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(152, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
-            momenttest(157, grouping, constraint, :equality)
-        end
-        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(154, grouping, constraint, :equality)
-        end
-    end
-
-    # the grouping is {1, z₁}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 5])
-        # the constraint is 5x₁
-        @testset let constraint=SimplePolynomial(BigFloat[5], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(153, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
-            momenttest(158, grouping, constraint, :equality)
-        end
-        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(155, grouping, constraint, :equality)
-        end
-    end
-
-    # the grouping is {1, z₂}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 3])
-        # the constraint is (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
-            momenttest(159, grouping, constraint, :equality)
-        end
-        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(156, grouping, constraint, :equality)
-        end
-    end
-
-    # the grouping is {x₁x₄², x₂²x₃³}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[144, 929])
-        # the constraint is 2x₁ + 8x₂x₄²
-        @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
-            momenttest(21, grouping, constraint, :rquadratic)
-            momenttest(22, grouping, constraint, :psdr)
-            momenttest(23, grouping, constraint, :dsosl1)
-            momenttest(24, grouping, constraint, :dsoslin)
-        end
-        # the constraint is 3(z₁ + z̄₁)
-        @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(25, grouping, constraint, :rquadratic)
-            momenttest(26, grouping, constraint, :psdr)
-            momenttest(27, grouping, constraint, :dsosl1)
-            momenttest(28, grouping, constraint, :dsoslin)
-        end
-        # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
-            momenttest(29, grouping, constraint, :rquadratic)
-            momenttest(30, grouping, constraint, :psdr)
-            momenttest(31, grouping, constraint, :dsosl1)
-            momenttest(32, grouping, constraint, :dsoslin)
-        end
-        # the constraint is 17x₁x₃²
-        @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
-            momenttest(13, grouping, constraint, :rquadratic)
-            momenttest(14, grouping, constraint, :psdr)
-            momenttest(15, grouping, constraint, :dsosl1)
-            momenttest(16, grouping, constraint, :dsoslin)
-        end
-        # the constraint is 24x₂z₁z̄₁
-        @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
-            momenttest(17, grouping, constraint, :rquadratic)
-            momenttest(18, grouping, constraint, :psdr)
-            momenttest(19, grouping, constraint, :dsosl1)
-            momenttest(20, grouping, constraint, :dsoslin)
-        end
-        # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
-            momenttest(33, grouping, constraint, :rquadratic)
-            momenttest(34, grouping, constraint, :psdr)
-            momenttest(35, grouping, constraint, :dsosl1)
-            momenttest(36, grouping, constraint, :dsoslin)
-        end
-    end
-
-    # the grouping is {x₂²z₁, x₁x₄²}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[126, 144])
-        # the constraint is 2x₁ + 8x₂x₄²
-        @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
-            momenttest(51, grouping, constraint, :rquadratic)
-            momenttest(52, grouping, constraint, :psdr)
-            momenttest(53, grouping, constraint, :dsosl1)
-            momenttest(54, grouping, constraint, :dsoslin)
-            momenttest(55, grouping, constraint, :psdc)
-            momenttest(56, grouping, constraint, :dsosquad)
-            momenttest(57, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 3(z₁ + z̄₁)
-        @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(58, grouping, constraint, :rquadratic)
-            momenttest(59, grouping, constraint, :psdr)
-            momenttest(60, grouping, constraint, :dsosl1)
-            momenttest(61, grouping, constraint, :dsoslin)
-            momenttest(62, grouping, constraint, :psdc)
-            momenttest(63, grouping, constraint, :dsosquad)
-            momenttest(64, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
-            momenttest(65, grouping, constraint, :rquadratic)
-            momenttest(66, grouping, constraint, :psdr)
-            momenttest(67, grouping, constraint, :dsosl1)
-            momenttest(68, grouping, constraint, :dsoslin)
-            momenttest(69, grouping, constraint, :psdc)
-            momenttest(70, grouping, constraint, :dsosquad)
-            momenttest(71, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 17x₁x₃²
-        @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
-            momenttest(37, grouping, constraint, :rquadratic)
-            momenttest(38, grouping, constraint, :psdr)
-            momenttest(39, grouping, constraint, :dsosl1)
-            momenttest(40, grouping, constraint, :dsoslin)
-            momenttest(41, grouping, constraint, :psdc)
-            momenttest(42, grouping, constraint, :dsosquad)
-            momenttest(43, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 24x₂z₁z̄₁
-        @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
-            momenttest(44, grouping, constraint, :rquadratic)
-            momenttest(45, grouping, constraint, :psdr)
-            momenttest(46, grouping, constraint, :dsosl1)
-            momenttest(47, grouping, constraint, :dsoslin)
-            momenttest(48, grouping, constraint, :psdc)
-            momenttest(49, grouping, constraint, :dsosquad)
-            momenttest(50, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
-            momenttest(72, grouping, constraint, :rquadratic)
-            momenttest(73, grouping, constraint, :psdr)
-            momenttest(74, grouping, constraint, :dsosl1)
-            momenttest(75, grouping, constraint, :dsoslin)
-            momenttest(76, grouping, constraint, :psdc)
-            momenttest(77, grouping, constraint, :dsosquad)
-            momenttest(78, grouping, constraint, :dsosl1c)
-        end
-    end
-
-    # the grouping is {1, x₁, x₂²}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 9, 37])
-        # the constraint is 6x₁
-        @testset let constraint=SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(170, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 4I)z₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+4im], SimpleMonomialVector{4,2}(UInt[5]))
-            momenttest(172, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 4I)z₁ + (6 - 4I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6-4im,6+4im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(171, grouping, constraint, :equality)
-        end
-        # the constraint is (2I)x₃ + (6 + 4I)z₁ + 8z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[8,6+4im,2im], SimpleMonomialVector{4,2}(UInt[4, 5, 7]))
-            momenttest(173, grouping, constraint, :equality)
-        end
-        # the constraint is -10 - 2z₂² + 8z₂z̄₂ - 2z̄₂²
-        @testset let constraint=SimplePolynomial(BigFloat[-10,-2,8,-2], SimpleMonomialVector{4,2}(UInt[1, 10, 11, 12]))
-            momenttest(174, grouping, constraint, :equality)
-        end
-    end
-
-    # the grouping is {1, x₁, z₂²}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 9, 12])
-        # the constraint is 6x₁
-        @testset let constraint=SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(175, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 4I)z₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+4im], SimpleMonomialVector{4,2}(UInt[5]))
             momenttest(177, grouping, constraint, :equality)
-        end
-        # the constraint is (6 + 4I)z₁ + (6 - 4I)z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6-4im,6+4im], SimpleMonomialVector{4,2}(UInt[4, 5]))
-            momenttest(176, grouping, constraint, :equality)
-        end
-        # the constraint is (2I)x₃ + (6 + 4I)z₁ + 8z̄₁
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[8,6+4im,2im], SimpleMonomialVector{4,2}(UInt[4, 5, 7]))
-            momenttest(178, grouping, constraint, :equality)
-        end
-        # the constraint is -10 - 2z₂² + 8z₂z̄₂ - 2z̄₂²
-        @testset let constraint=SimplePolynomial(BigFloat[-10,-2,8,-2], SimpleMonomialVector{4,2}(UInt[1, 10, 11, 12]))
-            momenttest(179, grouping, constraint, :equality)
-        end
-    end
-
-    # the grouping is {1, x₂, x₁x₄², x₂²x₃³}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 144, 929])
-        # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, 17x₄, 10x₁ + 8z₂z̄₂}, {17x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
-            momenttest(125, grouping, constraint, :psdr)
-            momenttest(126, grouping, constraint, :dsosl1)
-            momenttest(127, grouping, constraint, :dsoslin)
-        end
-        # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
-            momenttest(128, grouping, constraint, :psdr)
-            momenttest(129, grouping, constraint, :dsosl1)
-            momenttest(130, grouping, constraint, :dsoslin)
-            momenttest(131, grouping, constraint, :psdc)
-            momenttest(132, grouping, constraint, :dsosquad)
-            momenttest(133, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
-            momenttest(122, grouping, constraint, :psdr)
-            momenttest(123, grouping, constraint, :dsosl1)
-            momenttest(124, grouping, constraint, :dsoslin)
-        end
-    end
-
-    # the grouping is {1, x₂, x₄²z₁, x₃³z₂²}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 79, 729])
-        # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, 18x₄, 10x₁ + 8z₂z̄₂}, {18x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
-            momenttest(140, grouping, constraint, :psdr)
-            momenttest(141, grouping, constraint, :dsosl1)
-            momenttest(142, grouping, constraint, :dsoslin)
-            momenttest(143, grouping, constraint, :psdc)
-            momenttest(144, grouping, constraint, :dsosquad)
-            momenttest(145, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
-        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
-            momenttest(146, grouping, constraint, :psdr)
-            momenttest(147, grouping, constraint, :dsosl1)
-            momenttest(148, grouping, constraint, :dsoslin)
-            momenttest(149, grouping, constraint, :psdc)
-            momenttest(150, grouping, constraint, :dsosquad)
-            momenttest(151, grouping, constraint, :dsosl1c)
-        end
-        # the constraint is 4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂
-        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
-            momenttest(134, grouping, constraint, :psdr)
-            momenttest(135, grouping, constraint, :dsosl1)
-            momenttest(136, grouping, constraint, :dsoslin)
-            momenttest(137, grouping, constraint, :psdc)
-            momenttest(138, grouping, constraint, :dsosquad)
-            momenttest(139, grouping, constraint, :dsosl1c)
-        end
-    end
-
-    # the grouping is {1, x₂, x₁, x₂², x₁x₂, x₁²}
-    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 9, 37, 44, 45])
-        # the constraint is 5x₁
-        @testset let constraint=SimplePolynomial(BigFloat[5], SimpleMonomialVector{4,2}(UInt[9]))
-            momenttest(180, grouping, constraint, :equality)
         end
         # the constraint is (6 + 8I)z̄₁
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
@@ -15806,7 +17743,283 @@ end
         end
         # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(179, grouping, constraint, :equality)
+        end
+    end
+
+    # the grouping is {1, z₁}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 5])
+        # the constraint is 5x₁
+        @testset let constraint=SimplePolynomial(BigFloat[5], SimpleMonomialVector{4,2}(UInt[9]))
+            momenttest(178, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
+            momenttest(183, grouping, constraint, :equality)
+        end
+        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(180, grouping, constraint, :equality)
+        end
+    end
+
+    # the grouping is {1, z₂}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 3])
+        # the constraint is (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
+            momenttest(184, grouping, constraint, :equality)
+        end
+        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
             momenttest(181, grouping, constraint, :equality)
+        end
+    end
+
+    # the grouping is {x₁x₄², x₂²x₃³}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[144, 929])
+        # the constraint is 2x₁ + 8x₂x₄²
+        @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
+            momenttest(23, grouping, constraint, :rquadratic)
+            momenttest(24, grouping, constraint, :psdr)
+            momenttest(25, grouping, constraint, :dsosl1)
+            momenttest(26, grouping, constraint, :dsoslin)
+            momenttest(27, grouping, constraint, :sdsos)
+        end
+        # the constraint is 3(z₁ + z̄₁)
+        @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(28, grouping, constraint, :rquadratic)
+            momenttest(29, grouping, constraint, :psdr)
+            momenttest(30, grouping, constraint, :dsosl1)
+            momenttest(31, grouping, constraint, :dsoslin)
+            momenttest(32, grouping, constraint, :sdsos)
+        end
+        # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
+            momenttest(33, grouping, constraint, :rquadratic)
+            momenttest(34, grouping, constraint, :psdr)
+            momenttest(35, grouping, constraint, :dsosl1)
+            momenttest(36, grouping, constraint, :dsoslin)
+            momenttest(37, grouping, constraint, :sdsos)
+        end
+        # the constraint is 17x₁x₃²
+        @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
+            momenttest(13, grouping, constraint, :rquadratic)
+            momenttest(14, grouping, constraint, :psdr)
+            momenttest(15, grouping, constraint, :dsosl1)
+            momenttest(16, grouping, constraint, :dsoslin)
+            momenttest(17, grouping, constraint, :sdsos)
+        end
+        # the constraint is 24x₂z₁z̄₁
+        @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
+            momenttest(18, grouping, constraint, :rquadratic)
+            momenttest(19, grouping, constraint, :psdr)
+            momenttest(20, grouping, constraint, :dsosl1)
+            momenttest(21, grouping, constraint, :dsoslin)
+            momenttest(22, grouping, constraint, :sdsos)
+        end
+        # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
+            momenttest(38, grouping, constraint, :rquadratic)
+            momenttest(39, grouping, constraint, :psdr)
+            momenttest(40, grouping, constraint, :dsosl1)
+            momenttest(41, grouping, constraint, :dsoslin)
+            momenttest(42, grouping, constraint, :sdsos)
+        end
+    end
+
+    # the grouping is {x₂²z₁, x₁x₄²}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[126, 144])
+        # the constraint is 2x₁ + 8x₂x₄²
+        @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
+            momenttest(59, grouping, constraint, :rquadratic)
+            momenttest(60, grouping, constraint, :psdr)
+            momenttest(61, grouping, constraint, :dsosl1)
+            momenttest(62, grouping, constraint, :dsoslin)
+            momenttest(63, grouping, constraint, :sdsos)
+            momenttest(64, grouping, constraint, :psdc)
+            momenttest(65, grouping, constraint, :dsosquad)
+            momenttest(66, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 3(z₁ + z̄₁)
+        @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(67, grouping, constraint, :rquadratic)
+            momenttest(68, grouping, constraint, :psdr)
+            momenttest(69, grouping, constraint, :dsosl1)
+            momenttest(70, grouping, constraint, :dsoslin)
+            momenttest(71, grouping, constraint, :sdsos)
+            momenttest(72, grouping, constraint, :psdc)
+            momenttest(73, grouping, constraint, :dsosquad)
+            momenttest(74, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
+            momenttest(75, grouping, constraint, :rquadratic)
+            momenttest(76, grouping, constraint, :psdr)
+            momenttest(77, grouping, constraint, :dsosl1)
+            momenttest(78, grouping, constraint, :dsoslin)
+            momenttest(79, grouping, constraint, :sdsos)
+            momenttest(80, grouping, constraint, :psdc)
+            momenttest(81, grouping, constraint, :dsosquad)
+            momenttest(82, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 17x₁x₃²
+        @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
+            momenttest(43, grouping, constraint, :rquadratic)
+            momenttest(44, grouping, constraint, :psdr)
+            momenttest(45, grouping, constraint, :dsosl1)
+            momenttest(46, grouping, constraint, :dsoslin)
+            momenttest(47, grouping, constraint, :sdsos)
+            momenttest(48, grouping, constraint, :psdc)
+            momenttest(49, grouping, constraint, :dsosquad)
+            momenttest(50, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 24x₂z₁z̄₁
+        @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
+            momenttest(51, grouping, constraint, :rquadratic)
+            momenttest(52, grouping, constraint, :psdr)
+            momenttest(53, grouping, constraint, :dsosl1)
+            momenttest(54, grouping, constraint, :dsoslin)
+            momenttest(55, grouping, constraint, :sdsos)
+            momenttest(56, grouping, constraint, :psdc)
+            momenttest(57, grouping, constraint, :dsosquad)
+            momenttest(58, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
+            momenttest(83, grouping, constraint, :rquadratic)
+            momenttest(84, grouping, constraint, :psdr)
+            momenttest(85, grouping, constraint, :dsosl1)
+            momenttest(86, grouping, constraint, :dsoslin)
+            momenttest(87, grouping, constraint, :sdsos)
+            momenttest(88, grouping, constraint, :psdc)
+            momenttest(89, grouping, constraint, :dsosquad)
+            momenttest(90, grouping, constraint, :dsosl1c)
+        end
+    end
+
+    # the grouping is {1, x₁, x₂²}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 9, 37])
+        # the constraint is 6x₁
+        @testset let constraint=SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[9]))
+            momenttest(195, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 4I)z₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+4im], SimpleMonomialVector{4,2}(UInt[5]))
+            momenttest(197, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 4I)z₁ + (6 - 4I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6-4im,6+4im], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(196, grouping, constraint, :equality)
+        end
+        # the constraint is (2I)x₃ + (6 + 4I)z₁ + 8z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[8,6+4im,2im], SimpleMonomialVector{4,2}(UInt[4, 5, 7]))
+            momenttest(198, grouping, constraint, :equality)
+        end
+        # the constraint is -10 - 2z₂² + 8z₂z̄₂ - 2z̄₂²
+        @testset let constraint=SimplePolynomial(BigFloat[-10,-2,8,-2], SimpleMonomialVector{4,2}(UInt[1, 10, 11, 12]))
+            momenttest(199, grouping, constraint, :equality)
+        end
+    end
+
+    # the grouping is {1, x₁, z₂²}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 9, 12])
+        # the constraint is 6x₁
+        @testset let constraint=SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[9]))
+            momenttest(200, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 4I)z₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+4im], SimpleMonomialVector{4,2}(UInt[5]))
+            momenttest(202, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 4I)z₁ + (6 - 4I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6-4im,6+4im], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(201, grouping, constraint, :equality)
+        end
+        # the constraint is (2I)x₃ + (6 + 4I)z₁ + 8z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[8,6+4im,2im], SimpleMonomialVector{4,2}(UInt[4, 5, 7]))
+            momenttest(203, grouping, constraint, :equality)
+        end
+        # the constraint is -10 - 2z₂² + 8z₂z̄₂ - 2z̄₂²
+        @testset let constraint=SimplePolynomial(BigFloat[-10,-2,8,-2], SimpleMonomialVector{4,2}(UInt[1, 10, 11, 12]))
+            momenttest(204, grouping, constraint, :equality)
+        end
+    end
+
+    # the grouping is {1, x₂, x₁x₄², x₂²x₃³}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 144, 929])
+        # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, 17x₄, 10x₁ + 8z₂z̄₂}, {17x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
+            momenttest(145, grouping, constraint, :psdr)
+            momenttest(146, grouping, constraint, :dsosl1)
+            momenttest(147, grouping, constraint, :dsoslin)
+            momenttest(148, grouping, constraint, :sdsos)
+        end
+        # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
+            momenttest(149, grouping, constraint, :psdr)
+            momenttest(150, grouping, constraint, :dsosl1)
+            momenttest(151, grouping, constraint, :dsoslin)
+            momenttest(152, grouping, constraint, :sdsos)
+            momenttest(153, grouping, constraint, :psdc)
+            momenttest(154, grouping, constraint, :dsosquad)
+            momenttest(155, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
+            momenttest(141, grouping, constraint, :psdr)
+            momenttest(142, grouping, constraint, :dsosl1)
+            momenttest(143, grouping, constraint, :dsoslin)
+            momenttest(144, grouping, constraint, :sdsos)
+        end
+    end
+
+    # the grouping is {1, x₂, x₄²z₁, x₃³z₂²}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 79, 729])
+        # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, 18x₄, 10x₁ + 8z₂z̄₂}, {18x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
+            momenttest(163, grouping, constraint, :psdr)
+            momenttest(164, grouping, constraint, :dsosl1)
+            momenttest(165, grouping, constraint, :dsoslin)
+            momenttest(166, grouping, constraint, :sdsos)
+            momenttest(167, grouping, constraint, :psdc)
+            momenttest(168, grouping, constraint, :dsosquad)
+            momenttest(169, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
+        @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
+            momenttest(170, grouping, constraint, :psdr)
+            momenttest(171, grouping, constraint, :dsosl1)
+            momenttest(172, grouping, constraint, :dsoslin)
+            momenttest(173, grouping, constraint, :sdsos)
+            momenttest(174, grouping, constraint, :psdc)
+            momenttest(175, grouping, constraint, :dsosquad)
+            momenttest(176, grouping, constraint, :dsosl1c)
+        end
+        # the constraint is 4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
+            momenttest(156, grouping, constraint, :psdr)
+            momenttest(157, grouping, constraint, :dsosl1)
+            momenttest(158, grouping, constraint, :dsoslin)
+            momenttest(159, grouping, constraint, :sdsos)
+            momenttest(160, grouping, constraint, :psdc)
+            momenttest(161, grouping, constraint, :dsosquad)
+            momenttest(162, grouping, constraint, :dsosl1c)
+        end
+    end
+
+    # the grouping is {1, x₂, x₁, x₂², x₁x₂, x₁²}
+    @testset let grouping=SimpleMonomialVector{4,2}(UInt[1, 8, 9, 37, 44, 45])
+        # the constraint is 5x₁
+        @testset let constraint=SimplePolynomial(BigFloat[5], SimpleMonomialVector{4,2}(UInt[9]))
+            momenttest(205, grouping, constraint, :equality)
+        end
+        # the constraint is (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im], SimpleMonomialVector{4,2}(UInt[4]))
+            momenttest(207, grouping, constraint, :equality)
+        end
+        # the constraint is (6 - 8I)z₁ + (6 + 8I)z̄₁
+        @testset let constraint=SimplePolynomial(Complex{BigFloat}[6+8im,6-8im], SimpleMonomialVector{4,2}(UInt[4, 5]))
+            momenttest(206, grouping, constraint, :equality)
         end
     end
 end

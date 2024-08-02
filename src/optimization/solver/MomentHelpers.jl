@@ -201,6 +201,25 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             indlen = max(1 + maxlen, maxlen + dim -1)
             tri = :U
         end
+    elseif representation isa RepresentationSDSOS
+        matrix_indexing = false
+        if complex
+            #          cᵢᵢ = ∑ₓ sₓ,     sᵢⱼ₁sᵢⱼ₃ ≥ cᵢⱼᵣ² + cᵢⱼᵢ²
+            # lens:    1,               4
+            # indices: maxlen + dim -1, 2 + 4maxlen
+            # each constraint is submitted individually, no accumulation in the same vector
+            colcount = 4
+            indlen = max(maxlen + dim -1, 2 + 4maxlen)
+            tri = :U
+        else
+            #          cᵢᵢ = ∑ₓ sₓ,     sᵢⱼ₁sᵢⱼ₃ ≥ cᵢⱼ²
+            # lens:    1,               3
+            # indices: maxlen + dim -1, 2 + maxlen
+            # each constraint is submitted individually, no accumulation in the same vector
+            colcount = 3
+            indlen = max(maxlen + dim -1, 2 + maxlen)
+            tri = :U
+        end
     elseif dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))
         matrix_indexing = false
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
@@ -242,12 +261,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         row = zero(T)
     else
         lens, indices, values = data
-        # Off-diagonals are multiplied by √2 in order to put variables into the vectorized PSD cone. Even if state isa
-        # SOSWrapper (then, the variables directly correspond to a vectorized PSD cone), the actual values in the PSD matrix
-        # are still multiplied by 1/√2, so we must indeed always multiply the coefficients by √2 to undo this.
-        # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
-        # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying the
-        # left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
         if representation isa RepresentationDSOS
             scaling = 1.
             if complex
@@ -264,16 +277,33 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 slack_indices = add_var_slack!(state, trisize(dim -1))
                 slack_i = 1
             end
-        elseif dim == 2
+        elseif representation isa RepresentationSDSOS
+            # An off-diagonal entry in the originally PSD matrix stays. However, diagonal entries are replaced by sums of dim-1
+            # values that enter the rotated quadratic cone. We need those as slack variables.
+            slack_indices = add_var_slack!(state, dim * (dim -1))
+            slack_i = 1
             rquad = supports_rotated_quadratic(state)
-            quad = supports_quadratic(state)
-            if !rquad && quad
-                scaling = V(2)
+            scaling = rquad ? sqrt(V(2)) : V(2)
+            fixstate = add_constr_fix_prepare!(state, dim) # for every diagonal
+            unchecked_iterator = IndvalsIterator(indices, values, lens)
+        else
+            # Off-diagonals are multiplied by √2 in order to put variables into the vectorized PSD cone. Even if state isa
+            # SOSWrapper (then, the variables directly correspond to a vectorized PSD cone), the actual values in the PSD
+            # matrix are still multiplied by 1/√2, so we must indeed always multiply the coefficients by √2 to undo this.
+            # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
+            # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying
+            # the left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
+            if dim == 2
+                rquad = supports_rotated_quadratic(state)
+                quad = supports_quadratic(state)
+                if !rquad && quad
+                    scaling = V(2)
+                else
+                    scaling = sqrt(V(2))
+                end
             else
                 scaling = sqrt(V(2))
             end
-        else
-            scaling = sqrt(V(2))
         end
     end
     @inbounds for (exp2, g₂) in enumerate(grouping)
@@ -293,6 +323,12 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     unsafe_push!(values, one(V))
                     complex && unsafe_push!(lens, one(eltype(lens)))
                     slack_i += 1
+                end
+                if representation isa RepresentationSDSOS && !ondiag
+                    unsafe_push!(indices, slack_indices[slack_i], slack_indices[slack_i+1])
+                    unsafe_push!(values, one(V), one(V))
+                    unsafe_push!(lens, one(eltype(lens)), one(eltype(lens)))
+                    slack_i += 2
                 end
                 @twice secondtime (!matrix_indexing && !total_real) begin
                     curlen = 0
@@ -355,6 +391,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     if matrix_indexing
                         row += one(row)
                     elseif representation isa RepresentationPSD ||
+                        (representation isa RepresentationSDSOS && !iszero(curlen)) ||
                         (representation isa RepresentationDSOS && ((complex && (l1 || !iszero(curlen))) ||
                                                                    (l1 && (!iszero(curlen) || isempty(lens)))))
                         # For the real-valued ℓ₁ norm cone, we don't need empty entries - unless they are the first one (which
@@ -369,8 +406,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 if representation isa RepresentationDSOS && !l1
                     if ondiag
                         # We always traverse in :U order, so we already assigned slack variables to be the absolutes of all the
-                        # items above the diagonal; we find them in
-                        # slack_indices[slack_i-row+1:slack_i-1].
+                        # items above the diagonal; we find them in slack_indices[slack_i-row+1:slack_i-1].
                         # However, we must also add the corresponding absolute values _below_ the diagonal to our constraint;
                         # these are values that have not been assigned yet, and their indices are more difficult to obtain.
                         δ = (exp1 -1) * block_size + block_i # current row index
@@ -379,7 +415,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                             unsafe_push!(values, -one(V))
                         end
                         let i=slack_i-1+δ
-                            for col in (exp2 -1)*block_size+block_j+1:dim # the absolutes below are the same as to the right
+                            for _ in (exp2 -1)*block_size+block_j+1:dim # the absolutes below are the same as to the right
                                 unsafe_push!(indices, slack_indices[i])
                                 unsafe_push!(values, -one(V))
                                 i += δ
@@ -402,6 +438,37 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     empty!(indices)
                     empty!(values)
                     empty!(lens)
+                elseif representation isa RepresentationSDSOS
+                    if ondiag
+                        # The quadratic cones are set up on the off-diagonals; here, we must just put an equality to the
+                        # supposed diagonal and all the slack variables that make it up. We always traverse in :U order, but
+                        # now we have two slack variables per entry. We take the second one for everything above and the first
+                        # for everything below.
+                        δ = (exp1 -1) * block_size + block_i # current row index
+                        si = div(slack_i, 2, RoundUp)
+                        for i in si-δ+1:si-1
+                            unsafe_push!(indices, slack_indices[2i])
+                            unsafe_push!(values, -one(V))
+                        end
+                        let i=si-1+δ
+                            for _ in (exp2 -1)*block_size+block_j+1:dim # the absolutes below are the same as to the right
+                                unsafe_push!(indices, slack_indices[2i-1])
+                                unsafe_push!(values, -one(V))
+                                i += δ
+                                δ += 1
+                            end
+                        end
+                        fixstate = add_constr_fix!(state, fixstate, Indvals(indices, values), zero(V))
+                    elseif length(lens) == 2
+                        # Since the rhs is zero, these are just two nonnegative constraints on the two slack variables.
+                        add_constr_nonnegative!(state, unchecked_iterator)
+                    else
+                        (rquad ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens,
+                            rquad))
+                    end
+                    empty!(indices)
+                    empty!(values)
+                    empty!(lens)
                 elseif representation isa RepresentationPSD
                     if !matrix_indexing && complex && total_real && !ondiag
                         # We skipped the addition of an imaginary part because it is zero. But we have to tell this to the
@@ -420,6 +487,10 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         end
     end
     representation isa RepresentationDSOS && return # already did everything in the loop
+    if representation isa RepresentationSDSOS
+        add_constr_fix_finalize!(state, fixstate)
+        return
+    end
     if matrix_indexing
         return (complex ? add_constr_psd_complex! : add_constr_psd!)(
             state, dim, PSDMatrixCartesian{_get_offset(indextype)}(dim, Tri, finish!(rows), finish!(indices), finish!(values))
@@ -457,7 +528,7 @@ end
 # complex PSD cone explicitly
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
-    ::Tuple{Val{false},Val{false}}, representation::RepresentationMethod) where {Tri}
+    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDSOS,RepresentationPSD}) where {Tri}
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian && representation isa RepresentationPSD
     frontdiag = false
     if matrix_indexing
@@ -871,6 +942,7 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
         (Val((length(grouping) == 1 || isreal(grouping)) &&
              (constraint isa SimplePolynomial || isreal(constraint))),
          Val(representation isa RepresentationDSOS{<:Any,true} ||
+             representation isa RepresentationSDSOS ||
              (representation isa RepresentationPSD && supports_complex_psd(state)))),
         representation
     )
