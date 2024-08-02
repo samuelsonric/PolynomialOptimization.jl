@@ -28,9 +28,9 @@ Solver.supports_rotated_quadratic(::StateSOS) = true
 Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(:L, zero(Int32))
 
 function Solver.add_constr_slack!(state::StateSOS, num::Int)
-    if state.num_solver_cons + num > state.num_solver_cons
-        newnum = overallocation(state.num_solver_cons + Int32(num))
-        appendvars(state.task, newnum - state.num_solver_cons)
+    if state.num_used_cons + num > state.num_solver_cons
+        newnum = overallocation(state.num_used_cons + Int32(num))
+        appendcons(state.task, newnum - state.num_solver_cons)
         state.num_solver_cons = newnum
     end
     result = state.num_used_cons:state.num_used_cons+Int32(num -1)

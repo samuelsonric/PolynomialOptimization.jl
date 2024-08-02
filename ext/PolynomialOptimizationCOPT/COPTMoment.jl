@@ -30,7 +30,7 @@ Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint)
 
 function Solver.add_var_slack!(state::StateMoment, num::Int)
     if state.num_used_vars + num > state.num_solver_vars
-        newnum = overallocation(state.num_solver_vars + Cint(num))
+        newnum = overallocation(state.num_used_vars + Cint(num))
         Δ = newnum - state.num_solver_vars
         _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
             C_NULL))

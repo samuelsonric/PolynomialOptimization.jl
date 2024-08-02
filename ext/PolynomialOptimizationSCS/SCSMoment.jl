@@ -3,19 +3,19 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
     const minusAcoo_nonneg::SparseMatrixCOO{I,K,Float64,Offset}
     const minusAcoo_soc::SparseMatrixCOO{I,K,Float64,Offset}
     const b_zero::Tuple{FastVec{Int},FastVec{Float64}} # this is one-indexed
-    const c::Ref{Tuple{Vector{K},Vector{Float64}}}
     numzero::I
     lenzero::I
     const socsizes::FastVec{I}
     const psdsizes::FastVec{I}
     slack::K
+    c::Tuple{Vector{K},Vector{Float64}}
 
     StateMoment{I,K}() where {I<:Integer,K<:Integer} = new{I,K,zero(I)}(
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         (FastVec{Int}(), FastVec{Float64}()),
-        Ref{Tuple{Vector{K},Vector{Float64}}}(), 0, 0,
+        0, 0,
         FastVec{I}(), FastVec{I}(), K <: Signed ? -one(K) : typemax(K)
     )
 end
@@ -60,7 +60,7 @@ function Solver.add_constr_fix!(state::StateMoment{<:Integer,K}, ::Nothing, indv
 end
 
 function Solver.fix_objective!(state::StateMoment{<:Any,K}, indvals::Indvals{K,Float64}) where {K}
-    state.c[] = (indvals.indices, indvals.values)
+    state.c = (indvals.indices, indvals.values)
     return
 end
 
@@ -119,7 +119,7 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
         # indices - i.e., we could just use the monomial index. However, now we have to modify the column indices to make them
         # consecutive, removing all monomials that do not occur. We already know that no entry will ever occur twice, so we can
         # make our own optimized COO -> CSC function.
-        Ccoo = state.c[]
+        Ccoo = state.c
         m = size(Acoo, 1)
         b = zeros(Float64, m)
         copy!(@view(b[state.b_zero[1]]), state.b_zero[2])

@@ -28,8 +28,8 @@ Solver.supports_rotated_quadratic(::StateMoment) = true
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
 function Solver.add_var_slack!(state::StateMoment, num::Int)
-    if state.num_solver_vars + num > state.num_solver_vars
-        newnum = overallocation(state.num_solver_vars + Int32(num))
+    if state.num_used_vars + num > state.num_solver_vars
+        newnum = overallocation(state.num_used_vars + Int32(num))
         appendvars(state.task, newnum - state.num_solver_vars)
         state.num_solver_vars = newnum
     end

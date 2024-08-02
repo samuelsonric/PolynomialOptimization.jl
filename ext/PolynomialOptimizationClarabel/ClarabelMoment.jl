@@ -1,14 +1,13 @@
-struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
-    Acoo::SparseMatrixCOO{Int,K,V,1}
-    b::Tuple{FastVec{Int},FastVec{V}}
-    q::Ref{Tuple{Vector{K},Vector{V}}}
-    cones::FastVec{Clarabel.SupportedCone}
+mutable struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
+    const Acoo::SparseMatrixCOO{Int,K,V,1}
+    const b::Tuple{FastVec{Int},FastVec{V}}
+    const cones::FastVec{Clarabel.SupportedCone}
     slack::K
+    q::Tuple{Vector{K},Vector{V}}
 
     StateMoment{K,V}() where {K<:Integer,V<:Real} = new{K,V}(
         SparseMatrixCOO{Int,K,V,1}(),
         (FastVec{Int}(), FastVec{V}()),
-        Ref{Tuple{Vector{K},Vector{V}}}(),
         FastVec{Clarabel.SupportedCone}(),
         K <: Signed ? -one(K) : typemax(K)
     )
@@ -54,7 +53,7 @@ function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::Ind
 end
 
 function Solver.fix_objective!(state::StateMoment{K,V}, indvals::Indvals{K,V}) where {K,V}
-    state.q[] = (indvals.indices, indvals.values)
+    state.q = (indvals.indices, indvals.values)
     return
 end
 
@@ -72,7 +71,7 @@ function Solver.poly_optimize(::Val{:ClarabelMoment}, relaxation::AbstractRelaxa
         # indices - i.e., we could just use the monomial index. However, now we have to modify the column indices to make them
         # consecutive, removing all monomials that do not occur. We already know that no entry will ever occur twice, so we can
         # make our own optimized COO -> CSC function.
-        Qcoo = state.q[]
+        Qcoo = state.q
         b = zeros(V, size(state.Acoo, 1))
         copy!(@view(b[state.b[1]]), state.b[2])
 

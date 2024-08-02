@@ -1,22 +1,25 @@
-struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
-    Acoo::SparseMatrixCOO{Int,K,V,1}
-    b::Tuple{FastVec{Int},FastVec{V}}
-    minusGcoo::SparseMatrixCOO{Int,K,V,1}
-    c::Ref{Tuple{Vector{K},Vector{V}}}
-    cones::FastVec{Cones.Cone{V}}
+mutable struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,V}
+    const Acoo::SparseMatrixCOO{Int,K,V,1}
+    const b::Tuple{FastVec{Int},FastVec{V}}
+    const minusGcoo::SparseMatrixCOO{Int,K,V,1}
+    const cones::FastVec{Cones.Cone{V}}
     slack::K
+    c::Tuple{Vector{K},Vector{V}}
 
     StateMoment{K,V}() where {K<:Integer,V<:Real} = new{K,V}(
         SparseMatrixCOO{Int,K,V,1}(),
         (FastVec{Int}(), FastVec{V}()),
         SparseMatrixCOO{Int,K,V,1}(),
-        Ref{Tuple{Vector{K},Vector{V}}}(),
         FastVec{Cones.Cone{V}}(),
         K <: Signed ? -one(K) : typemax(K)
     )
 end
 
 Solver.supports_rotated_quadratic(::StateMoment) = true
+
+Solver.supports_l1(::StateMoment) = true
+
+Solver.supports_complex_l1(::StateMoment) = true
 
 Solver.supports_complex_psd(::StateMoment) = true
 
@@ -37,6 +40,18 @@ end
 function Solver.add_constr_rotated_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiPerSquare{V}(length(indvals)))
+    return
+end
+
+function Solver.add_constr_l1!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
+    push!(state.cones, Cones.EpiNormInf{V,V}(length(indvals), use_dual=true))
+    return
+end
+
+function Solver.add_constr_l1_complex!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
+    push!(state.cones, Cones.EpiNormInf{V,Complex{V}}(length(indvals), use_dual=true))
     return
 end
 
@@ -69,7 +84,7 @@ function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::Ind
 end
 
 function Solver.fix_objective!(state::StateMoment{K,V}, indvals::Indvals{K,V}) where {K,V}
-    state.c[] = (indvals.indices, indvals.values)
+    state.c = (indvals.indices, indvals.values)
     return
 end
 
@@ -88,7 +103,7 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
         # indices - i.e., we could just use the monomial index. However, now we have to modify the column indices to make them
         # consecutive, removing all monomials that do not occur. We already know that no entry will ever occur twice, so we can
         # make our own optimized COO -> CSC function.
-        Ccoo = state.c[]
+        Ccoo = state.c
         b = zeros(V, size(state.Acoo, 1))
         copy!(@view(b[state.b[1]]), state.b[2])
         h = zeros(V, size(state.minusGcoo, 1))
