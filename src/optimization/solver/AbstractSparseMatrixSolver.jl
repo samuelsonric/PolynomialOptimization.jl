@@ -213,7 +213,7 @@ sparse vector depending on the relaxation. To establish the mapping between the 
 column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the problem construction needs to be passed on.
 `slack` must contain the current value of the `slack` field of the `AbstractSparseMatrixSolver`.
 """
-function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, _moments::Vector{V},
     slack::Integer, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
     coo₁moninds = @view(coo₁.moninds[slack isa Signed ? (-slack:length(coo₁.moninds)) :
@@ -221,6 +221,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
     cooₙmoninds = ((@view(coo.moninds[slack isa Signed ? (-slack:length(coo.moninds)) :
                                                          (1:length(coo.moninds)-(typemax(slack)-slack))]) for coo in cooₙ)...,)
     max_mons = max(coo₁moninds[end], (moninds[end] for moninds in cooₙmoninds)...) # coos are sorted according to the columns
+    moments = @view(_moments[slack isa Signed ? (-slack:length(_moments)) : (1:length(_moments)-(typemax(slack)-slack))])
     @assert(length(moments) ≤ max_mons)
     if length(moments) == max_mons # (real) dense case
         solution = moments
