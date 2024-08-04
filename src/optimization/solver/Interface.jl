@@ -30,23 +30,24 @@ The default implementation returns the same value as [`supports_rotated_quadrati
 """
 supports_quadratic(state) = supports_rotated_quadratic(state)
 
-"""
-    supports_l1(state)
+@doc raw"""
+    supports_lnorm(state)
 
-Indicates the solver support for ℓ₁ norm cones: if `true`, the cone ``x_1 \\geq \\sum_{i \\geq 2} \\lvert x_i\\rvert`` is
-supported.
+Indicates the solver support for ``\ell_1`` (in the moment case) and ``\ell_\infty`` (in the SOS case) norm cones: if `true`,
+the cone ``x_1 \geq \sum_{i \geq 2} \lvert x_i\rvert`` or ``x_1 \geq \max_{i \geq 2} \lvert x_i\rvert`` is supported.
 The default implementation returns `false`.
 """
-supports_l1(state) = false
+supports_lnorm(state) = false
 
 @doc raw"""
-    supports_complex_l1(state)
+    supports_complex_lnorm(state)
 
-Indicates the solver support for complex-valued ℓ₁ norm cones: if `true`, the cone
-``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
+Indicates the solver support for complex-valued ``\ell_1`` (in the moment case) and ``\ell_\infty`` (in the SOS case) norm
+cones: if `true`, the cone ``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` or
+``x_1 \geq \max_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
 The default implementation returns `false`.
 """
-supports_complex_l1(state) = false
+supports_complex_lnorm(state) = false
 
 """
     Indvals{T,V<:Real}

@@ -86,8 +86,8 @@ Solver.supports_rotated_quadratic(::SolverSetup{<:Any,true}) = true
 Solver.psd_indextype(::SolverSetup{<:Any,<:Any,psd}) where {psd} = psd
 Solver.psd_indextype(::SolverSetup{<:Any,<:Any,false}) = PSDIndextypeMatrixCartesian(:U, typemin(Int)) # should only be triggered for linear/quadratic case, and then the offset is ignored
 Solver.supports_complex_psd(::SolverSetup{<:Any,<:Any,<:Any,true}) = true
-Solver.supports_l1(::SolverSetup{<:Any,<:Any,<:Any,<:Any,<:Any,true}) = true
-Solver.supports_complex_l1(::SolverSetup{<:Any,<:Any,<:Any,true,<:Any,true}) = true
+Solver.supports_lnorm(::SolverSetup{<:Any,<:Any,<:Any,<:Any,<:Any,true}) = true
+Solver.supports_complex_lnorm(::SolverSetup{<:Any,<:Any,<:Any,true,<:Any,true}) = true
 function Solver.add_var_slack!(state::SolverSetup, num::Int)
     @test state.slackvars >= num
     state.slackvars -= num

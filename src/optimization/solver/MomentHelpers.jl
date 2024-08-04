@@ -167,7 +167,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     elseif representation isa RepresentationDSOS
         matrix_indexing = false
         if complex
-            if supports_complex_l1(state)
+            if supports_complex_lnorm(state)
                 # complex ℓ₁ norm case: {cᵢᵢ, cᵢ₁ᵣ, cᵢ₁ᵢ, ... cᵢᵢ₋₁ᵣ, cᵢᵢ₋₁ᵢ, cᵢᵢ₊₁ᵣ, ...}
                 # lens:         2dim -1
                 # indices:      maxlen + 2maxlen * 2(dim -1))
@@ -184,7 +184,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 indlen = max(1 + 4maxlen, maxlen + dim -1)
                 tri = :U
             end
-        elseif supports_l1(state)
+        elseif supports_lnorm(state)
             # ℓ₁ norm case: {cᵢᵢ, cᵢ₁, ... cᵢᵢ₋₁, cᵢᵢ₊₁, ...}
             # lens:         dim
             # indices:      maxlen * dim
@@ -265,12 +265,12 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             scaling = 1.
             if complex
                 # We only end up here if the user requested the use of the complex rewrite in the representation.
-                l1 = supports_complex_l1(state) # In principle, a solver could decide to just implement the complex-valued cone
+                l1 = supports_complex_lnorm(state) # In principle, a solver could decide to just implement the complex-valued cone
                                                 # and we would not automatically rewrite things to use this one.
                 l1 || supports_quadratic(state) ||
                     error("Invalid configuration: the quadratic cone or the complex-valued ℓ₁ norm cone must be supported for this model of DSOS constraints")
             else
-                l1 = supports_l1(state)
+                l1 = supports_lnorm(state)
             end
             unchecked_iterator = IndvalsIterator(indices, values, lens)
             if !l1
@@ -540,7 +540,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false))), representation))
         if representation isa RepresentationDSOS
-            l1 = supports_l1(state)
+            l1 = supports_lnorm(state)
             if l1
                 frontdiag = true
                 tri = :F
@@ -926,7 +926,7 @@ See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
 function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
-    representation isa RepresentationDSOS{<:Any,true} && !supports_quadratic(state) && !supports_complex_l1(state) &&
+    representation isa RepresentationDSOS{<:Any,true} && !supports_quadratic(state) && !supports_complex_lnorm(state) &&
         error("The solver does not support quadratic or complex ℓ₁ cones, so a Hermitian representation via diagonally-dominant matrices is not possible")
     # TODO (unlikely): we could still do it if the solver supports only the rotated, but not the standard cone. But are there
     # any solvers in this category?

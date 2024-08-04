@@ -155,7 +155,7 @@ constraint matrix) indexed according to the `indvals`. This will read (where ``X
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
 !!! warning
-    This function will only be called if [`supports_l1`](@ref) returns `true` for the given state.
+    This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
     If ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables will be used
     (see [`add_var_slack!`](@ref)).
 """
@@ -170,7 +170,7 @@ Same as [`add_constr_l1!`](@ref), but now two successive items in `indvals` are 
 imaginary part of a component of the ℓ₁ norm cone.
 
 !!! warning
-    This function will only be called if [`supports_complex_l1`](@ref) returns `true` for the given state.
+    This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.
     If complex-valued ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables and
     quadratic cones will be used (see [`add_var_slack!`](@ref)).
 """

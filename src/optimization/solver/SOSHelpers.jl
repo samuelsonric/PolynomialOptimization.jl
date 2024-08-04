@@ -18,8 +18,8 @@ add_constr_rotated_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add
 add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
 add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
 add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
-add_constr_l1!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1!(state.state, indvals)
-add_constr_l1_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1_complex!(state.state, indvals)
+add_constr_l1!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_linf!(state.state, indvals)
+add_constr_l1_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_linf_complex!(state.state, indvals)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
 add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)

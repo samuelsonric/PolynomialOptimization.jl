@@ -1,5 +1,6 @@
-export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_l1!, add_var_l1_complex!, add_var_psd!,
-    add_var_psd_complex!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!, add_constr_slack!
+export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_linf!, add_var_linf_complex!,
+    add_var_psd!, add_var_psd_complex!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!,
+    add_constr_slack!
 
 function add_var_nonnegative! end
 
@@ -138,38 +139,38 @@ off-diagonal elements, the real part will be followed by the imaginary part. The
 """
 add_var_psd_complex!(::Any, ::Int, ::IndvalsIterator{<:Any,<:Real})
 
-function add_var_l1! end
+function add_var_linf! end
 
 @doc raw"""
-    add_var_l1!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_var_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds decision variables in a ℓ₁ norm cone to the solver and put their values into the linear constraints (rows in the linear
-constraint matrix), indexed according to the `indvals`. The `N = length(indvals)` variables will satisfy
-``x_1 \geq \sum_{i = 2}^N \lvert x_i\rvert``.
+Adds decision variables in a ``\ell_\infty`` norm cone to the solver and put their values into the linear constraints (rows in
+the linear constraint matrix), indexed according to the `indvals`. The `N = length(indvals)` variables will satisfy
+``x_1 \geq \max_{i > 2} \lvert x_i\rvert``.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
 !!! warning
-    This function will only be called if [`supports_l1`](@ref) returns `true` for the given state.
-    If ℓ₁ norm cones are unsupported, a fallback to multiple nonnegative variables with slack constraints will be
+    This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
+    If ``\ell_\infty`` norm cones are unsupported, a fallback to multiple nonnegative variables with slack constraints will be
     used (see [`add_constr_slack!`](@ref)).
 """
-add_var_l1!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_var_linf!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
-function add_var_l1_complex! end
+function add_var_linf_complex! end
 
 @doc raw"""
-    add_var_l1_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_var_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Same as [`add_var_l1!`](@ref), but now two successive items in `indvals` are interpreted as determining the real and
-imaginary part of a component of the ℓ₁ norm variable.
+Same as [`add_var_linf!`](@ref), but now two successive items in `indvals` are interpreted as determining the real and
+imaginary part of a component of the ``\ell_\infty`` norm variable.
 
 !!! warning
-    This function will only be called if [`supports_complex_l1`](@ref) returns `true` for the given state.
-    If complex-valued ℓ₁ norm cones are unsupported, a fallback to multiple nonnegative and quadratic variables with slack
-    constraints and will be used (see [`add_constr_slack!`](@ref)).
+    This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.
+    If complex-valued ``\ell_\infty`` norm cones are unsupported, a fallback to multiple nonnegative and quadratic variables
+    with slack constraints and will be used (see [`add_constr_slack!`](@ref)).
 """
-add_var_l1_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_var_linf_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
 """
     add_var_free_prepare!(state, num::Int)

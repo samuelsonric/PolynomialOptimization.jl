@@ -17,9 +17,9 @@ end
 
 Solver.supports_rotated_quadratic(::StateMoment) = true
 
-Solver.supports_l1(::StateMoment) = true
+Solver.supports_lnorm(::StateMoment) = true
 
-Solver.supports_complex_l1(::StateMoment) = true
+Solver.supports_complex_lnorm(::StateMoment) = true
 
 Solver.supports_complex_psd(::StateMoment) = true
 
