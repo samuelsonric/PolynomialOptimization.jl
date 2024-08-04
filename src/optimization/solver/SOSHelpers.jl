@@ -43,9 +43,12 @@ To make this function work for a solver, implement the following low-level primi
 - [`add_var_nonnegative!`](@ref)
 - [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_var_linf!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_var_linf_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
+- [`add_constr_slack!`](@ref)
 
 Usually, this function does not have to be called explicitly; use [`sos_setup!`](@ref) instead.
 
@@ -85,6 +88,8 @@ The following methods must be implemented by a solver to make this function work
 - [`add_var_nonnegative!`](@ref)
 - [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_var_linf!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_var_linf_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -92,6 +97,7 @@ The following methods must be implemented by a solver to make this function work
 - [`add_var_free!`](@ref)
 - [`add_var_free_finalize!`](@ref) (optional)
 - [`fix_constraints!`](@ref)
+- [`add_constr_slack!`](@ref)
 
 !!! warning "Indices"
     The constraint indices used in all solver functions directly correspond to the indices given back by [`mindex`](@ref).

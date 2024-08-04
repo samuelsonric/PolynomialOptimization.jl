@@ -918,9 +918,12 @@ To make this function work for a solver, implement the following low-level primi
 - [`add_constr_nonnegative!`](@ref)
 - [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_constr_l1!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_constr_l1_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
+- [`add_var_slack!`](@ref)
 
 Usually, this function does not have to be called explicitly; use [`moment_setup!`](@ref) instead.
 
@@ -1118,6 +1121,8 @@ The following methods must be implemented by a solver to make this function work
 - [`add_constr_nonnegative!`](@ref)
 - [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
+- [`add_constr_l1!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_constr_l1_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -1125,6 +1130,7 @@ The following methods must be implemented by a solver to make this function work
 - [`add_constr_fix!`](@ref)
 - [`add_constr_fix_finalize!`](@ref) (optional)
 - [`fix_objective!`](@ref)
+- [`add_var_slack!`](@ref)
 
 !!! warning "Indices"
     The variable indices used in all solver functions directly correspond to the indices given back by [`mindex`](@ref).

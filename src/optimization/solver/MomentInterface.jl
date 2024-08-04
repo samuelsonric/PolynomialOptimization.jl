@@ -147,8 +147,8 @@ function add_constr_l1! end
 @doc raw"""
     add_constr_l1!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds a ℓ₁ norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the linear
-constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+Adds an ``\ell_1`` norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
+linear constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
 ``X_1 \geq \sum_{i = 2}^N \lvert X_i\rvert``.
 
@@ -156,7 +156,7 @@ See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
 !!! warning
     This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
-    If ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables will be used
+    If ``\ell_1`` norm constraints are unsupported, a fallback to multiple linear constraints with slack variables will be used
     (see [`add_var_slack!`](@ref)).
 """
 add_constr_l1!(::Any, ::IndvalsIterator{<:Any,<:Real})
@@ -166,13 +166,13 @@ function add_constr_l1_complex! end
 @doc raw"""
     add_constr_l1_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Same as [`add_constr_l1!`](@ref), but now two successive items in `indvals` are interpreted as determining the real and
-imaginary part of a component of the ℓ₁ norm cone.
+Same as [`add_constr_l1!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
+determining the real and imaginary part of a component of the ``\ell_1`` norm cone.
 
 !!! warning
     This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.
-    If complex-valued ℓ₁ norm constraints are unsupported, a fallback to multiple linear constraints with slack variables and
-    quadratic cones will be used (see [`add_var_slack!`](@ref)).
+    If complex-valued ``\ell_1`` norm constraints are unsupported, a fallback to multiple linear constraints with slack
+    variables and quadratic cones will be used (see [`add_var_slack!`](@ref)).
 """
 add_constr_l1_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
 

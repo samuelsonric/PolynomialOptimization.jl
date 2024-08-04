@@ -144,7 +144,7 @@ function add_var_linf! end
 @doc raw"""
     add_var_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds decision variables in a ``\ell_\infty`` norm cone to the solver and put their values into the linear constraints (rows in
+Adds decision variables in an ``\ell_\infty`` norm cone to the solver and put their values into the linear constraints (rows in
 the linear constraint matrix), indexed according to the `indvals`. The `N = length(indvals)` variables will satisfy
 ``x_1 \geq \max_{i > 2} \lvert x_i\rvert``.
 
@@ -162,8 +162,8 @@ function add_var_linf_complex! end
 @doc raw"""
     add_var_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Same as [`add_var_linf!`](@ref), but now two successive items in `indvals` are interpreted as determining the real and
-imaginary part of a component of the ``\ell_\infty`` norm variable.
+Same as [`add_var_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
+determining the real and imaginary part of a component of the ``\ell_\infty`` norm variable.
 
 !!! warning
     This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.

@@ -122,7 +122,7 @@ SparseMatrixCOO
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
-MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::Integer, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
 #### [`AbstractAPISolver`](@ref)
@@ -144,6 +144,8 @@ which cones are supported; these should return constants.
 ```@docs
 supports_rotated_quadratic
 supports_quadratic
+supports_lnorm
+supports_complex_lnorm
 supports_complex_psd
 PSDIndextype
 PSDIndextypeMatrixCartesian
@@ -174,6 +176,8 @@ For this to work, the following methods (or a subset as previously indicated) mu
 add_constr_nonnegative!
 add_constr_rotated_quadratic!
 add_constr_quadratic!
+add_constr_l1!
+add_constr_l1_complex!
 add_constr_psd!
 add_constr_psd_complex!
 add_constr_fix_prepare!
@@ -196,6 +200,8 @@ The following methods (or a subset as previously indicated) must be implemented.
 add_var_nonnegative!
 add_var_rotated_quadratic!
 add_var_quadratic!
+add_var_linf!
+add_var_linf_complex!
 add_var_psd!
 add_var_psd_complex!
 add_var_free_prepare!
