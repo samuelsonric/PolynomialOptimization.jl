@@ -289,36 +289,25 @@ the most resource-intensive.
 struct RepresentationPSD end
 
 """
-    RepresentationSDSOS([u]) <: RepresentationMethod
+    RepresentationSDSOS() <: RepresentationMethod
 
-Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some
-`Q ∈ SDSOS`. The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix
-of suitable dimension.
-To represent `Q ∈ SDSOS`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
+Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone.
+To represent `σ ∈ SDSOS`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
 to a semidefinite formulation if this is not the case, as such a rewrite would defeat the purpose.
 """
-struct RepresentationSDSOS{M}
-    u::M
-
-    RepresentationSDSOS(u::M=I) where {M} = new{M}(u)
-end
+struct RepresentationSDSOS end
 
 """
-    RepresentationDSOS([u]; [complex=false]) <: RepresentationMethod
+    RepresentationDSOS(; complex=false) <: RepresentationMethod
 
-Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\\sigma = u^\\top Q u`` for some `Q ∈ DSOS`.
-The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix of suitable
-dimension.
-The membership `Q ∈ DSOS` is achieved using linear inequalities only.
+Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, whic is achieved using linear inequalities only.
 
 If σ is a Hermitian matrix, the DSOS condition will be imposed on the real matrix associated with σ, which has twice its
 dimension. Alternatively, by setting `complex` to `true`, the complex structure will be kept using a complex-valued ℓ₁ cone or
 a quadratic cone (which requires support for this in the solver).
 """
-struct RepresentationDSOS{M,Q}
-    u::M
-
-    RepresentationDSOS(u::M=I; complex=false) where {M} = new{M,complex}(u)
+struct RepresentationDSOS{Complex}
+    RepresentationDSOS(; complex=false) = new{complex}(u)
 end
 
 """
@@ -331,7 +320,7 @@ are supported:
 - [`RepresentationSDSOS`](@ref)
 - [`RepresentationDSOS`](@ref)
 """
-const RepresentationMethod = Union{RepresentationPSD,<:RepresentationSDSOS,<:RepresentationDSOS}
+const RepresentationMethod = Union{RepresentationPSD,RepresentationSDSOS,<:RepresentationDSOS}
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")
