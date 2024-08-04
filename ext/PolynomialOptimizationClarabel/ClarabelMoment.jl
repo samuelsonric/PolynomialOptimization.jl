@@ -19,7 +19,7 @@ Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
 function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.Acoo, indvals)
-    push!(state.cones, Clarabel.NonnegativeConeT(1))
+    push!(state.cones, Clarabel.NonnegativeConeT(length(indvals)))
     return
 end
 
