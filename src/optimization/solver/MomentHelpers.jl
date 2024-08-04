@@ -163,6 +163,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     maxlen = maximum(length, constraint, init=0)
     if dim == 1
         matrix_indexing = false
+        representation = RepresentationPSD() # will be linear anyway
         tri = :U
     elseif representation isa RepresentationDSOS
         matrix_indexing = false
@@ -201,6 +202,10 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             indlen = max(1 + maxlen, maxlen + dim -1)
             tri = :U
         end
+    elseif dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))
+        matrix_indexing = false
+        representation = RepresentationPSD() # will be quadratic anyway
+        tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
     elseif representation isa RepresentationSDSOS
         matrix_indexing = false
         if complex
@@ -220,9 +225,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             indlen = max(maxlen + dim -1, 2 + maxlen)
             tri = :U
         end
-    elseif dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))
-        matrix_indexing = false
-        tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
     elseif indextype isa PSDIndextypeMatrixCartesian
         Tri ∈ (:L, :U) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype, type)))
         matrix_indexing = true
