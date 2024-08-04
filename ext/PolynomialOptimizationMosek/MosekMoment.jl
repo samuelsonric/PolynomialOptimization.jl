@@ -39,27 +39,25 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
 end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Int32,Float64})
-    appendafes(state.task, 1)
-    Mosek.@MSK_putafefrow(state.task.task, state.num_afes, length(indvals), indvals.indices, indvals.values)
-    Mosek.@MSK_appendacc(state.task.task, 0, 1, Ref(state.num_afes), C_NULL)
-    state.num_afes += 1
+    appendcons(state.task, 1)
+    Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indvals), indvals.indices, indvals.values)
+    Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_LO, 0.0, Inf)
+    state.num_cons += 1
     return
 end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64})
     N = length(indvals)
-    appendafes(state.task, N)
-    ptrrow = Vector{Int64}(undef, N)
+    appendcons(state.task, N)
+    ptrrow = Vector{Int64}(undef, N +1)
     ptrrow[1] = 0
-    @inbounds for (i, len) in zip(2:N, indvals.lens)
-        ptrrow[i] = ptrrow[i-1] + len
+    @inbounds for (i, len) in enumerate(indvals.lens)
+        ptrrow[i+1] = ptrrow[i] + len
     end
-    Mosek.@MSK_putafefrowlist(state.task.task, N, collect(state.num_afes:state.num_afes+N-1),
-        convert(AbstractVector{Int32}, indvals.lens), ptrrow, length(indvals.indices), indvals.indices, indvals.values)
-    dom = Ref{Int64}()
-    Mosek.@MSK_appendrplusdomain(state.task.task, N, dom)
-    Mosek.@MSK_appendaccseq(state.task.task, dom[], N, state.num_afes, C_NULL)
-    state.num_afes += N
+    Mosek.@MSK_putarowslice64(state.task.task, state.num_cons, state.num_cons + N, ptrrow, pointer(ptrrow, 2),
+        indvals.indices, indvals.values)
+    Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + N, MSK_BK_LO, 0.0, Inf)
+    state.num_cons += N
     return
 end
 
