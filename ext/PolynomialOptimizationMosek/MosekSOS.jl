@@ -107,7 +107,7 @@ end
 
 function Solver.fix_constraints!(state::StateSOS, indvals::Indvals{Int32,Float64})
     len = length(indvals)
-    Mosek.@MSK_putconboundsliceconst(state.task.task, 0, length(state.mon_to_solver), MSK_BK_FX, 0., 0.)
+    Mosek.@MSK_putconboundsliceconst(state.task.task, 0, state.num_used_cons, MSK_BK_FX, 0., 0.)
     Mosek.@MSK_putconboundlist(state.task.task, len, indvals.indices, fill(MSK_BK_FX.value, len), indvals.values,
         indvals.values)
     return
