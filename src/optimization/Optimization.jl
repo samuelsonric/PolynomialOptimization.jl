@@ -1,12 +1,12 @@
-export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDSOS, RepresentationSDSOS
+export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDD, RepresentationSDD
 
 include("./Result.jl")
 include("./MomentMatrix.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
-using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDSOS,
-    RepresentationSDSOS
+using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDD,
+    RepresentationSDD
 import .Solver: poly_optimize
 
 """

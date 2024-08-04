@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    878950,      16332]
-NotebookOptionsPosition[    869675,      16174]
-NotebookOutlinePosition[    870116,      16191]
-CellTagsIndexPosition[    870073,      16188]
+NotebookDataLength[    878778,      16329]
+NotebookOptionsPosition[    869503,      16171]
+NotebookOutlinePosition[    869944,      16188]
+CellTagsIndexPosition[    869901,      16185]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -12127,7 +12127,7 @@ Cell[BoxData[
 
 Cell[CellGroupData[{
 
-Cell["DSOS", "Subsection",ExpressionUUID->"408b845e-878b-4d40-88b9-6f929bc078fe"],
+Cell["DD", "Subsection",ExpressionUUID->"408b845e-878b-4d40-88b9-6f929bc078fe"],
 
 Cell[BoxData[
  RowBox[{
@@ -12243,15 +12243,15 @@ Cell[BoxData[
 
 Cell[BoxData[{
  RowBox[{
-  RowBox[{"ClearAll", "[", "makeConstraintDSOShelper", "]"}], 
+  RowBox[{"ClearAll", "[", "makeConstraintDDhelper", "]"}], 
   ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
-   RowBox[{"makeConstraintDSOShelper", "[", 
+   RowBox[{"makeConstraintDDhelper", "[", 
     RowBox[{"momentMatrix_", ",", 
      RowBox[{"f", ":", 
-      RowBox[{"\"\<DSOSR-L1\>\"", "|", "\"\<DSOSCR-L1\>\""}]}]}], "]"}], ":=",
-    "\[IndentingNewLine]", 
+      RowBox[{"\"\<DDR-L1\>\"", "|", "\"\<DDCR-L1\>\""}]}]}], "]"}], ":=", 
+   "\[IndentingNewLine]", 
    RowBox[{"With", "[", 
     RowBox[{
      RowBox[{"{", 
@@ -12273,7 +12273,7 @@ Cell[BoxData[{
               RowBox[{"reordered", "=", 
                RowBox[{"If", "[", 
                 RowBox[{
-                 RowBox[{"f", "===", "\"\<DSOSR-L1\>\""}], ",", 
+                 RowBox[{"f", "===", "\"\<DDR-L1\>\""}], ",", 
                  RowBox[{"RotateLeft", "[", 
                   RowBox[{
                    RowBox[{"inds", "[", 
@@ -12335,12 +12335,12 @@ Cell[BoxData[{
             "\[IndentingNewLine]", "]"}]}], ",", "\[IndentingNewLine]", 
           "dim"}], "]"}], ",", "\[IndentingNewLine]", "\"\<\\nelse\>\""}], 
        "]"}], "<>", "\[IndentingNewLine]", 
-      "\"\<\\n    state.lastcall = :dsosl1\\nend\>\""}]}], 
+      "\"\<\\n    state.lastcall = :ddl1\\nend\>\""}]}], 
     "\[IndentingNewLine]", "]"}]}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
-   RowBox[{"makeConstraintDSOShelper", "[", 
-    RowBox[{"momentMatrix_", ",", "\"\<DSOSR-Linear\>\""}], "]"}], ":=", 
+   RowBox[{"makeConstraintDDhelper", "[", 
+    RowBox[{"momentMatrix_", ",", "\"\<DDR-Linear\>\""}], "]"}], ":=", 
    RowBox[{"With", "[", 
     RowBox[{
      RowBox[{"{", 
@@ -12483,7 +12483,7 @@ Cell[BoxData[{
              "\[IndentingNewLine]", "\"\<\\nelse\>\""}], "]"}]}]}], 
          "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}], "<>", 
       "\[IndentingNewLine]", 
-      "\"\<\\n    state.lastcall = :dsoslin\\nend\\nstate.it += 1\>\""}]}], 
+      "\"\<\\n    state.lastcall = :ddlin\\nend\\nstate.it += 1\>\""}]}], 
     "\[IndentingNewLine]", "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->"In[74]:=",ExpressionUUID->"ce5c8732-2cfa-c141-a152-91ab87a62ab4"],
@@ -12501,22 +12501,22 @@ Cell[BoxData[
        RowBox[{"FreeQ", "[", 
         RowBox[{"momentMatrix", ",", "_Complex"}], "]"}]}]}], ",", 
      RowBox[{"f", ":", 
-      RowBox[{"\"\<DSOSR\>\"", "|", "\"\<DSOSCR\>\""}]}]}], "]"}], ":=", 
+      RowBox[{"\"\<DDR\>\"", "|", "\"\<DDCR\>\""}]}]}], "]"}], ":=", 
    RowBox[{"Splice", "[", 
     RowBox[{"{", "\[IndentingNewLine]", 
      RowBox[{
-      RowBox[{"\"\<dsosl1\>\"", "->", 
+      RowBox[{"\"\<ddl1\>\"", "->", 
        RowBox[{
         RowBox[{"++", "currentId"}], "->", 
-        RowBox[{"makeConstraintDSOShelper", "[", 
+        RowBox[{"makeConstraintDDhelper", "[", 
          RowBox[{"momentMatrix", ",", 
           RowBox[{"f", "<>", "\"\<-L1\>\""}]}], "]"}]}]}], ",", 
       "\[IndentingNewLine]", 
-      RowBox[{"\"\<dsoslin\>\"", "->", 
+      RowBox[{"\"\<ddlin\>\"", "->", 
        RowBox[{
         RowBox[{"++", "currentId"}], "->", 
-        RowBox[{"makeConstraintDSOShelper", "[", 
-         RowBox[{"momentMatrix", ",", "\"\<DSOSR-Linear\>\""}], "]"}]}]}]}], 
+        RowBox[{"makeConstraintDDhelper", "[", 
+         RowBox[{"momentMatrix", ",", "\"\<DDR-Linear\>\""}], "]"}]}]}]}], 
      "\[IndentingNewLine]", "}"}], "]"}]}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->"In[77]:=",ExpressionUUID->"34e39380-6819-c34a-97a7-4fb97698e095"],
@@ -12524,8 +12524,8 @@ Cell[BoxData[
 Cell[BoxData[{
  RowBox[{
   RowBox[{
-   RowBox[{"makeConstraintDSOShelper", "[", 
-    RowBox[{"momentMatrix_", ",", "\"\<DSOSC-L1\>\""}], "]"}], ":=", 
+   RowBox[{"makeConstraintDDhelper", "[", 
+    RowBox[{"momentMatrix_", ",", "\"\<DDC-L1\>\""}], "]"}], ":=", 
    "\[IndentingNewLine]", 
    RowBox[{"With", "[", 
     RowBox[{
@@ -12624,12 +12624,12 @@ Cell[BoxData[{
             "\[IndentingNewLine]", "]"}]}], ",", "\[IndentingNewLine]", 
           "dim"}], "]"}], ",", "\[IndentingNewLine]", "\"\<\\nelse\>\""}], 
        "]"}], "<>", "\[IndentingNewLine]", 
-      "\"\<\\n    state.lastcall = :dsosl1c\\nend\>\""}]}], 
+      "\"\<\\n    state.lastcall = :ddl1c\\nend\>\""}]}], 
     "\[IndentingNewLine]", "]"}]}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
-   RowBox[{"makeConstraintDSOShelper", "[", 
-    RowBox[{"momentMatrix_", ",", "\"\<DSOSC-Quadratic\>\""}], "]"}], ":=", 
+   RowBox[{"makeConstraintDDhelper", "[", 
+    RowBox[{"momentMatrix_", ",", "\"\<DDC-Quadratic\>\""}], "]"}], ":=", 
    RowBox[{"With", "[", 
     RowBox[{
      RowBox[{"{", 
@@ -12897,7 +12897,7 @@ Cell[BoxData[{
            RowBox[{"[", 
             RowBox[{"2", ",", "1"}], "]"}], "]"}], ",", "\"\<\\nelse\>\""}], 
          "]"}], "<>", 
-        "\"\<\\n    state.lastcall = :dsosquad\\nend\\nstate.it += 1\>\""}], 
+        "\"\<\\n    state.lastcall = :ddquad\\nend\\nstate.it += 1\>\""}], 
        ",", 
        RowBox[{"r", "[", 
         RowBox[{"[", "1", "]"}], "]"}]}], "}"}]}], "\[IndentingNewLine]", 
@@ -12917,21 +12917,21 @@ Cell[BoxData[
       RowBox[{"!", 
        RowBox[{"FreeQ", "[", 
         RowBox[{"momentMatrix", ",", "_Complex"}], "]"}]}]}]}], ",", 
-    "\"\<DSOSC\>\""}], "]"}], ":=", 
+    "\"\<DDC\>\""}], "]"}], ":=", 
   RowBox[{"Splice", "[", 
    RowBox[{"{", "\[IndentingNewLine]", 
     RowBox[{
-     RowBox[{"\"\<dsosquad\>\"", "->", 
+     RowBox[{"\"\<ddquad\>\"", "->", 
       RowBox[{
        RowBox[{"++", "currentId"}], "->", 
-       RowBox[{"makeConstraintDSOShelper", "[", 
-        RowBox[{"momentMatrix", ",", "\"\<DSOSC-Quadratic\>\""}], "]"}]}]}], 
+       RowBox[{"makeConstraintDDhelper", "[", 
+        RowBox[{"momentMatrix", ",", "\"\<DDC-Quadratic\>\""}], "]"}]}]}], 
      ",", "\[IndentingNewLine]", 
-     RowBox[{"\"\<dsosl1c\>\"", "->", 
+     RowBox[{"\"\<ddl1c\>\"", "->", 
       RowBox[{
        RowBox[{"++", "currentId"}], "->", 
-       RowBox[{"makeConstraintDSOShelper", "[", 
-        RowBox[{"momentMatrix", ",", "\"\<DSOSC-L1\>\""}], "]"}]}]}]}], 
+       RowBox[{"makeConstraintDDhelper", "[", 
+        RowBox[{"momentMatrix", ",", "\"\<DDC-L1\>\""}], "]"}]}]}]}], 
     "\[IndentingNewLine]", "}"}], "]"}]}]], "Input",
  InitializationCell->True,
  CellLabel->"In[80]:=",ExpressionUUID->"6a5d64a0-91f3-8949-a19d-346dad5c3d4b"],
@@ -12949,7 +12949,7 @@ Cell[BoxData[
        RowBox[{"!", 
         RowBox[{"FreeQ", "[", 
          RowBox[{"momentMatrix", ",", "_Complex"}], "]"}]}]}]}], ",", 
-     "\"\<DSOSR\>\""}], "]"}], ":=", 
+     "\"\<DDR\>\""}], "]"}], ":=", 
    RowBox[{"makeConstraint", "[", 
     RowBox[{
      RowBox[{"ComplexExpand", "@", 
@@ -12962,15 +12962,14 @@ Cell[BoxData[
           {
            RowBox[{"Im", "[", "momentMatrix", "]"}], 
            RowBox[{"Re", "[", "momentMatrix", "]"}]}
-         }], ")"}], "]"}]}], ",", "\"\<DSOSCR\>\""}], "]"}]}], ";"}]], "Input",\
-
+         }], ")"}], "]"}]}], ",", "\"\<DDCR\>\""}], "]"}]}], ";"}]], "Input",
  InitializationCell->True,
  CellLabel->"In[81]:=",ExpressionUUID->"a8c63490-ac09-c444-a2de-22a866cb1cf4"]
 }, Closed]],
 
 Cell[CellGroupData[{
 
-Cell["SDSOS", "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
+Cell["SDD", "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
 
 Cell["definition", "Text",ExpressionUUID->"f0cf1b6b-3989-d649-8b25-70071cd2c1e5"],
 
@@ -13419,7 +13418,7 @@ Cell[BoxData[
 
 Cell[BoxData[
  RowBox[{
-  RowBox[{"makeConstraintSDSOShelper", "[", "momentMatrix_", "]"}], ":=", 
+  RowBox[{"makeConstraintSDDhelper", "[", "momentMatrix_", "]"}], ":=", 
   RowBox[{"With", "[", 
    RowBox[{
     RowBox[{"{", 
@@ -13718,8 +13717,8 @@ Cell[BoxData[
           RowBox[{"[", 
            RowBox[{"2", ",", "2", ",", "1"}], "]"}], "]"}], ",", 
          "\"\<\\nelse\>\""}], "]"}], "<>", 
-       "\"\<\\n    state.lastcall = :fix_sdsos\\nend\\nstate.it += 1\>\""}]}],
-      "}"}]}], "\[IndentingNewLine]", "]"}]}]], "Input",
+       "\"\<\\n    state.lastcall = :fix_sdd\\nend\\nstate.it += 1\>\""}]}], 
+     "}"}]}], "\[IndentingNewLine]", "]"}]}]], "Input",
  InitializationCell->True,
  CellLabel->
   "In[1187]:=",ExpressionUUID->"c08e531f-291f-954b-9842-884c44368d28"],
@@ -13732,12 +13731,12 @@ Cell[BoxData[
      RowBox[{"momentMatrix_", "?", "SquareMatrixQ"}], "/;", 
      RowBox[{
       RowBox[{"Length", "[", "momentMatrix", "]"}], ">", "1"}]}], ",", 
-    "\"\<SDSOS\>\""}], "]"}], ":=", 
-  RowBox[{"\"\<sdsos\>\"", "->", 
+    "\"\<SDD\>\""}], "]"}], ":=", 
+  RowBox[{"\"\<sdd\>\"", "->", 
    RowBox[{
     RowBox[{"++", "currentId"}], "->", 
     RowBox[{
-    "makeConstraintSDSOShelper", "[", "momentMatrix", "]"}]}]}]}]], "Input",
+    "makeConstraintSDDhelper", "[", "momentMatrix", "]"}]}]}]}]], "Input",
  InitializationCell->True,
  CellLabel->"In[83]:=",ExpressionUUID->"4eade182-431d-654a-b3e6-1f9a2ddfbcba"]
 }, Closed]]
@@ -13929,22 +13928,22 @@ SolverSetup(instance, psd=PSDIndextypeVector(:U), complex=true),\n            \
     "\"\<), complex=true),\n                  SolverSetup(instance, \
 psd=PSDIndextypeMatrixCartesian(:U, \>\"", "<>", 
     RowBox[{"ToString", "[", "psdmoffset", "]"}], "<>", 
-    "\"\<), complex=true))\n    elseif type === :dsosl1\n        states = \
-(SolverSetup(instance, representation=Solver.RepresentationDSOS(), l1=true),)\
-\n    elseif type === :dsosl1c\n        states = (SolverSetup(instance, \
-representation=Solver.RepresentationDSOS(complex=true), l1=true, \
-complex=true),)\n    elseif type === :dsoslin || type === :dsosquad\n        \
-dim = length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) \
-: 1)\n        if type === :dsoslin && (!isone(length(grouping)) && \
+    "\"\<), complex=true))\n    elseif type === :ddl1\n        states = \
+(SolverSetup(instance, representation=Solver.RepresentationDD(), l1=true),)\n \
+   elseif type === :ddl1c\n        states = (SolverSetup(instance, \
+representation=Solver.RepresentationDD(complex=true), l1=true, \
+complex=true),)\n    elseif type === :ddlin || type === :ddquad\n        dim \
+= length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : \
+1)\n        if type === :ddlin && (!isone(length(grouping)) && \
 !isreal(grouping) ||\n                                 !(constraint isa \
 AbstractMatrix ? all(isreal, constraint) : isreal(constraint)))\n            \
 dim *= 2\n        end\n        states = (SolverSetup(instance, linear=true, \
-quadratic=type===:dsosquad, \
-representation=Solver.RepresentationDSOS(complex=type===:dsosquad), \
-slackvars=div(dim * (dim -1), 2)),)\n    elseif type === :sdsos\n        dim \
-= length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : \
-1)\n        states = (SolverSetup(instance, linear=true, quadratic=true, \
-fixed=true, representation=Solver.RepresentationSDSOS(), slackvars=dim * (dim \
+quadratic=type===:ddquad, \
+representation=Solver.RepresentationDD(complex=type===:ddquad), \
+slackvars=div(dim * (dim -1), 2)),)\n    elseif type === :sdd\n        dim = \
+length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : 1)\n\
+        states = (SolverSetup(instance, linear=true, quadratic=true, \
+fixed=true, representation=Solver.RepresentationSDD(), slackvars=dim * (dim \
 -1)),)\n    elseif type === :equality\n        state = SolverSetup(instance, \
 fixed=true)\n        moment_add_equality!(state, grouping, constraint)\n      \
   @test state.lastcall === :add_constr_fix_finalize\n        return\n    else\
@@ -14045,17 +14044,15 @@ Cell[BoxData[{
            RowBox[{"addTestDetails", "[", 
             RowBox[{
              RowBox[{"makeConstraint", "[", 
-              RowBox[{"mm", ",", "\"\<DSOSR\>\""}], "]"}], ",", "grouping", 
-             ",", "constraint"}], "]"}]}], "]"}], ";", "\[IndentingNewLine]", 
-         
+              RowBox[{"mm", ",", "\"\<DDR\>\""}], "]"}], ",", "grouping", ",",
+              "constraint"}], "]"}]}], "]"}], ";", "\[IndentingNewLine]", 
          RowBox[{"AppendTo", "[", 
           RowBox[{"collections", ",", 
            RowBox[{"addTestDetails", "[", 
             RowBox[{
              RowBox[{"makeConstraint", "[", 
-              RowBox[{"mm", ",", "\"\<SDSOS\>\""}], "]"}], ",", "grouping", 
-             ",", "constraint"}], "]"}]}], "]"}], ";", "\[IndentingNewLine]", 
-         
+              RowBox[{"mm", ",", "\"\<SDD\>\""}], "]"}], ",", "grouping", ",",
+              "constraint"}], "]"}]}], "]"}], ";", "\[IndentingNewLine]", 
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"!", 
@@ -14076,8 +14073,8 @@ Cell[BoxData[{
               RowBox[{"addTestDetails", "[", 
                RowBox[{
                 RowBox[{"makeConstraint", "[", 
-                 RowBox[{"mm", ",", "\"\<DSOSC\>\""}], "]"}], ",", "grouping",
-                 ",", "constraint"}], "]"}]}], "]"}], ";"}]}], 
+                 RowBox[{"mm", ",", "\"\<DDC\>\""}], "]"}], ",", "grouping", 
+                ",", "constraint"}], "]"}]}], "]"}], ";"}]}], 
           "\[IndentingNewLine]", "]"}], ";"}]}], "\[IndentingNewLine]", "]"}],
        ";"}]}], "\[IndentingNewLine]", "]"}]}], 
   ";"}], "\[IndentingNewLine]", 
@@ -14169,7 +14166,7 @@ data::IndvalsIterator{BigInt,BigFloat}) =\n    \>\"", "<>", "interp", "<>",
             RowBox[{"KeyExistsQ", "[", 
              RowBox[{"tests", ",", "\"\<linear\>\""}], "]"}], "||", 
             RowBox[{"KeyExistsQ", "[", 
-             RowBox[{"tests", ",", "\"\<dsoslin\>\""}], "]"}]}], ",", 
+             RowBox[{"tests", ",", "\"\<ddlin\>\""}], "]"}]}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"WriteString", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14204,7 +14201,7 @@ false,false}, indvals::Indvals{BigInt,BigFloat})\n    @test (state.lastcall \
                     RowBox[{"tests", ",", "\"\<linear\>\"", ",", 
                     RowBox[{"{", "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
                     RowBox[{"Lookup", "[", 
-                    RowBox[{"tests", ",", "\"\<dsoslin\>\"", ",", 
+                    RowBox[{"tests", ",", "\"\<ddlin\>\"", ",", 
                     RowBox[{"{", "}"}]}], "]"}]}], "\[IndentingNewLine]", 
                     "]"}]}], "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
@@ -14215,7 +14212,7 @@ false,false}, indvals::Indvals{BigInt,BigFloat})\n    @test (state.lastcall \
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<dsosquad\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<ddquad\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"WriteString", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14245,8 +14242,8 @@ false}, indvals::Indvals{BigInt,BigFloat})\n    @test (state.lastcall === \
                     "]"}]}], ",", "\[IndentingNewLine]", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<dsosquad\>\"", "]"}]}], 
-                   "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"tests", "[", "\"\<ddquad\>\"", "]"}]}], "}"}]}], 
+                 "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
               "\"\<\n    else\n        @test false\n    end\nend\n\n\>\""}]}],
@@ -14255,7 +14252,7 @@ false}, indvals::Indvals{BigInt,BigFloat})\n    @test (state.lastcall === \
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<sdsos\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<sdd\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"WriteString", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14283,7 +14280,7 @@ false}, indvals::Indvals{BigInt,BigFloat})\n    if \>\"", "<>",
                     "]"}]}], ",", "\[IndentingNewLine]", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<sdsos\>\"", "]"}]}], "}"}]}], 
+                    RowBox[{"tests", "[", "\"\<sdd\>\"", "]"}]}], "}"}]}], 
                  "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
@@ -14293,7 +14290,7 @@ false}, indvals::Indvals{BigInt,BigFloat})\n    if \>\"", "<>",
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<dsosquad\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<ddquad\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"WriteString", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14302,7 +14299,7 @@ false}, indvals::Indvals{BigInt,BigFloat})\n    if \>\"", "<>",
 add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,false,\
 false}, data::IndvalsIterator{BigInt,BigFloat})\n    @test state.lastcall === \
 :linear # this is only called in combination with the linear one \
-(complex-valued DSOS)\n    if \>\"", "<>", "\[IndentingNewLine]", 
+(complex-valued DD)\n    if \>\"", "<>", "\[IndentingNewLine]", 
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
                RowBox[{
                 RowBox[{"Table", "[", 
@@ -14322,8 +14319,8 @@ false}, data::IndvalsIterator{BigInt,BigFloat})\n    @test state.lastcall === \
                     "]"}]}], ",", "\[IndentingNewLine]", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<dsosquad\>\"", "]"}]}], 
-                   "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"tests", "[", "\"\<ddquad\>\"", "]"}]}], "}"}]}], 
+                 "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
               "\"\<\n    else\n        @test false\n    end\nend\n\n\>\""}]}],
@@ -14370,7 +14367,7 @@ state.lastcall === :none\n    state.lastcall = :rquadratic\n    if \>\"", "<>",
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<sdsos\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<sdd\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"WriteString", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14398,7 +14395,7 @@ true,false}, data::IndvalsIterator{BigInt,BigFloat})\n    if \>\"", "<>",
                     "]"}]}], ",", "\[IndentingNewLine]", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<sdsos\>\"", "]"}]}], "}"}]}], 
+                    RowBox[{"tests", "[", "\"\<sdd\>\"", "]"}]}], "}"}]}], 
                  "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
@@ -14547,7 +14544,7 @@ where {tri}\n    @test state.lastcall === :none\n    state.lastcall = :psdc\n \
             RowBox[{"KeyExistsQ", "[", 
              RowBox[{"tests", ",", "\"\<equality\>\""}], "]"}], "||", 
             RowBox[{"KeyExistsQ", "[", 
-             RowBox[{"tests", ",", "\"\<sdsos\>\""}], "]"}]}], ",", 
+             RowBox[{"tests", ",", "\"\<sdd\>\""}], "]"}]}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"BinaryWrite", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
@@ -14555,13 +14552,13 @@ where {tri}\n    @test state.lastcall === :none\n    state.lastcall = :psdc\n \
              "\"\<function \
 Solver.add_constr_fix_prepare!(state::SolverSetup{<:Any,<:Any,false,false,\
 true,false}, num::Int)\n    @test state.lastcall === :none || sstate.lastcall \
-=== :add_constr_fix_finalize # for SDSOS\n    @test \
+=== :add_constr_fix_finalize # for SDD\n    @test \
 isempty(state.fixed_available)\n    state.lastcall = :add_constr_fix_prepare\n\
     union!(state.fixed_available, UInt(1):UInt(num))\n    return UInt(num)\n\
 end\n\nfunction \
 Solver.add_constr_fix_finalize!(state::SolverSetup{<:Any,<:Any,false,false,\
-true,false}, constrstate::UInt)\n    if state.lastcall === :fix_sdsos\n       \
- state.lastcall = :sdsos\n    else\n        @test state.lastcall === \
+true,false}, constrstate::UInt)\n    if state.lastcall === :fix_sdd\n        \
+state.lastcall = :sdd\n    else\n        @test state.lastcall === \
 :add_constr_fix\n        state.lastcall = :add_constr_fix_finalize\n    end\n \
    @test iszero(constrstate)\n    @test isempty(state.fixed_available)\nend\n\
 \nfunction \
@@ -14603,7 +14600,7 @@ state.lastcall = :add_constr_fix\n    @test iszero(rhs)\n    if \>\"", "<>",
                     RowBox[{"tests", ",", "\"\<equality\>\"", ",", 
                     RowBox[{"{", "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
                     RowBox[{"Lookup", "[", 
-                    RowBox[{"tests", ",", "\"\<sdsos\>\"", ",", 
+                    RowBox[{"tests", ",", "\"\<sdd\>\"", ",", 
                     RowBox[{"{", "}"}]}], "]"}]}], "\[IndentingNewLine]", 
                     "]"}]}], "}"}]}], "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
@@ -14614,7 +14611,7 @@ constrstate == length(state.fixed_available)\n    return constrstate\nend\n\n\
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<dsosl1\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<ddl1\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"BinaryWrite", "[", 
             RowBox[{"file", ",", 
@@ -14641,7 +14638,7 @@ data::IndvalsIterator{BigInt,BigFloat})\n    @test state.lastcall === :none\n \
                     "]"}]}], ",", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<dsosl1\>\"", "]"}]}], "}"}]}], 
+                    RowBox[{"tests", "[", "\"\<ddl1\>\"", "]"}]}], "}"}]}], 
                  "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
@@ -14651,7 +14648,7 @@ data::IndvalsIterator{BigInt,BigFloat})\n    @test state.lastcall === :none\n \
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<dsosl1c\>\""}], "]"}], ",", 
+            RowBox[{"tests", ",", "\"\<ddl1c\>\""}], "]"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"BinaryWrite", "[", 
             RowBox[{"file", ",", 
@@ -14678,8 +14675,8 @@ true}, data::IndvalsIterator{BigInt,BigFloat})\n    @test state.lastcall === \
                     "]"}]}], ",", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<dsosl1c\>\"", "]"}]}], "}"}]}],
-                  "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"tests", "[", "\"\<ddl1c\>\"", "]"}]}], "}"}]}], 
+                 "]"}], ",", "\[IndentingNewLine]", 
                 "\"\<\\n    elseif \>\""}], "]"}], "<>", 
               "\[IndentingNewLine]", 
               "\"\<\n    else\n        @test false\n    end\n    state.it += \
@@ -16255,84 +16252,84 @@ Cell[707794, 12096, 1046, 28, 70, "Input",ExpressionUUID->"e7881ef1-c252-164e-9d
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[708877, 12129, 81, 0, 70, "Subsection",ExpressionUUID->"408b845e-878b-4d40-88b9-6f929bc078fe"],
-Cell[708961, 12131, 129, 2, 70, "Input",ExpressionUUID->"e7559e1c-1020-a043-9fcd-58145e6aa688"],
-Cell[709093, 12135, 81, 0, 70, "Text",ExpressionUUID->"bb95b8e9-3ef5-8547-b05c-bd661497d0af"],
-Cell[709177, 12137, 306, 10, 70, "Input",ExpressionUUID->"df49c389-8d8d-3449-830b-ff2aa6b57c25"],
-Cell[709486, 12149, 173, 3, 70, "Text",ExpressionUUID->"092bb4f9-33a7-e945-bcd5-ffa2bec67487"],
-Cell[709662, 12154, 574, 21, 70, "Input",ExpressionUUID->"987f779a-c063-cd4d-93d7-e3369db971d9"],
-Cell[710239, 12177, 259, 7, 70, "Text",ExpressionUUID->"8a6da64d-f5e1-504a-830c-9599f5185a07"],
-Cell[710501, 12186, 482, 15, 70, "Input",ExpressionUUID->"cfaf924b-2410-174d-bdbd-06a36fd8e87d"],
-Cell[710986, 12203, 129, 0, 70, "Text",ExpressionUUID->"92e78436-6a0b-de4e-b4a2-9f7b81e09485"],
-Cell[711118, 12205, 406, 14, 70, "Input",ExpressionUUID->"c5a26282-f45a-0948-bd9f-098724b682f1"],
-Cell[711527, 12221, 111, 0, 70, "Text",ExpressionUUID->"e114a4fb-dc67-1746-bca5-7147640bcbc7"],
-Cell[711641, 12223, 532, 18, 70, "Input",ExpressionUUID->"e054a371-c1a1-8645-8dbf-a0ba55bbf1cf"],
-Cell[712176, 12243, 11130, 245, 70, "Input",ExpressionUUID->"ce5c8732-2cfa-c141-a152-91ab87a62ab4",
+Cell[708877, 12129, 79, 0, 70, "Subsection",ExpressionUUID->"408b845e-878b-4d40-88b9-6f929bc078fe"],
+Cell[708959, 12131, 129, 2, 70, "Input",ExpressionUUID->"e7559e1c-1020-a043-9fcd-58145e6aa688"],
+Cell[709091, 12135, 81, 0, 70, "Text",ExpressionUUID->"bb95b8e9-3ef5-8547-b05c-bd661497d0af"],
+Cell[709175, 12137, 306, 10, 70, "Input",ExpressionUUID->"df49c389-8d8d-3449-830b-ff2aa6b57c25"],
+Cell[709484, 12149, 173, 3, 70, "Text",ExpressionUUID->"092bb4f9-33a7-e945-bcd5-ffa2bec67487"],
+Cell[709660, 12154, 574, 21, 70, "Input",ExpressionUUID->"987f779a-c063-cd4d-93d7-e3369db971d9"],
+Cell[710237, 12177, 259, 7, 70, "Text",ExpressionUUID->"8a6da64d-f5e1-504a-830c-9599f5185a07"],
+Cell[710499, 12186, 482, 15, 70, "Input",ExpressionUUID->"cfaf924b-2410-174d-bdbd-06a36fd8e87d"],
+Cell[710984, 12203, 129, 0, 70, "Text",ExpressionUUID->"92e78436-6a0b-de4e-b4a2-9f7b81e09485"],
+Cell[711116, 12205, 406, 14, 70, "Input",ExpressionUUID->"c5a26282-f45a-0948-bd9f-098724b682f1"],
+Cell[711525, 12221, 111, 0, 70, "Text",ExpressionUUID->"e114a4fb-dc67-1746-bca5-7147640bcbc7"],
+Cell[711639, 12223, 532, 18, 70, "Input",ExpressionUUID->"e054a371-c1a1-8645-8dbf-a0ba55bbf1cf"],
+Cell[712174, 12243, 11112, 245, 70, "Input",ExpressionUUID->"ce5c8732-2cfa-c141-a152-91ab87a62ab4",
  InitializationCell->True],
-Cell[723309, 12490, 1218, 31, 70, "Input",ExpressionUUID->"34e39380-6819-c34a-97a7-4fb97698e095",
+Cell[723289, 12490, 1204, 31, 70, "Input",ExpressionUUID->"34e39380-6819-c34a-97a7-4fb97698e095",
  InitializationCell->True],
-Cell[724530, 12523, 18240, 382, 70, "Input",ExpressionUUID->"caa093ed-8ec4-1140-a93d-b377225c6fa8",
+Cell[724496, 12523, 18228, 382, 70, "Input",ExpressionUUID->"caa093ed-8ec4-1140-a93d-b377225c6fa8",
  InitializationCell->True],
-Cell[742773, 12907, 1117, 29, 70, "Input",ExpressionUUID->"6a5d64a0-91f3-8949-a19d-346dad5c3d4b",
+Cell[742727, 12907, 1103, 29, 70, "Input",ExpressionUUID->"6a5d64a0-91f3-8949-a19d-346dad5c3d4b",
  InitializationCell->True],
-Cell[743893, 12938, 1028, 29, 70, "Input",ExpressionUUID->"a8c63490-ac09-c444-a2de-22a866cb1cf4",
+Cell[743833, 12938, 1022, 28, 70, "Input",ExpressionUUID->"a8c63490-ac09-c444-a2de-22a866cb1cf4",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[744958, 12972, 82, 0, 70, "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
-Cell[745043, 12974, 81, 0, 70, "Text",ExpressionUUID->"f0cf1b6b-3989-d649-8b25-70071cd2c1e5"],
-Cell[745127, 12976, 395, 14, 70, "Input",ExpressionUUID->"e611c6ab-1b42-d047-bf7c-53723e295023"],
-Cell[745525, 12992, 117, 0, 70, "Text",ExpressionUUID->"4faab166-5437-aa4e-85fb-3b0ea6e2dd1b"],
-Cell[745645, 12994, 225, 7, 70, "Input",ExpressionUUID->"5341f5b6-4bf6-1f4e-9a65-34280fad66f2"],
-Cell[745873, 13003, 1273, 44, 70, "Text",ExpressionUUID->"0df48dcc-85df-8d4f-8437-8cee11facd6b"],
+Cell[744892, 12971, 80, 0, 70, "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
+Cell[744975, 12973, 81, 0, 70, "Text",ExpressionUUID->"f0cf1b6b-3989-d649-8b25-70071cd2c1e5"],
+Cell[745059, 12975, 395, 14, 70, "Input",ExpressionUUID->"e611c6ab-1b42-d047-bf7c-53723e295023"],
+Cell[745457, 12991, 117, 0, 70, "Text",ExpressionUUID->"4faab166-5437-aa4e-85fb-3b0ea6e2dd1b"],
+Cell[745577, 12993, 225, 7, 70, "Input",ExpressionUUID->"5341f5b6-4bf6-1f4e-9a65-34280fad66f2"],
+Cell[745805, 13002, 1273, 44, 70, "Text",ExpressionUUID->"0df48dcc-85df-8d4f-8437-8cee11facd6b"],
 Cell[CellGroupData[{
-Cell[747171, 13051, 1348, 41, 70, "Input",ExpressionUUID->"b02b96e1-1cbc-7c48-be6c-d849fb7cefc8"],
-Cell[748522, 13094, 5448, 141, 70, "Output",ExpressionUUID->"54203fc4-a0f2-f24f-9cb7-ac9ed524f4c8"]
+Cell[747103, 13050, 1348, 41, 70, "Input",ExpressionUUID->"b02b96e1-1cbc-7c48-be6c-d849fb7cefc8"],
+Cell[748454, 13093, 5448, 141, 70, "Output",ExpressionUUID->"54203fc4-a0f2-f24f-9cb7-ac9ed524f4c8"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[754007, 13240, 1182, 36, 70, "Input",ExpressionUUID->"6a081d0f-da8b-7c4c-b297-e102346a820d"],
-Cell[755192, 13278, 3540, 106, 70, "Output",ExpressionUUID->"b33241b2-19bf-2445-828b-1a1e2304eadb"]
+Cell[753939, 13239, 1182, 36, 70, "Input",ExpressionUUID->"6a081d0f-da8b-7c4c-b297-e102346a820d"],
+Cell[755124, 13277, 3540, 106, 70, "Output",ExpressionUUID->"b33241b2-19bf-2445-828b-1a1e2304eadb"]
 }, Open  ]],
-Cell[758747, 13387, 178, 3, 70, "Text",ExpressionUUID->"1c26fc70-66eb-344e-95fd-1a204839693b"],
-Cell[758928, 13392, 830, 25, 70, "Input",ExpressionUUID->"e8da68cb-57b1-9a48-b835-5c51e4806485"],
-Cell[759761, 13419, 14376, 305, 70, "Input",ExpressionUUID->"c08e531f-291f-954b-9842-884c44368d28",
+Cell[758679, 13386, 178, 3, 70, "Text",ExpressionUUID->"1c26fc70-66eb-344e-95fd-1a204839693b"],
+Cell[758860, 13391, 830, 25, 70, "Input",ExpressionUUID->"e8da68cb-57b1-9a48-b835-5c51e4806485"],
+Cell[759693, 13418, 14372, 305, 70, "Input",ExpressionUUID->"c08e531f-291f-954b-9842-884c44368d28",
  InitializationCell->True],
-Cell[774140, 13726, 548, 15, 70, "Input",ExpressionUUID->"4eade182-431d-654a-b3e6-1f9a2ddfbcba",
+Cell[774068, 13725, 542, 15, 70, "Input",ExpressionUUID->"4eade182-431d-654a-b3e6-1f9a2ddfbcba",
  InitializationCell->True]
 }, Closed]]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[774737, 13747, 114, 0, 53, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
-Cell[774854, 13749, 265, 4, 70, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
-Cell[775122, 13755, 3136, 75, 70, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
+Cell[774659, 13746, 114, 0, 53, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
+Cell[774776, 13748, 265, 4, 70, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
+Cell[775044, 13754, 3136, 75, 70, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[778295, 13835, 92, 0, 53, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
+Cell[778217, 13834, 92, 0, 53, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
 Cell[CellGroupData[{
-Cell[778412, 13839, 83, 0, 70, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
-Cell[778498, 13841, 7964, 115, 70, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
+Cell[778334, 13838, 83, 0, 70, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
+Cell[778420, 13840, 7940, 115, 70, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[786499, 13961, 84, 0, 70, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
-Cell[786586, 13963, 5070, 134, 70, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
+Cell[786397, 13960, 84, 0, 70, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
+Cell[786484, 13962, 5044, 132, 70, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[791693, 14102, 89, 0, 70, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
-Cell[791785, 14104, 34292, 695, 70, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
+Cell[791565, 14099, 89, 0, 70, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
+Cell[791657, 14101, 34248, 695, 70, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
  InitializationCell->True],
-Cell[826080, 14801, 4791, 137, 70, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
+Cell[825908, 14798, 4791, 137, 70, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
  InitializationCell->True],
-Cell[830874, 14940, 2284, 61, 70, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
+Cell[830702, 14937, 2284, 61, 70, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
  InitializationCell->True]
 }, Closed]]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[833207, 15007, 78, 0, 53, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
-Cell[833288, 15009, 36102, 1153, 1705, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
-Cell[869393, 16164, 266, 7, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+Cell[833035, 15004, 78, 0, 53, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
+Cell[833116, 15006, 36102, 1153, 1705, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+Cell[869221, 16161, 266, 7, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 }
 ]

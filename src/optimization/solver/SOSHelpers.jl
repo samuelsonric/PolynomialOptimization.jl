@@ -107,7 +107,7 @@ The following methods must be implemented by a solver to make this function work
 
 !!! info "Order"
     This function is guaranteed to set up the free variables first, then followed by all the others. However, the order of
-    nonnegative, quadratic, and PSD variables is undefined (depends on the problem).
+    nonnegative, quadratic, ``\\ell_\\infty`` norm, and PSD variables is undefined (depends on the problem).
 
 !!! info "Representation"
     This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The

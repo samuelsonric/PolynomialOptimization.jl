@@ -60,8 +60,8 @@ CurrentModule = PolynomialOptimization
 poly_optimize
 Solver.RepresentationMethod
 RepresentationPSD
-RepresentationSDSOS
-RepresentationDSOS
+RepresentationSDD
+RepresentationDD
 Result
 poly_problem(::Result)
 optimality_certificate

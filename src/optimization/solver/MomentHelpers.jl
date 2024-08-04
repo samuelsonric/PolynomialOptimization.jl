@@ -165,7 +165,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         matrix_indexing = false
         representation = RepresentationPSD() # will be linear anyway
         tri = :U
-    elseif representation isa RepresentationDSOS
+    elseif representation isa RepresentationDD
         matrix_indexing = false
         if complex
             if supports_complex_lnorm(state)
@@ -206,7 +206,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         matrix_indexing = false
         representation = RepresentationPSD() # will be quadratic anyway
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
-    elseif representation isa RepresentationSDSOS
+    elseif representation isa RepresentationSDD
         matrix_indexing = false
         if complex
             #          cᵢᵢ = ∑ₓ sₓ,     sᵢⱼ₁sᵢⱼ₃ ≥ cᵢⱼᵣ² + cᵢⱼᵢ²
@@ -263,7 +263,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         row = zero(T)
     else
         lens, indices, values = data
-        if representation isa RepresentationDSOS
+        if representation isa RepresentationDD
             scaling = 1.
             if complex
                 # We only end up here if the user requested the use of the complex rewrite in the representation.
@@ -279,7 +279,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 slack_indices = add_var_slack!(state, trisize(dim -1))
                 slack_i = 1
             end
-        elseif representation isa RepresentationSDSOS
+        elseif representation isa RepresentationSDD
             # An off-diagonal entry in the originally PSD matrix stays. However, diagonal entries are replaced by sums of dim-1
             # values that enter the rotated quadratic cone. We need those as slack variables.
             slack_indices = add_var_slack!(state, dim * (dim -1))
@@ -320,13 +320,13 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 #   elements are real-valued, canonical and non-canonicals will also occur in pairs.
                 total_real = !complex || (block_i == block_j && (exp1 == exp2 || (isreal_g₁ && isreal_g₂)))
                 ondiag = exp1 == exp2 && block_i == block_j
-                if representation isa RepresentationDSOS && !l1 && !ondiag
+                if representation isa RepresentationDD && !l1 && !ondiag
                     unsafe_push!(indices, slack_indices[slack_i])
                     unsafe_push!(values, one(V))
                     complex && unsafe_push!(lens, one(eltype(lens)))
                     slack_i += 1
                 end
-                if representation isa RepresentationSDSOS && !ondiag
+                if representation isa RepresentationSDD && !ondiag
                     unsafe_push!(indices, slack_indices[slack_i], slack_indices[slack_i+1])
                     unsafe_push!(values, one(V), one(V))
                     unsafe_push!(lens, one(eltype(lens)), one(eltype(lens)))
@@ -393,9 +393,9 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     if matrix_indexing
                         row += one(row)
                     elseif representation isa RepresentationPSD ||
-                        (representation isa RepresentationSDSOS && !iszero(curlen)) ||
-                        (representation isa RepresentationDSOS && ((complex && (l1 || !iszero(curlen))) ||
-                                                                   (l1 && (!iszero(curlen) || isempty(lens)))))
+                        (representation isa RepresentationSDD && !iszero(curlen)) ||
+                        (representation isa RepresentationDD && ((complex && (l1 || !iszero(curlen))) ||
+                                                                 (l1 && (!iszero(curlen) || isempty(lens)))))
                         # For the real-valued ℓ₁ norm cone, we don't need empty entries - unless they are the first one (which
                         # can only happen if the user specified a zero diagonal element in a PSD constraint).
                         # For the quadratic cone, the first entry is already filled, so we don't need the zero in any case.
@@ -405,7 +405,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         unsafe_push!(lens, Core.Intrinsics.trunc_int(eltype(lens), curlen)) # no check for overflows
                     end
                 end
-                if representation isa RepresentationDSOS && !l1
+                if representation isa RepresentationDD && !l1
                     if ondiag
                         # We always traverse in :U order, so we already assigned slack variables to be the absolutes of all the
                         # items above the diagonal; we find them in slack_indices[slack_i-row+1:slack_i-1].
@@ -440,7 +440,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     empty!(indices)
                     empty!(values)
                     empty!(lens)
-                elseif representation isa RepresentationSDSOS
+                elseif representation isa RepresentationSDD
                     if ondiag
                         # The quadratic cones are set up on the off-diagonals; here, we must just put an equality to the
                         # supposed diagonal and all the slack variables that make it up. We always traverse in :U order, but
@@ -488,8 +488,8 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             end
         end
     end
-    representation isa RepresentationDSOS && return # already did everything in the loop
-    if representation isa RepresentationSDSOS
+    representation isa RepresentationDD && return # already did everything in the loop
+    if representation isa RepresentationSDD
         add_constr_fix_finalize!(state, fixstate)
         return
     end
@@ -530,7 +530,7 @@ end
 # complex PSD cone explicitly
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
-    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDSOS,RepresentationPSD}) where {Tri}
+    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,RepresentationPSD}) where {Tri}
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian && representation isa RepresentationPSD
     frontdiag = false
     if matrix_indexing
@@ -541,7 +541,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     else
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false))), representation))
-        if representation isa RepresentationDSOS
+        if representation isa RepresentationDD
             l1 = supports_lnorm(state)
             if l1
                 frontdiag = true
@@ -720,7 +720,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         # (i.e., entries for the PSD matrix) are zero and don't arise in rows, although they will have to be present in lens.
         # So to avoid potentially overwriting data, we need a whole new vector.
         @inbounds let rows=finish!(rows), indices=finish!(indices), values=finish!(values)
-            if representation isa RepresentationDSOS
+            if representation isa RepresentationDD
                 lens = FastVec{SimplePolynomials.smallest_unsigned(2maxlen)}(buffer=dim2)
                 # Here we must work columnwise (by the actual columns). All diagonals were already put at the front of the
                 # column.
@@ -931,11 +931,11 @@ See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
 function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
-    representation isa RepresentationDSOS{<:Any,true} && !supports_quadratic(state) && !supports_complex_lnorm(state) &&
+    representation isa RepresentationDD{true} && !supports_quadratic(state) && !supports_complex_lnorm(state) &&
         error("The solver does not support quadratic or complex ℓ₁ cones, so a Hermitian representation via diagonally-dominant matrices is not possible")
     # TODO (unlikely): we could still do it if the solver supports only the rotated, but not the standard cone. But are there
     # any solvers in this category?
-    representation isa RepresentationSDSOS && !supports_rotated_quadratic(state) && !supports_quadratic(state) &&
+    representation isa RepresentationSDD && !supports_rotated_quadratic(state) && !supports_quadratic(state) &&
         error("The solver does not support (rotated) quadratic cones, so a representation via scaled diagonally-dominant matrices is not possible")
     return moment_add_matrix_helper!(
         state,
@@ -946,8 +946,8 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
         psd_indextype(state),
         (Val((length(grouping) == 1 || isreal(grouping)) &&
              (constraint isa SimplePolynomial || isreal(constraint))),
-         Val(representation isa RepresentationDSOS{<:Any,true} ||
-             representation isa RepresentationSDSOS ||
+         Val(representation isa RepresentationDD{true} ||
+             representation isa RepresentationSDD ||
              (representation isa RepresentationPSD && supports_complex_psd(state)))),
         representation
     )
@@ -1140,7 +1140,7 @@ The following methods must be implemented by a solver to make this function work
 
 !!! info "Order"
     This function is guaranteed to set up the fixed constraints first, then followed by all the others. However, the order of
-    nonnegative, quadratic, and PSD constraints is undefined (depends on the problem).
+    nonnegative, quadratic, ``\\ell_1`` norm, and PSD constraints is undefined (depends on the problem).
 
 !!! info "Representation"
     This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The

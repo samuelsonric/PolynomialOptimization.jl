@@ -289,25 +289,24 @@ the most resource-intensive.
 struct RepresentationPSD end
 
 """
-    RepresentationSDSOS() <: RepresentationMethod
+    RepresentationSDD() <: RepresentationMethod
 
-Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone.
-To represent `σ ∈ SDSOS`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
+To represent `σ ∈ SDD`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
 to a semidefinite formulation if this is not the case, as such a rewrite would defeat the purpose.
 """
-struct RepresentationSDSOS end
+struct RepresentationSDD end
 
 """
-    RepresentationDSOS(; complex=false) <: RepresentationMethod
+    RepresentationDD(; complex=false) <: RepresentationMethod
 
 Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, whic is achieved using linear inequalities only.
 
-If σ is a Hermitian matrix, the DSOS condition will be imposed on the real matrix associated with σ, which has twice its
+If σ is a Hermitian matrix, the DD condition will be imposed on the real matrix associated with σ, which has twice its
 dimension. Alternatively, by setting `complex` to `true`, the complex structure will be kept using a complex-valued ℓ₁ cone or
 a quadratic cone (which requires support for this in the solver).
 """
-struct RepresentationDSOS{Complex}
-    RepresentationDSOS(; complex=false) = new{complex}(u)
+struct RepresentationDD{Complex}
+    RepresentationDD(; complex=false) = new{complex}()
 end
 
 """
@@ -317,10 +316,10 @@ Union type that defines how the optimizer constraint σ ⪰ 0 is interpreted. Us
 however, there are various other possibilities giving rise to weaker results, but scale more favorably. The following methods
 are supported:
 - [`RepresentationPSD`](@ref)
-- [`RepresentationSDSOS`](@ref)
-- [`RepresentationDSOS`](@ref)
+- [`RepresentationSDD`](@ref)
+- [`RepresentationDD`](@ref)
 """
-const RepresentationMethod = Union{RepresentationPSD,RepresentationSDSOS,<:RepresentationDSOS}
+const RepresentationMethod = Union{RepresentationPSD,RepresentationSDD,<:RepresentationDD}
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")

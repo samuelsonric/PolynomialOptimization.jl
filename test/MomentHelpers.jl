@@ -111,20 +111,20 @@ function momenttest(instance, grouping, constraint, type)
                   SolverSetup(instance, psd=PSDIndextypeVector(:F), complex=true),
                   SolverSetup(instance, psd=PSDIndextypeMatrixCartesian(:L, 17), complex=true),
                   SolverSetup(instance, psd=PSDIndextypeMatrixCartesian(:U, 17), complex=true))
-    elseif type === :dsosl1
-        states = (SolverSetup(instance, representation=Solver.RepresentationDSOS(), l1=true),)
-    elseif type === :dsosl1c
-        states = (SolverSetup(instance, representation=Solver.RepresentationDSOS(complex=true), l1=true, complex=true),)
-    elseif type === :dsoslin || type === :dsosquad
+    elseif type === :ddl1
+        states = (SolverSetup(instance, representation=Solver.RepresentationDD(), l1=true),)
+    elseif type === :ddl1c
+        states = (SolverSetup(instance, representation=Solver.RepresentationDD(complex=true), l1=true, complex=true),)
+    elseif type === :ddlin || type === :ddquad
         dim = length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : 1)
-        if type === :dsoslin && (!isone(length(grouping)) && !isreal(grouping) ||
+        if type === :ddlin && (!isone(length(grouping)) && !isreal(grouping) ||
                                  !(constraint isa AbstractMatrix ? all(isreal, constraint) : isreal(constraint)))
             dim *= 2
         end
-        states = (SolverSetup(instance, linear=true, quadratic=type===:dsosquad, representation=Solver.RepresentationDSOS(complex=type===:dsosquad), slackvars=div(dim * (dim -1), 2)),)
-    elseif type === :sdsos
+        states = (SolverSetup(instance, linear=true, quadratic=type===:ddquad, representation=Solver.RepresentationDD(complex=type===:ddquad), slackvars=div(dim * (dim -1), 2)),)
+    elseif type === :sdd
         dim = length(grouping) * (constraint isa AbstractMatrix ? size(constraint, 1) : 1)
-        states = (SolverSetup(instance, linear=true, quadratic=true, fixed=true, representation=Solver.RepresentationSDSOS(), slackvars=dim * (dim -1)),)
+        states = (SolverSetup(instance, linear=true, quadratic=true, fixed=true, representation=Solver.RepresentationSDD(), slackvars=dim * (dim -1)),)
     elseif type === :equality
         state = SolverSetup(instance, fixed=true)
         moment_add_equality!(state, grouping, constraint)
@@ -200,7 +200,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,68265], BigFloat[1,-17], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,169998], BigFloat[-1,17], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 21
@@ -212,7 +212,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,63204], BigFloat[1,-24], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,151422], BigFloat[-1,24], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 26
@@ -224,7 +224,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,22426,63210], BigFloat[1,-2,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,63728,151428], BigFloat[-1,2,8], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 31
@@ -236,7 +236,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,20441], BigFloat[1,-6], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,55255], BigFloat[-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 36
@@ -248,7 +248,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,62324], BigFloat[1,-14], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,150102], BigFloat[-1,14], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 41
@@ -260,7 +260,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,20441,20442,22426,36378,62322,63210], BigFloat[1,-8,-16,-3,-4,-14,-5], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,55255,55256,63728,92459,150100,151428], BigFloat[-1,8,16,3,4,14,5], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 46
@@ -296,7 +296,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,22409], BigFloat[1,-17], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,23048], BigFloat[-1,-1,-1,17], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 54
@@ -332,7 +332,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,20571], BigFloat[1,-24], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,21922], BigFloat[-1,-1,-1,24], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 62
@@ -368,7 +368,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,6102,20588], BigFloat[1,-2,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,6223,21928], BigFloat[-1,-1,-1,2,8], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 70
@@ -404,7 +404,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,5542,5545], BigFloat[1,-3,-3], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,5815], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 78
@@ -440,7 +440,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,20164,20168], BigFloat[1,7,-7], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,21232], BigFloat[-1,-1,-1,14], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 86
@@ -476,7 +476,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[1,-4,-4,-8,-3,-4,-7,-7,-5], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,-1,-1,8,16,3,4,14,5], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 94
@@ -488,7 +488,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9460], BigFloat[1,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 99
@@ -524,7 +524,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1], BigFloat[1], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 107
@@ -560,7 +560,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9278], BigFloat[1,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 115
@@ -596,7 +596,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9280], BigFloat[1,-8], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 123
@@ -632,7 +632,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,-8,-2], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 131
@@ -668,7 +668,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9280,9297], BigFloat[1,-2,-1], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,17770], BigFloat[-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 139
@@ -680,7 +680,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,9278,9280], BigFloat[1,-16,-4], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 143
@@ -716,7 +716,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,20439,20440,36385,36903], BigFloat[1,4,6,-5,-3], true)
         elseif state.it == 15
             checkequality(indvals, BigInt[-3,-2,-1,55253,55254,92466,93270], BigFloat[-1,-1,-1,-4,-6,5,3], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 147
@@ -1008,7 +1008,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 143
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 151
@@ -2164,7 +2164,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 158
@@ -2296,7 +2296,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,14606,14607,14614,14615,26806,29209], BigFloat[1,2,2,-6,6,-8,-4], true)
         elseif state.it == 63
             checkequality(indvals, BigInt[-7,-6,-5,-4,-3,-2,-1,47925,47926,81393,86063], BigFloat[-1,-1,-1,-1,-1,-1,-1,-4,-12,8,4], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 165
@@ -3452,7 +3452,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     elseif state.instance == 172
@@ -4608,7 +4608,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,false,false,fals
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 575
             checkequality(indvals, BigInt[-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsoslin
+            state.lastcall = :ddlin
         end
         state.it += 1
     else
@@ -4624,7 +4624,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,20830], BigFloat[-1,17], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,23048], BigFloat[-1,17], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 57
@@ -4632,7 +4632,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,17744], BigFloat[-1,24], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,21922], BigFloat[-1,24], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 65
@@ -4640,7 +4640,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,5672,17777], BigFloat[-1,2,8], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,6223,21928], BigFloat[-1,2,8], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 73
@@ -4648,7 +4648,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,4699], BigFloat[-1,6], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,5815], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 81
@@ -4656,7 +4656,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,17502], BigFloat[-1,14], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,21232], BigFloat[-1,14], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 89
@@ -4664,7 +4664,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,4699,4702,5672,9297,17496,17777], BigFloat[-1,8,16,3,4,14,5], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,8,16,3,4,14,5], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 102
@@ -4676,7 +4676,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,9460], BigFloat[1,-8], true)
         elseif state.it == 3
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 110
@@ -4684,7 +4684,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 118
@@ -4692,7 +4692,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 126
@@ -4700,7 +4700,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,31799], BigFloat[-1,17], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 134
@@ -4708,7 +4708,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,9460,31799], BigFloat[-1,5,17], true)
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 154
@@ -4936,7 +4936,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,92474], BigFloat[1,-48], true)
         elseif state.it == 127
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 161
@@ -4952,7 +4952,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-5,-4,-1,3360,3361,6939,8304], BigFloat[-1,-1,-1,-4,-12,8,4], true)
         elseif state.it == 10
             checkequality(indvals, BigInt[-3,-2,-1,47925,47926,81393,86063], BigFloat[-1,-1,-1,-4,-12,8,4], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 168
@@ -5084,7 +5084,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 103
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     elseif state.instance == 175
@@ -5192,7 +5192,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
             checkequality(indvals, BigInt[-1,81570], BigFloat[1,-48], true)
         elseif state.it == 97
             checkequality(indvals, BigInt[-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
-            state.lastcall = :dsosquad
+            state.lastcall = :ddquad
         end
         state.it += 1
     else
@@ -5365,7 +5365,7 @@ function add_constr_nonnegative_worker!(state::SolverSetup{true,true,false,false
 end
 
 function add_constr_quadratic_worker!(state::SolverSetup{true,true,false,false,false,false}, data::IndvalsIterator{BigInt,BigFloat})
-    @test state.lastcall === :linear # this is only called in combination with the linear one (complex-valued DSOS)
+    @test state.lastcall === :linear # this is only called in combination with the linear one (complex-valued DD)
     if state.instance == 49
         iter = iterate(data)
         if state.it == 1
@@ -12980,7 +12980,7 @@ function add_constr_psd_complex_worker!(state::SolverSetup{false,false,<:Any,tru
 end
 
 function Solver.add_constr_fix_prepare!(state::SolverSetup{<:Any,<:Any,false,false,true,false}, num::Int)
-    @test state.lastcall === :none || sstate.lastcall === :add_constr_fix_finalize # for SDSOS
+    @test state.lastcall === :none || sstate.lastcall === :add_constr_fix_finalize # for SDD
     @test isempty(state.fixed_available)
     state.lastcall = :add_constr_fix_prepare
     union!(state.fixed_available, UInt(1):UInt(num))
@@ -12988,8 +12988,8 @@ function Solver.add_constr_fix_prepare!(state::SolverSetup{<:Any,<:Any,false,fal
 end
 
 function Solver.add_constr_fix_finalize!(state::SolverSetup{<:Any,<:Any,false,false,true,false}, constrstate::UInt)
-    if state.lastcall === :fix_sdsos
-        state.lastcall = :sdsos
+    if state.lastcall === :fix_sdd
+        state.lastcall = :sdd
     else
         @test state.lastcall === :add_constr_fix
         state.lastcall = :add_constr_fix_finalize
@@ -13495,7 +13495,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,169998], BigFloat[-1,17], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 22
@@ -13505,7 +13505,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,151422], BigFloat[-1,24], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 27
@@ -13515,7 +13515,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,63728,151428], BigFloat[-1,2,8], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 32
@@ -13525,7 +13525,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,55255], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 37
@@ -13535,7 +13535,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,150102], BigFloat[-1,14], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 42
@@ -13545,7 +13545,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,55255,55256,63728,92459,150100,151428], BigFloat[-1,8,16,3,4,14,5], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 47
@@ -13555,7 +13555,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,23048], BigFloat[-1,17], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 55
@@ -13565,7 +13565,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,21922], BigFloat[-1,24], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 63
@@ -13575,7 +13575,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,6223,21928], BigFloat[-1,2,8], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 71
@@ -13585,7 +13585,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,5815], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 79
@@ -13595,7 +13595,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,21232], BigFloat[-1,14], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 87
@@ -13605,7 +13605,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,5815,5816,6223,11399,21230,21928], BigFloat[-1,8,16,3,4,14,5], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 95
@@ -13615,7 +13615,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 100
@@ -13625,7 +13625,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 108
@@ -13635,7 +13635,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 116
@@ -13645,7 +13645,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 124
@@ -13655,7 +13655,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 132
@@ -13665,7 +13665,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 140
@@ -13675,7 +13675,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 2
             checkequality(indvals, BigInt[-1,17770], BigFloat[-1,6], true)
             pop!(state.fixed_available, UInt(2))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 144
@@ -13691,7 +13691,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 9
             checkequality(indvals, BigInt[-5,-3,-1,55253,55254,92466,93270], BigFloat[-1,-1,-1,-4,-6,5,3], true)
             pop!(state.fixed_available, UInt(4))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 148
@@ -13731,7 +13731,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 83
             checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             pop!(state.fixed_available, UInt(12))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 152
@@ -13771,7 +13771,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 83
             checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,93269], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             pop!(state.fixed_available, UInt(12))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 159
@@ -13787,7 +13787,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 9
             checkequality(indvals, BigInt[-5,-3,-1,47925,47926,81393,86063], BigFloat[-1,-1,-1,-4,-12,8,4], true)
             pop!(state.fixed_available, UInt(4))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 166
@@ -13827,7 +13827,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 83
             checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             pop!(state.fixed_available, UInt(12))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     elseif state.instance == 173
@@ -13867,7 +13867,7 @@ function add_constr_fix_helper!(state::SolverSetup{<:Any,<:Any,false,false,true,
         elseif state.it == 83
             checkequality(indvals, BigInt[-21,-19,-17,-15,-13,-11,-9,-7,-5,-3,-1,85993], BigFloat[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6], true)
             pop!(state.fixed_available, UInt(12))
-            state.lastcall = :fix_sdsos
+            state.lastcall = :fix_sdd
         end
         state.it += 1
     end
@@ -13888,7 +13888,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[169998], BigFloat[17])
             @checkequals(BigInt[68265], BigFloat[17])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 20
         iter = iterate(data)
@@ -13900,7 +13900,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[151422], BigFloat[24])
             @checkequals(BigInt[63204], BigFloat[24])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 25
         iter = iterate(data)
@@ -13912,7 +13912,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[63728,151428], BigFloat[2,8])
             @checkequals(BigInt[22426,63210], BigFloat[2,8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 30
         iter = iterate(data)
@@ -13924,7 +13924,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[55255], BigFloat[6])
             @checkequals(BigInt[20441], BigFloat[6])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 35
         iter = iterate(data)
@@ -13936,7 +13936,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[150102], BigFloat[14])
             @checkequals(BigInt[62324], BigFloat[14])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 40
         iter = iterate(data)
@@ -13948,7 +13948,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[55255,55256,63728,92459,150100,151428], BigFloat[8,16,3,4,14,5])
             @checkequals(BigInt[20441,20442,22426,36378,62322,63210], BigFloat[8,16,3,4,14,5])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 45
         iter = iterate(data)
@@ -13976,7 +13976,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[22409], BigFloat[17])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 53
         iter = iterate(data)
@@ -14004,7 +14004,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[20571], BigFloat[24])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 61
         iter = iterate(data)
@@ -14032,7 +14032,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[6102,20588], BigFloat[2,8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 69
         iter = iterate(data)
@@ -14060,7 +14060,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[5542,5545], BigFloat[3,3])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 77
         iter = iterate(data)
@@ -14088,7 +14088,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[20164,20168], BigFloat[-7,7])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 85
         iter = iterate(data)
@@ -14116,7 +14116,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 93
         iter = iterate(data)
@@ -14128,7 +14128,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[17770], BigFloat[6])
             @checkequals(BigInt[9460], BigFloat[8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 98
         iter = iterate(data)
@@ -14156,7 +14156,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @skipempty()
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 106
         iter = iterate(data)
@@ -14184,7 +14184,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[9278], BigFloat[8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 114
         iter = iterate(data)
@@ -14212,7 +14212,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[9280], BigFloat[8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 122
         iter = iterate(data)
@@ -14240,7 +14240,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[9278,9280], BigFloat[8,2])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 130
         iter = iterate(data)
@@ -14268,7 +14268,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @skipempty()
             @checkequals(BigInt[9280,9297], BigFloat[2,1])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 138
         iter = iterate(data)
@@ -14280,7 +14280,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[17770], BigFloat[6])
             @checkequals(BigInt[9278,9280], BigFloat[16,4])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 142
         iter = iterate(data)
@@ -14308,7 +14308,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[4678,4679,9264,9402], BigFloat[-4,-6,5,3])
             @checkequals(BigInt[20439,20440,36385,36903], BigFloat[-4,-6,5,3])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 146
         iter = iterate(data)
@@ -14480,7 +14480,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[63728,92459], BigFloat[10,8])
             @checkequals(BigInt[92474], BigFloat[48])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 150
         iter = iterate(data)
@@ -15108,7 +15108,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[63728,92459], BigFloat[10,8])
             @checkequals(BigInt[92474], BigFloat[48])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 157
         iter = iterate(data)
@@ -15192,7 +15192,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[4250,4251,4252,4253,8456,9004], BigFloat[-2,-2,6,-6,8,4])
             @checkequals(BigInt[14606,14607,14614,14615,26806,29209], BigFloat[-2,-2,6,-6,8,4])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 164
         iter = iterate(data)
@@ -15820,7 +15820,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[59062,81360], BigFloat[10,8])
             @checkequals(BigInt[81570], BigFloat[48])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     elseif state.instance == 171
         iter = iterate(data)
@@ -16448,7 +16448,7 @@ function add_constr_l1_helper!(state::SolverSetup{false,false,false,false,false,
             @checkequals(BigInt[59062,81360], BigFloat[10,8])
             @checkequals(BigInt[81570], BigFloat[48])
             @test isnothing(iter)
-            state.lastcall = :dsosl1
+            state.lastcall = :ddl1
         end
     else
         @test false
@@ -16470,7 +16470,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[22409], BigFloat[17])
             @checkequals(BigInt[22410], BigFloat[-17])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 58
         iter = iterate(data)
@@ -16484,7 +16484,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[20571], BigFloat[24])
             @checkequals(BigInt[20574], BigFloat[-24])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 66
         iter = iterate(data)
@@ -16498,7 +16498,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[6102,20588], BigFloat[2,8])
             @checkequals(BigInt[6103,20589], BigFloat[-2,-8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 74
         iter = iterate(data)
@@ -16512,7 +16512,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[5542,5545], BigFloat[3,3])
             @checkequals(BigInt[5546], BigFloat[-3])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 82
         iter = iterate(data)
@@ -16526,7 +16526,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[20164,20168], BigFloat[-7,7])
             @checkequals(BigInt[20154,20162], BigFloat[7,-7])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 90
         iter = iterate(data)
@@ -16540,7 +16540,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[5542,5545,5546,6102,10837,20156,20166,20588], BigFloat[4,4,8,3,4,7,7,5])
             @checkequals(BigInt[5542,5545,5546,6103,10843,20171,20174,20589], BigFloat[8,-8,-4,-3,-4,7,-7,-5])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 103
         iter = iterate(data)
@@ -16554,7 +16554,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @skipempty()
             @checkequals(BigInt[9460], BigFloat[8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 111
         iter = iterate(data)
@@ -16568,7 +16568,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[9278], BigFloat[8])
             @checkequals(BigInt[9280], BigFloat[-8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 119
         iter = iterate(data)
@@ -16582,7 +16582,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[9280], BigFloat[8])
             @checkequals(BigInt[9278], BigFloat[8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 127
         iter = iterate(data)
@@ -16596,7 +16596,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[9278,9280], BigFloat[8,2])
             @checkequals(BigInt[9278,9280], BigFloat[2,-8])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 135
         iter = iterate(data)
@@ -16610,7 +16610,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[9280,9297], BigFloat[2,1])
             @checkequals(BigInt[5665,9278,9280], BigFloat[-3,-2,16])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 155
         iter = iterate(data)
@@ -16914,7 +16914,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[92474], BigFloat[48])
             @skipempty()
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 162
         iter = iterate(data)
@@ -16954,7 +16954,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[14606,14607,14614,14615,26806,29209], BigFloat[-2,-2,6,-6,8,4])
             @checkequals(BigInt[14606,14607,14614,14615,26814,29213], BigFloat[-6,6,2,2,-8,-4])
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 169
         iter = iterate(data)
@@ -17258,7 +17258,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[81570], BigFloat[48])
             @skipempty()
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     elseif state.instance == 176
         iter = iterate(data)
@@ -17562,7 +17562,7 @@ function add_constr_l1_complex_helper!(state::SolverSetup{false,false,false,true
             @checkequals(BigInt[81570], BigFloat[48])
             @skipempty()
             @test isnothing(iter)
-            state.lastcall = :dsosl1c
+            state.lastcall = :ddl1c
         end
     else
         @test false
@@ -17662,72 +17662,72 @@ end
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8im], SimpleMonomialVector{4,2}(UInt[37])); SimplePolynomial(Complex{BigFloat}[-8im], SimpleMonomialVector{4,2}(UInt[37])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(96, grouping, constraint, :rquadratic)
             momenttest(97, grouping, constraint, :psdr)
-            momenttest(98, grouping, constraint, :dsosl1)
-            momenttest(99, grouping, constraint, :dsoslin)
-            momenttest(100, grouping, constraint, :sdsos)
+            momenttest(98, grouping, constraint, :ddl1)
+            momenttest(99, grouping, constraint, :ddlin)
+            momenttest(100, grouping, constraint, :sdd)
             momenttest(101, grouping, constraint, :psdc)
-            momenttest(102, grouping, constraint, :dsosquad)
-            momenttest(103, grouping, constraint, :dsosl1c)
+            momenttest(102, grouping, constraint, :ddquad)
+            momenttest(103, grouping, constraint, :ddl1c)
         end
         # the constraint is {{17x₃²z₁z̄₁, 8x₂²}, {8x₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])); SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[37])) SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(91, grouping, constraint, :rquadratic)
             momenttest(92, grouping, constraint, :psdr)
-            momenttest(93, grouping, constraint, :dsosl1)
-            momenttest(94, grouping, constraint, :dsoslin)
-            momenttest(95, grouping, constraint, :sdsos)
+            momenttest(93, grouping, constraint, :ddl1)
+            momenttest(94, grouping, constraint, :ddlin)
+            momenttest(95, grouping, constraint, :sdd)
         end
         # the constraint is {{17x₃²z₁z̄₁, (8I)z₂²}, {(-8I)z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[-8im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(112, grouping, constraint, :rquadratic)
             momenttest(113, grouping, constraint, :psdr)
-            momenttest(114, grouping, constraint, :dsosl1)
-            momenttest(115, grouping, constraint, :dsoslin)
-            momenttest(116, grouping, constraint, :sdsos)
+            momenttest(114, grouping, constraint, :ddl1)
+            momenttest(115, grouping, constraint, :ddlin)
+            momenttest(116, grouping, constraint, :sdd)
             momenttest(117, grouping, constraint, :psdc)
-            momenttest(118, grouping, constraint, :dsosquad)
-            momenttest(119, grouping, constraint, :dsosl1c)
+            momenttest(118, grouping, constraint, :ddquad)
+            momenttest(119, grouping, constraint, :ddl1c)
         end
         # the constraint is {{17x₃²z₁z̄₁, 8z₂²}, {8z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(BigFloat[8], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(BigFloat[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(104, grouping, constraint, :rquadratic)
             momenttest(105, grouping, constraint, :psdr)
-            momenttest(106, grouping, constraint, :dsosl1)
-            momenttest(107, grouping, constraint, :dsoslin)
-            momenttest(108, grouping, constraint, :sdsos)
+            momenttest(106, grouping, constraint, :ddl1)
+            momenttest(107, grouping, constraint, :ddlin)
+            momenttest(108, grouping, constraint, :sdd)
             momenttest(109, grouping, constraint, :psdc)
-            momenttest(110, grouping, constraint, :dsosquad)
-            momenttest(111, grouping, constraint, :dsosl1c)
+            momenttest(110, grouping, constraint, :ddquad)
+            momenttest(111, grouping, constraint, :ddl1c)
         end
         # the constraint is {{17x₃²z₁z̄₁, (8 + 2I)z₂²}, {(8 - 2I)z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[279])) SimplePolynomial(Complex{BigFloat}[8+2im], SimpleMonomialVector{4,2}(UInt[12])); SimplePolynomial(Complex{BigFloat}[8-2im], SimpleMonomialVector{4,2}(UInt[10])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(120, grouping, constraint, :rquadratic)
             momenttest(121, grouping, constraint, :psdr)
-            momenttest(122, grouping, constraint, :dsosl1)
-            momenttest(123, grouping, constraint, :dsoslin)
-            momenttest(124, grouping, constraint, :sdsos)
+            momenttest(122, grouping, constraint, :ddl1)
+            momenttest(123, grouping, constraint, :ddlin)
+            momenttest(124, grouping, constraint, :sdd)
             momenttest(125, grouping, constraint, :psdc)
-            momenttest(126, grouping, constraint, :dsosquad)
-            momenttest(127, grouping, constraint, :dsosl1c)
+            momenttest(126, grouping, constraint, :ddquad)
+            momenttest(127, grouping, constraint, :ddl1c)
         end
         # the constraint is {{5x₂²z₁ - (17I)x₃²z₁ + 5x₂²z̄₁ + (17I)x₃²z̄₁, (8 + 2I)z₂² + (8 - 2I)z̄₂²}, {(8 + 2I)z₂² + (8 - 2I)z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[17im,-17im,5,5], SimpleMonomialVector{4,2}(UInt[98, 99, 125, 126])) SimplePolynomial(Complex{BigFloat}[8-2im,8+2im], SimpleMonomialVector{4,2}(UInt[10, 12])); SimplePolynomial(Complex{BigFloat}[8-2im,8+2im], SimpleMonomialVector{4,2}(UInt[10, 12])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(136, grouping, constraint, :rquadratic)
             momenttest(137, grouping, constraint, :psdr)
-            momenttest(138, grouping, constraint, :dsosl1)
-            momenttest(139, grouping, constraint, :dsoslin)
-            momenttest(140, grouping, constraint, :sdsos)
+            momenttest(138, grouping, constraint, :ddl1)
+            momenttest(139, grouping, constraint, :ddlin)
+            momenttest(140, grouping, constraint, :sdd)
         end
         # the constraint is {{5x₂² + 17x₃²z₁z̄₁, (-3I)x₁ - 8z₂² + z₁z̄₁ + (8 - 2I)z̄₂²}, {(3I)x₁ + (8 + 2I)z₂² + z₁z̄₁ - 8z̄₂², 6x₂x₄²}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[5,17], SimpleMonomialVector{4,2}(UInt[37, 279])) SimplePolynomial(Complex{BigFloat}[-3im,8-2im,-8,1], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])); SimplePolynomial(Complex{BigFloat}[3im,-8,8+2im,1], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[116]))]
             momenttest(128, grouping, constraint, :rquadratic)
             momenttest(129, grouping, constraint, :psdr)
-            momenttest(130, grouping, constraint, :dsosl1)
-            momenttest(131, grouping, constraint, :dsoslin)
-            momenttest(132, grouping, constraint, :sdsos)
+            momenttest(130, grouping, constraint, :ddl1)
+            momenttest(131, grouping, constraint, :ddlin)
+            momenttest(132, grouping, constraint, :sdd)
             momenttest(133, grouping, constraint, :psdc)
-            momenttest(134, grouping, constraint, :dsosquad)
-            momenttest(135, grouping, constraint, :dsosl1c)
+            momenttest(134, grouping, constraint, :ddquad)
+            momenttest(135, grouping, constraint, :ddl1c)
         end
     end
 
@@ -17781,49 +17781,49 @@ end
         @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
             momenttest(23, grouping, constraint, :rquadratic)
             momenttest(24, grouping, constraint, :psdr)
-            momenttest(25, grouping, constraint, :dsosl1)
-            momenttest(26, grouping, constraint, :dsoslin)
-            momenttest(27, grouping, constraint, :sdsos)
+            momenttest(25, grouping, constraint, :ddl1)
+            momenttest(26, grouping, constraint, :ddlin)
+            momenttest(27, grouping, constraint, :sdd)
         end
         # the constraint is 3(z₁ + z̄₁)
         @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
             momenttest(28, grouping, constraint, :rquadratic)
             momenttest(29, grouping, constraint, :psdr)
-            momenttest(30, grouping, constraint, :dsosl1)
-            momenttest(31, grouping, constraint, :dsoslin)
-            momenttest(32, grouping, constraint, :sdsos)
+            momenttest(30, grouping, constraint, :ddl1)
+            momenttest(31, grouping, constraint, :ddlin)
+            momenttest(32, grouping, constraint, :sdd)
         end
         # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
             momenttest(33, grouping, constraint, :rquadratic)
             momenttest(34, grouping, constraint, :psdr)
-            momenttest(35, grouping, constraint, :dsosl1)
-            momenttest(36, grouping, constraint, :dsoslin)
-            momenttest(37, grouping, constraint, :sdsos)
+            momenttest(35, grouping, constraint, :ddl1)
+            momenttest(36, grouping, constraint, :ddlin)
+            momenttest(37, grouping, constraint, :sdd)
         end
         # the constraint is 17x₁x₃²
         @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
             momenttest(13, grouping, constraint, :rquadratic)
             momenttest(14, grouping, constraint, :psdr)
-            momenttest(15, grouping, constraint, :dsosl1)
-            momenttest(16, grouping, constraint, :dsoslin)
-            momenttest(17, grouping, constraint, :sdsos)
+            momenttest(15, grouping, constraint, :ddl1)
+            momenttest(16, grouping, constraint, :ddlin)
+            momenttest(17, grouping, constraint, :sdd)
         end
         # the constraint is 24x₂z₁z̄₁
         @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
             momenttest(18, grouping, constraint, :rquadratic)
             momenttest(19, grouping, constraint, :psdr)
-            momenttest(20, grouping, constraint, :dsosl1)
-            momenttest(21, grouping, constraint, :dsoslin)
-            momenttest(22, grouping, constraint, :sdsos)
+            momenttest(20, grouping, constraint, :ddl1)
+            momenttest(21, grouping, constraint, :ddlin)
+            momenttest(22, grouping, constraint, :sdd)
         end
         # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
             momenttest(38, grouping, constraint, :rquadratic)
             momenttest(39, grouping, constraint, :psdr)
-            momenttest(40, grouping, constraint, :dsosl1)
-            momenttest(41, grouping, constraint, :dsoslin)
-            momenttest(42, grouping, constraint, :sdsos)
+            momenttest(40, grouping, constraint, :ddl1)
+            momenttest(41, grouping, constraint, :ddlin)
+            momenttest(42, grouping, constraint, :sdd)
         end
     end
 
@@ -17833,67 +17833,67 @@ end
         @testset let constraint=SimplePolynomial(BigFloat[2,8], SimpleMonomialVector{4,2}(UInt[9, 116]))
             momenttest(59, grouping, constraint, :rquadratic)
             momenttest(60, grouping, constraint, :psdr)
-            momenttest(61, grouping, constraint, :dsosl1)
-            momenttest(62, grouping, constraint, :dsoslin)
-            momenttest(63, grouping, constraint, :sdsos)
+            momenttest(61, grouping, constraint, :ddl1)
+            momenttest(62, grouping, constraint, :ddlin)
+            momenttest(63, grouping, constraint, :sdd)
             momenttest(64, grouping, constraint, :psdc)
-            momenttest(65, grouping, constraint, :dsosquad)
-            momenttest(66, grouping, constraint, :dsosl1c)
+            momenttest(65, grouping, constraint, :ddquad)
+            momenttest(66, grouping, constraint, :ddl1c)
         end
         # the constraint is 3(z₁ + z̄₁)
         @testset let constraint=SimplePolynomial(BigFloat[3,3], SimpleMonomialVector{4,2}(UInt[4, 5]))
             momenttest(67, grouping, constraint, :rquadratic)
             momenttest(68, grouping, constraint, :psdr)
-            momenttest(69, grouping, constraint, :dsosl1)
-            momenttest(70, grouping, constraint, :dsoslin)
-            momenttest(71, grouping, constraint, :sdsos)
+            momenttest(69, grouping, constraint, :ddl1)
+            momenttest(70, grouping, constraint, :ddlin)
+            momenttest(71, grouping, constraint, :sdd)
             momenttest(72, grouping, constraint, :psdc)
-            momenttest(73, grouping, constraint, :dsosquad)
-            momenttest(74, grouping, constraint, :dsosl1c)
+            momenttest(73, grouping, constraint, :ddquad)
+            momenttest(74, grouping, constraint, :ddl1c)
         end
         # the constraint is (7I)(-(z₂²z̄₁) + z₁z̄₂²)
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[-7im,7im], SimpleMonomialVector{4,2}(UInt[52, 56]))
             momenttest(75, grouping, constraint, :rquadratic)
             momenttest(76, grouping, constraint, :psdr)
-            momenttest(77, grouping, constraint, :dsosl1)
-            momenttest(78, grouping, constraint, :dsoslin)
-            momenttest(79, grouping, constraint, :sdsos)
+            momenttest(77, grouping, constraint, :ddl1)
+            momenttest(78, grouping, constraint, :ddlin)
+            momenttest(79, grouping, constraint, :sdd)
             momenttest(80, grouping, constraint, :psdc)
-            momenttest(81, grouping, constraint, :dsosquad)
-            momenttest(82, grouping, constraint, :dsosl1c)
+            momenttest(81, grouping, constraint, :ddquad)
+            momenttest(82, grouping, constraint, :ddl1c)
         end
         # the constraint is 17x₁x₃²
         @testset let constraint=SimplePolynomial(BigFloat[17], SimpleMonomialVector{4,2}(UInt[150]))
             momenttest(43, grouping, constraint, :rquadratic)
             momenttest(44, grouping, constraint, :psdr)
-            momenttest(45, grouping, constraint, :dsosl1)
-            momenttest(46, grouping, constraint, :dsoslin)
-            momenttest(47, grouping, constraint, :sdsos)
+            momenttest(45, grouping, constraint, :ddl1)
+            momenttest(46, grouping, constraint, :ddlin)
+            momenttest(47, grouping, constraint, :sdd)
             momenttest(48, grouping, constraint, :psdc)
-            momenttest(49, grouping, constraint, :dsosquad)
-            momenttest(50, grouping, constraint, :dsosl1c)
+            momenttest(49, grouping, constraint, :ddquad)
+            momenttest(50, grouping, constraint, :ddl1c)
         end
         # the constraint is 24x₂z₁z̄₁
         @testset let constraint=SimplePolynomial(BigFloat[24], SimpleMonomialVector{4,2}(UInt[110]))
             momenttest(51, grouping, constraint, :rquadratic)
             momenttest(52, grouping, constraint, :psdr)
-            momenttest(53, grouping, constraint, :dsosl1)
-            momenttest(54, grouping, constraint, :dsoslin)
-            momenttest(55, grouping, constraint, :sdsos)
+            momenttest(53, grouping, constraint, :ddl1)
+            momenttest(54, grouping, constraint, :ddlin)
+            momenttest(55, grouping, constraint, :sdd)
             momenttest(56, grouping, constraint, :psdc)
-            momenttest(57, grouping, constraint, :dsosquad)
-            momenttest(58, grouping, constraint, :dsosl1c)
+            momenttest(57, grouping, constraint, :ddquad)
+            momenttest(58, grouping, constraint, :ddl1c)
         end
         # the constraint is 3x₁ + 5x₂x₄² + (4 + 8I)z₁ + (4 - 8I)z̄₁ + 4z₂z̄₂ + 7(z₂z̄₁² + z₁²z̄₂)
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[4-8im,4+8im,3,4,7,7,5], SimpleMonomialVector{4,2}(UInt[4, 5, 9, 11, 54, 62, 116]))
             momenttest(83, grouping, constraint, :rquadratic)
             momenttest(84, grouping, constraint, :psdr)
-            momenttest(85, grouping, constraint, :dsosl1)
-            momenttest(86, grouping, constraint, :dsoslin)
-            momenttest(87, grouping, constraint, :sdsos)
+            momenttest(85, grouping, constraint, :ddl1)
+            momenttest(86, grouping, constraint, :ddlin)
+            momenttest(87, grouping, constraint, :sdd)
             momenttest(88, grouping, constraint, :psdc)
-            momenttest(89, grouping, constraint, :dsosquad)
-            momenttest(90, grouping, constraint, :dsosl1c)
+            momenttest(89, grouping, constraint, :ddquad)
+            momenttest(90, grouping, constraint, :ddl1c)
         end
     end
 
@@ -17950,26 +17950,26 @@ end
         # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, 17x₄, 10x₁ + 8z₂z̄₂}, {17x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[17], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
             momenttest(145, grouping, constraint, :psdr)
-            momenttest(146, grouping, constraint, :dsosl1)
-            momenttest(147, grouping, constraint, :dsoslin)
-            momenttest(148, grouping, constraint, :sdsos)
+            momenttest(146, grouping, constraint, :ddl1)
+            momenttest(147, grouping, constraint, :ddlin)
+            momenttest(148, grouping, constraint, :sdd)
         end
         # the constraint is {{3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
             momenttest(149, grouping, constraint, :psdr)
-            momenttest(150, grouping, constraint, :dsosl1)
-            momenttest(151, grouping, constraint, :dsoslin)
-            momenttest(152, grouping, constraint, :sdsos)
+            momenttest(150, grouping, constraint, :ddl1)
+            momenttest(151, grouping, constraint, :ddlin)
+            momenttest(152, grouping, constraint, :sdd)
             momenttest(153, grouping, constraint, :psdc)
-            momenttest(154, grouping, constraint, :dsosquad)
-            momenttest(155, grouping, constraint, :dsosl1c)
+            momenttest(154, grouping, constraint, :ddquad)
+            momenttest(155, grouping, constraint, :ddl1c)
         end
         # the constraint is 3x₂x₃ - (2 + 3I)z₂ + 5z₁z̄₁ - (2 - 3I)z̄₂
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+3im,-2-3im,5,3], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
             momenttest(141, grouping, constraint, :psdr)
-            momenttest(142, grouping, constraint, :dsosl1)
-            momenttest(143, grouping, constraint, :dsoslin)
-            momenttest(144, grouping, constraint, :sdsos)
+            momenttest(142, grouping, constraint, :ddl1)
+            momenttest(143, grouping, constraint, :ddlin)
+            momenttest(144, grouping, constraint, :sdd)
         end
     end
 
@@ -17978,32 +17978,32 @@ end
         # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, 18x₄, 10x₁ + 8z₂z̄₂}, {18x₄, 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[18], SimpleMonomialVector{4,2}(UInt[6])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
             momenttest(163, grouping, constraint, :psdr)
-            momenttest(164, grouping, constraint, :dsosl1)
-            momenttest(165, grouping, constraint, :dsoslin)
-            momenttest(166, grouping, constraint, :sdsos)
+            momenttest(164, grouping, constraint, :ddl1)
+            momenttest(165, grouping, constraint, :ddlin)
+            momenttest(166, grouping, constraint, :sdd)
             momenttest(167, grouping, constraint, :psdc)
-            momenttest(168, grouping, constraint, :dsosquad)
-            momenttest(169, grouping, constraint, :dsosl1c)
+            momenttest(168, grouping, constraint, :ddquad)
+            momenttest(169, grouping, constraint, :ddl1c)
         end
         # the constraint is {{4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂, (-6I)x₁ - 8z₂² + 2z₁z̄₁ + (8 - 2I)z̄₂², 10x₁ + 8z₂z̄₂}, {(6I)x₁ + (8 + 2I)z₂² + 2z₁z̄₁ - 8z̄₂², 0, (24I)x₃z₂ - (24I)x₃z̄₂}, {10x₁ + 8z₂z̄₂, (24I)x₃z₂ - (24I)x₃z̄₂, 6x₂x₄}}
         @testset let constraint=[SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36])) SimplePolynomial(Complex{BigFloat}[-6im,8-2im,-8,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])); SimplePolynomial(Complex{BigFloat}[6im,-8,8+2im,2], SimpleMonomialVector{4,2}(UInt[9, 10, 12, 18])) SimplePolynomial(Complex{BigFloat}[0], SimpleMonomialVector{4,2}(UInt[1])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])); SimplePolynomial(Complex{BigFloat}[10,8], SimpleMonomialVector{4,2}(UInt[9, 11])) SimplePolynomial(Complex{BigFloat}[-24im,24im], SimpleMonomialVector{4,2}(UInt[25, 26])) SimplePolynomial(Complex{BigFloat}[6], SimpleMonomialVector{4,2}(UInt[35]))]
             momenttest(170, grouping, constraint, :psdr)
-            momenttest(171, grouping, constraint, :dsosl1)
-            momenttest(172, grouping, constraint, :dsoslin)
-            momenttest(173, grouping, constraint, :sdsos)
+            momenttest(171, grouping, constraint, :ddl1)
+            momenttest(172, grouping, constraint, :ddlin)
+            momenttest(173, grouping, constraint, :sdd)
             momenttest(174, grouping, constraint, :psdc)
-            momenttest(175, grouping, constraint, :dsosquad)
-            momenttest(176, grouping, constraint, :dsosl1c)
+            momenttest(175, grouping, constraint, :ddquad)
+            momenttest(176, grouping, constraint, :ddl1c)
         end
         # the constraint is 4x₂x₃ - (2 + 6I)z₂ + 8z₁z̄₁ - (2 - 6I)z̄₂
         @testset let constraint=SimplePolynomial(Complex{BigFloat}[-2+6im,-2-6im,8,4], SimpleMonomialVector{4,2}(UInt[2, 3, 18, 36]))
             momenttest(156, grouping, constraint, :psdr)
-            momenttest(157, grouping, constraint, :dsosl1)
-            momenttest(158, grouping, constraint, :dsoslin)
-            momenttest(159, grouping, constraint, :sdsos)
+            momenttest(157, grouping, constraint, :ddl1)
+            momenttest(158, grouping, constraint, :ddlin)
+            momenttest(159, grouping, constraint, :sdd)
             momenttest(160, grouping, constraint, :psdc)
-            momenttest(161, grouping, constraint, :dsosquad)
-            momenttest(162, grouping, constraint, :dsosl1c)
+            momenttest(161, grouping, constraint, :ddquad)
+            momenttest(162, grouping, constraint, :ddl1c)
         end
     end
 
