@@ -216,10 +216,13 @@ column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the 
 function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, _moments::Vector{V},
     slack::Integer, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
-    coo₁moninds = @view(coo₁.moninds[slack isa Signed ? (-slack:length(coo₁.moninds)) :
-                                                        (1:length(coo₁.moninds)-(typemax(slack)-slack))])
-    cooₙmoninds = ((@view(coo.moninds[slack isa Signed ? (-slack:length(coo.moninds)) :
-                                                         (1:length(coo.moninds)-(typemax(slack)-slack))]) for coo in cooₙ)...,)
+    if slack isa Signed
+        coo₁moninds = @view(coo₁.moninds[searchsortedfirst(coo₁.moninds, one(slack)):end])
+        cooₙmoninds = ((@view(coo.moninds[searchsortedfirst(coo.moninds, one(slack)):end]) for coo in cooₙ)...,)
+    else
+        coo₁moninds = @view(coo₁.moninds[1:searchsortedlast(coo₁.moninds, slack)])
+        cooₙmoninds = ((@view(coo.moninds[1:searchsortedlast(coo.moninds, slack)]) for coo in cooₙ)...,)
+    end
     max_mons = max(coo₁moninds[end], (moninds[end] for moninds in cooₙmoninds)...) # coos are sorted according to the columns
     moments = @view(_moments[slack isa Signed ? (-slack:length(_moments)) : (1:length(_moments)-(typemax(slack)-slack))])
     @assert(length(moments) ≤ max_mons)
