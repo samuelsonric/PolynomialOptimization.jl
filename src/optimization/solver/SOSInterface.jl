@@ -1,5 +1,5 @@
-export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_linf!, add_var_linf_complex!,
-    add_var_psd!, add_var_psd_complex!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!,
+export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_l1!, add_var_l1_complex!, add_var_psd!,
+    add_var_psd_complex!, add_var_dd!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!,
     add_constr_slack!
 
 function add_var_nonnegative! end
@@ -87,7 +87,7 @@ Note that if [`add_var_quadratic!`](@ref) is not implemented, `dim` may also be 
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
 
 !!! hint "Complex-valued PSD variables"
-    Note that this function will also be called for complex-valued PSD cones if [`supports_complex_psd`](@ref) returns `false`.
+    Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
     The data will have been rewritten in terms of a real-valued PSD cone, which doubles the dimension.
     If the solver natively supports complex-valued PSD cones, [`add_var_psd_complex!`](@ref) must be implemented.
 """
@@ -101,7 +101,7 @@ individual entries are [`Indvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 
 !!! hint "Complex-valued PSD variables"
-    Note that this function will also be called for complex-valued PSD cones if [`supports_complex_psd`](@ref) returns `false`.
+    Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
     The data will have been rewritten in terms of a real-valued PSD cone, which doubles the dimension.
     If the solver natively supports complex-valued PSD cones, [`add_var_psd_complex!`](@ref) must be implemented.
 """
@@ -121,7 +121,7 @@ Note that if [`add_var_quadratic!`](@ref) is not implemented, `dim` may also be 
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
 
 !!! warning
-    This function will only be called if [`supports_complex_psd`](@ref) is defined to return `true` for the given state.
+    This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
 """
 add_var_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex})
 
@@ -135,42 +135,76 @@ Regardless of the travelling order, for diagonal elements, there will be exactly
 off-diagonal elements, the real part will be followed by the imaginary part. Therefore, the coefficients are real-valued.
 
 !!! warning
-    This function will only be called if [`supports_complex_psd`](@ref) is defined to return `true` for the given state.
+    This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
 """
 add_var_psd_complex!(::Any, ::Int, ::IndvalsIterator{<:Any,<:Real})
 
-function add_var_linf! end
+function add_var_l1! end
 
 @doc raw"""
-    add_var_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_var_l1!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds decision variables in an ``\ell_\infty`` norm cone to the solver and put their values into the linear constraints (rows in
+Adds decision variables in an ``\ell_1`` norm cone to the solver and put their values into the linear constraints (rows in
 the linear constraint matrix), indexed according to the `indvals`. The `N = length(indvals)` variables will satisfy
-``x_1 \geq \max_{i > 2} \lvert x_i\rvert``.
+``x_1 \geq \sum_{i = 2}^N \lvert x_i\rvert``.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
 !!! warning
     This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
-    If ``\ell_\infty`` norm cones are unsupported, a fallback to multiple nonnegative variables with slack constraints will be
-    used (see [`add_constr_slack!`](@ref)).
+    If ``\ell_\infty`` norm cones are unsupported, a fallback to multiple nonnegative variables will be used.
 """
-add_var_linf!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_var_l1!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
-function add_var_linf_complex! end
+function add_var_l1_complex! end
 
 @doc raw"""
-    add_var_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_var_l1_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Same as [`add_var_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
-determining the real and imaginary part of a component of the ``\ell_\infty`` norm variable.
+Same as [`add_var_l1!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
+determining the real and imaginary part of a component of the ``\ell_1`` norm variable.
 
 !!! warning
-    This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.
-    If complex-valued ``\ell_\infty`` norm cones are unsupported, a fallback to multiple nonnegative and quadratic variables
-    with slack constraints and will be used (see [`add_constr_slack!`](@ref)).
+    This function will only be called if [`supports_lnorm_complex`](@ref) returns `true` for the given state.
+    If complex-valued ``\ell_1`` norm cones are unsupported, a fallback to multiple nonnegative and quadratic variables will be
+    used.
 """
-add_var_linf_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_var_l1_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
+function add_var_dd! end
+
+@doc raw"""
+    add_var_dd!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the cone of diagonally dominant matrices to the solver. `data` is an iterator through the
+(unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning that
+`M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
+
+!!! warning
+    This function will only be called if [`supports_dd`](@ref) returns `true` for the given state. If diagonally dominant cones
+    are not supported directly, a fallback to a columnwise representation in terms of ``\ell_1`` norms will be used (or the
+    fallbacks if this norm is not supported).
+"""
+add_var_dd!(::Any, ::Integer, ::IndvalsIterator{<:Any,<:Real})
+
+function add_var_dd_complex! end
+
+@doc raw"""
+    add_var_dd_complex!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the cone of complex-valued diagonally dominant matrices to the solver. `data` is an iterator
+through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning for the
+primal cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
+For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
+be followed by the imaginary part. Therefore, the coefficients are real-valued.
+
+!!! warning
+    This function will only be called if [`supports_dd_complex`](@ref) returns `true` for the given state. If complex-valued
+    diagonally dominant cones are not supported directly, a fallback to quadratic cones on the complex-valued data is tried
+    first (if supported), followed by a columnwise representation in terms of ``\ell_1`` norms or their fallback on the
+    realification of the matrix data if not.
+"""
+add_var_dd_complex!(::Any, ::Integer, ::IndvalsIterator{<:Any,<:Real})
 
 """
     add_var_free_prepare!(state, num::Int)

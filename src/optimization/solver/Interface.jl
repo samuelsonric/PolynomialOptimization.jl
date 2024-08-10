@@ -1,5 +1,6 @@
-export mindex, supports_rotated_quadratic, supports_quadratic, Indvals, supports_complex_psd, psd_indextype,
-    PSDIndextypeMatrixCartesian, PSDMatrixCartesian, PSDIndextypeVector, IndvalsIterator
+export mindex, supports_rotated_quadratic, supports_quadratic, supports_lnorm, supports_lnorm_complex, supports_psd_complex,
+    supports_dd, supports_dd_complex, Indvals, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian,
+    PSDIndextypeVector, IndvalsIterator
 
 """
     mindex(state, monomials::SimpleMonomialOrConj...)
@@ -12,19 +13,19 @@ The returned index is arbitrary as long as it is unique for the total monomial.
 @inline mindex(_, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc} =
     monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)
 
-"""
+@doc raw"""
     supports_rotated_quadratic(state)
 
 Indicates the solver support for rotated quadratic cones: if `true`, the rotated second-order cone
-``2x_1x_2 \\geq \\sum_{i \\geq 3} x_i^2`` is supported.
+``2x_1x_2 \geq \sum_{i \geq 3} x_i^2`` is supported.
 The default implementation returns `false`.
 """
 supports_rotated_quadratic(state) = false
 
-"""
+@doc raw"""
     supports_quadratic(state)
 
-Indicates the solver support for the quadratic cone: if `true`, the second-order cone ``x_1^2 \\geq \\sum_{i \\geq 2} x_i^2``
+Indicates the solver support for the quadratic cone: if `true`, the second-order cone ``x_1^2 \geq \\sum_{i \geq 2} x_i^2``
 is supported.
 The default implementation returns the same value as [`supports_rotated_quadratic`](@ref).
 """
@@ -40,14 +41,42 @@ The default implementation returns `false`.
 supports_lnorm(state) = false
 
 @doc raw"""
-    supports_complex_lnorm(state)
+    supports_lnorm_complex(state)
 
 Indicates the solver support for complex-valued ``\ell_1`` (in the moment case) and ``\ell_\infty`` (in the SOS case) norm
 cones: if `true`, the cone ``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` or
 ``x_1 \geq \max_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
 The default implementation returns `false`.
 """
-supports_complex_lnorm(state) = false
+supports_lnorm_complex(state) = false
+
+"""
+    supports_psd_complex(state)
+
+This function indicates whether the solver natively supports a complex-valued PSD cone. If it returns `false` (default), the
+complex-valued PSD constraints will be rewritten into real-valued PSD constraints; this is completely transparent for the
+solver. If the function returns `true`, the solver must additionally implement [`add_var_psd_complex!`](@ref) and
+[`add_constr_psd_complex!`](@ref).
+"""
+supports_psd_complex(_) = false
+
+@doc raw"""
+    supports_dd(state)
+
+This function indicates whether the solver natively supports a diagonally-dominant cone. If it returns `false` (default), the
+constraint will be rewritten in terms of multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm`](@ref))
+or linear constraints.
+"""
+supports_dd(_) = false
+
+@doc raw"""
+    supports_dd_complex(state)
+
+This function indicates whether the solver natively supports a complex-valued diagonally-dominant cone. If it returns `false`
+(default), the constraint will be rewritten in terms of quadratic constraints (if supported, see [`supports_quadratic`](@ref)),
+multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm`](@ref)), or linear constraints.
+"""
+supports_dd_complex(_) = false
 
 """
     Indvals{T,V<:Real}
@@ -83,16 +112,6 @@ Base.IteratorEltype(::Type{<:Indvals}) = Base.HasEltype()
 Base.eltype(::Type{Indvals{T,V}}) where {T,V} = Tuple{T,V}
 Base.length(iv::Indvals) = length(iv.z)
 Base.iterate(iv::Indvals, args...) = iterate(iv.z, args...)
-
-@doc raw"""
-    supports_complex_psd(state)
-
-This function indicates whether the solver natively supports a complex-valued PSD cone. If it returns `false` (default), the
-complex-valued PSD constraints will be rewritten into real-valued PSD constraints; this is completely transparent for the
-solver. If the function returns `true`, the solver must additionally implement [`add_var_psd_complex!`](@ref) and
-[`add_constr_psd_complex!`](@ref).
-"""
-supports_complex_psd(_) = false
 
 """
     PSDIndextypeMatrixCartesian(triangle, offset) <: PSDIndextype
@@ -297,16 +316,24 @@ to a semidefinite formulation if this is not the case, as such a rewrite would d
 struct RepresentationSDD end
 
 """
-    RepresentationDD(; complex=false) <: RepresentationMethod
+    RepresentationDD([u]; complex=true) <: RepresentationMethod
 
-Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, whic is achieved using linear inequalities only.
+Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\\sigma = u^\\dagger Q u`` for some `Q ∈ DD`.
+The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix of suitable
+dimension.
+The membership `Q ∈ DD` is achieved using linear inequalities and slack variables only.
 
-If σ is a Hermitian matrix, the DD condition will be imposed on the real matrix associated with σ, which has twice its
-dimension. Alternatively, by setting `complex` to `true`, the complex structure will be kept using a complex-valued ℓ₁ cone or
-a quadratic cone (which requires support for this in the solver).
+If σ is a Hermitian matrix, a complex-valued diagonally dominant cone will be used, if supported. If not, fallbacks will first
+try quadratic cones on the complex-valued data, and if this is also not supported, rewrite the matrix as a real one and then
+apply the real-valued DD constraint.
+By setting the `complex` paramter to `false`, the rewriting to a real matrix will always be used, regardless of complex-valued
+solver support.
+Note that if rewritten, `u` must be real-valued and have twice the side dimension of the complex-valued matrix.
 """
-struct RepresentationDD{Complex}
-    RepresentationDD(; complex=false) = new{complex}()
+struct RepresentationDD{M,Complex}
+    u::M
+
+    RepresentationDD(u::M=I; complex=true) where {M} = new{M,complex}(u)
 end
 
 """

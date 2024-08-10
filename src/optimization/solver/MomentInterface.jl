@@ -1,6 +1,6 @@
-export add_constr_nonnegative!, add_constr_rotated_quadratic!, add_constr_quadratic!, add_constr_l1!, add_constr_l1_complex!,
-    add_constr_psd!, add_constr_psd_complex!, add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!,
-    fix_objective!, add_var_slack!
+export add_constr_nonnegative!, add_constr_rotated_quadratic!, add_constr_quadratic!, add_constr_linf!,
+    add_constr_linf_complex!, add_constr_psd!, add_constr_psd_complex!, add_constr_dddual!, add_constr_dddual_complex!,
+    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, fix_objective!, add_var_slack!
 
 function add_constr_nonnegative! end
 
@@ -37,7 +37,7 @@ function add_constr_quadratic! end
 @doc raw"""
     add_constr_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds a quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the linear
+Adds a quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the conic
 constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1 \geq 0``,
 ``X_1^2 \geq \sum_{i = 2}^N X_i^2``.
@@ -60,7 +60,7 @@ function add_constr_rotated_quadratic! end
     add_constr_rotated_quadratic!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
 Adds a rotated quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
-linear constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1, X_2 \geq 0``,
 ``2X_1 X_2 \geq \sum_{i = 3}^N X_i^2``.
 
@@ -82,14 +82,13 @@ function add_constr_psd! end
     add_constr_psd!(state, dim::Integer, data::PSDMatrixCartesian{T,V}) where {T,V<:Real}
 
 Add a PSD constraint of side dimension `dim` ≥ 3 to the solver. Its requested triangle is indexed according to the return value
-of [`psd_indextype`](@ref)); these elements of the matrix are put into the linear constraints (rows in the linear constraint
-matrix) indicated by the keys when iterating through `data`, which are of the type returned by [`mindex`](@ref), at positions
-and with coefficients given by their values.
+of [`psd_indextype`](@ref)); these elements make up a linear matrix inequality with variables given by the keys when iterating
+through `data`, which are of the type returned by [`mindex`](@ref).
 Note that if [`add_constr_quadratic!`](@ref) is not implemented, `dim` may also be `2`.
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
 
 !!! hint "Complex-valued PSD variables"
-    Note that this function will also be called for complex-valued PSD cones if [`supports_complex_psd`](@ref) returns `false`.
+    Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
     The data will have been rewritten in terms of a real-valued PSD cone, which doubles the dimension.
     If the solver natively supports complex-valued PSD cones, [`add_constr_psd_complex!`](@ref) must be implemented.
 """
@@ -98,12 +97,12 @@ add_constr_psd!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Real})
 """
     add_constr_psd!(state, dim::Integer, data::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are [`Indvals`](@ref).
+Add a PSD constraint of side dimension `dim` ≥ 3 to the solver. `data` is an iterable through the elements of the PSD matrix
+one-by-one, in the order specified by [`psd_indextype`](@ref). The individual entries are [`Indvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 
 !!! hint "Complex-valued PSD variables"
-    Note that this function will also be called for complex-valued PSD cones if [`supports_complex_psd`](@ref) returns `false`.
+    Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
     The data will have been rewritten in terms of a real-valued PSD cone, which doubles the dimension.
     If the solver natively supports complex-valued PSD cones, [`add_constr_psd_complex!`](@ref) must be implemented.
 """
@@ -116,65 +115,100 @@ function add_constr_psd_complex! end
         data::PSDMatrixCartesian{T,V}) where {T,V<:Complex}
 
 Add a Hermitian PSD constraint of side dimension `dim` ≥ 3 to the solver. Its requested triangle is indexed according to the
-return value of [`psd_indextype`](@ref)); these elements of the matrix are put into the linear constraints (rows in the linear
-constraint matrix) indicated by the keys when iterating through `data`, which are of the type returned by [`mindex`](@ref),
-at positions and with coefficients given by their values. The real part of the coefficient corresponds to the coefficient in
-front of the real part of the matrix entry, the imaginary part is the coefficient for the imaginary part of the matrix entry.
+return value of [`psd_indextype`](@ref)); these elements make up a linear matrix inequality with variables given by the keys
+when iterating through `data`, which are of the type returned by [`mindex`](@ref). The real part of any coefficient corresponds
+to the coefficient in front of the real part of the matrix entry, the imaginary part is the coefficient for the imaginary part
+of the matrix entry.
 Note that if [`add_constr_quadratic!`](@ref) is not implemented, `dim` may also be `2`.
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
 
 !!! warning
-    This function will only be called if [`supports_complex_psd`](@ref) is defined to return `true` for the given state.
+    This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
 """
-add_constr_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex})
+add_constr_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex}) = unsupported
 
 """
     add_constr_psd_complex!(state, dim::Int, data::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
-individual entries are [`Indvals`](@ref).
+Add a Hermitian PSD constraint of side dimension `dim` ≥ 3 to the solver. `data` is an iterable through the elements of the PSD
+matrix one-by-one, in the order specified by [`psd_indextype`](@ref). The individual entries are [`Indvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 Regardless of the travelling order, for diagonal elements, there will be exactly one entry, which is the real part. For
 off-diagonal elements, the real part will be followed by the imaginary part. Therefore, the coefficients are real-valued.
 
 !!! warning
-    This function will only be called if [`supports_complex_psd`](@ref) is defined to return `true` for the given state.
+    This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
 """
 add_constr_psd_complex!(::Any, ::Int, ::IndvalsIterator{<:Any,<:Real})
 
-function add_constr_l1! end
+function add_constr_linf! end
 
 @doc raw"""
-    add_constr_l1!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_constr_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Adds an ``\ell_1`` norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
-linear constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+Adds an ``\ell_\infty`` norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
+conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
-``X_1 \geq \sum_{i = 2}^N \lvert X_i\rvert``.
+``X_1 \geq \max_{i > 2} \lvert X_i\rvert``.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
 !!! warning
     This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
-    If ``\ell_1`` norm constraints are unsupported, a fallback to multiple linear constraints with slack variables will be used
-    (see [`add_var_slack!`](@ref)).
+    If ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints will be used.
 """
-add_constr_l1!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_constr_linf!(::Any, ::IndvalsIterator{<:Any,<:Real})
 
-function add_constr_l1_complex! end
+function add_constr_linf_complex! end
 
 @doc raw"""
-    add_constr_l1_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+    add_constr_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
 
-Same as [`add_constr_l1!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
-determining the real and imaginary part of a component of the ``\ell_1`` norm cone.
+Same as [`add_constr_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
+determining the real and imaginary part of a component of the ``\ell_\infty`` norm cone.
 
 !!! warning
-    This function will only be called if [`supports_complex_lnorm`](@ref) returns `true` for the given state.
-    If complex-valued ``\ell_1`` norm constraints are unsupported, a fallback to multiple linear constraints with slack
-    variables and quadratic cones will be used (see [`add_var_slack!`](@ref)).
+    This function will only be called if [`supports_lnorm_complex`](@ref) returns `true` for the given state.
+    If complex-valued ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints and quadratic
+    cones will be used. If [`supports_quadratic`](@ref) is not `true`, complex-valued DD cones cannot be used.
 """
-add_constr_l1_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+add_constr_linf_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
+function add_constr_dddual! end
+
+@doc raw"""
+    add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the dual cone to diagonally dominant matrices to the solver. `data` is an iterator through
+the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning for the primal
+cone that `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
+
+!!! warning
+    This function will only be called if [`supports_dd`](@ref) returns `true` for the given state. If diagonally dominant cones
+    are not supported directly, a fallback to a columnwise representation in terms of ``\ell_\infty`` norms will be used (or
+    the fallbacks if this norm is not supported).
+"""
+add_constr_dddual!(::Any, ::Integer, ::IndvalsIterator{<:Any,<:Real})
+
+
+function add_constr_dddual_complex! end
+
+@doc raw"""
+    add_constr_dddual_complex!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the dual cone to complex-valued diagonally dominant matrices to the solver. `data` is an
+iterator through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning
+for the primal cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
+For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
+be followed by the imaginary part. Therefore, the coefficients are real-valued.
+
+!!! warning
+    This function will only be called if [`supports_dd_complex`](@ref) returns `true` for the given state. If complex-valued
+    diagonally dominant cones are not supported directly, a fallback to quadratic constraints on the complex-valued data is
+    tried first (if supported), followed by a columnwise representation in terms of ``\ell_\infty`` norms or their fallback on
+    the realification of the matrix data if not.
+"""
+add_constr_dddual_complex!(::Any, ::Integer, ::IndvalsIterator{<:Any,<:Real})
 
 """
     add_constr_fix_prepare!(state, num::Int)

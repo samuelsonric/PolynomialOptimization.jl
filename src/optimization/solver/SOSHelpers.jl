@@ -8,7 +8,11 @@ mindex(state::SOSWrapper, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,N
 
 supports_rotated_quadratic(state::SOSWrapper) = supports_rotated_quadratic(state.state)
 supports_quadratic(state::SOSWrapper) = supports_quadratic(state.state)
-supports_complex_psd(state::SOSWrapper) = supports_complex_psd(state.state)
+supports_lnorm(state::SOSWrapper) = supports_lnorm(state.state)
+supports_lnorm_complex(state::SOSWrapper) = supports_lnorm_complex(state.state)
+supports_psd_complex(state::SOSWrapper) = supports_psd_complex(state.state)
+supports_dd(state::SOSWrapper) = supports_dd(state.state)
+supports_dd_complex(state::SOSWrapper) = supports_dd_complex(state.state)
 psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
 
 # both necessary for disambiguation
@@ -18,8 +22,11 @@ add_constr_rotated_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add
 add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
 add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
 add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
-add_constr_l1!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_linf!(state.state, indvals)
-add_constr_l1_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_linf_complex!(state.state, indvals)
+add_constr_linf!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1!(state.state, indvals)
+add_constr_linf_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1_complex!(state.state, indvals)
+add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator) = add_var_dd!(state.state, dim, indvals)
+add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator) =
+    add_var_dd_complex!(state.state, dim, indvals)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
 add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)
@@ -43,10 +50,12 @@ To make this function work for a solver, implement the following low-level primi
 - [`add_var_nonnegative!`](@ref)
 - [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
-- [`add_var_linf!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
-- [`add_var_linf_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
+- [`add_var_l1!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_var_l1_complex!`](@ref) (optional, then set [`supports_lnorm_complex`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
-- [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
+- [`add_var_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
+- [`add_var_dd!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
+- [`add_var_dd_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_constr_slack!`](@ref)
 
@@ -88,10 +97,12 @@ The following methods must be implemented by a solver to make this function work
 - [`add_var_nonnegative!`](@ref)
 - [`add_var_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
 - [`add_var_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
-- [`add_var_linf!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
-- [`add_var_linf_complex!`](@ref) (optional, then set [`supports_complex_lnorm`](@ref) to `true`)
+- [`add_var_l1!`](@ref) (optional, then set [`supports_lnorm`](@ref) to `true`)
+- [`add_var_l1_complex!`](@ref) (optional, then set [`supports_lnorm_complex`](@ref) to `true`)
 - [`add_var_psd!`](@ref)
-- [`add_var_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
+- [`add_var_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
+- [`add_var_dd!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
+- [`add_var_dd_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_var_free_prepare!`](@ref) (optional)
 - [`add_var_free!`](@ref)
@@ -107,7 +118,7 @@ The following methods must be implemented by a solver to make this function work
 
 !!! info "Order"
     This function is guaranteed to set up the free variables first, then followed by all the others. However, the order of
-    nonnegative, quadratic, ``\\ell_\\infty`` norm, and PSD variables is undefined (depends on the problem).
+    nonnegative, quadratic, ``\\ell_1`` norm, and PSD variables is undefined (depends on the problem).
 
 !!! info "Representation"
     This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The

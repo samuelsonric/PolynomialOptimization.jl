@@ -19,9 +19,9 @@ Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.supports_lnorm(::StateMoment) = true
 
-Solver.supports_complex_lnorm(::StateMoment) = true
+Solver.supports_lnorm_complex(::StateMoment) = true
 
-Solver.supports_complex_psd(::StateMoment) = true
+Solver.supports_psd_complex(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
@@ -43,15 +43,15 @@ function Solver.add_constr_rotated_quadratic!(state::StateMoment{K,V}, indvals::
     return
 end
 
-function Solver.add_constr_l1!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+function Solver.add_constr_linf!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
-    push!(state.cones, Cones.EpiNormInf{V,V}(length(indvals), use_dual=true))
+    push!(state.cones, Cones.EpiNormInf{V,V}(length(indvals)))
     return
 end
 
-function Solver.add_constr_l1_complex!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+function Solver.add_constr_linf_complex!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
-    push!(state.cones, Cones.EpiNormInf{V,Complex{V}}(length(indvals), use_dual=true))
+    push!(state.cones, Cones.EpiNormInf{V,Complex{V}}(length(indvals)))
     return
 end
 
