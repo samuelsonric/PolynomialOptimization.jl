@@ -296,6 +296,12 @@ function Base.deleteat!(v::FastVec, i::Integer)
     return v
 end
 
+@inline function Base._deleteend!(v::FastVec, delta::Integer)
+    @boundscheck checkbounds(v, v.len - delta +1)
+    v.len -= delta
+    return v
+end
+
 # inspired by KristofferC's PushVector
 """
     finish!(v::FastVec)

@@ -188,7 +188,7 @@ cone that `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
     are not supported directly, a fallback to a columnwise representation in terms of ``\ell_\infty`` norms will be used (or
     the fallbacks if this norm is not supported).
 """
-function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex}=Val(false)) where {T,V<:Real,complex}
     isempty(data.lens) && return
     diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
     # Diagonal-dominant representation: this is a relaxation for the SOS formulation, where we replace M ∈ PSD by
@@ -206,28 +206,48 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
     # However, here we construct the moment representation; so we now need the dual formulation of diagonal dominance. Due to
     # the equality constraints, this is more complicated:
     # For side dimension n, there are n ℓ₁ cones (we just take the columns - also taking into account the rows would be even
-    # more restrictive). Without the U, the columns would look like (note that the diagonal is moved to the first row)
+    # more restrictive).
+    # Without the U, the columns would look like (note that the diagonal is moved to the first row)
     # data₁             data₄             data₆
     # 2data₂ - slack₁   slack₁            slack₂
     # 2data₃ - slack₂   2data₅ - slack₃   slack₃
     # i.e., we introduce a slack variable for every off-diagonal cell; on the upper triangle, we just put the slacks, on the
     # lower triangle, we put twice the data for this cell minus the slack.
+
     # If U is diagonal, things are not much more difficult:
-    # |U₁|²data₁            |U₂|²data₄            |U₃|²data₆
-    # 2Ū₂U₁data₂ - slack₁   slack₁                slack₂
-    # 2Ū₃U₁data₃ - slack₂   2Ū₃U₂data₅ - slack₃   slack₃
+    # U₁²data₁              U₂²data₄              U₃²data₆
+    # 2U₂U₁data₂ - slack₁   slack₁                slack₂
+    # 2U₃U₁data₃ - slack₂   2U₃U₂data₅ - slack₃   slack₃
+
     # If U is dense, we have for column j:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) Ū[j, row] U[j, col] data(j, j),
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[j, row] U[j, col] data(row, col),
     #  slack(i, j) for i ∈ 1, ..., j -1,
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Ū[i, row] U[j, col] + Ū[j, row] U[i, col]) data(i, j) -
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (U[i, row] U[j, col] + U[j, row] U[i, col]) data(row, col) -
     #      slack(i, j) for i ∈ j +1, ..., dim} ∈ ℓ_∞
+
+    # In the complex case with diagonal U, we have (note that the l.h.s. only has a real part, the rest are two entries)
+    # |U₁|²data₁                                 |U₂|²data₆                                 |U₃|²data₈
+    # 2Re(U₂Ū₁)data₂ - 2Im(U₂Ū₁)data₃ - slack₁   slack₁                                     slack₃
+    # 2Im(U₂Ū₁)data₂ + 2Re(U₂Ū₁)data₃ - slack₂   slack₂                                     slack₄
+    # 2Re(U₃Ū₁)data₄ - 2Im(U₃Ū₁)data₅ - slack₃   2Re(U₃Ū₂)data₇ - 2Im(U₃Ū₂)data₈ - slack₅   slack₅
+    # 2Im(U₃Ū₁)data₄ + 2Re(U₃Ū₁)data₅ - slack₄   2Im(U₃Ū₂)data₇ + 2Re(U₃Ū₂)data₈ - slack₆   slack₆
+
     maxsize = maximum(data.lens, init=0) # how large is one dataᵢ at most?
+    if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
+        maxsize *= 2
+    end
     if !diagu
         maxsize *= trisize(dim) # how large are all the dataᵢ that might be used in a single cell at most?
     end
-    have_linf = supports_lnorm(state)
+    have_linf = complex ? supports_lnorm_complex(state) : supports_lnorm(state)
+    complex && @assert(have_linf || supports_quadratic(state)) # this must have been checked during construction
     if have_linf
-        indices = FastVec{T}(buffer=(maxsize +1) * dim -1) # first row is possibly largest: full with data plus (dim -1) slacks
+        indices = FastVec{T}(buffer=complex ? ((2dim -2) * (maxsize +1) + maxsize) : (maxsize +1) * dim -1)
+                  # first col is possibly largest: full with data plus (dim -1) slacks
+    elseif complex
+        # This means that we use the quadratic cone to mimick the ℓ_∞ norm cone. This means Mᵢᵢ² ≥ Re² M₁ᵢ + Im² M₁ᵢ. So we
+        # need to submit lots of cones, but all of them pretty small.
+        indices = FastVec{T}(buffer=5maxsize + 2)
     else
         # If we don't have this cone, we must use linear constraints. To mimick the ℓ_∞ norm cone, we need to impose a number
         # of additional linear constraints: Mᵢᵢ - M₁ᵢ ≥ 0, Mᵢᵢ + M₁ᵢ ≥ 0, ... We will create all the first pairs of inequality
@@ -235,8 +255,8 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
         indices = FastVec{T}(buffer=(2maxsize +1) * (dim -1))
     end
     values = similar(indices, V)
-    lens = FastVec{Int}(buffer=dim)
-    slacks = add_var_slack!(state, trisize(dim -1))
+    lens = FastVec{Int}(buffer=complex ? 2dim -1 : dim)
+    slacks = add_var_slack!(state, complex ? 2trisize(dim -1) : trisize(dim -1))
     s = 1
     unchecked_iterator = IndvalsIterator(indices, values, lens)
     @inbounds if diagu
@@ -247,7 +267,8 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
             kᵤ = k
             kdiag = k
             # First add the diagonal, which naturally is the first item in the L order. If we need the linear constraints, we
-            # just prepare the diagonal data, as we need to add it for every off-diagonal term.
+            # just prepare the diagonal data, as we need to add it for every off-diagonal term. In the complex case, even if we
+            # use the quadratic cone, the first term will always stay the same, so we can already add it properly scaled.
             diaglen = Int(data.lens[i])
             diagr = k:k+diaglen-1
             k += diaglen
@@ -257,7 +278,7 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
             else
                 diaguval = true
             end
-            if have_linf
+            if have_linf || complex
                 # if we don't have the ℓ_∞ cone, the diagonal entry is only defined in each inequality
                 unsafe_append!(indices, @view(data.indices[diagr]))
                 unsafe_append!(values, @view(data.values[diagr]))
@@ -266,10 +287,27 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
             end
             # Add all elements above the diagonal, which are just the slack variables
             if have_linf
-                unsafe_append!(indices, @view(slacks[s:s+col-2]))
-                unsafe_append!(values, Iterators.repeated(one(V), col -1))
-                unsafe_append!(lens, Iterators.repeated(1, col -1))
-                s += col -1
+                unsafe_append!(indices, @view(slacks[s:s+(complex ? 2col -3 : col -2)]))
+                unsafe_append!(values, Iterators.repeated(one(V), complex ? 2col -2 : col -1))
+                unsafe_append!(lens, Iterators.repeated(1, complex ? 2col -2 : col -1))
+                s += complex ? 2col -2 : col -1
+            elseif complex
+                if !isone(col)
+                    unsafe_push!(indices, slacks[s], slacks[s+1])
+                    unsafe_push!(values, one(V), one(V))
+                    unsafe_push!(lens, 1, 1)
+                    add_constr_quadratic!(state, unchecked_iterator)
+                    s += 2
+                    for row in 2:col-1
+                        indices[end-1] = slacks[s]
+                        indices[end] = slacks[s+1]
+                        add_constr_quadratic!(state, unchecked_iterator)
+                        s += 2
+                    end
+                    Base._deleteend!(indices, 2)
+                    Base._deleteend!(values, 2)
+                    Base._deleteend!(lens, 2)
+                end
             else
                 for row in 1:col-1
                     unsafe_append!(indices, @view(data.indices[diagr]))
@@ -282,57 +320,94 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) 
                 end
             end
             # Add all elements below the diagonal
-            sbelow = s + col -1
+            sbelow = s + (complex ? 2col - 2 : col -1)
             for row in col+1:dim
-                len = Int(data.lens[i])
-                r = k:k+len-1
-                if have_linf
-                    unsafe_append!(indices, @view(data.indices[r]))
-                    unsafe_append!(values, @view(data.values[r]))
-                    if u isa Diagonal
-                        uval = 2conj(u[row, row]) * u[col, col]
-                        isone(uval) || rmul!(@view(values[end-len+1:end]), uval)
-                    else
-                        rmul!(@view(values[end-len+1:end]), V(2))
-                    end
-                    unsafe_push!(indices, slacks[sbelow])
-                    unsafe_push!(values, -one(V))
-                    unsafe_push!(lens, len +1)
-                else
-                    # We need to add the diagonal element again for every single constraint.
-                    unsafe_append!(indices, @view(data.indices[diagr]))
-                    unsafe_append!(values, @view(data.values[diagr]))
-                    isone(diaguval) || rmul!(@view(values[end-diaglen+1:end]), diaguval)
-                    # We combine this index part with the diagonal; but this can lead to duplicates, which we must sum up.
-                    if u isa Diagonal
-                        uval = 2conj(u[row, row]) * u[col, col]
-                    else
-                        uval = V(2)
-                    end
-                    thislen = diaglen
-                    searchrange = length(indices)-diaglen+1:length(indices)
-                    searchview = @view(indices[searchrange])
-                    for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
-                        idx = findfirst(isequal(ind), searchview)
-                        if isnothing(idx)
-                            unsafe_push!(indices, ind)
-                            unsafe_push!(values, uval * val)
-                            thislen += 1
+                @twice impart complex begin
+                    len = Int(data.lens[i])
+                    r = k:k+len-1
+                    if have_linf || complex
+                        if u isa Diagonal
+                            uval = 2u[row, row] * conj(u[col, col])
+                            if iszero(real(uval))
+                                thislen = 0
+                            else
+                                thislen = len
+                                unsafe_append!(indices, @view(data.indices[r]))
+                                unsafe_append!(values, @view(data.values[r]))
+                                isone(real(uval)) || rmul!(@view(values[end-len+1:end]), real(uval))
+                            end
+                            if complex && !iszero(imag(uval))
+                                let lenalt=Int(data.lens[impart ? i-1 : i+1]), k=impart ? k - lenalt : k + len, r=k:k+lenalt-1,
+                                    uval=impart ? imag(uval) : -imag(uval)
+                                    searchrange = length(indices)-thislen+1:length(indices)
+                                    searchview = @view(indices[searchrange])
+                                    for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                                        idx = findfirst(isequal(ind), searchview)
+                                        if isnothing(idx)
+                                            unsafe_push!(indices, ind)
+                                            unsafe_push!(values, uval * val)
+                                            thislen += 1
+                                        else
+                                            values[first(searchrange)+idx-1] += uval * val
+                                        end
+                                    end
+                                end
+                            end
                         else
-                            values[first(searchrange)+idx-1] += uval * val
+                            thislen = len
+                            unsafe_append!(indices, @view(data.indices[r]))
+                            unsafe_append!(values, @view(data.values[r]))
+                            rmul!(@view(values[end-len+1:end]), V(2))
                         end
+                        unsafe_push!(indices, slacks[sbelow])
+                        unsafe_push!(values, -one(V))
+                        unsafe_push!(lens, thislen +1)
+                    else
+                        # We need to add the diagonal element again for every single constraint.
+                        unsafe_append!(indices, @view(data.indices[diagr]))
+                        unsafe_append!(values, @view(data.values[diagr]))
+                        isone(diaguval) || rmul!(@view(values[end-diaglen+1:end]), diaguval)
+                        # We combine this index part with the diagonal; but this can lead to duplicates, which we must sum up.
+                        if u isa Diagonal
+                            uval = 2u[row, row] * u[col, col]
+                        else
+                            uval = V(2)
+                        end
+                        thislen = diaglen
+                        searchrange = length(indices)-diaglen+1:length(indices)
+                        searchview = @view(indices[searchrange])
+                        for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                            idx = findfirst(isequal(ind), searchview)
+                            if isnothing(idx)
+                                unsafe_push!(indices, ind)
+                                unsafe_push!(values, uval * val)
+                                thislen += 1
+                            else
+                                values[first(searchrange)+idx-1] += uval * val
+                            end
+                        end
+                        unsafe_push!(indices, slacks[sbelow])
+                        unsafe_push!(values, -one(V))
+                        unsafe_push!(lens, thislen +1)
                     end
-                    unsafe_push!(indices, slacks[sbelow])
-                    unsafe_push!(values, -one(V))
-                    unsafe_push!(lens, thislen +1)
+                    k += len
+                    i += 1
+                    if complex
+                        sbelow += impart ? 2row -3 : 1
+                    else
+                        sbelow += row -1
+                    end
                 end
-                k += len
-                i += 1
-                sbelow += row -1
+                if complex && !have_linf
+                    add_constr_quadratic!(state, unchecked_iterator)
+                    Base._deleteend!(indices, length(indices) - diaglen)
+                    Base._deleteend!(values, length(values) - diaglen)
+                    Base._deleteend!(lens, 2)
+                end
             end
             if have_linf
-                add_constr_linf!(state, unchecked_iterator)
-            else
+                (complex ? add_constr_linf_complex! : add_constr_linf!)(state, unchecked_iterator)
+            elseif !complex
                 add_constr_nonnegative!(state, unchecked_iterator)
                 # Flip the sign of the nondiagonal parts. This is tricky: Every entry begins with the diagonal part, then has
                 # the rest; so we can always simply flip the sign of the rest. However, if some indices of the rest coincide
@@ -492,7 +567,8 @@ be followed by the imaginary part. Therefore, the coefficients are real-valued.
     tried first (if supported), followed by a columnwise representation in terms of ``\ell_\infty`` norms or their fallback on
     the realification of the matrix data if not.
 """
-add_constr_dddual_complex!(::Any, ::Integer, ::IndvalsIterator{<:Any,<:Real})
+add_constr_dddual_complex!(state, dim::Integer, data::IndvalsIterator{<:Any,<:Real}, u) =
+    add_constr_dddual!(state, dim, data, u, Val(true))
 
 """
     add_constr_fix_prepare!(state, num::Int)
