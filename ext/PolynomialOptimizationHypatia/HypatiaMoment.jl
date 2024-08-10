@@ -33,7 +33,7 @@ end
 
 function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
-    push!(state.cones, Cones.EpiNormNucl{V}(length(indvals)))
+    push!(state.cones, Cones.EpiNormEucl{V}(length(indvals)))
     return
 end
 
