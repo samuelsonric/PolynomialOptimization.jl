@@ -249,6 +249,8 @@ struct IndvalsIterator{T,V,L,VT<:AbstractVector{T},VV<:AbstractVector{V}}
         length(indices) == length(values) || throw(ArgumentError("Invalid IndvalsIterator construction"))
         new{T,V,I,typeof(indices),typeof(values)}(indices, values, len)
     end
+    IndvalsIterator(::Unsafe, indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}} =
+        new{T,V,L,typeof(indices),typeof(values)}(indices, values, lens)
     function IndvalsIterator(indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
         length(indices) == length(values) == sum(lens, init=0)|| error("Invalid IndvalsIterator construction")
         new{T,V,L,typeof(indices),typeof(values)}(indices, values, lens)
@@ -326,7 +328,7 @@ The membership `Q ∈ DD` is achieved using linear inequalities and slack variab
 If σ is a Hermitian matrix, a complex-valued diagonally dominant cone will be used, if supported. If not, fallbacks will first
 try quadratic cones on the complex-valued data, and if this is also not supported, rewrite the matrix as a real one and then
 apply the real-valued DD constraint.
-By setting the `complex` paramter to `false`, the rewriting to a real matrix will always be used, regardless of complex-valued
+By setting the `complex` parameter to `false`, the rewriting to a real matrix will always be used, regardless of complex-valued
 solver support.
 Note that if rewritten, `u` must be real-valued and have twice the side dimension of the complex-valued matrix.
 """

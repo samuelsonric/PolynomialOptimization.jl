@@ -223,7 +223,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             # Off-diagonals are multiplied by √2 in order to put variables into the vectorized PSD cone. Even if state isa
             # SOSWrapper (then, the variables directly correspond to a vectorized PSD cone), the actual values in the PSD
             # matrix are still multiplied by 1/√2, so we must indeed always multiply the coefficients by √2 to undo this.
-            # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
+            # We also have to account for the unwanted factor of 2 in the rotated quadratic cone.
             # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying
             # the left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
             if dim == 2
@@ -393,7 +393,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                                              # UniformScaling)
             catch e
                 e isa BoundsError &&
-                    throw(ArgumentError("The given matrix for rotating the DD cone was not large enough (required dimension: $dim)"))
+                    throw(ArgumentError("The given matrix for rotating the DD cone was not large enough (required dimension: $dim2)"))
                 rethrow()
             end
             tri = :L
@@ -619,7 +619,7 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
         constraint isa AbstractMatrix ? constraint : ScalarMatrix(constraint),
         psd_indextype(state),
         (Val((length(grouping) == 1 || isreal(grouping)) &&
-             (constraint isa SimplePolynomial || isreal(constraint))),
+             (!(constraint isa AbstractMatrix) || isreal(constraint))),
          Val((representation isa RepresentationDD{<:Any,true} && (supports_dd_complex(state) ||
                                                                   supports_lnorm_complex(state) ||
                                                                   supports_quadratic(state))) ||
