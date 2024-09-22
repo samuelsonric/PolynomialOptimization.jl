@@ -149,6 +149,8 @@ supports_lnorm_complex
 supports_psd_complex
 supports_dd
 supports_dd_complex
+supports_sdd
+supports_sdd_complex
 PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
@@ -184,6 +186,8 @@ add_constr_psd!
 add_constr_psd_complex!
 add_constr_dddual!
 add_constr_dddual_complex!
+add_constr_sdddual!
+add_constr_sdddual_complex!
 add_constr_fix_prepare!
 add_constr_fix!
 add_constr_fix_finalize!
@@ -210,6 +214,8 @@ add_var_psd!
 add_var_psd_complex!
 add_var_dd!
 add_var_dd_complex!
+add_var_sdd!
+add_var_sdd_complex!
 add_var_free_prepare!
 add_var_free!
 add_var_free_finalize!

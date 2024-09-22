@@ -189,6 +189,9 @@ cone that `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
     the fallbacks if this norm is not supported).
 """
 function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex}=Val(false)) where {T,V<:Real,complex}
+    # If we end up here, this must be a fallback, i.e., the solver should not have set the supports_ functions to true!
+    complex && supports_dd_complex(state) && throw(MethodError(add_constr_dddual_complex!, (state, dim, data, u)))
+    !complex && supports_dd(state) && throw(MethodError(add_constr_dddual!, (state, dim, data, u)))
     isempty(data.lens) && return
     diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
     # Diagonal-dominant representation: this is a relaxation for the SOS formulation, where we replace M ∈ PSD by
@@ -573,6 +576,269 @@ be followed by the imaginary part. Therefore, the coefficients are real-valued.
 """
 add_constr_dddual_complex!(state, dim::Integer, data::IndvalsIterator{<:Any,<:Real}, u) =
     add_constr_dddual!(state, dim, data, u, Val(true))
+
+function add_constr_sdddual! end
+
+@doc raw"""
+    add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the dual cone to scaled diagonally dominant matrices to the solver. `data` is an iterator
+through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning for the
+primal cone that `M ∈ SDD(u) ⇔ M = uᵀ Q u` with `Q ∈ SDD`.
+
+!!! warning
+    This function will only be called if [`supports_sdd`](@ref) returns `true` for the given state. If scaled diagonally
+    dominant cones are not supported directly, a fallback to (rotated) quadratic cones will be used.
+"""
+function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex}=Val(false)) where {T,V<:Real,complex}
+    isempty(data.lens) && return
+    diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
+    # See the comment in add_constr_dddual!. Here, the fallback implementation is done in terms of rotated quadratic cones due
+    # to the relationship of SDD matrices with factor-width-2 matrices.
+    # Note that our data is already scaled in such a way that the diagonal elements are scaled by 1/√2, so we don't have to do
+    # this explicitly.
+
+    # For a general U and complex-valued data, we have the following rotated quadratic constraints for the column j and the row
+    # i > j:
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) - Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[i, col] Ū[i, row]) dataᵣ(row, col) - Im(U[i, col] Ū[i, row]) dataᵢ(row, col)),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Re( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
+    #                                     (Im(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col)),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Im( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
+    #                                     (Re(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col))
+    # } ∈ ℛ𝒬₄
+
+    # Let's specialize the formula. If U is diagonal:
+    # {|U[j, j]|² dataᵣ(j, j),
+    #  |U[i, i]|² dataᵣ(i, i),
+    #  (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) + Im(U[i, i] Ū[j, j]) dataᵢ(i, j)),
+    #  (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) - Re(U[i, i] Ū[j, j]) dataᵢ(i, j))
+    # } ∈ ℛ𝒬₄
+
+    # If U is instead real-valued:
+    # {∑_{col = 1}^dim ∑_{row = col}^dim U[j, col] U[j, row] data(row, col),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim U[i, col] U[i, row] data(row, col),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col)
+    # } ∈ ℛ𝒬₃
+
+    # If U is real-diagonal:
+    # {U[j, j]² data(j, j),
+    #  U[i, i]² data(i, i),
+    #  U[i, i] U[j, j] data(i, j)
+    # } ∈ ℛ𝒬₃
+    maxsize = maximum(data.lens, init=0) # how large is one dataᵢ at most?
+
+    if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
+        maxsize *= 2
+    end
+    if !diagu
+        maxsize *= trisize(dim) # how large are all the dataᵢ that might be used in a single cell at most?
+    end
+    have_rot = supports_rotated_quadratic(state)
+    indices = FastVec{T}(buffer=4maxsize)
+    values = similar(indices, V)
+    lens = FastVec{Int}(buffer=complex ? 4 : 3)
+    if diagu
+        idx = 1
+        dataidx = 1
+        diagdataidxs = Vector{Int}(undef, dim)
+        @inbounds diagdataidxs[1] = 1
+        @inbounds for j in 1:dim-1
+            x = diagdataidxs[j]
+            for _ in 0:(complex ? 2(dim-j) : dim-j)
+                x += data.lens[idx]
+                idx += 1
+            end
+            diagdataidxs[j+1] = x
+        end
+        idx = 1
+    end
+    @inbounds for j in 1:dim-1
+        #region First item
+        if diagu
+            len = Int(data.lens[idx])
+            r = dataidx:dataidx+len-1
+            dataidx += len
+            idx += 1
+            unsafe_append!(indices, @view(data.indices[r]))
+            unsafe_append!(values, @view(data.values[r]))
+            u isa Diagonal && rmul!(values, abs2(u[j, j]))
+        else
+            idx = 1
+            dataidx = 1
+            for col in 1:dim, row in col:dim
+                uval = u[j, col] * conj(u[j, row])
+                searchview = @view(indices[:])
+                @twice impart (complex && row != col) begin
+                    len = Int(data.lens[idx])
+                    r = dataidx:dataidx+len-1
+                    dataidx += len
+                    idx += 1
+                    thisuval = impart ? -imag(uval) : real(uval)
+                    iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                        dupidx = findfirst(isequal(ind), searchview)
+                        if isnothing(dupidx)
+                            unsafe_push!(indices, ind)
+                            unsafe_push!(values, thisuval * val)
+                        else
+                            values[dupidx] += thisuval * val
+                        end
+                    end
+                end
+            end
+        end
+        firstlen = length(indices)
+        unsafe_push!(lens, firstlen)
+        #endregion
+        if diagu
+            otheridx = idx + (complex ? 2(dim - j) : dim-j)
+        end
+        for i in j+1:dim
+            #region Second item
+            if diagu
+                len = Int(data.lens[otheridx])
+                r = diagdataidxs[i]:diagdataidxs[i]+len-1
+                otheridx += (complex ? 2(dim - i)+1 : dim-i+1)
+                unsafe_append!(indices, @view(data.indices[r]))
+                unsafe_append!(values, @view(data.values[r]))
+                u isa Diagonal && rmul!(@view(values[end-len+1:end]), abs2(u[i, i]))
+            else
+                idx = 1
+                dataidx = 1
+                for col in 1:dim, row in col:dim
+                    uval = u[i, col] * conj(u[i, row])
+                    searchview = @view(indices[firstlen+1:end])
+                    @twice impart (complex && row != col) begin
+                        len = Int(data.lens[idx])
+                        r = dataidx:dataidx+len-1
+                        dataidx += len
+                        idx += 1
+                        thisuval = impart ? -imag(uval) : real(uval)
+                        iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                            dupidx = findfirst(isequal(ind), searchview)
+                            if isnothing(dupidx)
+                                unsafe_push!(indices, ind)
+                                unsafe_push!(values, thisuval * val)
+                            else
+                                values[firstlen+dupidx] += thisuval * val
+                            end
+                        end
+                    end
+                end
+            end
+            unsafe_push!(lens, length(indices) - firstlen)
+            #endregion
+            #region Third and fourth item
+            if diagu
+                if u isa Diagonal
+                    uval = u[i, i] * conj(u[j, j])
+                end
+                @twice impart complex begin
+                    startidx = length(indices) +1
+                    len = Int(data.lens[idx])
+                    r = dataidx:dataidx+len-1
+                    if u isa Diagonal
+                        if !iszero(real(uval))
+                            unsafe_append!(indices, @view(data.indices[r]))
+                            unsafe_append!(values, @view(data.values[r]))
+                            if impart
+                                isone(-real(uval)) || rmul!(@view(values[startidx:end]), -real(uval))
+                            else
+                                isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
+                            end
+                        end
+                        if complex && !iszero(imag(uval))
+                            let lenalt=Int(data.lens[impart ? idx-1 : idx+1]),
+                                dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1
+                                searchrange = startidx:length(indices)
+                                searchview = @view(indices[searchrange])
+                                for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                                    dupidx = findfirst(isequal(ind), searchview)
+                                    if isnothing(dupidx)
+                                        unsafe_push!(indices, ind)
+                                        unsafe_push!(values, imag(uval) * val)
+                                    else
+                                        values[first(searchrange)+dupidx-1] += imag(uval) * val
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        unsafe_append!(indices, @view(data.indices[r]))
+                        unsafe_append!(values, @view(data.values[r]))
+                    end
+                    unsafe_push!(lens, length(indices) - startidx +1)
+                    dataidx += len
+                    idx += 1
+                end
+            else
+                @twice impart complex begin
+                    startidx = length(indices) +1
+                    idx = 1
+                    dataidx = 1
+                    for col in 1:dim, row in col:dim
+                        searchview = @view(indices[startidx:end])
+                        @twice imdata (complex && row != col) begin
+                            uval = u[i, col] * conj(u[j, row])
+                            if imdata
+                                uval -= u[i, row] * conj(u[j, col])
+                                thisuval = impart ? real(uval) : -imag(uval)
+                            else
+                                uval += u[i, row] * conj(u[j, col])
+                                thisuval = impart ? imag(uval) : real(uval)
+                            end
+                            len = Int(data.lens[idx])
+                            r = dataidx:dataidx+len-1
+                            dataidx += len
+                            idx += 1
+                            if !iszero(thisuval)
+                                for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                                    dupidx = findfirst(isequal(ind), searchview)
+                                    if isnothing(dupidx)
+                                        unsafe_push!(indices, ind)
+                                        unsafe_push!(values, thisuval * val)
+                                    else
+                                        values[dupidx+startidx-1] += thisuval * val
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    unsafe_push!(lens, length(indices) - startidx +1)
+                end
+            end
+            #endregion
+            (have_rot ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, have_rot))
+            # we can keep the first element
+            resize!(indices, firstlen)
+            resize!(values, firstlen)
+            resize!(lens, 1)
+        end
+        empty!(indices)
+        empty!(values)
+        empty!(lens)
+    end
+    return
+end
+
+function add_constr_sdddual_complex! end
+
+@doc raw"""
+    add_constr_sdddual_complex!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
+
+Add a constraint for membership in the dual cone to complex-valued scaled diagonally dominant matrices to the solver. `data` is
+an iterator through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the
+meaning for the primal cone that `M ∈ SDD(u) ⇔ M = u† Q u` with `Q ∈ SDD`.
+For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
+be followed by the imaginary part. Therefore, the coefficients are real-valued.
+
+!!! warning
+    This function will only be called if [`supports_sdd_complex`](@ref) returns `true` for the given state. If complex-valued
+    sclaed diagonally dominant cones are not supported directly, a fallback to quadratic constraints is automatically
+    performed.
+"""
+add_constr_sdddual_complex!(state, dim::Integer, data::IndvalsIterator{<:Any,<:Real}, u) =
+    add_constr_sdddual!(state, dim, data, u, Val(true))
 
 """
     add_constr_fix_prepare!(state, num::Int)

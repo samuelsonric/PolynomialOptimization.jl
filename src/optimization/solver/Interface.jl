@@ -78,6 +78,24 @@ or multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm
 """
 supports_dd_complex(_) = false
 
+@doc raw"""
+    supports_sdd(state)
+
+This function indicates whether the solver natively supports a scaled diagonally-dominant cone. If it returns `false`
+(default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic constraints, one of which must
+be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
+"""
+supports_sdd(_) = false
+
+@doc raw"""
+    supports_sdd_complex(state)
+
+This function indicates whether the solver natively supports a complex-valued scaled diagonally-dominant cone. If it returns
+`false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic constraints, one of
+which must be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
+"""
+supports_sdd_complex(_) = false
+
 """
     Indvals{T,V<:Real}
 
@@ -310,12 +328,23 @@ the most resource-intensive.
 struct RepresentationPSD end
 
 """
-    RepresentationSDD() <: RepresentationMethod
+    RepresentationSDD([u]; complex=true) <: RepresentationMethod
 
-To represent `σ ∈ SDD`, the solver must support the (rotated) quadratic cone. No effort is made to rewrite the problem back
-to a semidefinite formulation if this is not the case, as such a rewrite would defeat the purpose.
+Model the constraint "σ ⪰ 0" as a membership in the scaled diagonally dominant cone, ``\\sigma = u^\\dagger Q u`` for some
+`Q ∈ SDD`. The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix
+of suitable dimension.
+The membership `Q ∈ SDD` is achieved using the scaled diagonally dominant (dual) cone directly or (rotated) quadratic cones.
+
+If σ is a Hermitian matrix, a complex-valued scaled diagonally dominant (dual) cone will be used, if supported. If not,
+fallbacks to the (rotated) quadratic cones are used; however, if `complex=false` and the ordinary diagonally dominant (dual)
+cone is supported, rewrite the matrix as a real one and then use the real-valued cone.
+Note that if rewritten, `u` must be real-valued and have twice the side dimension of the complex-valued matrix.
 """
-struct RepresentationSDD end
+struct RepresentationSDD{M,Complex}
+    u::M
+
+    RepresentationSDD(u::M=I; complex=true) where {M} = new{M,complex}(u)
+end
 
 @doc raw"""
     RepresentationDD([u]; complex=true) <: RepresentationMethod
@@ -349,7 +378,7 @@ are supported:
 - [`RepresentationSDD`](@ref)
 - [`RepresentationDD`](@ref)
 """
-const RepresentationMethod = Union{RepresentationPSD,RepresentationSDD,<:RepresentationDD}
+const RepresentationMethod = Union{RepresentationPSD,<:RepresentationSDD,<:RepresentationDD}
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")

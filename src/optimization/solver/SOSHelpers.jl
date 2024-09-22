@@ -27,6 +27,9 @@ add_constr_linf_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_
 add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) = add_var_dd!(state.state, dim, indvals, u)
 add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) =
     add_var_dd_complex!(state.state, dim, indvals, u)
+add_constr_sdddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) = add_var_sdd!(state.state, dim, indvals, u)
+add_constr_sdddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) =
+    add_var_sdd_complex!(state.state, dim, indvals, u)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
 add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)
@@ -56,6 +59,8 @@ To make this function work for a solver, implement the following low-level primi
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
 - [`add_var_dd!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
 - [`add_var_dd_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
+- [`add_var_sdd!`](@ref) (optional, then set [`supports_sdd`](@ref) to `true`)
+- [`add_var_sdd_complex!`](@ref) (optional, then set [`supports_sdd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_constr_slack!`](@ref)
 
@@ -103,6 +108,8 @@ The following methods must be implemented by a solver to make this function work
 - [`add_var_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
 - [`add_var_dd!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
 - [`add_var_dd_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
+- [`add_var_sdd!`](@ref) (optional, then set [`supports_sdd`](@ref) to `true`)
+- [`add_var_sdd_complex!`](@ref) (optional, then set [`supports_sdd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_var_free_prepare!`](@ref) (optional)
 - [`add_var_free!`](@ref)

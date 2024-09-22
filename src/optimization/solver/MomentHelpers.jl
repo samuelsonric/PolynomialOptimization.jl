@@ -42,7 +42,7 @@ function to_soc!(indices, values, lens, supports_rotated)
             iszero(lens[j]) && deleteat!(lens, j)
         end
     end
-    return IndvalsIterator(indices, values, lens)
+    return IndvalsIterator(unsafe, indices, values, lens)
 end
 
 # This is an iterator that mimicks two nested loops:
@@ -152,7 +152,7 @@ end
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
-# - or DD/SDOS representations in the real case and in the complex case if the quadratic cone is requested
+# - or DD/SDD representations in the real case and in the complex case if the quadratic cone is requested
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
     type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::RepresentationMethod) where {Tri}
@@ -165,7 +165,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         matrix_indexing = false
         representation = RepresentationPSD() # will be linear anyway
         tri = :U
-    elseif representation isa RepresentationDD
+    elseif representation isa RepresentationDD || representation isa RepresentationSDD
         try
             representation.u[dim, dim] # just for bounds checking - we cannot access size, as u might be anything (e.g.,
                                        # UniformScaling)
@@ -180,9 +180,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         matrix_indexing = false
         representation = RepresentationPSD() # will be quadratic anyway
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
-    elseif representation isa RepresentationSDD
-        matrix_indexing = false
-        tri = :U
     elseif indextype isa PSDIndextypeMatrixCartesian
         Tri ∈ (:L, :U) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype, type)))
         matrix_indexing = true
@@ -237,6 +234,13 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             else
                 scaling = sqrt(V(2))
             end
+        elseif representation isa RepresentationSDD
+            scaleoffdiags = (complex && supports_sdd_complex(state)) || (!complex && supports_sdd(state))
+            if scaleoffdiags
+                scaling = sqrt(V(2))
+            else
+                scaling = sqrt(inv(V(2))) # We'll apply this scaling to the diagonals!
+            end
         end
     end
     @inbounds for (exp2, g₂) in enumerate(grouping)
@@ -251,18 +255,13 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 #   elements are real-valued, canonical and non-canonicals will also occur in pairs.
                 total_real = !complex || (block_i == block_j && (exp1 == exp2 || (isreal_g₁ && isreal_g₂)))
                 ondiag = exp1 == exp2 && block_i == block_j
-                if representation isa RepresentationSDD && !ondiag
-                    unsafe_push!(indices, slack_indices[slack_i], slack_indices[slack_i+1])
-                    unsafe_push!(values, one(V), one(V))
-                    unsafe_push!(lens, one(eltype(lens)), one(eltype(lens)))
-                    slack_i += 2
-                end
                 @twice secondtime (!matrix_indexing && !total_real) begin
                     curlen = 0
                     for term_constr in constraint[block_i, block_j]
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
-                        if representation isa RepresentationPSD && tri !== :F && tri !== :DF && !matrix_indexing && !ondiag
+                        if (representation isa RepresentationPSD && tri !== :F && tri !== :DF && !matrix_indexing && !ondiag) ||
+                            (representation isa RepresentationSDD && ondiag != scaleoffdiags)
                             coeff_constr *= scaling
                         end
                         recoeff = real(coeff_constr)
@@ -387,7 +386,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     else
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
             (Val(false), Val(false))), representation))
-        if representation isa RepresentationDD
+        if representation isa RepresentationDD || representation isa RepresentationSDD
             try
                 representation.u[dim2, dim2] # just for bounds checking - we cannot access size, as u might be anything (e.g.,
                                              # UniformScaling)
@@ -397,6 +396,15 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 rethrow()
             end
             tri = :L
+
+            if representation isa RepresentationSDD
+                scaleoffdiags = supports_sdd(state)
+                if scaleoffdiags
+                    scaling = sqrt(V(2))
+                else
+                    scaling = sqrt(inv(V(2))) # We'll apply this scaling to the diagonals!
+                end
+            end
         else
             tri = Tri
             scaling = sqrt(V(2))
@@ -449,7 +457,8 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                     for term_constr in constraint[block_i, block_j]
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
-                        if representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag
+                        if (representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag) ||
+                            (representation isa RepresentationSDD && ondiag != scaleoffdiags)
                             coeff_constr *= scaling
                         end
                         recoeff = real(coeff_constr)
@@ -573,6 +582,8 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
 
             if representation isa RepresentationDD
                 add_constr_dddual!(state, 2dim, IndvalsIterator(indices, values, lens), representation.u)
+            elseif representation isa RepresentationSDD
+                add_constr_sdddual!(state, 2dim, IndvalsIterator(indices, values, lens), representation.u)
             else
                 add_constr_psd!(state, 2dim, IndvalsIterator(indices, values, lens))
             end
@@ -600,6 +611,8 @@ To make this function work for a solver, implement the following low-level primi
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
 - [`add_constr_dddual!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
 - [`add_constr_dddual_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
+- [`add_constr_sdddual!`](@ref) (optional, then set [`supports_sdd`](@ref) to `true`)
+- [`add_constr_sdddual_complex!`](@ref) (optional, then set [`supports_sdd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_var_slack!`](@ref)
 
@@ -609,8 +622,13 @@ See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
 function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
-    representation isa RepresentationSDD && !supports_rotated_quadratic(state) && !supports_quadratic(state) &&
-        error("The solver does not support (rotated) quadratic cones, so a representation via scaled diagonally-dominant matrices is not possible")
+    real_valued = (length(grouping) == 1 || isreal(grouping)) && (!(constraint isa AbstractMatrix) || isreal(constraint))
+    if representation isa RepresentationSDD && !supports_rotated_quadratic(state) && !supports_quadratic(state) &&
+        ((representation isa RepresentationSDD{<:Any,true} && ((real_valued && !supports_sdd(state)) ||
+                                                               (!real_valued && !supports_sdd_complex(state))))) ||
+        ((representation isa RepresentationSDD{<:Any,false} && !supports_dd(state)))
+        error("The solver does not support the required scaled diagonally dominant cone or the fallback (rotated) quadratic cones, so a representation via scaled diagonally-dominant matrices is not possible")
+    end
     return moment_add_matrix_helper!(
         state,
         Base.promote_op(mindex, typeof(state), monomial_type(P)),
@@ -618,14 +636,14 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
         grouping,
         constraint isa AbstractMatrix ? constraint : ScalarMatrix(constraint),
         psd_indextype(state),
-        (Val((length(grouping) == 1 || isreal(grouping)) &&
-             (!(constraint isa AbstractMatrix) || isreal(constraint))),
+        (Val(real_valued),
          Val((representation isa RepresentationDD{<:Any,true} && (supports_dd_complex(state) ||
                                                                   supports_lnorm_complex(state) ||
                                                                   supports_quadratic(state))) ||
              # TODO (unlikely): we could still do it if the solver supports only the rotated, but not the standard cone. But
              # are there any solvers in this category?
-             representation isa RepresentationSDD ||
+             representation isa RepresentationSDD{<:Any,true} ||
+             (representation isa RepresentationSDD{<:Any,false} && !supports_sdd(state)) ||
              (representation isa RepresentationPSD && supports_psd_complex(state)))),
         representation
     )
@@ -805,6 +823,8 @@ The following methods must be implemented by a solver to make this function work
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_psd_complex`](@ref) to `true`)
 - [`add_constr_dddual!`](@ref) (optional, then set [`supports_dd`](@ref) to `true`)
 - [`add_constr_dddual_complex!`](@ref) (optional, then set [`supports_dd_complex`](@ref) to `true`)
+- [`add_constr_sdddual!`](@ref) (optional, then set [`supports_sdd`](@ref) to `true`)
+- [`add_constr_sdddual_complex!`](@ref) (optional, then set [`supports_sdd_complex`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 - [`add_constr_fix_prepare!`](@ref) (optional)
 - [`add_constr_fix!`](@ref)
