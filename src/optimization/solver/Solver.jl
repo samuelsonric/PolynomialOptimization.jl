@@ -6,7 +6,7 @@ using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
 using ..FastVector: overallocation
 using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!
 import ..PolynomialOptimization: MomentVector
-using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, unsafe
+using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
 # likely need

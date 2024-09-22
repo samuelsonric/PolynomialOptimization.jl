@@ -24,9 +24,9 @@ add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, d
 add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
 add_constr_linf!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1!(state.state, indvals)
 add_constr_linf_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1_complex!(state.state, indvals)
-add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator) = add_var_dd!(state.state, dim, indvals)
-add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator) =
-    add_var_dd_complex!(state.state, dim, indvals)
+add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) = add_var_dd!(state.state, dim, indvals, u)
+add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) =
+    add_var_dd_complex!(state.state, dim, indvals, u)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
 add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)

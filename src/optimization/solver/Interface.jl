@@ -73,8 +73,8 @@ supports_dd(_) = false
     supports_dd_complex(state)
 
 This function indicates whether the solver natively supports a complex-valued diagonally-dominant cone. If it returns `false`
-(default), the constraint will be rewritten in terms of quadratic constraints (if supported, see [`supports_quadratic`](@ref)),
-multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm`](@ref)), or linear constraints.
+(default), the constraint will be rewritten in terms of quadratic constraints (if supported, see [`supports_quadratic`](@ref))
+or multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm_complex`](@ref)).
 """
 supports_dd_complex(_) = false
 
@@ -317,17 +317,18 @@ to a semidefinite formulation if this is not the case, as such a rewrite would d
 """
 struct RepresentationSDD end
 
-"""
+@doc raw"""
     RepresentationDD([u]; complex=true) <: RepresentationMethod
 
-Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\\sigma = u^\\dagger Q u`` for some `Q ∈ DD`.
+Model the constraint "σ ⪰ 0" as a membership in the diagonally dominant cone, ``\sigma = u^\dagger Q u`` for some `Q ∈ DD`.
 The matrix `u` is by default an identity of any dimension; however, usually, care must be taken to have a matrix of suitable
 dimension.
-The membership `Q ∈ DD` is achieved using linear inequalities and slack variables only.
+The membership `Q ∈ DD` is achieved using the diagonally dominant (dual) cone directly, ``\ell_1``- or ``\ell_\infty``-norm
+cones or linear inequalities; slack variables will be added as necessary.
 
-If σ is a Hermitian matrix, a complex-valued diagonally dominant cone will be used, if supported. If not, fallbacks will first
-try quadratic cones on the complex-valued data, and if this is also not supported, rewrite the matrix as a real one and then
-apply the real-valued DD constraint.
+If σ is a Hermitian matrix, a complex-valued diagonally dominant (dual) cone will be used, if supported. If not, fallbacks will
+first try quadratic cones on the complex-valued data, and if this is also not supported, rewrite the matrix as a real one and
+then apply the real-valued DD constraint.
 By setting the `complex` parameter to `false`, the rewriting to a real matrix will always be used, regardless of complex-valued
 solver support.
 Note that if rewritten, `u` must be real-valued and have twice the side dimension of the complex-valued matrix.
