@@ -125,7 +125,7 @@ This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixC
 !!! warning
     This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
 """
-add_constr_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex}) = unsupported
+add_constr_psd_complex!(::Any, ::Int, ::PSDMatrixCartesian{<:Any,<:Complex})
 
 """
     add_constr_psd_complex!(state, dim::Int, data::IndvalsIterator{T,V}) where {T,V<:Real}
@@ -141,47 +141,14 @@ off-diagonal elements, the real part will be followed by the imaginary part. The
 """
 add_constr_psd_complex!(::Any, ::Int, ::IndvalsIterator{<:Any,<:Real})
 
-function add_constr_linf! end
-
-@doc raw"""
-    add_constr_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
-
-Adds an ``\ell_\infty`` norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
-conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
-``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
-``X_1 \geq \max_{i > 2} \lvert X_i\rvert``.
-
-See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
-
-!!! warning
-    This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
-    If ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints will be used.
-"""
-add_constr_linf!(::Any, ::IndvalsIterator{<:Any,<:Real})
-
-function add_constr_linf_complex! end
-
-@doc raw"""
-    add_constr_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
-
-Same as [`add_constr_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
-determining the real and imaginary part of a component of the ``\ell_\infty`` norm cone.
-
-!!! warning
-    This function will only be called if [`supports_lnorm_complex`](@ref) returns `true` for the given state.
-    If complex-valued ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints and quadratic
-    cones will be used. If [`supports_quadratic`](@ref) is not `true`, complex-valued DD cones cannot be used.
-"""
-add_constr_linf_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
-
 function add_constr_dddual! end
 
 @doc raw"""
     add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
 
 Add a constraint for membership in the dual cone to diagonally dominant matrices to the solver. `data` is an iterator through
-the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning for the primal
-cone that `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
+the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone that
+`M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
 
 !!! warning
     This function will only be called if [`supports_dd`](@ref) returns `true` for the given state. If diagonally dominant cones
@@ -563,8 +530,8 @@ function add_constr_dddual_complex! end
     add_constr_dddual_complex!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
 
 Add a constraint for membership in the dual cone to complex-valued diagonally dominant matrices to the solver. `data` is an
-iterator through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning
-for the primal cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
+iterator through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal
+cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
 For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
 be followed by the imaginary part. Therefore, the coefficients are real-valued.
 
@@ -577,14 +544,47 @@ be followed by the imaginary part. Therefore, the coefficients are real-valued.
 add_constr_dddual_complex!(state, dim::Integer, data::IndvalsIterator{<:Any,<:Real}, u) =
     add_constr_dddual!(state, dim, data, u, Val(true))
 
+function add_constr_linf! end
+
+@doc raw"""
+    add_constr_linf!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Adds an ``\ell_\infty`` norm constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
+conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
+``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
+``X_1 \geq \max_{i > 2} \lvert X_i\rvert``.
+
+See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+
+!!! warning
+    This function will only be called if [`supports_lnorm`](@ref) returns `true` for the given state.
+    If ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints will be used.
+"""
+add_constr_linf!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
+function add_constr_linf_complex! end
+
+@doc raw"""
+    add_constr_linf_complex!(state, indvals::IndvalsIterator{T,V}) where {T,V<:Real}
+
+Same as [`add_constr_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
+determining the real and imaginary part of a component of the ``\ell_\infty`` norm cone.
+
+!!! warning
+    This function will only be called if [`supports_lnorm_complex`](@ref) returns `true` for the given state.
+    If complex-valued ``\ell_\infty`` norm constraints are unsupported, a fallback to multiple linear constraints and quadratic
+    cones will be used. If [`supports_quadratic`](@ref) is not `true`, complex-valued DD cones cannot be used.
+"""
+add_constr_linf_complex!(::Any, ::IndvalsIterator{<:Any,<:Real})
+
 function add_constr_sdddual! end
 
 @doc raw"""
     add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
 
 Add a constraint for membership in the dual cone to scaled diagonally dominant matrices to the solver. `data` is an iterator
-through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the meaning for the
-primal cone that `M ∈ SDD(u) ⇔ M = uᵀ Q u` with `Q ∈ SDD`.
+through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone
+that `M ∈ SDD(u) ⇔ M = uᵀ Q u` with `Q ∈ SDD`.
 
 !!! warning
     This function will only be called if [`supports_sdd`](@ref) returns `true` for the given state. If scaled diagonally
@@ -827,8 +827,8 @@ function add_constr_sdddual_complex! end
     add_constr_sdddual_complex!(state, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V<:Real}
 
 Add a constraint for membership in the dual cone to complex-valued scaled diagonally dominant matrices to the solver. `data` is
-an iterator through the (unscaled) lower triangle of the element of the matrix. A basis change is induced by `u`, with the
-meaning for the primal cone that `M ∈ SDD(u) ⇔ M = u† Q u` with `Q ∈ SDD`.
+an iterator through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the
+primal cone that `M ∈ SDD(u) ⇔ M = u† Q u` with `Q ∈ SDD`.
 For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
 be followed by the imaginary part. Therefore, the coefficients are real-valued.
 

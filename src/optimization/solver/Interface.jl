@@ -31,25 +31,6 @@ The default implementation returns the same value as [`supports_rotated_quadrati
 """
 supports_quadratic(state) = supports_rotated_quadratic(state)
 
-@doc raw"""
-    supports_lnorm(state)
-
-Indicates the solver support for ``\ell_1`` (in the moment case) and ``\ell_\infty`` (in the SOS case) norm cones: if `true`,
-the cone ``x_1 \geq \sum_{i \geq 2} \lvert x_i\rvert`` or ``x_1 \geq \max_{i \geq 2} \lvert x_i\rvert`` is supported.
-The default implementation returns `false`.
-"""
-supports_lnorm(state) = false
-
-@doc raw"""
-    supports_lnorm_complex(state)
-
-Indicates the solver support for complex-valued ``\ell_1`` (in the moment case) and ``\ell_\infty`` (in the SOS case) norm
-cones: if `true`, the cone ``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` or
-``x_1 \geq \max_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
-The default implementation returns `false`.
-"""
-supports_lnorm_complex(state) = false
-
 """
     supports_psd_complex(state)
 
@@ -63,8 +44,9 @@ supports_psd_complex(_) = false
 @doc raw"""
     supports_dd(state)
 
-This function indicates whether the solver natively supports a diagonally-dominant cone. If it returns `false` (default), the
-constraint will be rewritten in terms of multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm`](@ref))
+This function indicates whether the solver natively supports a diagonally-dominant cone (or its dual for the moment case).
+If it returns `false` (default), the constraint will be rewritten in terms of multiple ``\ell_\infty``/``\ell_1`` norm
+constraints (if supported, see [`supports_lnorm`](@ref))
 or linear constraints.
 """
 supports_dd(_) = false
@@ -72,27 +54,48 @@ supports_dd(_) = false
 @doc raw"""
     supports_dd_complex(state)
 
-This function indicates whether the solver natively supports a complex-valued diagonally-dominant cone. If it returns `false`
-(default), the constraint will be rewritten in terms of quadratic constraints (if supported, see [`supports_quadratic`](@ref))
-or multiple ``\ell_\infty`` norm constraints (if supported, see [`supports_lnorm_complex`](@ref)).
+This function indicates whether the solver natively supports a complex-valued diagonally-dominant cone (or its dual for the
+moment case). If it returns `false` (default), the constraint will be rewritten in terms of quadratic constraints (if
+supported, see [`supports_quadratic`](@ref)) or multiple ``\ell_\infty``/``\ell_1`` norm constraints (if supported, see
+[`supports_lnorm_complex`](@ref)).
 """
 supports_dd_complex(_) = false
 
 @doc raw"""
+    supports_lnorm(state)
+
+Indicates the solver support for ``\ell_\infty`` (in the moment case) and ``\ell_1`` (in the SOS case) norm cones: if `true`,
+the cone ``x_1 \geq \max_{i \geq 2} \lvert x_i\rvert`` or ``x_1 \geq \sum_{i \geq 2} \lvert x_i\rvert`` is supported.
+The default implementation returns `false`.
+"""
+supports_lnorm(state) = false
+
+@doc raw"""
+    supports_lnorm_complex(state)
+
+Indicates the solver support for complex-valued ``\ell_\infty`` (in the moment case) and ``\ell_1`` (in the SOS case) norm
+cones: if `true`, the cone ``x_1 \geq \max_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` or
+``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
+The default implementation returns `false`.
+"""
+supports_lnorm_complex(state) = false
+
+@doc raw"""
     supports_sdd(state)
 
-This function indicates whether the solver natively supports a scaled diagonally-dominant cone. If it returns `false`
-(default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic constraints, one of which must
-be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
+This function indicates whether the solver natively supports a scaled diagonally-dominant cone (or its dual for the moment
+case). If it returns `false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic
+constraints, one of which must be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
 """
 supports_sdd(_) = false
 
 @doc raw"""
     supports_sdd_complex(state)
 
-This function indicates whether the solver natively supports a complex-valued scaled diagonally-dominant cone. If it returns
-`false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic constraints, one of
-which must be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
+This function indicates whether the solver natively supports a complex-valued scaled diagonally-dominant cone (or its dual for
+the moment case). If it returns `false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or
+quadratic constraints, one of which must be supported (see [`supports_rotated_quadratic`](@ref) and
+[`supports_quadratic`](@ref)).
 """
 supports_sdd_complex(_) = false
 
