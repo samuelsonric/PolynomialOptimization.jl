@@ -22,13 +22,15 @@ add_constr_rotated_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add
 add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
 add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
 add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
-add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) = add_var_dd!(state.state, dim, indvals, u)
-add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) =
+add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    add_var_dd!(state.state, dim, indvals, u)
+add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
     add_var_dd_complex!(state.state, dim, indvals, u)
 add_constr_linf!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1!(state.state, indvals)
 add_constr_linf_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1_complex!(state.state, indvals)
-add_constr_sdddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) = add_var_sdd!(state.state, dim, indvals, u)
-add_constr_sdddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator, u) =
+add_constr_sdddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    add_var_sdd!(state.state, dim, indvals, u)
+add_constr_sdddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
     add_var_sdd_complex!(state.state, dim, indvals, u)
 
 add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
@@ -38,6 +40,16 @@ add_constr_fix_finalize!(state::SOSWrapper, constrstate) = add_var_free_finalize
 add_var_slack!(state::SOSWrapper, num::Int) = add_constr_slack!(state.state, num)
 
 fix_objective!(state::SOSWrapper, indvals::Indvals) = fix_constraints!(state.state, indvals)
+
+# fallbacks
+add_var_dd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    @invoke add_constr_dddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
+add_var_dd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    @invoke add_constr_dd_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
+add_var_sdd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    @invoke add_constr_sdddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
+add_var_sdd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
+    @invoke add_constr_sdddual_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
 
 """
     sos_add_matrix!(state, grouping::SimpleMonomialVector,
