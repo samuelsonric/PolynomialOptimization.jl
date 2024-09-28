@@ -243,7 +243,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
             throw(MethodError(MomentVector, (relaxation, moments, coo₁, cooₙ...)))
         end
         if 3length(moments) < max_mons
-            solution = SparseVector(max_mons, mon_pos, moments)
+            solution = SparseVector(max_mons, mon_pos, iszero(slack) ? _moments : collect(moments))
         else
             solution = fill(NaN, max_mons)
             copy!(@view(solution[mon_pos]), moments)
