@@ -45,7 +45,7 @@ fix_objective!(state::SOSWrapper, indvals::Indvals) = fix_constraints!(state.sta
 add_var_dd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
     @invoke add_constr_dddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
 add_var_dd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    @invoke add_constr_dd_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
+    @invoke add_constr_dddual_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
 add_var_sdd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
     @invoke add_constr_sdddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
 add_var_sdd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
@@ -80,8 +80,8 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_equality!`](@ref).
 """
-sos_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::SimplePolynomial,
-    representation::RepresentationMethod=RepresentationPSD()) =
+sos_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::Union{P,<:AbstractMatrix{P}},
+    representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial} =
     moment_add_matrix!(SOSWrapper(state), grouping, constraint, representation)
 
 """
