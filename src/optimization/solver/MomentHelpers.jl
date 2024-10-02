@@ -234,6 +234,11 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             else
                 scaling = sqrt(V(2))
             end
+        elseif representation isa RepresentationDD
+            scaleoffdiags = (complex && supports_dd_complex(state)) || (!complex && supports_dd(state))
+            if scaleoffdiags
+                scaling = sqrt(V(2))
+            end
         elseif representation isa RepresentationSDD
             scaleoffdiags = (complex && supports_sdd_complex(state)) || (!complex && supports_sdd(state))
             if scaleoffdiags
@@ -261,6 +266,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         if (representation isa RepresentationPSD && tri !== :F && tri !== :DF && !matrix_indexing && !ondiag) ||
+                            (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
                             (representation isa RepresentationSDD && ondiag != scaleoffdiags)
                             coeff_constr *= scaling
                         end
