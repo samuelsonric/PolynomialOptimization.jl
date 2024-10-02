@@ -16,7 +16,7 @@ abstract type AbstractAPISolver{K<:Integer} end
 Appends at least one new variable (moment-case) or constraint (SOS-case) to the solver `state` that represents the monomial
 given by `key`.
 """
-append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
+Base.append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
 
 @inline function mindex(solver::AbstractAPISolver, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
     idx = monomial_index(monomials...)
