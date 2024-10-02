@@ -4,11 +4,11 @@ using PolynomialOptimization.Solver: PSDIndextype
 using PolynomialOptimization: sort_along!
 
 function checkequality(indvals, supposed_indices, supposed_values, exact::Bool=false)
-    # we don't have any guarantee that the indices are ordered
+    # we don't have any guarantee that the indices are ordered, and we must keep their order
     indices, values = indvals.indices, indvals.values
-    sort_along!(indices, values)
     # sometimes, cancellations may happen that will give rise to explicit zeros, but the test code generation will have them dropped
-    keeppos = findall(!iszero, values)
+    keeppos_unsorted = findall(!iszero, values)
+    @views keeppos = keeppos_unsorted[sortperm(indices[keeppos_unsorted])]
     @views return indices[keeppos] == supposed_indices && (exact ? values[keeppos] == supposed_values : isapprox(values[keeppos], supposed_values, atol=1e-13))
 end
 

@@ -506,6 +506,9 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
             # the rest; so we can always simply flip the sign of the rest. However, if some indices of the rest coincide
             # with diagonal indices, we merged them in the front; flipping won't do the job.
             # Previously, we had diag + offdiag, now we want diag - offdiag, so let's do -(old - diag) + diag = -old+2diag
+            # Note: This relies on the implementation not changing the underlying indvals (which is not done
+            # AbstractSparseMatrixSolver or any of the provided API solvers). If the implementation were to, e.g., sort the
+            # indices, we'd generate invalid data.
             k = isone(j) ? diaglen : 0
             for l in lens
                 @simd for di in 1:diaglen

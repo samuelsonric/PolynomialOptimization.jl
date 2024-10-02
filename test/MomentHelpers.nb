@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    878778,      16329]
-NotebookOptionsPosition[    869503,      16171]
-NotebookOutlinePosition[    869944,      16188]
-CellTagsIndexPosition[    869901,      16185]
+NotebookDataLength[    878859,      16329]
+NotebookOptionsPosition[    869584,      16171]
+NotebookOutlinePosition[    870025,      16188]
+CellTagsIndexPosition[    869982,      16185]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -13851,29 +13851,29 @@ the test instances to different methods).\nusing \
 PolynomialOptimization.Solver: PSDIndextype\nusing PolynomialOptimization: \
 sort_along!\n\nfunction checkequality(indvals, supposed_indices, \
 supposed_values, exact::Bool=false)\n    # we don't have any guarantee that \
-the indices are ordered\n    indices, values = indvals.indices, \
-indvals.values\n    sort_along!(indices, values)\n    # sometimes, \
-cancellations may happen that will give rise to explicit zeros, but the test \
-code generation will have them dropped\n    keeppos = findall(!iszero, \
-values)\n    @views return indices[keeppos] == supposed_indices && (exact ? \
-values[keeppos] == supposed_values : isapprox(values[keeppos], \
-supposed_values, atol=1e-13))\nend\n\nfunction checkequality(rows, \
-supposed_rows, cols, supposed_cols, values, supposed_values)\n    \
-sort_along!(rows, cols, values, relevant=2)\n    sort_along!(supposed_rows, \
-supposed_cols, supposed_values, relevant=2)\n    keeppos = findall(!iszero, \
-values)\n    @views return rows[keeppos] == supposed_rows && cols[keeppos] == \
-supposed_cols && values[keeppos] == supposed_values\nend\n\nmacro \
-checkequals(lowerind, lowerval, upperind, upperval, fullind, fullval)\n    \
-esc(quote\n        if tri === :L\n            @test checkequality(iter[1], \
-$lowerind, $lowerval)\n        elseif tri === :U\n            @test \
-checkequality(iter[1], $upperind, $upperval)\n        else\n            @test \
-checkequality(iter[1], $fullind, $fullval, true)\n        end\n        iter = \
-iterate(data, iter[2])\n    end)\nend\n\nmacro checkequals(ind, lowerrows, \
-lowercols, lowervals)\n    esc(quote\n        # it may rarely happen that we \
-end up with a all-zeros entry, which would not be present in the test\n       \
- while iter[1].first < $ind && all(iszero, iter[1].second[3])\n            \
-iter = iterate(data, iter[2])\n        end\n        @test iter[1].first == \
-$ind\n        if tri === :L\n            @test \
+the indices are ordered, and we must keep their order\n    indices, values = \
+indvals.indices, indvals.values\n    # sometimes, cancellations may happen \
+that will give rise to explicit zeros, but the test code generation will have \
+them dropped\n    keeppos_unsorted = findall(!iszero, values)\n    @views \
+keeppos = keeppos_unsorted[sortperm(indices[keeppos_unsorted])]\n    @views \
+return indices[keeppos] == supposed_indices && (exact ? values[keeppos] == \
+supposed_values : isapprox(values[keeppos], supposed_values, atol=1e-13))\n\
+end\n\nfunction checkequality(rows, supposed_rows, cols, supposed_cols, \
+values, supposed_values)\n    sort_along!(rows, cols, values, relevant=2)\n   \
+ sort_along!(supposed_rows, supposed_cols, supposed_values, relevant=2)\n    \
+keeppos = findall(!iszero, values)\n    @views return rows[keeppos] == \
+supposed_rows && cols[keeppos] == supposed_cols && values[keeppos] == \
+supposed_values\nend\n\nmacro checkequals(lowerind, lowerval, upperind, \
+upperval, fullind, fullval)\n    esc(quote\n        if tri === :L\n           \
+ @test checkequality(iter[1], $lowerind, $lowerval)\n        elseif tri === \
+:U\n            @test checkequality(iter[1], $upperind, $upperval)\n        \
+else\n            @test checkequality(iter[1], $fullind, $fullval, true)\n    \
+    end\n        iter = iterate(data, iter[2])\n    end)\nend\n\nmacro \
+checkequals(ind, lowerrows, lowercols, lowervals)\n    esc(quote\n        # \
+it may rarely happen that we end up with a all-zeros entry, which would not \
+be present in the test\n        while iter[1].first < $ind && all(iszero, \
+iter[1].second[3])\n            iter = iterate(data, iter[2])\n        end\n  \
+      @test iter[1].first == $ind\n        if tri === :L\n            @test \
 checkequality(iter[1].second[1], $lowerrows, iter[1].second[2], $lowercols, \
 iter[1].second[3], $lowervals)\n        else\n            @test \
 checkequality(iter[1].second[1], $lowercols, iter[1].second[2], $lowerrows, \
@@ -16308,28 +16308,28 @@ Cell[CellGroupData[{
 Cell[778217, 13834, 92, 0, 53, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
 Cell[CellGroupData[{
 Cell[778334, 13838, 83, 0, 70, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
-Cell[778420, 13840, 7940, 115, 70, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
+Cell[778420, 13840, 8021, 115, 70, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[786397, 13960, 84, 0, 70, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
-Cell[786484, 13962, 5044, 132, 70, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
+Cell[786478, 13960, 84, 0, 70, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
+Cell[786565, 13962, 5044, 132, 70, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[791565, 14099, 89, 0, 70, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
-Cell[791657, 14101, 34248, 695, 70, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
+Cell[791646, 14099, 89, 0, 70, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
+Cell[791738, 14101, 34248, 695, 70, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
  InitializationCell->True],
-Cell[825908, 14798, 4791, 137, 70, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
+Cell[825989, 14798, 4791, 137, 70, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
  InitializationCell->True],
-Cell[830702, 14937, 2284, 61, 70, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
+Cell[830783, 14937, 2284, 61, 70, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
  InitializationCell->True]
 }, Closed]]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[833035, 15004, 78, 0, 53, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
-Cell[833116, 15006, 36102, 1153, 1705, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
-Cell[869221, 16161, 266, 7, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+Cell[833116, 15004, 78, 0, 53, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
+Cell[833197, 15006, 36102, 1153, 1705, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+Cell[869302, 16161, 266, 7, 28, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 }
 ]
