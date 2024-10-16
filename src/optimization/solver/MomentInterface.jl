@@ -186,40 +186,40 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
     # Note slackᵢ(i, j) = -slackᵢ(j, i)
 
     # For a general U and complex-valued data, this is instead for the column j:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) -
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) +
     #                                                        Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
     #  slackᵣ(j, i), slackᵢ(j, i) for i ∈ 1, ..., j -1,
     #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col})
-    #      ((Re( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
-    #       (Im(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵣ(i, j),
+    #      ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
+    #       (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵣ(i, j),
     #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col})
-    #      ((Im( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
-    #       (Re(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵢ(i, j)
+    #      ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
+    #       (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵢ(i, j)
     #  for i in j +1, ..., dim
     # } ∈ ℓ_∞
 
     # Let's specialize the formula. If U is diagonal:
     # {|U[j, j]|² dataᵣ(j, j),
     #  slackᵣ(j, i), slackᵢ(j, i) for i ∈ 1, ..., j -1,
-    #  2 (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) + Im(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵣ(i, j),
-    #  2 (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) - Re(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵢ(i, j)
+    #  2 (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) - Im(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵣ(i, j),
+    #  2 (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) + Re(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵢ(i, j)
     #  for i in j +1, ..., dim
     # } ∈ ℓ_∞
     # Let's write this out:
     # |U₁|²data₁                                 |U₂|²data₆                                 |U₃|²data₈
-    # 2Re(U₂Ū₁)data₂ + 2Im(U₂Ū₁)data₃ - slack₁   slack₁                                     slack₃
-    # 2Im(U₂Ū₁)data₂ - 2Re(U₂Ū₁)data₃ - slack₂   slack₂                                     slack₄
-    # 2Re(U₃Ū₁)data₄ + 2Im(U₃Ū₁)data₅ - slack₃   2Re(U₃Ū₂)data₇ + 2Im(U₃Ū₂)data₈ - slack₅   slack₅
-    # 2Im(U₃Ū₁)data₄ - 2Re(U₃Ū₁)data₅ - slack₄   2Im(U₃Ū₂)data₇ - 2Re(U₃Ū₂)data₈ - slack₆   slack₆
+    # 2Re(U₂Ū₁)data₂ - 2Im(U₂Ū₁)data₃ - slack₁   slack₁                                     slack₃
+    # 2Im(U₂Ū₁)data₂ + 2Re(U₂Ū₁)data₃ - slack₂   slack₂                                     slack₄
+    # 2Re(U₃Ū₁)data₄ - 2Im(U₃Ū₁)data₅ - slack₃   2Re(U₃Ū₂)data₇ - 2Im(U₃Ū₂)data₈ - slack₅   slack₅
+    # 2Im(U₃Ū₁)data₄ + 2Re(U₃Ū₁)data₅ - slack₄   2Im(U₃Ū₂)data₇ + 2Re(U₃Ū₂)data₈ - slack₆   slack₆
 
-    # If U is instead real-valued:
+    # If everything is instead real-valued:
     # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[j, col] U[j, row] data(row, col),
     #  slack(j, i) for i ∈ 1, ..., j -1,
     #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col) -
     #      slack(i, j) for i in j +1, ..., dim
     # } ∈ ℓ_∞
 
-    # If U is real-diagonal:
+    # If everything is real and U is diagonal:
     # {U[j, j]² data(j, j),
     #  slack(j, i) for i ∈ 1, ..., j -1,
     #  2 U[i, i] U[j, j] data(i, j) - slack(i, j) for i in j +1, ..., dim
@@ -291,7 +291,7 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
                     r = dataidx:dataidx+len-1
                     dataidx += len
                     idx += 1
-                    thisuval = impart ? -imag(uval) : real(uval)
+                    thisuval = impart ? imag(uval) : real(uval)
                     iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
                         dupidx = findfirst(isequal(ind), searchview)
                         if isnothing(dupidx)
@@ -369,24 +369,21 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
                             if !iszero(real(uval))
                                 unsafe_append!(indices, @view(data.indices[r]))
                                 unsafe_append!(values, @view(data.values[r]))
-                                if impart
-                                    isone(-real(uval)) || rmul!(@view(values[startidx:end]), -real(uval))
-                                else
-                                    isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
-                                end
+                                isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
                             end
                             if complex && !iszero(imag(uval))
                                 let lenalt=Int(data.lens[impart ? idx-1 : idx+1]),
-                                    dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1
+                                    dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1,
+                                    uimval=impart ? imag(uval) : -imag(uval)
                                     searchrange = startidx:length(indices)
                                     searchview = @view(indices[searchrange])
                                     for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
                                         dupidx = findfirst(isequal(ind), searchview)
                                         if isnothing(dupidx)
                                             unsafe_push!(indices, ind)
-                                            unsafe_push!(values, imag(uval) * val)
+                                            unsafe_push!(values, uimval * val)
                                         else
-                                            values[first(searchrange)+dupidx-1] += imag(uval) * val
+                                            values[first(searchrange)+dupidx-1] += uimval * val
                                         end
                                     end
                                 end
@@ -443,11 +440,12 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
                     for col in 1:dim, row in col:dim
                         @twice imdata (complex && row != col) begin
                             searchview = @view(indices[startidx:end])
+                            uval = u[i, row] * conj(u[j, col])
                             if imdata
-                                uval -= u[i, row] * conj(u[j, col])
+                                uval -= u[i, col] * conj(u[j, row])
                                 thisuval = impart ? real(uval) : -imag(uval)
                             else
-                                uval += u[i, row] * conj(u[j, col])
+                                uval += u[i, col] * conj(u[j, row])
                                 thisuval = impart ? imag(uval) : real(uval)
                             end
                             len = Int(data.lens[idx])
