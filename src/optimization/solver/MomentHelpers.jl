@@ -306,7 +306,12 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             end
             tri = :L
 
-            if representation isa RepresentationSDD
+            if representation isa RepresentationDD
+                scaleoffdiags = supports_dd(state)
+                if scaleoffdiags
+                    scaling = sqrt(V(2))
+                end
+            elseif representation isa RepresentationSDD
                 scaleoffdiags = supports_sdd(state)
                 if scaleoffdiags
                     scaling = sqrt(V(2))
@@ -367,6 +372,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         if (representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag) ||
+                            (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
                             (representation isa RepresentationSDD && ondiag != scaleoffdiags)
                             coeff_constr *= scaling
                         end
