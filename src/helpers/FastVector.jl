@@ -116,7 +116,7 @@ end
 
 @inline function unsafe_push!(v::FastVec{V}, els...) where {V}
     # we don't need calls to copyto! here - the size of els is completely known and probably quite small, so let's inline
-    @assert(length(v.data) > v.len + length(els))
+    @assert(length(v.data) ≥ v.len + length(els))
     for el in els
         @inbounds v.data[v.len += 1] = convert(V, el)
     end
