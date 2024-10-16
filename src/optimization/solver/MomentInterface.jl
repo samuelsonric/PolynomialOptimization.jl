@@ -285,8 +285,8 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
                 if row != col
                     uval *= V(2)
                 end
-                searchview = @view(indices[:])
                 @twice impart (complex && row != col) begin
+                    searchview = @view(indices[:])
                     len = Int(data.lens[idx])
                     r = dataidx:dataidx+len-1
                     dataidx += len
@@ -441,9 +441,8 @@ function add_constr_dddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u, 
                     idx = 1
                     dataidx = 1
                     for col in 1:dim, row in col:dim
-                        searchview = @view(indices[startidx:end])
                         @twice imdata (complex && row != col) begin
-                            uval = u[i, col] * conj(u[j, row])
+                            searchview = @view(indices[startidx:end])
                             if imdata
                                 uval -= u[i, row] * conj(u[j, col])
                                 thisuval = impart ? real(uval) : -imag(uval)
@@ -671,8 +670,8 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
             dataidx = 1
             for col in 1:dim, row in col:dim
                 uval = u[j, col] * conj(u[j, row])
-                searchview = @view(indices[:])
                 @twice impart (complex && row != col) begin
+                    searchview = @view(indices[:])
                     len = Int(data.lens[idx])
                     r = dataidx:dataidx+len-1
                     dataidx += len
@@ -710,8 +709,8 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                 dataidx = 1
                 for col in 1:dim, row in col:dim
                     uval = u[i, col] * conj(u[i, row])
-                    searchview = @view(indices[firstlen+1:end])
                     @twice impart (complex && row != col) begin
+                        searchview = @view(indices[firstlen+1:end])
                         len = Int(data.lens[idx])
                         r = dataidx:dataidx+len-1
                         dataidx += len
