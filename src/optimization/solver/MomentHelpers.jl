@@ -45,109 +45,6 @@ function to_soc!(indices, values, lens, supports_rotated)
     return IndvalsIterator(unsafe, indices, values, lens)
 end
 
-# This is an iterator that mimicks two nested loops:
-# :U -> exp1 ∈ 1:exp2,  block_i ∈ 1:(exp1 == exp2 ? block_j : block_size)
-# :L -> exp1 ∈ exp2:lg, block_i ∈ (exp1 == exp2 ? block_j : 1):block_size
-# :F -> exp1 ∈ 1:lg,    block_i ∈ 1:block_size
-# However, for the case :DF, we need to take the diagonal element first (exp1 = exp2, block_i = block_j), then iterate through
-# the others (in an arbitrary order).
-struct MatrixPartIter{Tri,complex,G}
-    lg::Int
-    block_size::Int
-    exp2::Int
-    block_j::Int
-    grouping::G
-
-    function MatrixPartIter{Tri,complex}(lg::Int, block_size::Int, exp2::Int, block_j::Int, grouping::G) where {Tri,complex,G}
-        (Tri ∈ (:U, :L, :F, :DF) && complex isa Bool) ||
-            throw(MethodError(MatrixPartIter{Tri,complex}, (lg, block_size, exp2, block_j, grouping)))
-        new{Tri,complex,G}(lg, block_size, exp2, block_j, grouping)
-    end
-end
-
-Base.IteratorEltype(::Type{<:MatrixPartIter}) = Base.HasEltype()
-Base.IteratorSize(::Type{<:MatrixPartIter}) = Base.HasLength()
-Base.eltype(::Type{<:MatrixPartIter{<:Any,G}}) where {G} = Tuple{Int,eltype(G),Bool,Int}
-
-Base.length(m::MatrixPartIter{:U}) = (m.exp2 -1) * m.block_size + m.block_j
-Base.length(m::MatrixPartIter{:L}) = (m.lg - m.exp2) * m.block_size + (m.block_size - m.block_j +1)
-Base.length(m::Union{<:MatrixPartIter{:F},<:MatrixPartIter{:DF}}) = m.lg * m.block_size
-@inline function Base.iterate(m::MatrixPartIter{Tri,complex}) where {Tri,complex}
-    Tri ∈ (:U, :L) || throw(MethodError(iterate, (m,)))
-    exp1_range = Tri === :U ? (1:m.exp2) : (m.exp2:m.lg)
-    outer_iterator = @inbounds zip(exp1_range, @view(m.grouping[exp1_range]))
-    outer_it = iterate(outer_iterator)
-    while true
-        isnothing(outer_it) && return nothing
-        exp1, g₁ = outer_it[1]
-        isreal_g₁ = !complex || isreal(g₁)
-        inner_iterator = Tri === :U ? (1:(exp1 == m.exp2 ? m.block_j : m.block_size)) :
-                                      ((exp1 == m.exp2 ? m.block_j : 1):m.block_size)
-        inner_it = iterate(inner_iterator)
-        isnothing(inner_it) ||
-            return (exp1, g₁, isreal_g₁, inner_it[1]), (outer_iterator, outer_it, isreal_g₁, inner_iterator, inner_it[2])
-        outer_it = iterate(outer_iterator, outer_it[2])
-    end
-end
-@inline function Base.iterate(m::MatrixPartIter{Tri,complex}, (outer_iterator, outer_it, isreal_g₁, inner_iterator, inner_state)) where {Tri,complex}
-    Tri ∈ (:U, :L) || throw(MethodError(iterate, (m,)))
-    inner_it = iterate(inner_iterator, inner_state)
-    while isnothing(inner_it)
-        outer_it = iterate(outer_iterator, outer_it[2])
-        isnothing(outer_it) && return nothing
-        exp1, g₁ = outer_it[1]
-        isreal_g₁ = !complex || isreal(g₁)
-        inner_iterator = Tri === :U ? (1:(exp1 == m.exp2 ? m.block_j : m.block_size)) :
-                                      ((exp1 == m.exp2 ? m.block_j : 1):m.block_size)
-        inner_it = iterate(inner_iterator)
-    end
-    return (outer_it[1]..., isreal_g₁, inner_it[1]), (outer_iterator, outer_it, isreal_g₁, inner_iterator, inner_it[2])
-end
-@inline function Base.iterate(m::MatrixPartIter{:F,complex}) where {complex}
-    outer_iterator = enumerate(m.grouping)
-    outer_it = iterate(outer_iterator)
-    while true
-        isnothing(outer_it) && return nothing
-        exp1, g₁ = outer_it[1]
-        isreal_g₁ = !complex || isreal(g₁)
-        iszero(m.block_size) || return (exp1, g₁, isreal_g₁, 1), (outer_iterator, outer_it, isreal_g₁, 1)
-        outer_it = iterate(outer_iterator, outer_it[2])
-    end
-end
-@inline function Base.iterate(m::MatrixPartIter{:F,complex}, (outer_iterator, outer_it, isreal_g₁, inner_pos)) where {complex}
-    while inner_pos ≥ m.block_size
-        outer_it = iterate(outer_iterator, outer_it[2])
-        isnothing(outer_it) && return nothing
-        exp1, g₁ = outer_it[1]
-        isreal_g₁ = !complex || isreal(g₁)
-        inner_pos = 0
-    end
-    return (outer_it[1]..., isreal_g₁, inner_pos +1), (outer_iterator, outer_it, isreal_g₁, inner_pos +1)
-end
-@inline function Base.iterate(m::MatrixPartIter{:DF,complex}) where {complex}
-    # This is basically a concatenation of the :L with the :U iterator and the last element dropped. To avoid another burden on
-    # dispatch, we'll make this work statically.
-    iter_l = MatrixPartIter{:L,complex}(m.lg, m.block_size, m.exp2, m.block_j, m.grouping)
-    it = iterate(iter_l)
-    isnothing(it) && return nothing
-    iter_u = MatrixPartIter{:U,complex}(m.lg, m.block_size, m.exp2, m.block_j, m.grouping)
-    return it[1], (iter_l, iter_u, it[2], true, m.lg * m.block_size -1)
-end
-@inline function Base.iterate(m::MatrixPartIter{:DF}, (iter_l, iter_u, state, in_l, remaining))
-    iszero(remaining) && return nothing
-    if in_l
-        it = iterate(iter_l, state)
-        if isnothing(it)
-            it = iterate(iter_u)
-            in_l = false
-        end
-    else
-        it = iterate(iter_u, state)
-    end
-    it::Tuple
-    return it[1], (iter_l, iter_u, it[2], in_l, remaining -1)
-end
-
 # generic moment matrix constraint with
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
 #   contains complex coefficients/monomials, imaginary parts cancel out)
@@ -251,84 +148,90 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     @inbounds for (exp2, g₂) in enumerate(grouping)
         isreal_g₂ = !complex || isreal(g₂)
         for block_j in 1:block_size
-            for (exp1, g₁, isreal_g₁, block_i) in MatrixPartIter{tri,complex}(lg, block_size, exp2, block_j, grouping)
-                # - !complex: all polynomials are real-valued in total. Only take into account canonical monomials, but
-                #   double the prefactor if their conjugated must also occur.
-                # - block_i == block_j && exp1 == exp2: we are on the total diagonal. Even if not all polynomials were
-                #   real, these are for sure.
-                # - block_i == block_j && isreal(g₁) && isreal(g₂): we are on the inner diagonal, but since the outer basis
-                #   elements are real-valued, canonical and non-canonicals will also occur in pairs.
-                total_real = !complex || (block_i == block_j && (exp1 == exp2 || (isreal_g₁ && isreal_g₂)))
-                ondiag = exp1 == exp2 && block_i == block_j
-                @twice secondtime (!matrix_indexing && !total_real) begin
-                    curlen = 0
-                    for term_constr in constraint[block_i, block_j]
-                        mon_constr = monomial(term_constr)
-                        coeff_constr = coefficient(term_constr)
-                        if (representation isa RepresentationPSD && tri !== :F && tri !== :DF && !matrix_indexing && !ondiag) ||
-                            (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
-                            (representation isa RepresentationSDD && ondiag != scaleoffdiags)
-                            coeff_constr *= scaling
-                        end
-                        recoeff = real(coeff_constr)
-                        imcoeff = imag(coeff_constr)
-                        repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
-                        if total_real
-                            # Even if `complex` - so we are on the diagonal and the values should be Complex{V} - we can
-                            # just do the push!, the conversion is implicitly done; as the imaginary part should be zero,
-                            # we don't need to discriminate against matrix_indexing.
-                            if canonical # ≡ iscanonical(mon_constr)
-                                if !iszero(recoeff)
-                                    matrix_indexing && unsafe_push!(rows, row)
-                                    unsafe_push!(indices, repart)
-                                    unsafe_push!(values, repart == impart ? recoeff : V(2) * recoeff)
-                                    curlen += 1
-                                end
-                                if repart == impart
-                                    @assert(iszero(imcoeff)) # else the polynomial on the diagonal would not be real-valued
-                                    @assert(isreal(mon_constr))
-                                elseif !iszero(imcoeff)
-                                    matrix_indexing && unsafe_push!(rows, row)
-                                    unsafe_push!(indices, impart)
-                                    unsafe_push!(values, V(-2) * imcoeff)
-                                    curlen += 1
-                                end
+            exp1_range = (tri === :F ? (1:lg) : (tri === :U ? (1:exp2) : (exp2:lg)))
+            for (exp1, g₁) in zip(exp1_range, @view(grouping[exp1_range]))
+                isreal_g₁ = !complex || isreal(g₁)
+                for block_i in (tri === :F ? (1:block_size) : (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
+                                                                            ((exp1 == exp2 ? block_j : 1):block_size)))
+                    # - !complex: all polynomials are real-valued in total. Only take into account canonical monomials, but
+                    #   double the prefactor if their conjugated must also occur.
+                    # - block_i == block_j && exp1 == exp2: we are on the total diagonal. Even if not all polynomials were
+                    #   real, these are for sure.
+                    # - block_i == block_j && isreal(g₁) && isreal(g₂): we are on the inner diagonal, but since the outer basis
+                    #   elements are real-valued, canonical and non-canonicals will also occur in pairs.
+                    total_real = !complex || (block_i == block_j && (exp1 == exp2 || (isreal_g₁ && isreal_g₂)))
+                    ondiag = exp1 == exp2 && block_i == block_j
+                    @twice secondtime (!matrix_indexing && !total_real) begin
+                        curlen = 0
+                        for term_constr in constraint[block_i, block_j]
+                            mon_constr = monomial(term_constr)
+                            coeff_constr = coefficient(term_constr)
+                            if (representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag) ||
+                                (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
+                                (representation isa RepresentationSDD && ondiag != scaleoffdiags)
+                                coeff_constr *= scaling
                             end
-                        else
-                            # We are not on the diagonal, so we must work with every entry. Updating might become necessary
-                            # as the conjugate can pop up later.
-                            if matrix_indexing
-                                # Interpretation: Complex(x, y) means that the real part of the entry is given by x and
-                                #                 the imaginary part by y.
-                                let coeff=Complex(recoeff, Tri === :L ? -imcoeff : imcoeff)
-                                    if !iszero(coeff)
-                                        @pushorupdate!(repart, row, coeff)
-                                        repart == impart ||
-                                            @pushorupdate!(impart, row,
-                                                canonical ? Complex(-imcoeff, Tri === :L ? -recoeff : recoeff) :
-                                                            Complex(imcoeff, Tri === :L ? recoeff : -recoeff))
+                            recoeff = real(coeff_constr)
+                            imcoeff = imag(coeff_constr)
+                            repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
+                            if total_real
+                                # Even if `complex` - so we are on the diagonal and the values should be Complex{V} - we can
+                                # just do the push!, the conversion is implicitly done; as the imaginary part should be zero,
+                                # we don't need to discriminate against matrix_indexing.
+                                if canonical # ≡ iscanonical(mon_constr)
+                                    if !iszero(recoeff)
+                                        matrix_indexing && unsafe_push!(rows, row)
+                                        unsafe_push!(indices, repart)
+                                        unsafe_push!(values, repart == impart ? recoeff : V(2) * recoeff)
+                                        curlen += 1
+                                    end
+                                    if repart == impart
+                                        @assert(iszero(imcoeff)) # else the polynomial on the diagonal would not be real-valued
+                                        @assert(isreal(mon_constr))
+                                    elseif !iszero(imcoeff)
+                                        matrix_indexing && unsafe_push!(rows, row)
+                                        unsafe_push!(indices, impart)
+                                        unsafe_push!(values, V(-2) * imcoeff)
+                                        curlen += 1
                                     end
                                 end
-                            elseif !secondtime
-                                iszero(recoeff) || @pushorupdate!(repart, row, recoeff)
-                                repart == impart || iszero(imcoeff) ||
-                                    @pushorupdate!(impart, row, canonical ? -imcoeff : imcoeff)
                             else
-                                iszero(imcoeff) || @pushorupdate!(repart, row, imcoeff)
-                                repart == impart || iszero(recoeff) ||
-                                    @pushorupdate!(impart, row, canonical ? recoeff : -recoeff)
+                                # We are not on the diagonal, so we must work with every entry. Updating might become necessary
+                                # as the conjugate can pop up later.
+                                if matrix_indexing
+                                    # Interpretation: Complex(x, y) means that the real part of the entry is given by x and
+                                    #                 the imaginary part by y.
+                                    let coeff=Complex(recoeff, Tri === :L ? -imcoeff : imcoeff)
+                                        if !iszero(coeff)
+                                            @pushorupdate!(repart, row, coeff)
+                                            repart == impart ||
+                                                @pushorupdate!(impart, row,
+                                                    canonical ? Complex(-imcoeff, Tri === :L ? -recoeff : recoeff) :
+                                                                Complex(imcoeff, Tri === :L ? recoeff : -recoeff))
+                                        end
+                                    end
+                                elseif !secondtime
+                                    iszero(recoeff) || @pushorupdate!(repart, row, recoeff)
+                                    repart == impart || iszero(imcoeff) ||
+                                        @pushorupdate!(impart, row, canonical ? -imcoeff : imcoeff)
+                                else
+                                    iszero(imcoeff) || @pushorupdate!(repart, row, imcoeff)
+                                    repart == impart || iszero(recoeff) ||
+                                        @pushorupdate!(impart, row, canonical ? recoeff : -recoeff)
+                                end
                             end
                         end
+                        if matrix_indexing
+                            row += one(row)
+                        else
+                            unsafe_push!(lens, Core.Intrinsics.trunc_int(eltype(lens), curlen)) # no check for overflows
+                        end
                     end
-                    if matrix_indexing
-                        row += one(row)
-                    else
-                        unsafe_push!(lens, Core.Intrinsics.trunc_int(eltype(lens), curlen)) # no check for overflows
+                    if !matrix_indexing && complex && total_real && !ondiag
+                        # We skipped the addition of an imaginary part because it is zero. But we have to tell this to the
+                        # solver.
+                        unsafe_push!(lens, zero(eltype(lens)))
                     end
-                end
-                if !matrix_indexing && complex && total_real && !ondiag
-                    # We skipped the addition of an imaginary part because it is zero. But we have to tell this to the solver.
-                    unsafe_push!(lens, zero(eltype(lens)))
                 end
             end
         end
