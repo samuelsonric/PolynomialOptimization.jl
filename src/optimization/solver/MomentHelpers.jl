@@ -140,8 +140,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             scaleoffdiags = (complex && supports_sdd_complex(state)) || (!complex && supports_sdd(state))
             if scaleoffdiags
                 scaling = sqrt(V(2))
-            else
-                scaling = sqrt(inv(V(2))) # We'll apply this scaling to the diagonals!
             end
         end
     end
@@ -168,7 +166,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                             coeff_constr = coefficient(term_constr)
                             if (representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag) ||
                                 (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
-                                (representation isa RepresentationSDD && ondiag != scaleoffdiags)
+                                (representation isa RepresentationSDD && scaleoffdiags && !ondiag)
                                 coeff_constr *= scaling
                             end
                             recoeff = real(coeff_constr)
@@ -281,7 +279,7 @@ end
 # complex PSD cone explicitly
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
-    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,RepresentationPSD}) where {Tri}
+    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,<:RepresentationSDD,RepresentationPSD}) where {Tri}
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian && representation isa RepresentationPSD
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
@@ -315,8 +313,6 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                 scaleoffdiags = supports_sdd(state)
                 if scaleoffdiags
                     scaling = sqrt(V(2))
-                else
-                    scaling = sqrt(inv(V(2))) # We'll apply this scaling to the diagonals!
                 end
             end
         else
@@ -324,7 +320,8 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             scaling = sqrt(V(2))
         end
     end
-    if dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state)))
+    if dim == 1 || (dim == 2 && representation isa RepresentationPSD &&
+                    (supports_rotated_quadratic(state) || supports_quadratic(state)))
         # in these cases, we will rewrite the Hermitian PSD cone in terms of linear or quadratic constraints, so break off
         return moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, (Val(false), Val(true)), representation)
     end
@@ -373,7 +370,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         coeff_constr = coefficient(term_constr)
                         if (representation isa RepresentationPSD && tri !== :F && !matrix_indexing && !ondiag) ||
                             (representation isa RepresentationDD && scaleoffdiags && !ondiag) ||
-                            (representation isa RepresentationSDD && ondiag != scaleoffdiags)
+                            (representation isa RepresentationSDD && scaleoffdiags && !ondiag)
                             coeff_constr *= scaling
                         end
                         recoeff = real(coeff_constr)
@@ -539,9 +536,9 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
     real_valued = (length(grouping) == 1 || isreal(grouping)) && (!(constraint isa AbstractMatrix) || isreal(constraint))
     if representation isa RepresentationSDD && !supports_rotated_quadratic(state) && !supports_quadratic(state) &&
-        ((representation isa RepresentationSDD{<:Any,true} && ((real_valued && !supports_sdd(state)) ||
+        (((representation isa RepresentationSDD{<:Any,true} && ((real_valued && !supports_sdd(state)) ||
                                                                (!real_valued && !supports_sdd_complex(state))))) ||
-        ((representation isa RepresentationSDD{<:Any,false} && !supports_dd(state)))
+         ((representation isa RepresentationSDD{<:Any,false} && !supports_sdd(state))))
         error("The solver does not support the required scaled diagonally dominant cone or the fallback (rotated) quadratic cones, so a representation via scaled diagonally-dominant matrices is not possible")
     end
     return moment_add_matrix_helper!(
@@ -558,7 +555,6 @@ function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleM
              # TODO (unlikely): we could still do it if the solver supports only the rotated, but not the standard cone. But
              # are there any solvers in this category?
              representation isa RepresentationSDD{<:Any,true} ||
-             (representation isa RepresentationSDD{<:Any,false} && !supports_sdd(state)) ||
              (representation isa RepresentationPSD && supports_psd_complex(state)))),
         representation
     )
@@ -754,8 +750,7 @@ The following methods must be implemented by a solver to make this function work
     [`AbstractSparseMatrixSolver`](@ref) already takes care of this.
 
 !!! info "Order"
-    This function is guaranteed to set up the fixed constraints first, then followed by all the others. However, the order of
-    nonnegative, quadratic, ``\\ell_\\infty`` norm, and PSD constraints is undefined (depends on the problem).
+    The individual constraint types can be added in any order (including interleaved).
 
 !!! info "Representation"
     This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The

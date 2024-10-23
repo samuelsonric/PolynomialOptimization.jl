@@ -339,8 +339,9 @@ of suitable dimension.
 The membership `Q ∈ SDD` is achieved using the scaled diagonally dominant (dual) cone directly or (rotated) quadratic cones.
 
 If σ is a Hermitian matrix, a complex-valued scaled diagonally dominant (dual) cone will be used, if supported. If not,
-fallbacks to the (rotated) quadratic cones are used; however, if `complex=false` and the ordinary diagonally dominant (dual)
-cone is supported, rewrite the matrix as a real one and then use the real-valued cone.
+fallbacks to the (rotated) quadratic cones are used; however, if `complex=false` and the ordinary scaled diagonally dominant
+(dual) cone is supported, rewrite the matrix as a real one and then use the real-valued cone. This is usually never advisable,
+as the rotated quadratic cone always works on the complex data.
 Note that if rewritten, `u` must be real-valued and have twice the side dimension of the complex-valued matrix.
 """
 struct RepresentationSDD{M,Complex}

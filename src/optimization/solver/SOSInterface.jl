@@ -14,7 +14,7 @@ Falls back to the vector-valued version if not implemented.
 See also [`Indvals`](@ref).
 """
 add_var_nonnegative!(state, indvals::Indvals) =
-    add_var_nonnegative!(state, IndvalsIterator(indvals.indices, indvals.values, StackVec(length(indvals))))
+    add_var_nonnegative!(state, IndvalsIterator(unsafe, indvals.indices, indvals.values, StackVec(length(indvals))))
 
 """
     add_var_nonnegative!(state, indvals::IndvalsIterator)

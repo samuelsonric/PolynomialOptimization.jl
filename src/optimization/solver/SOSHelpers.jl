@@ -13,6 +13,8 @@ supports_lnorm_complex(state::SOSWrapper) = supports_lnorm_complex(state.state)
 supports_psd_complex(state::SOSWrapper) = supports_psd_complex(state.state)
 supports_dd(state::SOSWrapper) = supports_dd(state.state)
 supports_dd_complex(state::SOSWrapper) = supports_dd_complex(state.state)
+supports_sdd(state::SOSWrapper) = supports_sdd(state.state)
+supports_sdd_complex(state::SOSWrapper) = supports_sdd_complex(state.state)
 psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
 
 # both necessary for disambiguation
@@ -136,8 +138,7 @@ The following methods must be implemented by a solver to make this function work
     [`AbstractSparseMatrixSolver`](@ref) already takes care of this.
 
 !!! info "Order"
-    This function is guaranteed to set up the free variables first, then followed by all the others. However, the order of
-    nonnegative, quadratic, ``\\ell_1`` norm, and PSD variables is undefined (depends on the problem).
+    The individual variable types can be added in any order (including interleaved).
 
 !!! info "Representation"
     This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The

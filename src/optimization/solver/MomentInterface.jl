@@ -14,7 +14,7 @@ Falls back to the vector-valued version if not implemented.
 See also [`Indvals`](@ref).
 """
 add_constr_nonnegative!(state, indvals::Indvals) =
-    add_constr_nonnegative!(state, IndvalsIterator(indvals.indices, indvals.values, StackVec(length(indvals))))
+    add_constr_nonnegative!(state, IndvalsIterator(unsafe, indvals.indices, indvals.values, StackVec(length(indvals))))
 
 """
     add_constr_nonnegative!(state, indvals::IndvalsIterator)
@@ -595,38 +595,43 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
     diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
     # See the comment in add_constr_dddual!. Here, the fallback implementation is done in terms of rotated quadratic cones due
     # to the relationship of SDD matrices with factor-width-2 matrices.
-    # Note that our data is already scaled in such a way that the diagonal elements are scaled by 1/√2, so we don't have to do
-    # this explicitly.
+    # We must take care of scaling the off-diagonal data; as we didn't know about the rotation, this could not have been done
+    # before. The rotated quadratic cone is 2x₁ x₂ ≥ ∑ᵢ xᵢ², so we'll scale the x₃ by √2 (i.e. multiply all the coefficients
+    # that use x₃ by 1/√2) to make this equivalent to [x₁ x₃; x₃ x₂] ⪰ 0. However, since only one triangle is considered, we
+    # also need to scale the coefficients by 2, so in total we end up with √2.
 
     # For a general U and complex-valued data, we have the following rotated quadratic constraints for the column j and the row
     # i > j:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) - Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[i, col] Ū[i, row]) dataᵣ(row, col) - Im(U[i, col] Ū[i, row]) dataᵢ(row, col)),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Re( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
-    #                                     (Im(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col)),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Im( U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
-    #                                     (Re(-U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵢ(row, col))
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) +
+    #                                                        Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[i, col] Ū[i, row]) dataᵣ(row, col) +
+    #                                                        Im(U[i, col] Ū[i, row]) dataᵢ(row, col)),
+    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
+    #                                        (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)),
+    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
+    #                                        (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col))
     # } ∈ ℛ𝒬₄
 
     # Let's specialize the formula. If U is diagonal:
     # {|U[j, j]|² dataᵣ(j, j),
     #  |U[i, i]|² dataᵣ(i, i),
-    #  (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) + Im(U[i, i] Ū[j, j]) dataᵢ(i, j)),
-    #  (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) - Re(U[i, i] Ū[j, j]) dataᵢ(i, j))
+    #  √2 (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) - Im(U[i, i] Ū[j, j]) dataᵢ(i, j)),
+    #  √2 (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) + Re(U[i, i] Ū[j, j]) dataᵢ(i, j))
     # } ∈ ℛ𝒬₄
 
-    # If U is instead real-valued:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim U[j, col] U[j, row] data(row, col),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim U[i, col] U[i, row] data(row, col),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col)
+    # If everything is instead real-valued:
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[j, col] U[j, row] data(row, col),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[i, col] U[i, row] data(row, col),
+    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col)
     # } ∈ ℛ𝒬₃
 
-    # If U is real-diagonal:
+    # If everything is real and U is diagonal:
     # {U[j, j]² data(j, j),
     #  U[i, i]² data(i, i),
-    #  U[i, i] U[j, j] data(i, j)
+    #  √2 U[i, i] U[j, j] data(i, j)
     # } ∈ ℛ𝒬₃
     maxsize = maximum(data.lens, init=0) # how large is one dataᵢ at most?
+    scaling = sqrt(V(2))
 
     if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
         maxsize *= 2
@@ -668,13 +673,16 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
             dataidx = 1
             for col in 1:dim, row in col:dim
                 uval = u[j, col] * conj(u[j, row])
+                if row != col
+                    uval *= V(2)
+                end
                 @twice impart (complex && row != col) begin
                     searchview = @view(indices[:])
                     len = Int(data.lens[idx])
                     r = dataidx:dataidx+len-1
                     dataidx += len
                     idx += 1
-                    thisuval = impart ? -imag(uval) : real(uval)
+                    thisuval = impart ? imag(uval) : real(uval)
                     iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
                         dupidx = findfirst(isequal(ind), searchview)
                         if isnothing(dupidx)
@@ -707,13 +715,16 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                 dataidx = 1
                 for col in 1:dim, row in col:dim
                     uval = u[i, col] * conj(u[i, row])
+                    if row != col
+                        uval *= V(2)
+                    end
                     @twice impart (complex && row != col) begin
                         searchview = @view(indices[firstlen+1:end])
                         len = Int(data.lens[idx])
                         r = dataidx:dataidx+len-1
                         dataidx += len
                         idx += 1
-                        thisuval = impart ? -imag(uval) : real(uval)
+                        thisuval = impart ? imag(uval) : real(uval)
                         iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
                             dupidx = findfirst(isequal(ind), searchview)
                             if isnothing(dupidx)
@@ -731,7 +742,7 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
             #region Third and fourth item
             if diagu
                 if u isa Diagonal
-                    uval = u[i, i] * conj(u[j, j])
+                    uval = u[i, i] * conj(u[j, j]) * scaling
                 end
                 @twice impart complex begin
                     startidx = length(indices) +1
@@ -741,24 +752,21 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                         if !iszero(real(uval))
                             unsafe_append!(indices, @view(data.indices[r]))
                             unsafe_append!(values, @view(data.values[r]))
-                            if impart
-                                isone(-real(uval)) || rmul!(@view(values[startidx:end]), -real(uval))
-                            else
-                                isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
-                            end
+                            isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
                         end
                         if complex && !iszero(imag(uval))
                             let lenalt=Int(data.lens[impart ? idx-1 : idx+1]),
-                                dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1
+                                dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1,
+                                uimval=impart ? imag(uval) : -imag(uval)
                                 searchrange = startidx:length(indices)
                                 searchview = @view(indices[searchrange])
                                 for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
                                     dupidx = findfirst(isequal(ind), searchview)
                                     if isnothing(dupidx)
                                         unsafe_push!(indices, ind)
-                                        unsafe_push!(values, imag(uval) * val)
+                                        unsafe_push!(values, uimval * val)
                                     else
-                                        values[first(searchrange)+dupidx-1] += imag(uval) * val
+                                        values[first(searchrange)+dupidx-1] += uimval * val
                                     end
                                 end
                             end
@@ -766,8 +774,9 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                     else
                         unsafe_append!(indices, @view(data.indices[r]))
                         unsafe_append!(values, @view(data.values[r]))
+                        rmul!(@view(values[end-len+1:end]), scaling)
                     end
-                    unsafe_push!(lens, length(indices) - startidx +1)
+                    iszero(length(indices) - startidx +1) || unsafe_push!(lens, length(indices) - startidx +1)
                     dataidx += len
                     idx += 1
                 end
@@ -777,16 +786,19 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                     idx = 1
                     dataidx = 1
                     for col in 1:dim, row in col:dim
-                        searchview = @view(indices[startidx:end])
                         @twice imdata (complex && row != col) begin
-                            uval = u[i, col] * conj(u[j, row])
+                            uval = u[i, row] * conj(u[j, col])
+                            searchview = @view(indices[startidx:end])
                             if imdata
-                                uval -= u[i, row] * conj(u[j, col])
+                                uval -= u[i, col] * conj(u[j, row])
                                 thisuval = impart ? real(uval) : -imag(uval)
                             else
-                                uval += u[i, row] * conj(u[j, col])
+                                if row != col
+                                    uval += u[i, col] * conj(u[j, row])
+                                end
                                 thisuval = impart ? imag(uval) : real(uval)
                             end
+                            thisuval *= scaling
                             len = Int(data.lens[idx])
                             r = dataidx:dataidx+len-1
                             dataidx += len
@@ -804,11 +816,57 @@ function add_constr_sdddual!(state, dim::Integer, data::IndvalsIterator{T,V}, u,
                             end
                         end
                     end
-                    unsafe_push!(lens, length(indices) - startidx +1)
+                    iszero(length(indices) - startidx +1) || unsafe_push!(lens, length(indices) - startidx +1)
                 end
             end
             #endregion
-            (have_rot ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, have_rot))
+            # Some possible reductions to simpler cones:
+            rg₁ = 1:lens[1]
+            rg₂ = lens[1]+1:lens[1]+lens[2]
+            @views if length(lens) == 2 || all(iszero, values[last(rg₂)+1:end])
+                @label lastzero
+                # 2x₁x₂ ≥ 0, x₁, x₂ ≥ 0
+                has₁ = !iszero(lens[1]) && any(!iszero, values[rg₁])
+                has₂ = !iszero(lens[2]) && any(!iszero, values[rg₂])
+                if has₁ || has₂
+                    if has₁ && has₂
+                        # x₁, x₂ ≥ 0
+                        add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lens))
+                    else
+                        # x₁ ≥ 0 or x₂ ≥ 0
+                        add_constr_nonnegative!(state, Indvals(indices, values))
+                    end
+                # else 0 ≥ 0
+                end
+            else
+                zero₁ = iszero(lens[1]) && all(iszero, values[rg₁])
+                zero₂ = iszero(lens[2]) && all(iszero, values[rg₂])
+                if zero₁ || zero₂
+                    # 0 ≥ x₃² + x₄², x₁, x₂ ≥ 0
+                    if zero₁
+                        # x₂ ≥ 0
+                        add_constr_nonnegative!(state, Indvals(indices[rg₂], values[rg₂]))
+                    else
+                        # x₁ ≥ 0
+                        add_constr_nonnegative!(state, Indvals(indices[rg₁], values[rg₁]))
+                    end
+                    # x₃ = x₄ = 0
+                    rg₃ = last(rg₂)+1:last(rg₂)+lens[3]
+                    zero₃ = all(iszero, values[rg₃])
+                    zero₄ = length(lens) < 4 || all(iszero, values[last(rg₃)+1:end])
+                    zero₃ && zero₄ && @goto lastzero
+                    prep = add_constr_fix_prepare!(state, !zero₃ + !zero₄)
+                    zero₃ ||
+                        (prep = @views add_constr_fix!(state, prep, Indvals(indices[rg₃], values[rg₃]), zero(V)))
+                    zero₄ ||
+                        (prep = @views add_constr_fix!(state, prep, Indvals(indices[last(rg₃)+1:end], values[last(rg₃)+1:end]),
+                            zero(V)))
+                    add_constr_fix_finalize!(state, prep)
+                else
+                    # full case
+                    (have_rot ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, have_rot))
+                end
+            end
             # we can keep the first element
             resize!(indices, firstlen)
             resize!(values, firstlen)
