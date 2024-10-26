@@ -9,6 +9,8 @@ using .Solver: default_solver_method, monomial_count, RepresentationMethod, Repr
     RepresentationSDD
 import .Solver: poly_optimize
 
+_val_of(::Val{S}) where {S} = S
+
 """
     poly_optimize([method, ]relaxation::AbstractRelaxation; verbose=false,
         clique_merging=false, representation=RepresentationPSD(), kwargs...)
@@ -41,9 +43,9 @@ solver has been loaded.
       constraint (and will be undefined for the objective, but still present to avoid extra compilataion). The last element
       is an `Int` denoting the index of the grouping within the constraint/objective.
 """
-function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=false,
+function poly_optimize(@nospecialize(v::Val), relaxation::AbstractRelaxation; verbose::Bool=false,
     representation::Union{<:RepresentationMethod,<:Base.Callable}=RepresentationPSD(),
-    clique_merging::Bool=false, kwargs...) where {S}
+    clique_merging::Bool=false, kwargs...)
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
         groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation
@@ -76,7 +78,7 @@ function poly_optimize(v::Val{S}, relaxation::AbstractRelaxation; verbose::Bool=
         end
         result = poly_optimize(v, relaxation, groups; verbose, representation, kwargs...)
     end
-    return Result(relaxation, S, otime, result...)
+    return Result(relaxation, _val_of(v), otime, result...)
 end
 
 """
