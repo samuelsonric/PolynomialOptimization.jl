@@ -1,10 +1,9 @@
 mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrixSolver{I,K,Float64}
-    const minusAcoo_zeropsd::SparseMatrixCOO{I,K,Float64,Offset}
+    const minusAcoo_zero::SparseMatrixCOO{I,K,Float64,Offset}
     const minusAcoo_nonneg::SparseMatrixCOO{I,K,Float64,Offset}
     const minusAcoo_soc::SparseMatrixCOO{I,K,Float64,Offset}
+    const minusAcoo_psd::SparseMatrixCOO{I,K,Float64,Offset}
     const b_zero::Tuple{FastVec{Int},FastVec{Float64}} # this is one-indexed
-    numzero::I
-    lenzero::I
     const socsizes::FastVec{I}
     const psdsizes::FastVec{I}
     slack::K
@@ -14,8 +13,8 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
+        SparseMatrixCOO{I,K,Float64,zero(I)}(),
         (FastVec{Int}(), FastVec{Float64}()),
-        0, 0,
         FastVec{I}(), FastVec{I}(), K <: Signed ? -one(K) : typemax(K)
     )
 end
@@ -36,7 +35,7 @@ function Solver.add_constr_quadratic!(state::StateMoment{<:Integer,K}, indvals::
 end
 
 function Solver.add_constr_psd!(state::StateMoment{<:Integer,K}, dim::Int, data::IndvalsIterator{K,Float64}) where {K}
-    append!(state.minusAcoo_zeropsd, data)
+    append!(state.minusAcoo_psd, data)
     push!(state.psdsizes, dim)
     return
 end
@@ -44,18 +43,16 @@ end
 function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     # Those is just a lower bound, as the number of constraints is multiplied by the individual index count. But better than
     # nothing.
-    prepare_push!(state.minusAcoo_zeropsd, num)
+    prepare_push!(state.minusAcoo_zero, num)
     return
 end
 
 function Solver.add_constr_fix!(state::StateMoment{<:Integer,K}, ::Nothing, indvals::Indvals{K,Float64}, rhs::Float64) where {K}
-    v = append!(state.minusAcoo_zeropsd, indvals)
+    v = append!(state.minusAcoo_zero, indvals)
     if !iszero(rhs)
         push!(state.b_zero[1], v +1)
         push!(state.b_zero[2], rhs)
     end
-    state.numzero += one(I)
-    state.lenzero += length(indvals)
     return
 end
 
@@ -75,45 +72,34 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
         moment_setup!(state, relaxation, groupings; representation)
         customize(state)
 
-        # We now must merge the noneg and the soc constraints into the zeropsd COO at the appropriate position
-        Acoo = state.minusAcoo_zeropsd
-        nzero = state.numzero
-        lenzero = state.lenzero
+        # We now must merge the all constraints together in an appropriate order
+        Acoo = state.minusAcoo_zero
+        nzero = size(Acoo, 1)
+        lenzero = length(Acoo)
         nnonneg = size(state.minusAcoo_nonneg, 1)
         lennonneg = length(state.minusAcoo_nonneg)
         nsoc = size(state.minusAcoo_soc, 1)
         lensoc = length(state.minusAcoo_soc)
-        npsd = size(Acoo, 1) - nzero
-        lenpsd = length(Acoo) - lenzero
-        @inbounds if !iszero(lennonneg + lensoc)
-            # calculate the shifts
-            # TODO: this shifts all the PSD data to the end, then inserts the remaining ones in between. As we sort the data
-            # afterwards anyway, we wouldn't really have to do the shift. Check if it is faster to rely on sorting.
-            # merge all the row data (note that we would then have to adjust the detection of the number of rows in b).
-            resize!(Acoo.rowinds, length(Acoo) + lennonneg + lensoc)
-            @views Acoo.rowinds[end:-1:lenzero+lennonneg+lensoc+1] .= Acoo.rowinds[lenzero+lenpsd:-1:lenzero+1] .+ (nnonneg + nsoc)
-            if iszero(nzero)
-                copyto!(Acoo.rowinds, 1, state.minusAcoo_nonneg.rowinds, 1, lennonneg)
-            else
-                @views Acoo.rowinds[lenzero+1:lenzero+lennonneg] .= state.minusAcoo_nonneg.rowinds .+ nzero
+        npsd = size(state.minusAcoo_psd, 1)
+        lenpsd = length(state.minusAcoo_psd)
+        if iszero(nzero) && iszero(nnonneg) && iszero(nsoc)
+            Acoo = state.minusAcoo_psd
+        else
+            prepare_push!(Acoo, lennonneg + lensoc + lenpsd)
+            δ = nzero
+            for (newA, newδ) in ((state.minusAcoo_nonneg, nnonneg),
+                                 (state.minusAcoo_soc, nsoc),
+                                 (state.minusAcoo_psd, npsd))
+                @simd for rowind in newA.rowinds
+                    unsafe_push!(Acoo.rowinds, rowind + δ)
+                end
+                append!(Acoo.moninds, newA.moninds)
+                @simd for nzval in newA.nzvals
+                    unsafe_push!(Acoo.nzvals, -nzval)
+                end
+                δ += newδ
             end
-            if iszero(nzero + nnonneg)
-                copyto!(Acoo.rowinds, 1, state.minusAcoo_soc.rowinds, 1, lensoc)
-            else
-                @views Acoo.rowinds[lenzero+lennonneg+1:lenzero+lennonneg+lensoc] .= state.minusAcoo_soc.rowinds .+ (nzero + nnonneg)
-            end
-            # merge the remaining data
-            resize!(Acoo.moninds, length(Acoo.moninds) + lennonneg + lensoc)
-            copyto!(Acoo.moninds, lenzero + lennonneg + lensoc +1, Acoo.moninds, lenzero +1, lenpsd)
-            copyto!(Acoo.moninds, lenzero +1, state.minusAcoo_nonneg.moninds, 1, lennonneg)
-            copyto!(Acoo.moninds, lenzero + lennonneg +1, state.minusAcoo_soc.moninds, 1, lensoc)
-
-            resize!(Acoo.nzvals, length(Acoo.nzvals) + lennonneg + lensoc)
-            copyto!(Acoo.nzvals, lenzero + lennonneg + lensoc +1, Acoo.nzvals, lenzero +1, lenpsd)
-            copyto!(Acoo.nzvals, lenzero +1, state.minusAcoo_nonneg.nzvals, 1, lennonneg)
-            copyto!(Acoo.nzvals, lenzero + lennonneg +1, state.minusAcoo_soc.nzvals, 1, lensoc)
         end
-        rmul!(@view(Acoo.nzvals[lenzero+1:end]), -1.0) # this must happen before we sort the columns
 
         # Now we have all the data in COO form. The reason for this choice is that we were able to assign arbitrary column
         # indices - i.e., we could just use the monomial index. However, now we have to modify the column indices to make them
