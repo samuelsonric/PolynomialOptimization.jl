@@ -130,34 +130,34 @@ end
 function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
     representation, verbose::Bool=false, customize::Base.Callable=_ -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
-    try
-        setup_time = @elapsed begin
-            K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
+    setup_time = @elapsed begin
+        K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
-            verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
-            for (k, v) in parameters
-                putparam(task, string(k), string(v))
-            end
-            putobjsense(task, MSK_OBJECTIVE_SENSE_MINIMIZE)
-            # just set up some domains, this is cheap and we don't have to query them afterwards
-            appendrplusdomain(task, 1)
-            appendrquadraticconedomain(task, 3)
-            appendrquadraticconedomain(task, 4)
-
-            state = StateMoment{K}(task)
-            moment_setup!(state, relaxation, groupings; representation)
-            Mosek.@MSK_putvarboundsliceconst(task.task, 0, state.num_used_vars, MSK_BK_FR.value, -Inf, Inf)
-            customize(state)
+        verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
+        for (k, v) in parameters
+            putparam(task, string(k), string(v))
         end
-        @verbose_info("Setup complete in ", setup_time, " seconds")
+        putobjsense(task, MSK_OBJECTIVE_SENSE_MINIMIZE)
+        # just set up some domains, this is cheap and we don't have to query them afterwards
+        appendrplusdomain(task, 1)
+        appendrquadraticconedomain(task, 3)
+        appendrquadraticconedomain(task, 4)
 
-        optimize(task)
-        @verbose_info("Optimization complete, retrieving moments")
-
-        x = Vector{Float64}(undef, state.num_used_vars)
-        Mosek.@MSK_getxxslice(task.task, MSK_SOL_ITR.value, 0, length(x), x)
-        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, x, state)
-    finally
-        deletetask(task)
+        state = StateMoment{K}(task)
+        moment_setup!(state, relaxation, groupings; representation)
+        Mosek.@MSK_putvarboundsliceconst(task.task, 0, state.num_used_vars, MSK_BK_FR.value, -Inf, Inf)
+        customize(state)
     end
+    @verbose_info("Setup complete in ", setup_time, " seconds")
+
+    optimize(task)
+    @verbose_info("Optimization complete")
+
+    return state, getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR)
+end
+
+function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateMoment)
+    x = Vector{Float64}(undef, state.num_used_vars)
+    Mosek.@MSK_getxxslice(state.task.task, MSK_SOL_ITR.value, 0, length(x), x)
+    return MomentVector(relaxation, x, state)
 end

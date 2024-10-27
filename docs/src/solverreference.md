@@ -96,12 +96,16 @@ be implemented.
 ```@docs
 mindex
 ```
-Every implementation of [`poly_optimize`](@ref) should return a tuple consisting of the optimal value, the status of the
-solver, and an instance of a [`MomentVector`](@ref) containing the resulting moment data.
+Every implementation of [`poly_optimize`](@ref) should return a tuple that contains some internal state of the solver as well
+as the optimal value and the status of the solver.
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver
 to be chosen automatically. Apart from the exact specification `:<solvername>Moment` or `:<solvername>SOS`, a short form
 `:<solvername>` that chooses the recommended method should also be implemented. For this, the [`@solver_alias`](@ref) macro can
-be used.
+be used. When details on the solution data a requested, the [`extract_moments`](@ref) function is called, which has to be
+implemented for each solver:
+```@docs
+extract_moments
+```
 
 While this page documents in detail how a new solver can be implemented, the explanation is far more extensive than an actual
 implementation. In order to implement a new solver, it is therefore recommended to first determine the category in which it
@@ -122,7 +126,7 @@ SparseMatrixCOO
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
-MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::Integer, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::K, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
 #### [`AbstractAPISolver`](@ref)

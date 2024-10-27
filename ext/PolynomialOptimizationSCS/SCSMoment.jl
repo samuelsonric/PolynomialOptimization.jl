@@ -159,5 +159,8 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
     Base.@_gc_preserve_end _y
     Base.@_gc_preserve_end _s
 
-    return status, scs_info.pobj, MomentVector(relaxation, x, state.slack, Acoo)
+    return (Val(:SCSMoment), x, state.slack, Acoo), status, scs_info.pobj
 end
+
+Solver.extract_moments(relaxation::AbstractRelaxation, (_, x, slack, Acoo)::Tuple{Val{:SCSMoment},Vararg}) =
+    MomentVector(relaxation, x, slack, Acoo)

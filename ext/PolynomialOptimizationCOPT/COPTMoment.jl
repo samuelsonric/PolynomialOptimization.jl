@@ -162,14 +162,17 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
     _check_ret(copt_env, COPT_GetIntAttr(task, COPT_INTATTR_LPSTATUS, status))
     value = Ref{Cdouble}()
     _check_ret(copt_env, COPT_GetDblAttr(task, COPT_DBLATTR_LPOBJVAL, value))
-    @verbose_info("Optimization complete, retrieving moments")
+    @verbose_info("Optimization complete")
 
     if status[] ∈ (COPT_LPSTATUS_OPTIMAL, COPT_LPSTATUS_IMPRECISE)
-        x = Vector{Cdouble}(undef, state.num_solver_vars)
-        _check_ret(copt_env, COPT_GetLpSolution(task, x, C_NULL, C_NULL, C_NULL))
-        return status[], value[], MomentVector(relaxation, resize!(x, state.num_used_vars), state)
+        return state, status[], value[]
     else
-        @verbose_info("Solution data extraction complete")
-        return status[], value[], MomentVector(relaxation, missing)
+        return missing, status[], value[]
     end
+end
+
+function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateMoment)
+    x = Vector{Cdouble}(undef, state.num_solver_vars)
+    _check_ret(copt_env, COPT_GetLpSolution(state.problem, x, C_NULL, C_NULL, C_NULL))
+    return MomentVector(relaxation, resize!(x, state.num_used_vars), state)
 end

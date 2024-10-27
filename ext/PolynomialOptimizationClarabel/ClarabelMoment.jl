@@ -90,7 +90,10 @@ function Solver.poly_optimize(::Val{:ClarabelMoment}, relaxation::AbstractRelaxa
     solution = Clarabel.solve!(solver)
     status = solution.status
     value = solution.obj_val
-    @verbose_info("Optimization complete, retrieving moments")
+    @verbose_info("Optimization complete")
 
-    return status, value, MomentVector(relaxation, solution.x, state.slack, state.Acoo)
+    return (state, solution), status, value
 end
+
+Solver.extract_moments(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}) =
+    MomentVector(relaxation, solution.x, state.slack, state.Acoo)

@@ -169,6 +169,13 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
     end
 end
 
+moment_vector_type(::Type{Rx}, ::Type{V}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc,I<:Integer,
+                                                 Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{
+                                                     <:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}
+                                                 }}}} =
+    MomentVector{R,V,Nr,Nc,<:Union{Vector{R},SparseVector{R,I},SubArray{R,1,Vector{R},Tuple{UnitRange{I}},true}},
+                 ExponentsAll{Nr+2Nc,I}}
+
 """
     Result
 
@@ -187,13 +194,30 @@ A `Result` struct `r` contains information about
 
 This type is not exported.
 """
-struct Result{R<:AbstractRelaxation,V,M<:MomentVector{<:Any,V}}
-    relaxation::R
-    method::Symbol
-    time::Float64
-    status
-    objective::Float64
-    moments::M
+mutable struct Result{Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
+    const relaxation::Rx
+    const method::Symbol
+    const time::Float64
+    const state
+    const status
+    const objective::V
+    moments
+
+    Result(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,<:Any,Nc}}}, method::Symbol, time::Float64,
+        @nospecialize(state), @nospecialize(status), objective::R) where {R<:Real,Nc} =
+        new{typeof(relaxation),R,iszero(Nc) ? R : Complex{R}}(relaxation, method, time, state, status, objective, missing)
+end
+
+function Base.getproperty(r::Result{Rx,R,V}, f::Symbol) where {Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
+    if f === :moments
+        T = moment_vector_type(Rx, V)
+        if ismissing(getfield(r, :moments))
+            return setfield!(r, :moments, Solver.extract_moments(r.relaxation, r.state))::T
+        else
+            return getfield(r, f)::T
+        end
+    end
+    return getfield(r, f)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", x::Result)

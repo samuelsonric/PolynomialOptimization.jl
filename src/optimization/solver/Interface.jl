@@ -1,6 +1,6 @@
 export mindex, supports_rotated_quadratic, supports_quadratic, supports_lnorm, supports_lnorm_complex, supports_psd_complex,
     supports_dd, supports_dd_complex, Indvals, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian,
-    PSDIndextypeVector, IndvalsIterator
+    PSDIndextypeVector, IndvalsIterator, extract_moments
 
 """
     mindex(state, monomials::SimpleMonomialOrConj...)
@@ -383,6 +383,16 @@ are supported:
 - [`RepresentationDD`](@ref)
 """
 const RepresentationMethod = Union{RepresentationPSD,<:RepresentationSDD,<:RepresentationDD}
+
+"""
+    extract_moments(relaxation::AbstractRelaxation, state)
+
+Extracts a [`MomentVector`](@ref) from a solved relaxation. The `state` parameter is the first return value of the
+[`poly_optimize`](@ref) call by the solver. This function is only called once for each result; the output is cached.
+"""
+function extract_moments end
+
+extract_moments(relaxation::AbstractRelaxation, ::Missing) = MomentVector(relaxation, missing)
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")

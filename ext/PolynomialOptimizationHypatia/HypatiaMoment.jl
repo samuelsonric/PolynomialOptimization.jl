@@ -131,7 +131,10 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
     Solvers.solve(solver)
     status = Solvers.get_status(solver)
     value = Solvers.get_primal_obj(solver)
-    @verbose_info("Optimization complete, retrieving moments")
+    @verbose_info("Optimization complete")
 
-    return status, value, MomentVector(relaxation, Solvers.get_x(solver), state.slack, state.Acoo, state.minusGcoo)
+    return (state, solver), status, value
 end
+
+Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}) =
+    MomentVector(relaxation, Solvers.get_x(solver), state.slack, state.Acoo, state.minusGcoo)

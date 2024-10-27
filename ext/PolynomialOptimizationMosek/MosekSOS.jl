@@ -116,29 +116,29 @@ end
 function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
     representation, verbose::Bool=false, customize::Base.Callable=(state) -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
-    try
-        setup_time = @elapsed begin
-            K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
+    setup_time = @elapsed begin
+        K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
-            verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
-            for (k, v) in parameters
-                putparam(task, string(k), string(v))
-            end
-            putobjsense(task, MSK_OBJECTIVE_SENSE_MAXIMIZE)
-
-            state = StateSOS{K}(task)
-            sos_setup!(state, relaxation, groupings; representation)
-            customize(state)
+        verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
+        for (k, v) in parameters
+            putparam(task, string(k), string(v))
         end
-        @verbose_info("Setup complete in ", setup_time, " seconds")
+        putobjsense(task, MSK_OBJECTIVE_SENSE_MAXIMIZE)
 
-        optimize(task)
-        @verbose_info("Optimization complete, retrieving moments")
-
-        y = Vector{Float64}(undef, length(state.mon_to_solver))
-        Mosek.@MSK_getyslice(task.task, MSK_SOL_ITR.value, 0, length(y), y)
-        return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, y, state)
-    finally
-        deletetask(task)
+        state = StateSOS{K}(task)
+        sos_setup!(state, relaxation, groupings; representation)
+        customize(state)
     end
+    @verbose_info("Setup complete in ", setup_time, " seconds")
+
+    optimize(task)
+    @verbose_info("Optimization complete")
+
+    return state, getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR)
+end
+
+function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateSOS)
+    y = Vector{Float64}(undef, length(state.mon_to_solver))
+    Mosek.@MSK_getyslice(state.task.task, MSK_SOL_ITR.value, 0, length(y), y)
+    return MomentVector(relaxation, y, state)
 end
