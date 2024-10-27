@@ -15,23 +15,22 @@ function poly_solutions(::Val{:heuristic}, result::Result; verbose::Bool=false)
     # then, when analyzing the problem, set the perturbation parameter to some small value, which should lift all degeneracies.
     # However, this will also slightly modify the problem, changing the optimal value (and its point) a bit. For small
     # perturbations, the solution is close enough to provide ideal starting points for another optimizer.
-    solutions = poly_solutions(Val(Symbol("heuristic-postprocess")), result,
-        poly_solutions(Val(Symbol("heuristic-magnitudes")), result)...)
+    solutions = poly_solutions(Val(Symbol("heuristic-postprocess")), result.moments,
+        poly_solutions(Val(Symbol("heuristic-magnitudes")), result.relaxation, result.moments)...)
     @verbose_info("Extracted all signs/phases, found ", length(solutions), " possible solution",
         isone(length(solutions)) ? "" : "s")
     return solutions
 end
 
 function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
-    result::Result{<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,MI}}}},V}) where {Nr,Nc,MI<:Integer,R<:Real,V<:Union{R,Complex{R}}}
+    relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,MI}}}},
+    moments::MomentVector{R,V,Nr,Nc}) where {Nr,Nc,MI<:Integer,R<:Real,V<:Union{R,Complex{R}}}
     # In this part, we extract the parts of the solution by looking at the monomials that are powers of variables.
     solution = fill(iszero(Nc) ? R(NaN) : Complex(R(NaN), R(NaN)), Nr + Nc)
     I = SimplePolynomials.smallest_unsigned(Nr + 2Nc)
     zero_checks = Set{I}()
     unknown_signs = Set{I}()
     unknown_phases = Dict{I,Set{R}}()
-    relaxation = result.relaxation
-    moments = result.moments
     e = ExponentsAll{Nr+2Nc,MI}()
     deg = degree(relaxation)
     for i in 1:Nr
@@ -120,15 +119,13 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
     return solution, zero_checks, unknown_signs, unknown_phases
 end
 
-function poly_solutions(::Val{Symbol("heuristic-postprocess")},
-    result::Result{<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},V}, candidate::AbstractVector{V},
+function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentVector{R,V,Nr,Nc}, candidate::AbstractVector{V},
     zero_checks::Set{I}, unknown_signs::Set{I}, unknown_phases::Dict{I,Set{R}}) where {Nr,Nc,I<:Integer,R<:Real,V<:Union{R,Complex{R}}}
     isempty(zero_checks) && isempty(unknown_signs) && isempty(unknown_phases) && return [candidate]
     # Candidate contains the possible absolute values of the solutions. However,
     # - some unknown entries may in fact be zero: check for those indices in zero_checks
     # - some real-valued variables have an unknown sign: check for those in unknown_signs
     # - some complex-valued variables have multiple phases that could be assigned: check for those in unknown_phases
-    moments = result.moments
     dependencies = Set{I}() # We might not be able to resolve everything in the first iteration; keep track of things that
                             # would allow us to do better in the next.
     while true
@@ -261,10 +258,10 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
         # First, check the signs, for which there are only two options.
         if !isempty(unknown_signs)
             signpos = pop!(unknown_signs)
-            first_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), result, copy(candidate), zero_checks,
+            first_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, copy(candidate), zero_checks,
                 copy(unknown_signs), copy(unknown_phases))
             candidate[signpos] = -candidate[signpos]
-            second_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), result, candidate, zero_checks, unknown_signs,
+            second_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidate, zero_checks, unknown_signs,
                 unknown_phases)
             return [first_sol; second_sol]
         else
@@ -280,7 +277,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
             for candidate_phase in candidate_phases
                 candidateᵢ = copy(candidate)
                 candidateᵢ[candidate_index] *= cis(candidate_phase)
-                append!(solutions, poly_solutions(Val(Symbol("heuristic-postprocess")), result, candidateᵢ, zero_checks,
+                append!(solutions, poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidateᵢ, zero_checks,
                     copy(unknown_signs), copy(unknown_phases)))
             end
             return solutions
