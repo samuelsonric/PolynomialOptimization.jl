@@ -130,7 +130,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
                             # would allow us to do better in the next.
     while true
         retry = false
-        for (mon, mon_val) in moments
+        for (mon, mon_val) in MomentAssociation(moments)
             isnan(mon_val) && continue
             if abs(mon_val) < R(1e-7)
                 isempty(zero_checks) && continue
