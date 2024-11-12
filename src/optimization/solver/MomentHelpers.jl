@@ -100,6 +100,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         # This is unless we are in the case of a rotated quadratic cone, for which SOS/moment doesn't make any difference.
         # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying the
         # left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
+        if dim == 2
             rquad = supports_rotated_quadratic(state)
             quad = supports_quadratic(state)
             if !rquad && quad
