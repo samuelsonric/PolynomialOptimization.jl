@@ -58,7 +58,7 @@ Changes the size of the internal buffer that is kept available to quickly manage
 than the actual length of this vector, this is a no-op.
 """
 function Base.sizehint!(v::FastVec, len::Integer)
-    len ≥ v.len && resize!(v.data, len)
+    len ≥ length(v.data) && resize!(v.data, len)
     return v
 end
 
@@ -80,7 +80,7 @@ buffer is large enough to hold all the new items that will be pushed without all
 """
 function prepare_push!(v::FastVec, new_items::Integer)
     new_items ≥ 0 || error("prepare_push! expects a positive number of items")
-    v.len - length(v.data) < new_items && resize!(v.data, overallocation(v.len + new_items))
+    length(v.data) - v.len < new_items && resize!(v.data, overallocation(v.len + new_items))
     return v
 end
 
@@ -124,6 +124,39 @@ end
 end
 
 """
+    insert!(v::FastVec, index::Integer, el)
+
+Insert an `el` into `v` at the given `index`. `index` is the index of `item` in the resulting `v`.
+Note that if you made sure beforehand that the capacity of `v` is sufficient for the addition of this element, consider calling
+[`unsafe_insert!`](@ref) instead, which avoids the length check.
+"""
+@inline function Base.insert!(v::FastVec{V}, index::Integer, el) where {V}
+    @boundscheck(1 ≤ index ≤ v.len +1 || throw(BoundsError(v, index)))
+    elV = convert(V, el)
+    v.len += 1
+    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    @inbounds copyto!(v.data, index +1, v.data, index, v.len - index)
+    @inbounds v.data[index] = el
+    return v
+end
+
+"""
+    unsafe_insert!(v::FastVec, index::Integer, el)
+
+Insert an `el` into `v` at the given `index`. `index` is the index of `item` in the resulting `v`.
+This function assumes that the internal buffer of `v` holds enough space to add at least one element; if this is not the case,
+it will lead to memory corruption. Call [`insert!`](@ref) instead if you cannot guarantee the necessary buffer size.
+"""
+@inline function unsafe_insert!(v::FastVec{V}, index::Integer, el) where {V}
+    @assert(1 ≤ index ≤ v.len +1 || throw(BoundsError(v, index)))
+    elV = convert(V, el)
+    v.len += 1
+    @inbounds copyto!(v.data, index +1, v.data, index, v.len - index)
+    @inbounds v.data[index] = el
+    return v
+end
+
+"""
     append!(v::FastVec, els)
 
 Appends all items in `els` to the end of `v`, increasing the length of `v` by `length(els)`. If there is not enough space,
@@ -131,7 +164,7 @@ grows `v`.
 Note that if you made sure beforehand that the capacity of `v` is sufficient for the addition of these elements, consider
 calling [`unsafe_append!`](@ref) instead, which avoids the length check.
 """
-@inline function Base.append!(v::FastVec{V}, els) where {V}
+@inline function Base.append!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
     length(v.data) < v.len && resize!(v.data, overallocation(v.len))
@@ -154,7 +187,7 @@ Appends all items in `els` to the end of `v`, increasing the length of `v` by `l
 This function assumes that the internal buffer of `v` holds enough space to add at least all elements in `els`; if this is not
 the case, it will lead to memory corruption. Call [`append!`](@ref) instead if you cannot guarantee the necessary buffer size.
 """
-@inline function unsafe_append!(v::FastVec{V}, els) where {V}
+@inline function unsafe_append!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
     @assert(length(v.data) ≥ v.len)
@@ -178,7 +211,7 @@ grows `v`.
 Note that if you made sure beforehand that the capacity of `v` is sufficient for the addition of these elements, consider
 calling [`unsafe_prepend!`](@ref) instead, which avoids the length check.
 """
-@inline function Base.prepend!(v::FastVec{V}, els) where {V}
+@inline function Base.prepend!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
     length(v.data) < v.len && resize!(v.data, overallocation(v.len))
@@ -203,7 +236,7 @@ Prepends all items in `els` to the beginning of `v`, increasing the length `v` b
 This function assumes that the internal buffer of `v` holds enough space to add at least all elements in `els`; if this is not
 the case, it will lead to memory corruption. Call [`prepend!`](@ref) instead if you cannot guarantee the necessary buffer size.
 """
-@inline function unsafe_prepend!(v::FastVec{V}, els) where {V}
+@inline function unsafe_prepend!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
     @assert(length(v.data) ≥ v.len)
@@ -219,6 +252,66 @@ end
     @inbounds copyto!(v.data, els.len +1, v.data, 1, oldlen) # must always work correctly with overlapping
     @inbounds copyto!(v.data, 1, els.data, 1, els.len)
     return v
+end
+
+"""
+    splice!(v::FastVec, index::Integer, [replacement]) -> item
+
+Remove the item at the given index, and return the removed item. Subsequent items are shifted left to fill the resulting gap.
+If specified, replacement values from an ordered collection will be spliced in place of the removed item.
+No unsafe version of this function exists.
+To insert `replacement` before an index `n` without removing any items, use `splice!(collection, n:n-1, replacement)`.
+"""
+function Base.splice!(v::FastVec, i::Integer, ins=Base._default_splice)
+    x = v[i]
+    m = length(ins)
+    @inbounds if m == 0
+        deleteat!(v, i)
+    elseif m == 1
+        v.data[i] = first(ins)
+    else
+        v.len += m -1
+        length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+        copyto!(v.data, i + m, v.data, i +1, v.len - m - i +1)
+        k = 0
+        for x in ins
+            v.data[i+k] = x
+            k += 1
+        end
+    end
+    return x
+end
+
+function Base.splice!(v::FastVec, r::AbstractUnitRange{<:Integer}, ins=Base._default_splice)
+    x = v[r]
+    m = length(ins)
+    if m == 0
+        deleteat!(v, r)
+        return x
+    end
+
+    n = v.len
+    f = first(r)
+    l = last(r)
+    d = length(r)
+
+    @inbounds if m < d
+        delta = d - m
+        copyto!(v.data, l - delta +1, v.data, l +1, n - f - delta)
+        v.len -= delta
+    elseif m > d
+        delta = m - d
+        v.len += delta
+        length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+        copyto!(v.data, l + delta +1, v.data, l +1, n - l)
+    end
+
+    k = 0
+    @inbounds for y in ins
+        v.data[f+k] = y
+        k += 1
+    end
+    return x
 end
 
 """
@@ -279,6 +372,32 @@ will be increased to exactly `n`) and sets the length of the vector to `n`.
 function Base.resize!(v::FastVec, n::Integer)
     n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
     v.len = n
+    return v
+end
+
+"""
+    deleteat!(a::FastVec, i)
+
+Remove the item at the given `i` and return the modified `a`. Subsequent items are shifted to fill the resulting gap. The
+internal buffer size is not modified. The index must be either an integer or a unit range.
+"""
+function Base.deleteat!(v::FastVec, i::Integer)
+    @inbounds for j in i:v.len-1
+        v.data[j] = v.data[j+1]
+    end
+    v.len -= 1
+    return v
+end
+
+Base.@propagate_inbounds function Base.deleteat!(v::FastVec, i::AbstractUnitRange)
+    copyto!(v.data, first(i), v.data, last(i) +1, v.len - last(i))
+    v.len -= length(i)
+    return v
+end
+
+@inline function Base._deleteend!(v::FastVec, delta::Integer)
+    @boundscheck checkbounds(v, v.len - delta +1)
+    v.len -= delta
     return v
 end
 
