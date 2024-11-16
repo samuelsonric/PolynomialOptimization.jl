@@ -37,6 +37,27 @@ Base.size(v::FastVec) = (v.len,)
 Base.strides(v::FastVec) = strides(v.data)
 Base.elsize(v::FastVec) = Base.elsize(v.data)
 
+iterate(v::FastVec, i=1) = (@inline; (i % UInt) - 1 < length(v) ? (@inbounds v.data[i], i + 1) : nothing)
+
+# Similar to unsafe_cast in SimplePolynomials, but we only want to skip the checks if our given type is not larger than the
+# target, because only then we can ensure validity base on the nonnegativity of the length.
+unsafe_upcast(T::Type{<:Signed}, x::Signed) = T(x)
+unsafe_upcast(T::Type{<:Unsigned}, x::Unsigned) = T(x)
+function unsafe_upcast(T::Type{S}, x::Unsigned) where {S<:Signed} # assume the unsigned value does not have the top bit set
+    if sizeof(T) == sizeof(x)
+        return Core.bitcast(T, x)
+    else
+        return T(x)
+    end
+end
+function unsafe_upcast(T::Type{U}, x::Signed) where {U<:Unsigned} # assume the signed value is not negative
+    if sizeof(T) == sizeof(x)
+        return Core.bitcast(T, x)
+    else
+        return T(x)
+    end
+end
+
 Base.@propagate_inbounds function Base.getindex(v::FastVec, i::Int)
     @boundscheck checkbounds(v, i)
     @inbounds return v.data[i]
@@ -57,8 +78,8 @@ Base.length(v::FastVec) = v.len
 Changes the size of the internal buffer that is kept available to quickly manage pushing into the vector. If len is smaller
 than the actual length of this vector, this is a no-op.
 """
-function Base.sizehint!(v::FastVec, len::Integer)
-    len ≥ length(v.data) && resize!(v.data, len)
+@inline function Base.sizehint!(v::FastVec, len::Integer)
+    len ≥ length(v.data) && resize!(v.data, unsafe_upcast(UInt, len))
     return v
 end
 
@@ -67,7 +88,7 @@ end
 
 Clears the vector without freeing the internal buffer.
 """
-function Base.empty!(v::FastVec)
+@inline function Base.empty!(v::FastVec)
     v.len = 0
     return v
 end
@@ -78,9 +99,9 @@ end
 Prepares pushing (or appending) at last `new_items` in the future, in one or multiple calls. This ensures that the internal
 buffer is large enough to hold all the new items that will be pushed without allocations in between.
 """
-function prepare_push!(v::FastVec, new_items::Integer)
-    new_items ≥ 0 || error("prepare_push! expects a positive number of items")
-    length(v.data) - v.len < new_items && resize!(v.data, overallocation(v.len + new_items))
+@inline function prepare_push!(v::FastVec, new_items::Integer)
+    @boundscheck(new_items ≥ 0 || error("prepare_push! expects a positive number of items"))
+    length(v.data) - v.len < new_items && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len + new_items)))
     return v
 end
 
@@ -94,7 +115,7 @@ Note that if you made sure beforehand that the capacity of `v` is sufficient for
 @inline function Base.push!(v::FastVec{V}, el) where {V}
     elV = convert(V, el)
     v.len += 1
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(v.len)))
     @inbounds v.data[v.len] = elV
     return v
 end
@@ -134,7 +155,7 @@ Note that if you made sure beforehand that the capacity of `v` is sufficient for
     @boundscheck(1 ≤ index ≤ v.len +1 || throw(BoundsError(v, index)))
     elV = convert(V, el)
     v.len += 1
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds copyto!(v.data, index +1, v.data, index, v.len - index)
     @inbounds v.data[index] = el
     return v
@@ -167,7 +188,7 @@ calling [`unsafe_append!`](@ref) instead, which avoids the length check.
 @inline function Base.append!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds copyto!(v.data, oldlen +1, els, 1, length(els))
     return v
 end
@@ -175,7 +196,7 @@ end
 @inline function Base.append!(v::FastVec{V}, els::FastVec{V}) where {V}
     oldlen = v.len
     v.len += els.len
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds copyto!(v.data, oldlen +1, els.data, 1, els.len)
     return v
 end
@@ -214,7 +235,7 @@ calling [`unsafe_prepend!`](@ref) instead, which avoids the length check.
 @inline function Base.prepend!(v::FastVec, els)
     oldlen = v.len
     v.len += length(els)
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds copyto!(v.data, length(els) +1, v.data, 1, oldlen) # must always work correctly with overlapping
     @inbounds copyto!(v.data, els)
     return v
@@ -223,7 +244,7 @@ end
 @inline function Base.prepend!(v::FastVec{V}, els::FastVec{V}) where {V}
     oldlen = v.len
     v.len += els.len
-    length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds copyto!(v.data, els.len +1, v.data, 1, oldlen) # must always work correctly with overlapping
     @inbounds copyto!(v.data, 1, els.data, 1, els.len)
     return v
@@ -271,7 +292,7 @@ function Base.splice!(v::FastVec, i::Integer, ins=Base._default_splice)
         v.data[i] = first(ins)
     else
         v.len += m -1
-        length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+        length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
         copyto!(v.data, i + m, v.data, i +1, v.len - m - i +1)
         k = 0
         for x in ins
@@ -302,7 +323,7 @@ function Base.splice!(v::FastVec, r::AbstractUnitRange{<:Integer}, ins=Base._def
     elseif m > d
         delta = m - d
         v.len += delta
-        length(v.data) < v.len && resize!(v.data, overallocation(v.len))
+        length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
         copyto!(v.data, l + delta +1, v.data, l +1, n - l)
     end
 
@@ -370,7 +391,7 @@ Ensures that the internal buffer can hold at least `n` items (meaning that large
 will be increased to exactly `n`) and sets the length of the vector to `n`.
 """
 function Base.resize!(v::FastVec, n::Integer)
-    n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
+    n > v.len && resize!(v.data, unsafe_upcast(UInt, n)) # assume we know what we are doing, so no overallocation here
     v.len = n
     return v
 end
@@ -408,7 +429,7 @@ end
 Returns the `Vector` representation that internally underlies the FastVec instance. This function should only be called when no
 further operations on the FastVec itself are carried out.
 """
-finish!(v::FastVec) = resize!(v.data, v.len)
+finish!(v::FastVec) = resize!(v.data, unsafe_upcast(UInt, v.len))
 
 # This is how Julia internally grows vectors:
 # size_t overallocation(size_t maxsize)
