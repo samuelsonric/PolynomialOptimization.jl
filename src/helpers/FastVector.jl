@@ -327,9 +327,9 @@ function Base.splice!(v::FastVec, r::AbstractUnitRange{<:Integer}, ins=Base._def
         copyto!(v.data, l + delta +1, v.data, l +1, n - l)
     end
 
-    k = 0
+    k = f
     @inbounds for y in ins
-        v.data[f+k] = y
+        v.data[k] = y
         k += 1
     end
     return x
