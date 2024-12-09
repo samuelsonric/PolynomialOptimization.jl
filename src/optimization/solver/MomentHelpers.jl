@@ -2,17 +2,60 @@ export moment_add_matrix!, moment_add_equality!, moment_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
 
+function to_soc!(indices, values, lens, supports_rotated)
+    @assert(length(lens) ≥ 2)
+    @inbounds if supports_rotated
+        for j in length(lens):-1:3
+            iszero(lens[j]) && deleteat!(lens, j)
+        end
+    else
+        range₁ = 1:lens[1]
+        range₂ = lens[1]+1:lens[1]+lens[2]
+        prevlen = last(range₂)
+        inds = @views count_uniques(indices[range₁], indices[range₂])
+        total = 2inds
+        if total > prevlen
+            Base._growat!(indices, prevlen +1, total - prevlen)
+            Base._growat!(values, prevlen +1, total - prevlen)
+        end
+        # we must make a copy to avoid potential overwrites, doesn't matter in which direction we work
+        oldinds = indices[1:prevlen]
+        oldvals = values[1:prevlen]
+        count_uniques(@view(oldinds[range₁]), @view(oldinds[range₂]), let oldinds=oldinds, oldvals=oldvals
+            (o₁, i₁, i₂) -> @inbounds begin
+                if ismissing(i₁)
+                    indices[o₁+inds] = indices[o₁] = oldinds[lens[1]+i₂]
+                    values[o₁+inds] = -(values[o₁] = oldvals[lens[1]+i₂])
+                elseif ismissing(i₂)
+                    indices[o₁+inds] = indices[o₁] = oldinds[i₁]
+                    values[o₁+inds] = values[o₁] = oldvals[i₁]
+                else
+                    indices[o₁+inds] = indices[o₁] = oldinds[i₁]
+                    values[o₁] = oldvals[i₁] + oldvals[lens[1]+i₂]
+                    values[o₁+inds] = oldvals[i₁] - oldvals[lens[1]+i₂]
+                end
+            end
+        end)
+        lens[1] = inds
+        lens[2] = inds
+        for j in length(lens):-1:2
+            iszero(lens[j]) && deleteat!(lens, j)
+        end
+    end
+    return IndvalsIterator(indices, values, lens)
+end
+
 # generic moment matrix constraint with
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextype{Tri},
-    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}) where {Tri}
+    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::AbstractRepresentationMethod) where {Tri}
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
-    if dim == 1 || (dim == 2 && supports_quadratic(state) !== SOLVER_QUADRATIC_NONE)
+    if dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state)))
         matrix_indexing = false
         tri = :U # we always create the data in U format; this ensures the scaling is already taken care of
     elseif indextype isa PSDIndextypeMatrixCartesian
@@ -41,12 +84,12 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
     end
     # introduce a method barrier to fix the potentially unknown eltype of lens make sure "dynamic" constants can be folded
     moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex), lg,
-        block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values))
+        block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values), representation)
 end
 
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
-    ::Val{complex}, lg, block_size, dim, data) where {Tri,tri,matrix_indexing,complex}
+    ::Val{complex}, lg, block_size, dim, data, representation::AbstractRepresentationMethod) where {Tri,tri,matrix_indexing,complex}
     if matrix_indexing
         rows, indices, values = data
         i = zero(T)
@@ -58,14 +101,15 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
         # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying the
         # left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
         if dim == 2
+            rquad = supports_rotated_quadratic(state)
             quad = supports_quadratic(state)
-            if quad === SOLVER_QUADRATIC_SOC
-                sqrt2 = V(2)
+            if !rquad && quad
+                scaling = V(2)
             else
-                sqrt2 = sqrt(V(2))
+                scaling = sqrt(V(2))
             end
         else
-            sqrt2 = sqrt(V(2))
+            scaling = sqrt(V(2))
         end
         lens, indices, values = data
         i = 1
@@ -92,7 +136,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                             mon_constr = monomial(term_constr)
                             coeff_constr = coefficient(term_constr)
                             if tri !== :F && !matrix_indexing && !ondiag
-                                coeff_constr *= sqrt2
+                                coeff_constr *= scaling
                             end
                             recoeff = real(coeff_constr)
                             imcoeff = imag(coeff_constr)
@@ -164,61 +208,32 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             state, dim, PSDMatrixCartesian{_get_offset(indextype)}(dim, Tri, finish!(rows), finish!(indices), finish!(values))
         )
     else
-        @assert(i == lastindex(lens) +1)
-        @inbounds if dim == 1
-            @assert(length(lens) == 1)
-            add_constr_nonnegative!(state, Indvals(indices, values))
-        elseif dim == 2 && quad !== SOLVER_QUADRATIC_NONE
-            @assert(length(lens) == (complex ? 4 : 3))
-            # Note: indices/values represent the vectorized PSD cone (upper triangle) with off-diagonals already pre-multiplied
-            # by sqrt(2).
-            range1 = 1:lens[1]
-            range2 = last(range1)+1:last(range1)+lens[2]
-            range3 = last(range2)+1:last(range2)+lens[3]
-            indices₁₁ = @view(indices[range1])
-            values₁₁ = @view(values[range1])
-            indicesₒᵣ = @view(indices[range2])
-            valuesₒᵣ = @view(values[range2])
-            fourquads = complex
-            if fourquads
-                indicesₒᵢ = @view(indices[range3])
-                valuesₒᵢ = @view(values[range3])
-                range4 = last(range3)+1:last(range3)+lens[4]
-                indices₂₂ = @view(indices[range4])
-                values₂₂ = @view(values[range4])
-                if all(iszero, valuesₒᵢ)
-                    fourquads = false
-                elseif all(iszero(valuesₒᵣ))
-                    indicesₒᵣ = indicesₒᵢ
-                    valuesₒᵣ = valuesₒᵢ
-                    fourquads = false
+        let indices=finish!(indices), values=finish!(values)
+            # Even if we are complex-valued, DSOS and SDSOS will always work - simply due to the structure of how the data is
+            # aligned.
+            @assert(i == lastindex(lens) +1)
+            @inbounds if dim == 1
+                @assert(length(lens) == 1)
+                add_constr_nonnegative!(state, Indvals(indices, values))
+            elseif dim == 2 && (rquad || quad)
+                @assert(length(lens) == (complex ? 4 : 3))
+                # Note: indices/values represent the vectorized PSD cone (lower triangle) with off-diagonals already
+                # pre-multiplied by sqrt(2). To make this exactly equivalent to a rotated quadratic cone, we must bring the
+                # last element to the second position.
+                @views @unroll for x in (indices, values)
+                    reverse!(x[lens[1]+1:end-lens[end]])
+                    reverse!(x[end-lens[end]+1:end])
+                    reverse!(x[lens[1]+1:end])
                 end
-            else
-                indices₂₂ = @view(indices[range3])
-                values₂₂ = @view(values[range3])
-            end
-            if quad === SOLVER_QUADRATIC_RSOC
-                if !fourquads
-                    add_constr_quadratic!(state, Indvals(indices₁₁, values₁₁), Indvals(indices₂₂, values₂₂),
-                        Indvals(indicesₒᵣ, valuesₒᵣ))
+                if complex
+                    lens[2], lens[3], lens[4] = lens[4], lens[2], lens[3]
                 else
-                    add_constr_quadratic!(state, Indvals(indices₁₁, values₁₁), Indvals(indices₂₂, values₂₂),
-                        Indvals(indicesₒᵣ, valuesₒᵣ), Indvals(indicesₒᵢ, valuesₒᵢ))
+                    lens[2], lens[3] = lens[3], lens[2]
                 end
+                (rquad ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, rquad))
             else
-                if !fourquads
-                    add_constr_quadratic!(state, RSocToSocHelper{true}(indices₁₁, values₁₁, indices₂₂, values₂₂),
-                        RSocToSocHelper{false}(indices₁₁, values₁₁, indices₂₂, values₂₂), Indvals(indicesₒᵣ, valuesₒᵣ))
-                else
-                    add_constr_quadratic!(state, RSocToSocHelper{true}(indices₁₁, values₁₁, indices₂₂, values₂₂),
-                        RSocToSocHelper{false}(indices₁₁, values₁₁, indices₂₂, values₂₂), Indvals(indicesₒᵣ, valuesₒᵣ),
-                        Indvals(indicesₒᵢ, valuesₒᵢ))
-                end
+                (complex ? add_constr_psd_complex! : add_constr_psd!)(state, dim, IndvalsIterator(indices, values, lens))
             end
-        else
-            (complex ? add_constr_psd_complex! : add_constr_psd!)(
-                state, dim, PSDVector(finish!(indices), finish!(values), lens)
-            )
         end
     end
     return
@@ -228,25 +243,25 @@ end
 # complex PSD cone explicitly
 function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} where M<:SimpleMonomial,
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::AbstractPSDIndextype{Tri},
-    ::Tuple{Val{false},Val{false}}) where {Tri}
+    ::Tuple{Val{false},Val{false}}, representation::RepresentationPSD) where {Tri}
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian
     if matrix_indexing
         Tri ∈ (:L, :U) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
-            (Val(false), Val(false)))))
+            (Val(false), Val(false)), representation)))
         tri = :U # we always create the data in U format, as the PSDMatrixCartesian then has to compute the row/col indices
                  # based on the linear index - and the formula is slightly simpler for U.
     else
         Tri ∈ (:L, :U, :F) || throw(MethodError(moment_add_matrix_helper!, (state, T, V, grouping, constraint, indextype,
-            (Val(false), Val(false)))))
+            (Val(false), Val(false))), representation))
         tri = Tri
-        sqrt2 = sqrt(V(2))
+        scaling = sqrt(V(2))
     end
     lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
     dim = lg * block_size
-    if dim == 1 || (dim == 2 && supports_quadratic(state) !== SOLVER_QUADRATIC_NONE)
+    if dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state)))
         # in these cases, we will rewrite the Hermitian PSD cone in terms of linear or quadratic constraints, so break off
-        return moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, (Val(false), Val(true)))
+        return moment_add_matrix_helper!(state, T, V, grouping, constraint, indextype, (Val(false), Val(true)), representation)
     end
     maxlen = maximum(length, constraint, init=0)
     colcount = tri === :F ? 4dim^2 : trisize(2dim)
@@ -292,7 +307,7 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         if tri !== :F && !matrix_indexing && !ondiag
-                            coeff_constr *= sqrt2
+                            coeff_constr *= scaling
                         end
                         recoeff = real(coeff_constr)
                         imcoeff = imag(coeff_constr)
@@ -413,35 +428,38 @@ function moment_add_matrix_helper!(state, T, V, grouping::AbstractVector{M} wher
             end
             fill!(@view(lens[i:end]), zero(eltype(lens)))
 
-            add_constr_psd!(state, 2dim, PSDVector(indices, values, lens))
+            add_constr_psd!(state, 2dim, IndvalsIterator(indices, values, lens))
         end
     end
 end
 
 """
     moment_add_matrix!(state, grouping::SimpleMonomialVector,
-        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}})
+        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
+        representation::AbstractRepresentationMethod=RepresentationPSD())
 
 Parses a constraint in the moment hierarchy with a basis given in `grouping` (this might also be a partial basis due to
 sparsity), premultiplied by `constraint` (which may be the unit polynomial for the moment matrix) and calls the appropriate
-solver functions to set up the problem structure.
+solver functions to set up the problem structure according to `representation`.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
 - [`add_constr_nonnegative!`](@ref)
-- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
 
 Usually, this function does not have to be called explicitly; use [`moment_setup!`](@ref) instead.
 
-See also [`moment_add_equality!`](@ref).
+See also [`moment_add_equality!`](@ref), [`AbstractRepresentationMethod`](@ref).
 """
-moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::Union{P,<:AbstractMatrix{P}}) where {P<:SimplePolynomial} =
-    moment_add_matrix_helper!(
+function moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
+    constraint::Union{P,<:AbstractMatrix{P}}, representation::AbstractRepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
+    representation isa RepresentationSDSOS && supports_quadratic(state) === SOLVER_QUADRATIC_NONE &&
+        error("The solver does not support quadratic cones, so a representation via scaled diagonally-dominant matrices is not possible")
+    return moment_add_matrix_helper!(
         state,
         Base.promote_op(mindex, typeof(state), monomial_type(P)),
         real(coefficient_type(P)),
@@ -449,8 +467,10 @@ moment_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial},
         constraint isa AbstractMatrix ? constraint : ScalarMatrix(constraint),
         psd_indextype(state),
         (Val((length(grouping) == 1 || isreal(grouping)) &&
-             (constraint isa SimplePolynomial || isreal(constraint))), Val(supports_complex_psd(state)))
+             (constraint isa SimplePolynomial || isreal(constraint))), Val(supports_complex_psd(state))),
+        representation
     )
+end
 
 """
     moment_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
@@ -490,10 +510,10 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
                 end
             end
         end
-        # In the real case, we can skip the first i-1 entries as they would lead to duplicates.
-        # In the complex case, we can also skip the first i-1 entries, as they would lead to exact conjugates, which in the
-        # end give rise to the same conditions.
-        for g₂ in Iterators.drop(grouping, iszero(Nc) ? i -1 : i)
+        # In the real case, we can skip the entries behind i as they would lead to duplicates.
+        # In the complex case, we can also skip them, as they would lead to exact conjugates, which in the end give rise to the
+        # same conditions (but note that i is already handled above).
+        for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
             # We don't use mindex, as this can have unintended side-effects on the solver state (such as creating a
             # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
             # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
@@ -609,7 +629,7 @@ function moment_add_equality!(state, grouping::AbstractVector{M} where {M<:Simpl
 end
 
 """
-    moment_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings)
+    moment_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
 
 Sets up all the necessary moment matrices, variables, constraints, and objective of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
@@ -618,8 +638,8 @@ second of the equality, the third of the inequality, and the fourth of the PSD c
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)
 - [`add_constr_nonnegative!`](@ref)
-- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to
-  [`SOLVER_QUADRATIC_SOC`](@ref SolverQuadratic) or [`SOLVER_QUADRATIC_RSOC`](@ref SolverQuadratic))
+- [`add_constr_rotated_quadratic!`](@ref) (optional, then set [`supports_rotated_quadratic`](@ref) to `true`)
+- [`add_constr_quadratic!`](@ref) (optional, then set [`supports_quadratic`](@ref) to `true`)
 - [`add_constr_psd!`](@ref)
 - [`add_constr_psd_complex!`](@ref) (optional, then set [`supports_complex_psd`](@ref) to `true`)
 - [`psd_indextype`](@ref)
@@ -638,9 +658,24 @@ The following methods must be implemented by a solver to make this function work
     This function is guaranteed to set up the fixed constraints first, then followed by all the others. However, the order of
     nonnegative, quadratic, and PSD constraints is undefined (depends on the problem).
 
-See also [`sos_setup!`](@ref), [`moment_add_matrix!`](@ref), [`moment_add_equality!`](@ref).
+!!! info "Representation"
+    This function may also be used to describe simplified cones such as the (scaled) diagonally dominant one. The
+    `representation` parameter can be used to define a representation that is employed for the individual groupings. This may
+    either be an instance of an [`AbstractRepresentationMethod`](@ref) - which requires the method to be independent of the
+    dimension of the grouping - or a callable. In the latter case, it will be passed as a first parameter an identifier[^3] of
+    the current conic variable, and as a second parameter the side dimension of its matrix. The method must then return an
+    [`AbstractRepresentationMethod`](@ref) instance.
+
+    [^3]: This identifier will be a tuple, where the first element is a symbol - either `:objective`, `:nonneg`, or `:psd` - to
+          indicate the general reason why the variable is there. The second element is an `Int` denoting the index of the
+          constraint (and will be undefined for the objective, but still present to avoid extra compilataion). The last element
+          is an `Int` denoting the index of the grouping within the constraint/objective.
+
+See also [`sos_setup!`](@ref), [`moment_add_matrix!`](@ref), [`moment_add_equality!`](@ref),
+[`AbstractRepresentationMethod`](@ref).
 """
-function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings) where {P}
+function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings;
+    representation::Union{<:AbstractRepresentationMethod,<:Base.Callable}=RepresentationPSD()) where {P}
     problem = poly_problem(relaxation)
     T = Base.promote_op(mindex, typeof(state), monomial_type(P))
     V = real(coefficient_type(problem.objective))
@@ -696,18 +731,25 @@ function moment_setup!(state, relaxation::AbstractRelaxation{<:Problem{P}}, grou
 
     # SOS term for objective
     constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
-    for grouping in groupings.obj
-        moment_add_matrix!(state, collect_grouping(grouping), constantP)
+    for (i, grouping) in enumerate(groupings.obj)
+        g = collect_grouping(grouping)
+        moment_add_matrix!(state, g, constantP,
+            representation isa AbstractRepresentationMethod ? representation : representation((:objective, 0, i), length(g)))
     end
     # localizing matrices
-    for (groupingsᵢ, constrᵢ) in zip(groupings.nonnegs, problem.constr_nonneg)
-        for grouping in groupingsᵢ
-            moment_add_matrix!(state, collect_grouping(grouping), constrᵢ)
+    for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
+        for (j, grouping) in enumerate(groupingsᵢ)
+            g = collect_grouping(grouping)
+            moment_add_matrix!(state, g, constrᵢ,
+                representation isa AbstractRepresentationMethod ? representation : representation((:nonneg, i, j), length(g)))
         end
     end
-    for (groupingsᵢ, constrᵢ) in zip(groupings.psds, problem.constr_psd)
-        for grouping in groupingsᵢ
-            moment_add_matrix!(state, collect_grouping(grouping), constrᵢ)
+    for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.psds, problem.constr_psd))
+        for (j, grouping) in enumerate(groupingsᵢ)
+            g = collect_grouping(grouping)
+            moment_add_matrix!(state, g, constrᵢ,
+                representation isa AbstractRepresentationMethod ? representation :
+                                                                  representation((:psd, i, j), length(g) * size(constrᵢ, 1)))
         end
     end
 

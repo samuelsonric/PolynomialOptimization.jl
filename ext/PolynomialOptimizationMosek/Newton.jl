@@ -13,7 +13,8 @@ let
         end
     end
     for checkall in (false, true)
-        @eval function Newton.preproc(::Val{:Mosek}, mons, vertexindices::$(checkall ? :(Val{:all}) : :(Any)), verbose, singlethread; parameters...)
+        @eval function Newton.preproc(::Val{:Mosek}, mons, vertexindices::$(checkall ? :(Val{:all}) : :(Any)), verbose,
+            singlethread; parameters...)
             nv = nvariables(mons)
             nc = length(mons)
             nvertices = $(checkall ? :nc : :(length(vertexindices)))
@@ -155,6 +156,7 @@ function Newton.prepare(::Val{:Mosek}, mons, num, verbose; parameters...)
             # ourselves. Let's assume that at least a second task can be created.
             mem = @allocdiff begin
                 secondtask = Mosek.Task(task)
+                putintparam(secondtask, MSK_IPAR_NUM_THREADS, 1)
                 optimize(secondtask)
             end
             if mem ≤ 0

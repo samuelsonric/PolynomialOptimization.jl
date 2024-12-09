@@ -58,6 +58,10 @@ CurrentModule = PolynomialOptimization
 ```
 ```@docs
 poly_optimize
+Solver.AbstractRepresentationMethod
+RepresentationPSD
+RepresentationSDSOS
+RepresentationDSOS
 Result
 poly_problem(::Result)
 optimality_certificate
@@ -66,6 +70,7 @@ poly_solutions
 poly_solution_badness
 moment_matrix
 MomentVector
+MomentAssociation
 ```
 
 ## Newton polytope construction (manually)

@@ -3,7 +3,7 @@ module Relaxation
 using ..SimplePolynomials, .SimplePolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector
 import StatsBase, Graphs
-using ..PolynomialOptimization: @assert, @inbounds, Problem, @verbose_info, issubset_sorted
+using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted
 import ..PolynomialOptimization: poly_problem, iterate!
 
 export AbstractRelaxation, basis, groupings, iterate!
@@ -106,7 +106,7 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     print(io, "\nBlock groupings\n===============\nObjective: ")
     _show_groupings(io, groupings.obj, groupings.var_cliques)
     for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
-        block = getproperty(groupings, f)::Vector{<:Vector{SimpleMonomialVector{Nr,Nc,I}}}
+        block = getproperty(groupings, f)::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
         if !isempty(block)
             for (i, constr) in enumerate(block)
                 print(io, "\n", name, " constraint #", i, ": ")
@@ -249,15 +249,18 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
         cliquesizes_lin = [Dict{Int,Int}() for _ in 1:length(groups.var_cliques)]
         for grouping in groups.obj
             cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
-            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
+            l = length(grouping)
+            cliquesize[l] = get!(cliquesize, l, 0) +1
         end
         for constr in groups.zeros, grouping in constr
             cliquesize = cliquesizes_lin[_findclique(grouping, groups.var_cliques)]
-            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
+            l = length(grouping)
+            cliquesize[l] = get!(cliquesize, l, 0) +1
         end
         for constrs in (groups.nonnegs, groups.psds), constr in constrs, grouping in constr
             cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
-            cliquesize[length(grouping)] = get!(cliquesize, length(grouping), 0) +1
+            l = length(grouping)
+            cliquesize[l] = get!(cliquesize, l, 0) +1
         end
         for (i, (va, size_psd, size_lin)) in enumerate(zip(groups.var_cliques, cliquesizes_psd, cliquesizes_lin))
             print(io, "\n> Clique #", i, ": ", join(va, ", "))
@@ -304,9 +307,9 @@ See also [`poly_problem`](@ref).
 """
 function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
     gr = groupings(relaxation)
-    subdegree = v -> maximum(maxdegree_complex, v)
+    subdegree = v -> maximum(maxdegree_complex, v, init=0)
     return max(
-        maximum(maxdegree_complex, gr.obj),
+        maximum(maxdegree_complex, gr.obj, init=0),
         maximum(subdegree, gr.zeros, init=0),
         maximum(subdegree, gr.nonnegs, init=0),
         maximum(subdegree, gr.psds, init=0)

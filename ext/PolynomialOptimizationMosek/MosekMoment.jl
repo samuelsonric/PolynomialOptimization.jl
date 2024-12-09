@@ -1,54 +1,96 @@
 mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K}
     const task::Mosek.Task
-    num_vars::Int32
+    num_solver_vars::Int32 # total number of variables available in the solver
+    num_used_vars::Int32 # number of variables already used for something (might include scratch variables)
     num_cons::Int32
     num_afes::Int64
     const mon_to_solver::Dict{FastKey{K},Int32}
 
     StateMoment{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
-        task, zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
+        task, zero(Int32), zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
     )
 end
 
 function Base.append!(state::StateMoment, key)
-    if state.num_vars == length(state.mon_to_solver)
-        newnum = overallocation(state.num_vars + one(state.num_vars))
-        appendvars(state.task, newnum - state.num_vars)
-        state.num_vars = newnum
+    if state.num_used_vars == state.num_solver_vars
+        newnum = overallocation(state.num_solver_vars + one(Int32))
+        appendvars(state.task, newnum - state.num_solver_vars)
+        state.num_solver_vars = newnum
     end
-    return state.mon_to_solver[FastKey(key)] = Int32(length(state.mon_to_solver))
+    return state.mon_to_solver[FastKey(key)] = let uv=state.num_used_vars
+        state.num_used_vars += one(Int32)
+        uv
+    end
 end
 
-Solver.supports_quadratic(::StateMoment) = SOLVER_QUADRATIC_RSOC
+Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
-function Solver.add_constr_nonnegative!(state::StateMoment, indvals::AbstractIndvals{Int32,Float64})
+function Solver.add_var_slack!(state::StateMoment, num::Int)
+    if state.num_solver_vars + num > state.num_solver_vars
+        newnum = overallocation(state.num_solver_vars + Int32(num))
+        appendvars(state.task, newnum - state.num_solver_vars)
+        state.num_solver_vars = newnum
+    end
+    result = state.num_used_vars:state.num_used_vars+Int32(num -1)
+    state.num_used_vars += num
+    return result
+end
+
+function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Int32,Float64})
     appendafes(state.task, 1)
     Mosek.@MSK_putafefrow(state.task.task, state.num_afes, length(indvals), indvals.indices, indvals.values)
-    Mosek.@MSK_appendacc(state.task.task, 0, 1, StackVec(state.num_afes), StackVec(0.0))
+    Mosek.@MSK_appendacc(state.task.task, 0, 1, Ref(state.num_afes), C_NULL)
     state.num_afes += 1
     return
 end
 
-function Solver.add_constr_quadratic!(state::StateMoment, indvals::AbstractIndvals{Int32,Float64}...)
+function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64})
+    N = length(indvals)
+    appendafes(state.task, N)
+    ptrrow = Vector{Int64}(undef, N)
+    ptrrow[1] = 0
+    @inbounds for (i, len) in zip(2:N, indvals.lens)
+        ptrrow[i] = ptrrow[i-1] + len
+    end
+    Mosek.@MSK_putafefrowlist(state.task.task, N, collect(state.num_afes:state.num_afes+N-1),
+        convert(AbstractVector{Int32}, indvals.lens), ptrrow, length(indvals.indices), indvals.indices, indvals.values)
+    dom = Ref{Int64}()
+    Mosek.@MSK_appendrplusdomain(state.task.task, N, dom)
+    Mosek.@MSK_appendaccseq(state.task.task, dom[], N, state.num_afes, C_NULL)
+    state.num_afes += N
+    return
+end
+
+function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}, ::Val{rotated}=Val(false)) where {rotated}
     conedim = length(indvals)
     appendafes(state.task, conedim)
     for indval in indvals
         Mosek.@MSK_putafefrow(state.task.task, state.num_afes, length(indval), indval.indices, indval.values)
         state.num_afes += 1
     end
-    if length(indvals) == 3
+    # TODO: benchmark which approach is better, subsequence putafefrow as here or one putafefrowlist with preprocessing
+    if rotated && length(indvals) == 3
         Mosek.@MSK_appendaccseq(state.task.task, 1, 3, state.num_afes -3, C_NULL)
-    elseif length(indvals) == 4
+    elseif rotated && length(indvals) == 4
         Mosek.@MSK_appendaccseq(state.task.task, 2, 4, state.num_afes -4, C_NULL)
     else
-        error("Unsupported length of quadratic cone")
+        dom = Ref{Int64}()
+        if rotated
+            Mosek.@MSK_appendrquadraticconedomain(state.task.task, N, dom)
+        else
+            Mosek.@MSK_appendquadraticconedomain(state.task.task, N, dom)
+        end
+        Mosek.@MSK_appendaccseq(state.task.task, dom[], N, state.num_afes - N, C_NULL)
     end
     return
 end
 
-function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDVector{Int32,Float64})
+Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}) =
+    add_constr_quadratic!(state, indvals, Val(true))
+
+function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::IndvalsIterator{Int32,Float64})
     n = trisize(dim)
     appendafes(state.task, n)
     curafe = state.num_afes
@@ -75,20 +117,20 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     return
 end
 
-function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::AbstractIndvals{Int32,Float64}, rhs::Float64)
+function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::Indvals{Int32,Float64}, rhs::Float64)
     Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indvals), indvals.indices, indvals.values)
     iszero(rhs) || Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_FX, rhs, rhs)
     state.num_cons += 1
     return
 end
 
-function Solver.fix_objective!(state::StateMoment, indvals::AbstractIndvals{Int32,Float64})
+function Solver.fix_objective!(state::StateMoment, indvals::Indvals{Int32,Float64})
     Mosek.@MSK_putclist(state.task.task, length(indvals), indvals.indices, indvals.values)
     return
 end
 
 function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    verbose::Bool=false, customize::Base.Callable=_ -> nothing, parameters...)
+    representation, verbose::Bool=false, customize::Base.Callable=_ -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     try
         setup_time = @elapsed begin
@@ -105,8 +147,8 @@ function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxatio
             appendrquadraticconedomain(task, 4)
 
             state = StateMoment{K}(task)
-            moment_setup!(state, relaxation, groupings)
-            Mosek.@MSK_putvarboundsliceconst(task.task, 0, length(state.mon_to_solver), MSK_BK_FR.value, -Inf, Inf)
+            moment_setup!(state, relaxation, groupings; representation)
+            Mosek.@MSK_putvarboundsliceconst(task.task, 0, state.num_used_vars, MSK_BK_FR.value, -Inf, Inf)
             customize(state)
         end
         @verbose_info("Setup complete in ", setup_time, " seconds")
@@ -114,7 +156,7 @@ function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxatio
         optimize(task)
         @verbose_info("Optimization complete, retrieving moments")
 
-        x = Vector{Float64}(undef, length(state.mon_to_solver))
+        x = Vector{Float64}(undef, state.num_used_vars)
         Mosek.@MSK_getxxslice(task.task, MSK_SOL_ITR.value, 0, length(x), x)
         return getsolsta(task, MSK_SOL_ITR), getprimalobj(task, MSK_SOL_ITR), MomentVector(relaxation, x, state)
     finally

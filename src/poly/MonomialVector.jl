@@ -282,7 +282,7 @@ function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed,V,<:SimpleMonomia
     elseif E <: Tuple{AbstractExponents,AbstractUnitRange}
         return Indexed ? ((mi.mv.indices[begin], v), (mi.mv.indices[begin], v, length(mi.mv) -1)) : (v, (v, length(mi.mv) -1))
     elseif Iterate
-        return (Indexed ? (mi.mv.indices[begin], v) : v), (v, I(2), 1, length(mi.mv) -1)
+        return (Indexed ? (mi.mv.indices[begin], v) : v), (v, mi.mv.indices[begin], 2, length(mi.mv) -1)
     else
         return Indexed ? ((mi.mv.indices[begin], v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
     end
@@ -303,16 +303,15 @@ function Base.iterate(mi::SimpleMonomialVectorIterator{true}, (index, state, rem
     @assert(success)
     return (index + one(index), state), (index + one(index), state, remaining -1)
 end
-function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, index, internal, remaining)::Tuple{AbstractVector{Int},Integer,Int,Int}) where {Indexed}
+function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, previndex, internal, remaining)::Tuple{AbstractVector{Int},Integer,Int,Int}) where {Indexed}
     iszero(remaining) && return nothing
-    @inbounds while true
-        internal += 1
+    index = mi.mv.indices[internal]
+    @inbounds for _ in previndex+one(previndex):index
+        previndex += 1
         success = iterate!(unsafe, state, mi.mv.e)
         @assert(success)
-        mi.mv.indices[internal] < index || break
     end
-    index = mi.mv.indices[internal]
-    return (Indexed ? (index, state) : state), (state, index + one(index), internal, remaining -1)
+    return (Indexed ? (index, state) : state), (state, index, internal +1, remaining -1)
 end
 function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, index, remaining)::Tuple{AbstractVector{Int},Int,Int}) where {Indexed}
     iszero(remaining) && return nothing
