@@ -115,7 +115,7 @@ Note that if you made sure beforehand that the capacity of `v` is sufficient for
 @inline function Base.push!(v::FastVec{V}, el) where {V}
     elV = convert(V, el)
     v.len += 1
-    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(v.len)))
+    length(v.data) < v.len && resize!(v.data, overallocation(unsafe_upcast(UInt, v.len)))
     @inbounds v.data[v.len] = elV
     return v
 end
