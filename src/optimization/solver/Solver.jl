@@ -42,8 +42,8 @@ end
 
 include("./Helpers.jl")
 include("./Interface.jl")
-include("./MomentHelpers.jl")
 include("./SOSHelpers.jl")
+include("./MomentHelpers.jl")
 include("./AbstractAPISolver.jl")
 include("./AbstractSparseMatrixSolver.jl")
 

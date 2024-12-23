@@ -1,4 +1,4 @@
-mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K}
+mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     const task::Mosek.Task
     num_solver_vars::Int32 # total number of variables available in the solver
     num_used_vars::Int32 # number of variables already used for something (might include scratch variables)

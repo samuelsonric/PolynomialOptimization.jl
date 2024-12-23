@@ -1,114 +1,122 @@
-export mindex, supports_rotated_quadratic, supports_quadratic, supports_lnorm, supports_lnorm_complex, supports_psd_complex,
-    supports_dd, supports_dd_complex, Indvals, psd_indextype, PSDIndextypeMatrixCartesian, PSDMatrixCartesian,
-    PSDIndextypeVector, IndvalsIterator, extract_moments
+export AbstractSolver, mindex, supports_rotated_quadratic, supports_quadratic, supports_lnorm, supports_lnorm_complex,
+    supports_psd_complex, supports_dd, supports_dd_complex, Indvals, psd_indextype, PSDIndextypeMatrixCartesian,
+    PSDMatrixCartesian, PSDIndextypeVector, IndvalsIterator, extract_moments
 
 """
-    mindex(state, monomials::SimpleMonomialOrConj...)
+    AbstractSolver{T,V<:Real}
+
+Abstract supertype for any solver state. `T` is the type that is returned by calling [`mindex`](@ref) with such a state; `V` is
+the type of the coefficients used in the solver. Using the default implementation for [`mindex`](@ref), `T` will be `UInt`.
+Most likely, `V` will be `Float64`.
+"""
+abstract type AbstractSolver{T,V<:Real} end
+
+"""
+    mindex(::AbstractSolver{T}, monomials::SimpleMonomialOrConj...)::T
 
 Calculates the index that the product of all monomials will have in the SDP represented by `state`.
 The default implementation calculates the one-based monomial index according to a dense deglex order and returns an `UInt`.
-Make sure that the return value of this function can always be inferred using `promote_op`.
 The returned index is arbitrary as long as it is unique for the total monomial.
 """
-@inline mindex(_, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc} =
-    monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)
+@inline mindex(::AbstractSolver{T}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc} =
+    monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)::T
 
 @doc raw"""
-    supports_rotated_quadratic(state)
+    supports_rotated_quadratic(::AbstractSolver)
 
 Indicates the solver support for rotated quadratic cones: if `true`, the rotated second-order cone
 ``2x_1x_2 \geq \sum_{i \geq 3} x_i^2`` is supported.
 The default implementation returns `false`.
 """
-supports_rotated_quadratic(state) = false
+supports_rotated_quadratic(::AbstractSolver) = false
 
 @doc raw"""
-    supports_quadratic(state)
+    supports_quadratic(::AbstractSolver)
 
 Indicates the solver support for the quadratic cone: if `true`, the second-order cone ``x_1^2 \geq \\sum_{i \geq 2} x_i^2``
 is supported.
 The default implementation returns the same value as [`supports_rotated_quadratic`](@ref).
 """
-supports_quadratic(state) = supports_rotated_quadratic(state)
+supports_quadratic(state::AbstractSolver) = supports_rotated_quadratic(state)
 
 """
-    supports_psd_complex(state)
+    supports_psd_complex(::AbstractSolver)
 
 This function indicates whether the solver natively supports a complex-valued PSD cone. If it returns `false` (default), the
 complex-valued PSD constraints will be rewritten into real-valued PSD constraints; this is completely transparent for the
 solver. If the function returns `true`, the solver must additionally implement [`add_var_psd_complex!`](@ref) and
 [`add_constr_psd_complex!`](@ref).
 """
-supports_psd_complex(_) = false
+supports_psd_complex(::AbstractSolver) = false
 
 @doc raw"""
-    supports_dd(state)
+    supports_dd(::AbstractSolver)
 
 This function indicates whether the solver natively supports a diagonally-dominant cone (or its dual for the moment case).
 If it returns `false` (default), the constraint will be rewritten in terms of multiple ``\ell_\infty``/``\ell_1`` norm
-constraints (if supported, see [`supports_lnorm`](@ref))
-or linear constraints.
+constraints (if supported, see [`supports_lnorm`](@ref)), together with slack variables and equality constraints. If these
+``\ell``-norm constraints are also not supported, linear constraints will be used.
 """
-supports_dd(_) = false
+supports_dd(::AbstractSolver) = false
 
 @doc raw"""
-    supports_dd_complex(state)
+    supports_dd_complex(::AbstractSolver)
 
 This function indicates whether the solver natively supports a complex-valued diagonally-dominant cone (or its dual for the
 moment case). If it returns `false` (default), the constraint will be rewritten in terms of quadratic constraints (if
 supported, see [`supports_quadratic`](@ref)) or multiple ``\ell_\infty``/``\ell_1`` norm constraints (if supported, see
 [`supports_lnorm_complex`](@ref)).
 """
-supports_dd_complex(_) = false
+supports_dd_complex(::AbstractSolver) = false
 
 @doc raw"""
-    supports_lnorm(state)
+    supports_lnorm(::AbstractSolver)
 
 Indicates the solver support for ``\ell_\infty`` (in the moment case) and ``\ell_1`` (in the SOS case) norm cones: if `true`,
 the cone ``x_1 \geq \max_{i \geq 2} \lvert x_i\rvert`` or ``x_1 \geq \sum_{i \geq 2} \lvert x_i\rvert`` is supported.
 The default implementation returns `false`.
 """
-supports_lnorm(state) = false
+supports_lnorm(::AbstractSolver) = false
 
 @doc raw"""
-    supports_lnorm_complex(state)
+    supports_lnorm_complex(::AbstractSolver)
 
 Indicates the solver support for complex-valued ``\ell_\infty`` (in the moment case) and ``\ell_1`` (in the SOS case) norm
 cones: if `true`, the cone ``x_1 \geq \max_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` or
 ``x_1 \geq \sum_{i \geq 2} \lvert\operatorname{Re} x_i + \mathrm i \operatorname{Im} x_i\rvert`` is supported.
 The default implementation returns `false`.
 """
-supports_lnorm_complex(state) = false
+supports_lnorm_complex(::AbstractSolver) = false
 
 @doc raw"""
-    supports_sdd(state)
+    supports_sdd(::AbstractSolver)
 
 This function indicates whether the solver natively supports a scaled diagonally-dominant cone (or its dual for the moment
 case). If it returns `false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or quadratic
 constraints, one of which must be supported (see [`supports_rotated_quadratic`](@ref) and [`supports_quadratic`](@ref)).
 """
-supports_sdd(_) = false
+supports_sdd(::AbstractSolver) = false
 
 @doc raw"""
-    supports_sdd_complex(state)
+    supports_sdd_complex(::AbstractSolver)
 
 This function indicates whether the solver natively supports a complex-valued scaled diagonally-dominant cone (or its dual for
 the moment case). If it returns `false` (default), the constraints will be rewritten in terms of multiple rotated quadratic or
 quadratic constraints, one of which must be supported (see [`supports_rotated_quadratic`](@ref) and
 [`supports_quadratic`](@ref)).
 """
-supports_sdd_complex(_) = false
+supports_sdd_complex(::AbstractSolver) = false
 
 """
-    Indvals{T,V<:Real}
+    Indvals{T,V}
 
 Supertype for an iterable that returns a `Tuple{T,V}` on iteration, where the first is a variable/constraint index and the
-second its coefficient in the constraint matrix. The type `T` is the type returned by [`mindex`](@ref).
+second its coefficient in the constraint matrix. The parameters of the type correspond to those in [`AbstractSolver`](@ref).
 The properties `indices` and `values` can be accessed and will give `AbstractVector`s of the appropriate type. Note that the
 fields should only be used if an iterative approach is not feasible, as they might be constructed on-demand (this will only
 happen for the first two indvals in the standard quadratic cone, all other elements can be accessed with zero cost).
 """
-struct Indvals{T,V<:Real,Z}
+struct Indvals{T,V,Z}
     z::Z
 
     function Indvals(indices::AbstractVector{T}, values::AbstractVector{V}) where {T,V<:Real}
@@ -138,9 +146,9 @@ Base.iterate(iv::Indvals, args...) = iterate(iv.z, args...)
     PSDIndextypeMatrixCartesian(triangle, offset) <: PSDIndextype
 
 The solver implements PSD matrix constraints by using a monolithic PSD matrix variable or an LMI-style representation.
-Entries from the variable are obtained (or put into the LMI) by using a cartesian index of two integers of the return type of
-[`mindex`](@ref). This index represents one triangle of the matrix (the lower if `triangle === :L`, the upper if
-`triangle === :U`). The first entry has the index `(offset, offset)`, typically either `0` or `1`.
+Entries from the variable are obtained (or put into the LMI) by using a cartesian index of two integers of the type parameter
+`T` of the [`AbstractSolver`](@ref). This index represents one triangle of the matrix (the lower if `triangle === :L`, the
+upper if `triangle === :U`). The first entry has the index `(offset, offset)`, typically either `0` or `1`.
 
 !!! info
     Note that while only one triangle is indexed, it is assumed that the solver will by default populate the other triangle in
@@ -251,7 +259,7 @@ struct PSDIndextypeVector{Tri}
 end
 
 """
-    IndvalsIterator
+    IndvalsIterator{T,V}
 
 An iterable that returns consecutive elements in a vectorized PSD cone.
 This type stores a vector of indices and values together with information about the length of the individual subsequences.
@@ -313,7 +321,7 @@ See also [`PSDIndextypeMatrixCartesian`](@ref), [`PSDIndextypeVector`](@ref).
 const PSDIndextype{Tri} = Union{<:PSDIndextypeMatrixCartesian{Tri},PSDIndextypeVector{Tri}}
 
 """
-    psd_indextype(state)
+    psd_indextype(::AbstractSolver)
 
 This function must indicate in which format the solver expects its data for PSD variables. The return type must be an instance
 of a [`PSDIndextype`](@ref) subtype.

@@ -91,9 +91,11 @@ problem. Usually, a solver falls in one of two categories:
 - Problem data is constructed incrementally via various calls to API functions of the solver, which does not provide access to
   its internals. In this case, the new type should be a descendant of [`AbstractAPISolver`](@ref). Usually, commercial solvers
   fall in this category.
-However, it is not required that the type is in fact a subtype of either of those. If it is not, then [`mindex`](@ref) needs to
-be implemented.
+However, it is not required that the type is in fact a subtype of either of those; the most general possible supertype is
+[`AbstractSolver`](@ref), which does not make any assumptions or provide any but the most skeleton fallback implementations and
+a default for [`mindex`](@ref).
 ```@docs
+AbstractSolver
 mindex
 ```
 Every implementation of [`poly_optimize`](@ref) should return a tuple that contains some internal state of the solver as well

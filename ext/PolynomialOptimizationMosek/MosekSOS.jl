@@ -1,4 +1,4 @@
-mutable struct StateSOS{K<:Integer} <: AbstractAPISolver{K}
+mutable struct StateSOS{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     const task::Mosek.Task
     num_vars::Int32
     num_bar_vars::Int32

@@ -1,60 +1,44 @@
 export sos_add_matrix!, sos_add_equality!, sos_setup!
 
-struct SOSWrapper{S}
+struct SOSWrapper{S<:AbstractSolver} # We don't make this an AbstractSolver, which allows to disambiguate all our substitution
+                                     # methods without actually specifying all the arguments in detail. However, this means
+                                     # that we have to allow the setup methods to take a Union of AbstractSolver and
+                                     # SOSWrapper.
     state::S
 end
 
-mindex(state::SOSWrapper, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc} = mindex(state.state, monomials...)
+const AnySolver{T,V} = Union{<:AbstractSolver{T,V},SOSWrapper{<:AbstractSolver{T,V}}}
 
-supports_rotated_quadratic(state::SOSWrapper) = supports_rotated_quadratic(state.state)
-supports_quadratic(state::SOSWrapper) = supports_quadratic(state.state)
-supports_lnorm(state::SOSWrapper) = supports_lnorm(state.state)
-supports_lnorm_complex(state::SOSWrapper) = supports_lnorm_complex(state.state)
-supports_psd_complex(state::SOSWrapper) = supports_psd_complex(state.state)
-supports_dd(state::SOSWrapper) = supports_dd(state.state)
-supports_dd_complex(state::SOSWrapper) = supports_dd_complex(state.state)
-supports_sdd(state::SOSWrapper) = supports_sdd(state.state)
-supports_sdd_complex(state::SOSWrapper) = supports_sdd_complex(state.state)
-psd_indextype(state::SOSWrapper) = psd_indextype(state.state)
+mindex(state::SOSWrapper, args...) = mindex(state.state, args...)
 
-# both necessary for disambiguation
-add_constr_nonnegative!(state::SOSWrapper, indvals::Indvals) = add_var_nonnegative!(state.state, indvals)
-add_constr_nonnegative!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_nonnegative!(state.state, indvals)
-add_constr_rotated_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_rotated_quadratic!(state.state, indvals)
-add_constr_quadratic!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_quadratic!(state.state, indvals)
-add_constr_psd!(state::SOSWrapper, dim::Int, data) = add_var_psd!(state.state, dim, data)
-add_constr_psd_complex!(state::SOSWrapper, dim::Int, data) = add_var_psd_complex!(state.state, dim, data)
-add_constr_dddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    add_var_dd!(state.state, dim, indvals, u)
-add_constr_dddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    add_var_dd_complex!(state.state, dim, indvals, u)
-add_constr_linf!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1!(state.state, indvals)
-add_constr_linf_complex!(state::SOSWrapper, indvals::IndvalsIterator) = add_var_l1_complex!(state.state, indvals)
-add_constr_sdddual!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    add_var_sdd!(state.state, dim, indvals, u)
-add_constr_sdddual_complex!(state::SOSWrapper, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    add_var_sdd_complex!(state.state, dim, indvals, u)
+for mapfn in (
+    :supports_rotated_quadratic, :supports_quadratic, :supports_lnorm, :supports_lnorm_complex, :supports_psd_complex,
+    :supports_dd, :supports_dd_complex, :supports_sdd, :supports_sdd_complex,
+    :psd_indextype
+)
+    @eval $mapfn(state::SOSWrapper) = $mapfn(state.state)
+end
 
-add_constr_fix_prepare!(state::SOSWrapper, num::Int) = add_var_free_prepare!(state.state, num)
-add_constr_fix!(state::SOSWrapper, args...) = add_var_free!(state.state, args...)
-add_constr_fix_finalize!(state::SOSWrapper, constrstate) = add_var_free_finalize!(state.state, constrstate)
+for mapfn in (
+    :nonnegative!, :rotated_quadratic!, :quadratic!, :psd!, :psd_complex!
+)
+    @eval $(Symbol(:add_constr_, mapfn))(state::SOSWrapper, args...) = $(Symbol(:add_var_, mapfn))(state.state, args...)
+end
 
-add_var_slack!(state::SOSWrapper, num::Int) = add_constr_slack!(state.state, num)
-
-fix_objective!(state::SOSWrapper, indvals::Indvals) = fix_constraints!(state.state, indvals)
-
-# fallbacks
-add_var_dd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    @invoke add_constr_dddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
-add_var_dd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    @invoke add_constr_dddual_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
-add_var_sdd!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    @invoke add_constr_sdddual!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
-add_var_sdd_complex!(state, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u) =
-    @invoke add_constr_sdddual_complex!(SOSWrapper(state)::Any, dim::Int, indvals::IndvalsIterator{<:Any,<:Real}, u::Any)
+for (newname, oldname) in (
+    (:add_var_dd!, :add_constr_dddual!), (:add_var_dd_complex!, :add_constr_dddual_complex!),
+    (:add_var_l1!, :add_constr_linf!), (:add_var_l1_complex!, :add_constr_linf_complex!),
+    (:add_var_sdd!, :add_constr_sdddual!), (:add_var_sdd_complex!, :add_constr_sdddual_complex!),
+    (:add_var_free_prepare!, :add_constr_fix_prepare!), (:add_var_free!, :add_constr_fix!),
+    (:add_var_free_finalize!, :add_constr_fix_finalize!),
+    (:add_constr_slack!, :add_var_slack!),
+    (:fix_constraints!, :fix_objective!)
+)
+    @eval $oldname(state::SOSWrapper, args...) = $newname(state.state, args...)
+end
 
 """
-    sos_add_matrix!(state, grouping::SimpleMonomialVector,
+    sos_add_matrix!(state::AbstractSolver, grouping::SimpleMonomialVector,
         constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
         representation::RepresentationMethod=RepresentationPSD())
 
@@ -82,12 +66,10 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_equality!`](@ref).
 """
-sos_add_matrix!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::Union{P,<:AbstractMatrix{P}},
-    representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial} =
-    moment_add_matrix!(SOSWrapper(state), grouping, constraint, representation)
+sos_add_matrix!(state::AbstractSolver, args...) = moment_add_matrix!(SOSWrapper(state), args...)
 
 """
-    sos_add_equality!(state, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+    sos_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
 
 Parses a polynomial equality constraint for sums-of-squares and calls the appropriate solver functions to set up the problem
 structure. `grouping` contains the basis that will be squared in the process to generate the prefactor.
@@ -101,11 +83,10 @@ Usually, this function does not have to be called explicitly; use [`sos_setup!`]
 
 See also [`sos_add_matrix!`](@ref).
 """
-sos_add_equality!(state, grouping::AbstractVector{M} where {M<:SimpleMonomial}, constraint::SimplePolynomial) =
-    moment_add_equality!(SOSWrapper(state), grouping, constraint)
+sos_add_equality!(state::AbstractSolver, args...) = moment_add_equality!(SOSWrapper(state), args...)
 
 """
-    sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
+    sos_setup!(state::AbstractSolver, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
 
 Sets up all the necessary SOS matrices, free variables, objective, and constraints of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
@@ -151,6 +132,4 @@ The following methods must be implemented by a solver to make this function work
 See also [`moment_setup!`](@ref), [`sos_add_matrix!`](@ref), [`sos_add_equality!`](@ref),
 [`RepresentationMethod`](@ref).
 """
-sos_setup!(state, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation::Union{<:RepresentationMethod,<:Base.Callable}=RepresentationPSD()) =
-    moment_setup!(SOSWrapper(state), relaxation, groupings; representation)
+sos_setup!(state::AbstractSolver, args...; kwargs...) = moment_setup!(SOSWrapper(state), args...; kwargs...)

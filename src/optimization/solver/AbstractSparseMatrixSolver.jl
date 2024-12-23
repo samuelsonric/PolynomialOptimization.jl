@@ -12,16 +12,10 @@ or `typemax(K)` if it is unsigned.
 
 See also [`SparseMatrixCOO`](@ref).
 """
-abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} end
+abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} <: AbstractSolver{K,V} end
 
 Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
     monomial_index(monomials...)::K
-
-function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
-    stop = state.slack
-    state.slack -= num
-    return (state.slack + one(K)):stop
-end
 
 function Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
     stop = state.slack
