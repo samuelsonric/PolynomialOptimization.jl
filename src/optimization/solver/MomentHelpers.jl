@@ -498,6 +498,9 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
 end
 
 function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex}) where {T,V,complex}
+    !complex && (Base.IteratorEltype(u) isa Base.HasEltype) && eltype(u) <: Complex &&
+        throw(MethodError(moment_add_dddual_transform!, (state, dim, data, u)))
+    @assert(dim > 1)
     diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
     # Diagonal-dominant representation: this is a relaxation for the SOS formulation, where we replace M ∈ PSD by
     # M ∈ {U† D U, D ∈ DD}. Since this is more restrictive than PSD, the SOS maximization will only decrease, so we still have
@@ -506,358 +509,538 @@ function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data:
     # mᵢ = ∑_(diagonal j) Ū[row(j), row(i)] U[col(j), col(i)] dⱼ +
     #      ∑_(offdiag j) (Ū[col(j), row(i)] U[row(j), col(i)] + Ū[row(j), row(i)] U[col(j), col(i)]) dⱼ ⇔ m = Ũ d.
     # Note that if U is diagonal, mᵢ = Ū[row(i), row(i)] U[col(i), col(i)] dᵢ.
-    # So define d ∈ vec(DD), m free, then demand 𝟙*m + (-Ũ)*d = 0. But actually, in SOS, m enters the linear constraints with
-    # rows given by sosdata, so we don't even need to create those variables - d is sufficient. Therefore, the DD-SOS problem
-    # looks like d ∈ vec(DD), and sosdata[i] contains the linear constraint row indices for the linear combination (Ũ*d)[i].
+    # So define d ∈ vec(DD), m free, then demand 𝟙*m + (-Ũ)*d = 0. While we could eliminate m fully, it is actually
+    # advantageous to keep them: in this way, we have direct access to the rotated DD cone in the solution returned by the
+    # solver. Additionally, using m instead of -Ũ*d in the constraints can give a higher sparsity. Of course, if U is the
+    # identity, we would be better off eliminating m.
     # Then, we need to translate DD into a cone that is supported; let's assume for simplicity that the ℓ₁ cone is available.
     # DD = ℓ₁ × ... × ℓ₁ plus equality constraints that enforce symmetry.
     # However, here we construct the moment representation; so we now need the dual formulation of diagonal dominance. Due to
     # the equality constraints, this is more complicated:
     # For side dimension n, there are n ℓ₁ cones (we just take the columns - also taking into account the rows would be even
-    # more restrictive).
-    # Without the U, the columns in the real-valued case would look like (note that the diagonal is moved to the first row)
-    # data₁             data₄             data₆
-    # 2data₂ - slack₁   slack₁            slack₂
-    # 2data₃ - slack₂   2data₅ - slack₃   slack₃
-    # i.e., we introduce a slack variable for every off-diagonal cell; on the upper triangle, we just put the slacks, on the
-    # lower triangle, we put twice the data for this cell minus the slack.
-    # Note slackᵢ(i, j) = -slackᵢ(j, i)
+    # more restrictive). For every data entry, we need a new slack variable which we fix to be equal to this data entry (a
+    # variable for each the real and the imaginary part). We need additional slacks for every entry in the strict upper
+    # triangle (twice in the complex-valued case).
+    # Without the U, all this would look as follows (for a 3x3 real matrix):
+    # data₁ = slack₁, data₂ = slack₂, data₃ = slack₃, data₄ = slack₄, data₅ = slack₅, data₆ = slack₆
+    # {slack₁, slack₂ - slack₇, slack₃ - slack₈} ∈ ℓ_∞
+    # {slack₄, slack₇,          slack₅ - slack₉} ∈ ℓ_∞
+    # {slack₆, slack₈,          slack₉}          ∈ ℓ_∞
+    # effectively corresponding to the DDDual matrix
+    # data₁            slack₇           slack₈
+    # data₂ - slack₇   data₄            slack₉
+    # data₃ - slack₈   data₅ - slack₉   data₆
 
-    # For a general U and complex-valued data, this is instead for the column j:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) +
-    #                                                        Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
-    #  slackᵣ(j, i), slackᵢ(j, i) for i ∈ 1, ..., j -1,
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col})
-    #      ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
-    #       (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵣ(i, j),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col})
-    #      ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
-    #       (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)) - slackᵢ(i, j)
+    # The assignment of slack variables to the data will always be the same and unrelated to U. Therefore, in the following,
+    # for better clarity, we will omit the equality constraints and simply write slack(row, col), where it is understood that
+    # for row ≥ col (lower triangle), this corresponds to the equality-constrained slack variable that is (twice) the data, and
+    # for row < col (strict upper triangle), this corresponds to a free slack variable required due to symmetry.
+
+    # For a general U and complex-valued data, we then have for the column j:
+    # {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) slackᵣ(row, col) +
+    #                                     Im(U[j, col] Ū[j, row]) slackᵢ(row, col)),
+    #  slackᵣ(i, j), slackᵢ(i, j) for i ∈ 1, ..., j -1,
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) slackᵣ(row, col) -
+    #                                     (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) slackᵢ(row, col)) - slackᵣ(j, i),
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) slackᵣ(row, col) +
+    #                                     (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) slackᵢ(row, col)) + slackᵢ(j, i)
     #  for i in j +1, ..., dim
     # } ∈ ℓ_∞
 
     # Let's specialize the formula. If U is diagonal:
-    # {|U[j, j]|² dataᵣ(j, j),
-    #  slackᵣ(j, i), slackᵢ(j, i) for i ∈ 1, ..., j -1,
-    #  2 (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) - Im(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵣ(i, j),
-    #  2 (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) + Re(U[i, i] Ū[j, j]) dataᵢ(i, j)) - slackᵢ(i, j)
+    # {|U[j, j]|² slackᵣ(j, j),
+    #  slackᵣ(i, j), slackᵢ(i, j) for i ∈ 1, ..., j -1,
+    #  (Re(U[i, i] Ū[j, j]) slackᵣ(i, j) - Im(U[i, i] Ū[j, j]) slackᵢ(i, j)) - slackᵣ(j, i),
+    #  (Im(U[i, i] Ū[j, j]) slackᵣ(i, j) + Re(U[i, i] Ū[j, j]) slackᵢ(i, j)) + slackᵢ(j, i)
     #  for i in j +1, ..., dim
     # } ∈ ℓ_∞
-    # Let's write this out:
-    # |U₁|²data₁                                 |U₂|²data₆                                 |U₃|²data₈
-    # 2Re(U₂Ū₁)data₂ - 2Im(U₂Ū₁)data₃ - slack₁   slack₁                                     slack₃
-    # 2Im(U₂Ū₁)data₂ + 2Re(U₂Ū₁)data₃ - slack₂   slack₂                                     slack₄
-    # 2Re(U₃Ū₁)data₄ - 2Im(U₃Ū₁)data₅ - slack₃   2Re(U₃Ū₂)data₇ - 2Im(U₃Ū₂)data₈ - slack₅   slack₅
-    # 2Im(U₃Ū₁)data₄ + 2Re(U₃Ū₁)data₅ - slack₄   2Im(U₃Ū₂)data₇ + 2Re(U₃Ū₂)data₈ - slack₆   slack₆
 
     # If everything is instead real-valued:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[j, col] U[j, row] data(row, col),
-    #  slack(j, i) for i ∈ 1, ..., j -1,
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col) -
-    #      slack(i, j) for i in j +1, ..., dim
+    # {∑_{col = 1}^dim ∑_{row = col}^dim U[j, col] U[j, row] slack(row, col),
+    #  slack(i, j) for i ∈ 1, ..., j -1,
+    #  ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) slack(row, col) - slack(j, i)
+    #  for i in j +1, ..., dim
     # } ∈ ℓ_∞
 
     # If everything is real and U is diagonal:
-    # {U[j, j]² data(j, j),
-    #  slack(j, i) for i ∈ 1, ..., j -1,
-    #  2 U[i, i] U[j, j] data(i, j) - slack(i, j) for i in j +1, ..., dim
+    # {U[j, j]² slack(j, j),
+    #  slack(i, j) for i ∈ 1, ..., j -1,
+    #  U[i, i] U[j, j] slack(i, j) - slack(j, i) for i in j +1, ..., dim
     # } ∈ ℓ_∞
-    # Let's write this out:
-    # U₁²data₁              U₂²data₄              U₃²data₆
-    # 2U₂U₁data₂ - slack₁   slack₁                slack₂
-    # 2U₃U₁data₃ - slack₂   2U₃U₂data₅ - slack₃   slack₃
+
+    # If the ℓ_∞ cone is not available, we can instead use the nonnegative cone if we are not complex. The most efficient way
+    # to do this is in fact to directly rewrite the ℓ_∞ cone formulation in terms of two nonnegative constraints for all but
+    # the diagonal entry.
+    # If we are complex, then in the SOS formulation, we have to split the complex ℓ₁-norm cone. For this, we use quadratic
+    # cones to obtain an upper bound on the absolute value from the real and imaginary parts. The diagonal entries are then the
+    # sum of all absolute values plus a nonnegative variable. As a consequence, we no longer need to maintain the other
+    # triangle, it is now implicit. Translated into the moment domain, we get a dim-dimensional nonnegative cone and
+    # trisize(dim -1) norm cones. The first entry in the norm cone is the sum of the nonnegative variables corresponding to the
+    # current row and column.
+
     maxsize = maximum(data.lens, init=0) # how large is one dataᵢ at most?
 
-    if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
-        maxsize *= 2
-    end
-    if !diagu
-        maxsize *= trisize(dim) # how large are all the dataᵢ that might be used in a single cell at most?
-    end
     have_linf = complex ? supports_lnorm_complex(state) : supports_lnorm(state)
     complex && @assert(have_linf || supports_quadratic(state)) # this must have been checked during construction
+    ts = trisize(dim)
+    dsq = dim^2
     if have_linf
-        indices = FastVec{T}(buffer=complex ? ((2dim -2) * (maxsize +1) + maxsize) : (maxsize +1) * dim -1)
-                  # first col is possibly largest: full with data plus (dim -1) slacks
+        indices = FastVec{T}(buffer=max(1 + maxsize,
+            if diagu
+                if complex
+                    6dim -5 # 1 + 6(dim -1)
+                else
+                    2dim -1 # 1 + 2(dim -1)
+                end
+            elseif complex
+                2 * ((ts +1) * (2dim -1) - dim) # 2trisize(dim) + (2trisize(dim) +1) * 2(dim -1)
+            else
+                (ts +1) * dim -1 # trisize(dim) + (trisize(dim) +1) * (dim -1)
+            end) # either the first col or the longest data assignment are the largest
+        )
+        lens = FastVec{Int}(buffer=complex ? 2dim -1 : dim)
+        slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     elseif complex
         # This means that we use the quadratic cone to mimick the ℓ_∞ norm cone: x₁ ≥ ∑ᵢ (Re² xᵢ + Im² xᵢ). So we need to
         # submit lots of cones, but all of them pretty small.
-        indices = FastVec{T}(buffer=5maxsize + 2)
+        indices = FastVec{T}(buffer=max(1 + maxsize, 6, 3dsq))
+        slacks = add_var_slack!(state, dsq)
     else
-        # If we don't have this cone, we must use linear constraints. To mimick the ℓ_∞ norm cone, we need to impose a number
-        # of additional linear constraints: xᵢ - x₁ ≥ 0, xᵢ + x₁ ≥ 0, ... We will create all the first pairs of inequality
-        # constraints in a single column, then flip the sign and do it all over again. The diagonal entry, which we don't need
-        # to add explicitly, still gets a placeholder value.
-        indices = FastVec{T}(buffer=(2maxsize +1) * (dim -1) + maxsize)
+        # If we don't have this cone, we must use linear constraints. While we could do the whole matrix in a single large
+        # nonnegative constraint vector, we'll do it columnwise as well.
+        indices = FastVec{T}(buffer=max(1 + maxsize, diagu ? 2 * 3(dim -1) : 2 * (ts +1) * (dim -1)))
+        if diagu
+            lens = FastVec{Int}(buffer=2dim -2)
+        end
+        slacks = add_var_slack!(state, dsq)
     end
     values = similar(indices, V)
-    lens = FastVec{Int}(buffer=complex ? 2dim -1 : dim)
-    slacks = add_var_slack!(state, complex ? 2trisize(dim -1) : trisize(dim -1))
-    s = 1
-    if diagu
-        idx = 1
-        dataidx = 1
+
+    # Add the equality constraints first; this is independent of U or the method to model the cone
+    @inbounds let eqstate=@inline add_constr_fix_prepare!(state, complex ? dsq : ts)
+        # When iterating through data, we need to add our slack element; it does not matter whether at the beginning or the
+        # end. So under the assertion that data contains more than just a single Indvals (which is always true, else this
+        # function would not be called), we append the slack at the end, temporarily overwriting what is there for the first
+        # item; and we prepend it for all others (no need to restore the value afterwards), avoiding copying around.
+        firstindvals, restindvals = Iterators.peel(data)
+        dataindices, datavalues = firstindvals.indices, firstindvals.values
+        # while we could simply do @inbounds indices[end+1], this won't work in the interpreter; and we need the index multiple
+        # times anyway, so let's just compute it under the assumption that everything is as it should be.
+        @assert(dataindices isa Base.FastContiguousSubArray)
+        pos = dataindices.offset1 + length(dataindices) +1
+        storedind = dataindices.parent[pos]
+        storedval = datavalues.parent[pos]
+        dataindices.parent[pos] = slacks[1]
+        datavalues.parent[pos] = -one(V)
+        eqstate = @inline add_constr_fix!(state, eqstate, Indvals(view(dataindices.parent, dataindices.offset1+1:pos),
+                                                                  view(datavalues.parent, dataindices.offset1+1:pos)), zero(V))
+        dataindices.parent[pos] = storedind
+        datavalues.parent[pos] = storedval
+        offdiags = dim -1
+        col = 1
+        slack = 2
+        let indvalsiter=iterate(restindvals)
+            while !isnothing(indvalsiter)
+                indvals = indvalsiter[1]
+                dataindices, datavalues = indvals.indices, indvals.values
+                pos = dataindices.offset1
+                dataindices.parent[pos] = slacks[slack]
+                datavalues.parent[pos] = -one(V)
+                if iszero(offdiags)
+                    col += 1
+                    offdiags = dim - col
+                else
+                    if complex
+                        slack += 1
+                        eqstate = @inline add_constr_fix!(state, eqstate,
+                                                            Indvals(view(dataindices.parent,
+                                                                        pos:dataindices.offset1+length(dataindices)),
+                                                                    view(datavalues.parent,
+                                                                        pos:dataindices.offset1+length(dataindices))),
+                                                            zero(V))
+                        indvalsiter = iterate(restindvals, indvalsiter[2])::Tuple
+                        indvals = indvalsiter[1]
+                        dataindices, datavalues = indvals.indices, indvals.values
+                        pos = dataindices.offset1
+                        dataindices.parent[pos] = slacks[slack]
+                        datavalues.parent[pos] = -one(V)
+                    end
+                    offdiags -= 1
+                end
+                slack += 1
+                eqstate = @inline add_constr_fix!(state, eqstate,
+                                                    Indvals(view(dataindices.parent,
+                                                                pos:dataindices.offset1+length(dataindices)),
+                                                            view(datavalues.parent,
+                                                                pos:dataindices.offset1+length(dataindices))), zero(V))
+                indvalsiter = iterate(restindvals, indvalsiter[2])
+            end
+        end
+        @inline add_constr_fix_finalize!(state, eqstate)
     end
-    @inbounds for j in 1:dim
-        #region Diagonal
-        # First add the diagonal, which naturally is the first item in the L order. We will add this diagonal once for
-        # sure. This is fine for the ℓ_∞ cone anyway, where it is supposed to be the first element; but also for the other
-        # cones, where we need to repeat it, it is not a problem: for the quadratic cone, it will always be exactly the
-        # first element in the cone; for the linear inequalities, it may combine with other elements. However, we add all
-        # linear inequalities of the same j in one bunch, i.e., the first corresponds to diagonal - first slack, where
-        # nothing combines. The only exception is the j = 1 case, where we don't have any slack. In this case, we'll just
-        # add diagonal ≥ 0 anyway and skip it when passing the data to the cone (it is not wrong, but also not necessary).
+
+    # Note: We always add the items and don't check whether the value is zero, potentially reducing the sparsity pattern (only
+    # for diagonal u, we respect it). This is so that the solver data is always at the same position and re-optimizations with
+    # a different u will not change the structure of the solver problem (of course, we'd have to write support for re-using the
+    # problem in the first place...).
+    if have_linf
         if diagu
-            diaglen = Int(data.lens[idx])
-            diagr = dataidx:dataidx+diaglen-1
-            dataidx += diaglen
-            idx += 1
-            unsafe_append!(indices, @view(data.indices[diagr]))
-            unsafe_append!(values, @view(data.values[diagr]))
-            u isa Diagonal && rmul!(values, abs2(u[j, j]))
-        else
-            idx = 1
-            dataidx = 1
-            for col in 1:dim, row in col:dim
-                uval = u[j, col] * conj(u[j, row])
-                if row != col
-                    uval *= V(2)
-                end
-                @twice impart (complex && row != col) begin
-                    searchview = @view(indices[:])
-                    len = Int(data.lens[idx])
-                    r = dataidx:dataidx+len-1
-                    dataidx += len
-                    idx += 1
-                    thisuval = impart ? imag(uval) : real(uval)
-                    iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
-                        dupidx = findfirst(isequal(ind), searchview)
-                        if isnothing(dupidx)
-                            unsafe_push!(indices, ind)
-                            unsafe_push!(values, thisuval * val)
-                        else
-                            values[dupidx] += thisuval * val
-                        end
-                    end
-                end
-            end
-            diaglen = length(indices)
-        end
-        if have_linf || complex
-            unsafe_push!(lens, diaglen)
-        else
-            diagvals = @view(values[:])
-        end
-        #endregion
-        #region Above diagonal (slacks)
-        if have_linf
-            δ = complex ? 2j -2 : j -1
-            unsafe_append!(indices, @view(slacks[s:s+δ-1]))
-            unsafe_append!(values, Iterators.repeated(one(V), δ))
-            unsafe_append!(lens, Iterators.repeated(1, δ))
-            s += δ
-        elseif complex
-            if !isone(j)
-                unsafe_push!(indices, slacks[s], slacks[s+1])
-                unsafe_push!(values, one(V), one(V))
-                unsafe_push!(lens, 1, 1)
-                add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
-                s += 2
-                for i in 2:j-1
-                    indices[end-1] = slacks[s]
-                    indices[end] = slacks[s+1]
-                    add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
-                    s += 2
-                end
-                Base._deleteend!(indices, 2)
-                Base._deleteend!(values, 2)
-                Base._deleteend!(lens, 2)
-            end
-        else
-            # the first slack doesn't need the diagonal any more, we already added it
-            if !isone(j)
-                unsafe_push!(indices, slacks[s])
-                unsafe_push!(values, one(V))
-                unsafe_push!(lens, diaglen +1)
-                s += 1
-                for i in 2:j-1
-                    unsafe_append!(indices, @view(indices[1:diaglen]))
-                    unsafe_append!(values, @view(values[1:diaglen]))
-                    unsafe_push!(indices, slacks[s])
-                    unsafe_push!(values, one(V))
-                    unsafe_push!(lens, diaglen +1)
-                    s += 1
-                end
-            end
-        end
-        #endregion
-        #region Below diagonal
-        sbelow = s + (complex ? 2j - 2 : j -1)
-        for i in j+1:dim
-            if diagu
-                if (have_linf || complex) && u isa Diagonal
-                    uval = 2u[i, i] * conj(u[j, j])
-                end
-                @twice impart complex begin
-                    startidx = length(indices) +1
-                    len = Int(data.lens[idx])
-                    r = dataidx:dataidx+len-1
-                    if have_linf || complex
-                        if u isa Diagonal
-                            if !iszero(real(uval))
-                                unsafe_append!(indices, @view(data.indices[r]))
-                                unsafe_append!(values, @view(data.values[r]))
-                                isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
-                            end
-                            if complex && !iszero(imag(uval))
-                                let lenalt=Int(data.lens[impart ? idx-1 : idx+1]),
-                                    dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1,
-                                    uimval=impart ? imag(uval) : -imag(uval)
-                                    searchrange = startidx:length(indices)
-                                    searchview = @view(indices[searchrange])
-                                    for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
-                                        dupidx = findfirst(isequal(ind), searchview)
-                                        if isnothing(dupidx)
-                                            unsafe_push!(indices, ind)
-                                            unsafe_push!(values, uimval * val)
-                                        else
-                                            values[first(searchrange)+dupidx-1] += uimval * val
-                                        end
-                                    end
-                                end
-                            end
-                        else
-                            unsafe_append!(indices, @view(data.indices[r]))
-                            unsafe_append!(values, @view(data.values[r]))
-                            rmul!(@view(values[end-len+1:end]), V(2))
-                        end
-                    else
-                        # We need to add the diagonal element again for every single constraint.
-                        unsafe_append!(indices, @view(indices[1:diaglen]))
-                        unsafe_append!(values, @view(values[1:diaglen]))
-                        # We combine this index part with the diagonal; but this can lead to duplicates, which we must sum up.
-                        # Note we are real-valued if we are here.
-                        if u isa Diagonal
-                            uval = 2u[i, i] * u[j, j]
-                        else
-                            uval = V(2)
-                        end
-                        searchrange = length(indices)-diaglen+1:length(indices)
-                        searchview = @view(indices[searchrange])
-                        for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
-                            dupidx = findfirst(isequal(ind), searchview)
-                            if isnothing(dupidx)
-                                unsafe_push!(indices, ind)
-                                unsafe_push!(values, uval * val)
-                            else
-                                values[first(searchrange)+dupidx-1] += uval * val
-                            end
-                        end
-                    end
-                    unsafe_push!(indices, slacks[sbelow])
-                    unsafe_push!(values, impart ? one(V) : -one(V))
-                    unsafe_push!(lens, length(indices) - startidx +1)
-                    dataidx += len
-                    idx += 1
+            upperslack = (complex ? dsq : ts) +1
+            lowerslack = 1
+            @inbounds for j in 1:dim
+                #region Diagonal (naturally is the first item in the L order, and must be the first in the ℓ_∞ cone)
+                unsafe_push!(indices, slacks[lowerslack])
+                unsafe_push!(values, u isa Diagonal ? abs2(u[j, j]) : one(V))
+                unsafe_push!(lens, 1)
+                lowerslack += 1
+                #endregion
+                #region Above diagonal (slacks)
+                δ = complex ? 2j -2 : j -1
+                unsafe_append!(indices, @view(slacks[upperslack:upperslack+δ-1]))
+                unsafe_append!(values, Iterators.repeated(one(V), δ))
+                unsafe_append!(lens, Iterators.repeated(1, δ))
+                upperslack += δ
+                #endregion
+                #region Below diagonal
+                sbelow = upperslack + (complex ? 2j - 2 : j -1)
+                for i in j+1:dim
+                    uval = u isa Diagonal ? u[i, i] * conj(u[j, j]) : one(V)
                     if complex
-                        sbelow += impart ? 2i -3 : 1
+                        unsafe_push!(indices, slacks[lowerslack], slacks[lowerslack+1], slacks[sbelow])
+                        unsafe_push!(values, real(uval), -imag(uval), -one(V))
+                        unsafe_push!(lens, 3)
+                    else
+                        unsafe_push!(indices, slacks[lowerslack], slacks[sbelow])
+                        unsafe_push!(values, real(uval), -one(V)) # should be real anyway
+                        unsafe_push!(lens, 2)
+                    end
+                    if complex
+                        unsafe_push!(indices, slacks[lowerslack], slacks[lowerslack+1], slacks[sbelow+1])
+                        unsafe_push!(values, imag(uval), real(uval), one(V))
+                        unsafe_push!(lens, 3)
+                        sbelow += 2i -2
+                        lowerslack += 2
                     else
                         sbelow += i -1
+                        lowerslack += 1
                     end
                 end
-            else
-                @twice impart complex begin
-                    startidx = length(indices) +1
-                    if !have_linf && !complex
-                        # We need to add the diagonal element again for every linear constraint
-                        unsafe_append!(indices, @view(indices[1:diaglen]))
-                        unsafe_append!(values, @view(values[1:diaglen]))
+                #endregion
+                #region Add the whole column
+                (complex ? add_constr_linf_complex! : add_constr_linf!)(state, IndvalsIterator(unsafe, indices, values, lens))
+                #endregion
+                empty!(indices)
+                empty!(values)
+                empty!(lens)
+            end
+        else
+            upperslack = (complex ? dsq : ts) +1
+            @inbounds for j in 1:dim
+                #region Diagonal (naturally is the first item in the L order, and must be the first in the ℓ_∞ cone)
+                lowerslack = 1
+                for col in 1:dim
+                    unsafe_push!(indices, slacks[lowerslack])
+                    unsafe_push!(values, abs2(u[j, col]))
+                    lowerslack += 1
+                    for row in col+1:dim
+                        uval = u[j, col] * conj(u[j, row])
+                        @twice imdata complex begin
+                            unsafe_push!(indices, slacks[lowerslack+imdata])
+                            unsafe_push!(values, imdata ? imag(uval) : real(uval))
+                        end
+                        lowerslack += (complex ? 2 : 1)
                     end
-                    idx = 1
-                    dataidx = 1
-                    for col in 1:dim, row in col:dim
-                        @twice imdata (complex && row != col) begin
-                            searchview = @view(indices[startidx:end])
-                            uval = u[i, row] * conj(u[j, col])
-                            if imdata
-                                uval -= u[i, col] * conj(u[j, row])
-                                thisuval = impart ? real(uval) : -imag(uval)
-                            else
-                                uval += u[i, col] * conj(u[j, row])
-                                thisuval = impart ? imag(uval) : real(uval)
-                            end
-                            len = Int(data.lens[idx])
-                            r = dataidx:dataidx+len-1
-                            dataidx += len
-                            idx += 1
-                            if !iszero(thisuval)
-                                if row != col
-                                    thisuval *= V(2)
-                                end
-                                for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
-                                    dupidx = findfirst(isequal(ind), searchview)
-                                    if isnothing(dupidx)
-                                        unsafe_push!(indices, ind)
-                                        unsafe_push!(values, thisuval * val)
+                end
+                unsafe_push!(lens, length(indices))
+                #endregion
+                #region Above diagonal (slacks)
+                δ = complex ? 2j -2 : j -1
+                unsafe_append!(indices, @view(slacks[upperslack:upperslack+δ-1]))
+                unsafe_append!(values, Iterators.repeated(one(V), δ))
+                unsafe_append!(lens, Iterators.repeated(1, δ))
+                upperslack += δ
+                #endregion
+                #region Below diagonal
+                sbelow = upperslack + (complex ? 2j - 2 : j -1)
+                for i in j+1:dim
+                    @twice impart complex begin
+                        beforeidx = length(indices)
+                        slack = 1
+                        for col in 1:dim
+                            uval = 2u[i, col] * conj(u[j, col])
+                            unsafe_push!(indices, slacks[slack])
+                            unsafe_push!(values, impart ? imag(uval) : real(uval))
+                            slack += 1
+                            for row in col+1:dim
+                                @twice imdata complex begin
+                                    uval = u[i, row] * conj(u[j, col])
+                                    if imdata
+                                        uval -= u[i, col] * conj(u[j, row])
+                                        thisuval = impart ? real(uval) : -imag(uval)
                                     else
-                                        values[dupidx+startidx-1] += thisuval * val
+                                        uval += u[i, col] * conj(u[j, row])
+                                        thisuval = impart ? imag(uval) : real(uval)
                                     end
+                                    unsafe_push!(indices, slacks[slack])
+                                    unsafe_push!(values, thisuval)
+                                    slack += 1
+                                end
+                            end
+                        end
+                        unsafe_push!(indices, slacks[sbelow])
+                        unsafe_push!(values, impart ? one(V) : -one(V))
+                        unsafe_push!(lens, length(indices) - beforeidx)
+                        if complex
+                            sbelow += impart ? 2i -3 : 1
+                        else
+                            sbelow += i -1
+                        end
+                    end
+                end
+                #endregion
+                #region Add the whole column
+                (complex ? add_constr_linf_complex! : add_constr_linf!)(state, IndvalsIterator(unsafe, indices, values, lens))
+                #endregion
+                empty!(indices)
+                empty!(values)
+                empty!(lens)
+            end
+        end
+    elseif complex
+        if diagu
+            rowdiagslack = 1
+            lowerslack = 1
+            @inbounds for j in 1:dim
+                #region Diagonal (naturally is the first item in the L order, and we must put it separately in the nonneg cone)
+                unsafe_push!(indices, slacks[lowerslack])
+                unsafe_push!(values, u isa Diagonal ? abs2(u[j, j]) : one(V))
+                add_constr_nonnegative!(state, Indvals(indices, values))
+                lowerslack += 1
+                #endregion
+                #region Below diagonal
+                # We keep the variable from the column diagonal, but we also need the variable from the row diagonal
+                resize!(indices, 6)
+                resize!(values, 6)
+                rowdiagslack += 2(dim - j) +1
+                srowdiag = rowdiagslack
+                for i in j+1:dim
+                    uval = u isa Diagonal ? u[i, i] * conj(u[j, j]) : one(V)
+
+                    indices[2] = slacks[srowdiag]
+                    values[2] = u isa Diagonal ? abs2(u[i, i]) : one(V)
+                    indices[5] = indices[3] = slacks[lowerslack]
+                    indices[6] = indices[4] = slacks[lowerslack+1]
+                    values[3] = real(uval)
+                    values[4] = -imag(uval)
+                    values[5] = imag(uval)
+                    values[6] = real(uval)
+                    srowdiag += 2(dim - i) +1
+                    lowerslack += 2
+                    @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, 2))
+                end
+                #endregion
+                empty!(indices)
+                empty!(values)
+            end
+        else
+            unsafe_append!(indices, slacks)
+            unsafe_append!(indices, slacks)
+            unsafe_append!(indices, slacks)
+            @inbounds for j in 1:dim
+                #region Diagonal (naturally is the first item in the L order, and we must put it separately in the nonneg cone)
+                @inbounds for col in 1:dim
+                    unsafe_push!(values, abs2(u[j, col]))
+                    for row in col+1:dim
+                        uval = u[j, col] * conj(u[j, row])
+                        unsafe_push!(values, real(uval), imag(uval))
+                    end
+                end
+                add_constr_nonnegative!(state, Indvals(slacks, values))
+                empty!(values)
+                #endregion
+                #region Below diagonal
+                for i in j+1:dim
+                    # first the diagonal, which is our col diagonal plus the row diagonal that we must recompute.
+                    slack = 1
+                    for col in 1:dim
+                        unsafe_push!(values, abs2(u[j, col]) + abs2(u[i, col]))
+                        slack += 1
+                        for row in col+1:dim
+                            uval = u[j, col] * conj(u[j, row]) + u[i, col] * conj(u[i, row])
+                            unsafe_push!(values, real(uval), imag(uval))
+                        end
+                    end
+                    # then every off-diagonal
+                    @twice impart true begin
+                        slack = 1
+                        for col in 1:dim
+                            uval = 2u[i, col] * conj(u[j, col])
+                            unsafe_push!(values, impart ? imag(uval) : real(uval))
+                            slack += 1
+                            for row in col+1:dim
+                                @twice imdata true begin
+                                    uval = u[i, row] * conj(u[j, col])
+                                    if imdata
+                                        uval -= u[i, col] * conj(u[j, row])
+                                        thisuval = impart ? real(uval) : -imag(uval)
+                                    else
+                                        uval += u[i, col] * conj(u[j, row])
+                                        thisuval = impart ? imag(uval) : real(uval)
+                                    end
+                                    unsafe_push!(values, thisuval)
+                                    slack += 1
                                 end
                             end
                         end
                     end
-                    unsafe_push!(indices, slacks[sbelow])
-                    unsafe_push!(values, impart ? one(V) : -one(V))
-                    unsafe_push!(lens, length(indices) - startidx +1)
-                    if complex
-                        sbelow += impart ? 2i -3 : 1
+                    @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, dsq))
+                    empty!(values)
+                end
+                #endregion
+            end
+        end
+    else
+        # this case is real-valued
+        upperslack = ts +1
+        if diagu
+            lowerslack = 1
+            @inbounds for j in 1:dim
+                #region Diagonal
+                udiagval = u isa Diagonal ? u[j, j]^2 : one(V)
+                diagslack = lowerslack
+                lowerslack += 1
+                #endregion
+                #region Above diagonal (slacks)
+                for i in 0:j-2
+                    unsafe_push!(indices, slacks[diagslack], slacks[upperslack+i], slacks[diagslack], slacks[upperslack+i])
+                    unsafe_push!(values, udiagval, one(V), udiagval, -one(V))
+                    unsafe_push!(lens, 2, 2)
+                end
+                #endregion
+                #region Below diagonal
+                upperslack += j -1
+                sbelow = upperslack + j -1
+                for i in j+1:dim
+                    if u isa Diagonal
+                        uval = u[i, i] * u[j, j]
                     else
-                        sbelow += i -1
+                        uval = one(V)
+                    end
+                    unsafe_push!(indices, slacks[diagslack], slacks[lowerslack], slacks[sbelow],
+                                            slacks[diagslack], slacks[lowerslack], slacks[sbelow])
+                    unsafe_push!(values, udiagval, uval, -one(V), udiagval, -uval, one(V))
+                    unsafe_push!(lens, 3, 3)
+                    sbelow += i -1
+                    lowerslack += 1
+                end
+                #endregion
+                #region Add the whole column
+                add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lens))
+                #endregion
+                empty!(indices)
+                empty!(values)
+                empty!(lens)
+            end
+        else
+            @inbounds for j in 1:dim
+                #region Above diagonal (slacks)
+                lowerslack = 1
+                for col in 1:dim
+                    unsafe_push!(indices, slacks[lowerslack])
+                    unsafe_push!(values, u[j, col]^2)
+                    lowerslack += 1
+                    for row in col+1:dim
+                        unsafe_push!(indices, slacks[lowerslack])
+                        unsafe_push!(values, u[j, col] * u[j, row])
+                        lowerslack += 1
                     end
                 end
-            end
-            if complex && !have_linf
-                add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
-                Base._deleteend!(indices, length(indices) - diaglen)
-                Base._deleteend!(values, length(values) - diaglen)
-                Base._deleteend!(lens, 2)
-            end
-        end
-        #endregion
-        #region Add the whole column
-        # ℓ_∞ or linear; quadratic meant lots of constraints that were already added on-the-fly
-        if have_linf
-            (complex ? add_constr_linf_complex! : add_constr_linf!)(state, IndvalsIterator(unsafe, indices, values, lens))
-        elseif !complex
-            if isone(j)
-                # Here we added the diagonal entry in the beginning as a dummy so that we can easily subtract without
-                # multiplication operations. But we don't need it in the cone
-                indvals = @views IndvalsIterator(unsafe, indices[diaglen+1:end], values[diaglen+1:end], lens)
-            else
-                indvals = @views IndvalsIterator(unsafe, indices[1:end], values[1:end], lens) # just for type stability
-            end
-            add_constr_nonnegative!(state, indvals)
-            # Flip the sign of the nondiagonal parts. This is tricky: Every entry begins with the diagonal part, then has
-            # the rest; so we can always simply flip the sign of the rest. However, if some indices of the rest coincide
-            # with diagonal indices, we merged them in the front; flipping won't do the job.
-            # Previously, we had diag + offdiag, now we want diag - offdiag, so let's do -(old - diag) + diag = -old+2diag
-            # Note: This relies on the implementation not changing the underlying indvals (which is not done
-            # AbstractSparseMatrixSolver or any of the provided API solvers). If the implementation were to, e.g., sort the
-            # indices, we'd generate invalid data.
-            k = isone(j) ? diaglen : 0
-            for l in lens
-                @simd for di in 1:diaglen
-                    values[k+di] = 2diagvals[di] - values[k+di]
+                diagvalues = @view(values[1:lowerslack-1]) # these are the isolated values for the diagonal u, we can use them
+                                                            # to save some re-computations. But beware: if j = 1, there is no
+                                                            # slack, so we should not even have inserted the values in this way
+                                                            # here! We need to account for this later.
+                                                            # [Note 1:lowerslack-1 = begin:end]
+                diagslacks = @view(slacks[1:lowerslack-1])
+                unsafe_push!(indices, slacks[upperslack]) # for j = 1, these are also invalid
+                unsafe_push!(values, -one(V)) # this should be 1 on the upper triangle, but we need it to be -1 for the lower
+                unsafe_append!(indices, diagslacks)
+                unsafe_append!(values, diagvalues)
+                unsafe_push!(indices, slacks[upperslack])
+                unsafe_push!(values, one(V)) # and this should be -1
+                for i in 1:j-2
+                    unsafe_append!(indices, diagslacks)
+                    unsafe_append!(values, diagvalues)
+                    unsafe_push!(indices, slacks[upperslack+i])
+                    unsafe_push!(values, one(V))
+                    unsafe_append!(indices, diagslacks)
+                    unsafe_append!(values, diagvalues)
+                    unsafe_push!(indices, slacks[upperslack+i])
+                    unsafe_push!(values, -one(V))
                 end
-                rmul!(@view(values[k+diaglen+1:k+l]), -one(V))
-                k += l
+                #endregion
+                #region Below diagonal
+                # Here we now have to be careful. If j = 1, then we already have the coefficients for the slacks due to the
+                # diagonal part written into values. This is wrong, we need to update them and add the part for the (2, 1)
+                # entry. However, it is better if we actually start to insert the starting from (3, 1), then at the end
+                # re-visit the (2, 1) part and update it only now; in this way, we can use our knowledge of the diagonal part,
+                # saving some small re-computation.
+                upperslack += j -1
+                sbelow = upperslack + j -1
+                if isone(j)
+                    sbelow += j
+                end
+                for i in (isone(j) ? 3 : j +1):dim
+                    @twice negative true begin
+                        slack = 1
+                        for col in 1:dim
+                            unsafe_push!(indices, slacks[slack])
+                            unsafe_push!(values, diagvalues[slack] + (negative ? -2 : 2) * u[i, col] * u[j, col])
+                            slack += 1
+                            for row in col+1:dim
+                                uval = u[i, row] * u[j, col] + u[i, col] * u[j, row]
+                                unsafe_push!(indices, slacks[slack])
+                                unsafe_push!(values, diagvalues[slack] + (negative ? -uval : uval))
+                                slack += 1
+                            end
+                        end
+                        unsafe_push!(indices, slacks[sbelow])
+                        unsafe_push!(values, negative ? one(V) : -one(V))
+                    end
+                    sbelow += i -1
+                end
+                # Now let's take care of (2, 1). indices and lens are already set up properly, only the values have to be
+                # adjusted.
+                if isone(j)
+                    @twice negative true begin
+                        slack = 1
+                        for col in 1:dim
+                            diagvalues[slack] += (negative ? -2 : 2) * u[2, col] * u[1, col]
+                            slack += 1
+                            for row in col+1:dim
+                                uval = u[2, row] * u[1, col] + u[2, col] * u[1, row]
+                                diagvalues[slack] += (negative ? -uval : uval)
+                                slack += 1
+                            end
+                        end
+                        if !negative
+                            # now map to the next value range
+                            diagvalues = @view(values[diagvalues.offset1+length(diagvalues)+2:diagvalues.offset1+2length(diagvalues)+1])
+                        end
+                    end
+                else
+                    # Finally correct the signs (actually, it does not matter at all if our upper triangle is represented by
+                    # dummy₁ - dummy₂ or dummy₁ + dummy₂; let's just do this for consistency).
+                    values[lowerslack] = one(V)
+                    values[2lowerslack] = -one(V)
+                end
+                #endregion
+                #region Add the whole column
+                add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lowerslack))
+                #endregion
+                empty!(indices)
+                empty!(values)
             end
-            add_constr_nonnegative!(state, indvals)
         end
-        #endregion
-        empty!(indices)
-        empty!(values)
-        empty!(lens)
     end
     return
 end

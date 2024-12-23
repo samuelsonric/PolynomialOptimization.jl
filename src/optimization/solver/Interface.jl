@@ -278,7 +278,7 @@ struct IndvalsIterator{T,V,L,VT<:AbstractVector{T},VV<:AbstractVector{V}}
         length(indices) == length(values) || throw(ArgumentError("Invalid IndvalsIterator construction"))
         new{T,V,I,typeof(indices),typeof(values)}(indices, values, len)
     end
-    IndvalsIterator(::Unsafe, indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}} =
+    IndvalsIterator(::Unsafe, indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:Union{<:Integer,<:AbstractVector{<:Integer}}} =
         new{T,V,L,typeof(indices),typeof(values)}(indices, values, lens)
     function IndvalsIterator(indices::AbstractVector{T}, values::AbstractVector{V}, lens::L) where {T,V,L<:AbstractVector{<:Integer}}
         length(indices) == length(values) == sum(lens, init=0)|| error("Invalid IndvalsIterator construction")
