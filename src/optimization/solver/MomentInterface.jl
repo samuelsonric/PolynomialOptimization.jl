@@ -146,7 +146,7 @@ function add_constr_dddual! end
     add_constr_dddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the dual cone to diagonally dominant matrices to the solver. `data` is an iterator through
-the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone that
+the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone that
 `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
 
 !!! warning
@@ -162,7 +162,7 @@ function add_constr_dddual_complex! end
     add_constr_dddual_complex!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the dual cone to complex-valued diagonally dominant matrices to the solver. `data` is an
-iterator through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal
+iterator through the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal
 cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
 For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
 be followed by the imaginary part. Therefore, the coefficients are real-valued.
