@@ -1041,7 +1041,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
                 unsafe_push!(values, real(uval), imag(uval))
             end
         end
-        add_constr_nonnegative!(state, Indvals(slacks, values))
+        add_constr_nonnegative!(state, Indvals(@view(slacks[1:dsq]), values))
         empty!(values)
         #endregion
         #region Below diagonal
