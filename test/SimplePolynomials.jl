@@ -332,7 +332,7 @@ end
     xmon = SimpleMonomial{2,0}([1, 0])
     @test variable(xmon) === x
     # no arithmetics
-    @test variable(Term(1.0, xmon)) === x
+    @test variable(Term(1., xmon)) === x
     @test_throws InexactError variable(Term(3, xmon)) === x
 
     @test transpose(x) === x
@@ -404,7 +404,7 @@ end
     zmon = SimpleMonomial{0,2}([1, 0], [0, 0])
     @test variable(zmon) === z
     # no arithmetics
-    @test variable(Term(1.0, zmon)) === z
+    @test variable(Term(1., zmon)) === z
     @test_throws InexactError variable(Term(3, zmon)) === z
 
     @test transpose(z) === z
@@ -499,8 +499,8 @@ end
     @test variable(xmon) === x
     @test variable(zmon) === z
     # no arithmetics
-    @test variable(Term(1.0, xmon)) === x
-    @test variable(Term(1.0, zmon)) === z
+    @test variable(Term(1., xmon)) === x
+    @test variable(Term(1., zmon)) === z
     @test_throws InexactError variable(Term(3, xmon)) === z
     @test_throws InexactError variable(Term(3, zmon)) === z
 

@@ -67,8 +67,8 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
         newnum = overallocation(state.num_solver_vars + Cint(N))
         Δ = newnum - state.num_solver_vars
         lb = fill(-COPT_INFINITY, Δ)
-        @inbounds lb[1] = 0.0
-        rotated && @inbounds lb[2] = 0.0
+        @inbounds lb[1] = 0.
+        rotated && @inbounds lb[2] = 0.
         _check_ret(copt_env, COPT_AddCols(state.problem, Δ, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL,
             lb, C_NULL, C_NULL))
         state.num_solver_vars += Δ

@@ -41,7 +41,7 @@ end
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Int32,Float64})
     appendcons(state.task, 1)
     Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indvals), indvals.indices, indvals.values)
-    Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_LO, 0.0, Inf)
+    Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_LO, 0., Inf)
     state.num_cons += 1
     return
 end
@@ -56,7 +56,7 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     end
     Mosek.@MSK_putarowslice64(state.task.task, state.num_cons, state.num_cons + N, ptrrow, pointer(ptrrow, 2),
         indvals.indices, indvals.values)
-    Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + N, MSK_BK_LO, 0.0, Inf)
+    Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + N, MSK_BK_LO, 0., Inf)
     state.num_cons += N
     return
 end
@@ -111,7 +111,7 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
     appendcons(state.task, num)
     # most of the constraints will be zero, so we can save some calls if we all set them to zero and only change the few
     # nonzero ones
-    Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + num, MSK_BK_FX, 0.0, 0.0)
+    Mosek.@MSK_putconboundsliceconst(state.task.task, state.num_cons, state.num_cons + num, MSK_BK_FX, 0., 0.)
     return
 end
 
