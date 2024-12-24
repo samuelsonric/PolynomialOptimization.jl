@@ -8,28 +8,39 @@ function add_constr_nonnegative! end
     add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where {T,V}
 
 Add a nonnegative constraint to the solver that contains the decision variables (columns in the linear constraint matrix)
-indexed according to `indvals`.
+indexed according to `indvals`. An identifier should be returned that allows to uniquely identify this constraint among the
+linear constraints in the solver for later processing.
 Falls back to the vector-valued version if not implemented.
 
 See also [`Indvals`](@ref).
 """
 add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where {T,V} =
-    add_constr_nonnegative!(state, IndvalsIterator(unsafe, indvals.indices, indvals.values, StackVec(length(indvals))))
+    @inbounds first(
+        @inline add_constr_nonnegative!(
+            state,
+            IndvalsIterator(unsafe, indvals.indices, indvals.values, StackVec(length(indvals)))
+        )
+    )
 
 """
     add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::IndvalsIterator{T,V}) where {T,V}
 
 Adds multiple nonnegative constraints to the solver that contain the decision variables (columns in the linear constraint
-matrix) indices according to the entries in `indvals`.
-Falls back to calling the scalar-valued version multiple times if not implemented.
+matrix) indices according to the entries in `indvals`. An abstract vector of identifiers should be returned that allows to
+uniquely identify every constraint among the linear constraints in the solver for later processing.
+Falls back to calling the scalar-valued version multiple times if not implemented. Note that the fallback will assume that the
+identifiers are contiguous integers and return a `UnitRange` for efficiency reasons.
 
 See also [`IndvalsIterator`](@ref).
 """
 function add_constr_nonnegative!(state::AbstractSolver{T,V}, iv::IndvalsIterator{T,V}) where {T,V}
-    for indvals in iv
-        add_constr_nonnegative!(state, indvals)
+    peeled = Iterators.peel(iv)
+    isnothing(peeled) && return 1:0
+    lastid = peeled[1]
+    for indvals in peeled[2]
+        lastid = add_constr_nonnegative!(state, indvals)
     end
-    return
+    return firstid:lastid
 end
 
 function add_constr_quadratic! end
@@ -40,7 +51,8 @@ function add_constr_quadratic! end
 Adds a quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the conic
 constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1 \geq 0``,
-``X_1^2 \geq \sum_{i = 2}^N X_i^2``.
+``X_1^2 \geq \sum_{i = 2}^N X_i^2``. An identifier should be returned that allows to uniquely identify this constraint among
+the quadratic constraints in the solver for later processing.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
@@ -62,7 +74,8 @@ function add_constr_rotated_quadratic! end
 Adds a rotated quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
 conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``) ``X_1, X_2 \geq 0``,
-``2X_1 X_2 \geq \sum_{i = 3}^N X_i^2``.
+``2X_1 X_2 \geq \sum_{i = 3}^N X_i^2``. An identifier should be returned that allows to uniquely identify this constraint among
+the rotated quadratic constraints in the solver for later processing.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
@@ -86,6 +99,8 @@ of [`psd_indextype`](@ref)); these elements make up a linear matrix inequality w
 through `data`, which are of the type `T`.
 Note that if [`add_constr_quadratic!`](@ref) is not implemented, `dim` may also be `2`.
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
+An identifier should be returned that allows to uniquely identify this constraint among the PSD constraints in the solver for
+later processing.
 
 !!! hint "Complex-valued PSD variables"
     Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
@@ -100,6 +115,8 @@ add_constr_psd!(::AbstractSolver{T,V}, ::Int, ::PSDMatrixCartesian{T,V}) where {
 Add a PSD constraint of side dimension `dim` ≥ 3 to the solver. `data` is an iterable through the elements of the PSD matrix
 one-by-one, in the order specified by [`psd_indextype`](@ref). The individual entries are [`Indvals`](@ref).
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
+An identifier should be returned that allows to uniquely identify this constraint among the PSD constraints in the solver for
+later processing.
 
 !!! hint "Complex-valued PSD variables"
     Note that this function will also be called for complex-valued PSD cones if [`supports_psd_complex`](@ref) returns `false`.
@@ -120,6 +137,8 @@ when iterating through `data`, which are of the type `T`. The real part of any c
 front of the real part of the matrix entry, the imaginary part is the coefficient for the imaginary part of the matrix entry.
 Note that if [`add_constr_quadratic!`](@ref) is not implemented, `dim` may also be `2`.
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixCartesian`](@ref).
+An identifier should be returned that allows to uniquely identify this constraint among the complex PSD constraints in the
+solver for later processing.
 
 !!! warning
     This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
@@ -134,6 +153,8 @@ matrix one-by-one, in the order specified by [`psd_indextype`](@ref). The indivi
 This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`](@ref).
 Regardless of the travelling order, for diagonal elements, there will be exactly one entry, which is the real part. For
 off-diagonal elements, the real part will be followed by the imaginary part. Therefore, the coefficients are real-valued.
+An identifier should be returned that allows to uniquely identify this constraint among the complex PSD constraints in the
+solver for later processing.
 
 !!! warning
     This function will only be called if [`supports_psd_complex`](@ref) is defined to return `true` for the given state.
@@ -148,6 +169,8 @@ function add_constr_dddual! end
 Add a constraint for membership in the dual cone to diagonally dominant matrices to the solver. `data` is an iterator through
 the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone that
 `M ∈ DD(u) ⇔ M = uᵀ Q u` with `Q ∈ DD`.
+An identifier should be returned that allows to uniquely identify this constraint among the dual-DD constraints in the solver
+for later processing.
 
 !!! warning
     This function will only be called if [`supports_dd`](@ref) returns `true` for the given state. If diagonally dominant cones
@@ -166,6 +189,8 @@ iterator through the scaled lower triangle of the matrix. A basis change is indu
 cone that `M ∈ DD(u) ⇔ M = u† Q u` with `Q ∈ DD`.
 For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
 be followed by the imaginary part. Therefore, the coefficients are real-valued.
+An identifier should be returned that allows to uniquely identify this constraint among the complex dual-DD constraints in the
+solver for later processing.
 
 !!! warning
     This function will only be called if [`supports_dd_complex`](@ref) returns `true` for the given state. If complex-valued
@@ -184,6 +209,8 @@ Adds an ``\ell_\infty`` norm constraint to the `N = length(indvals)` linear comb
 conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
 ``\mathit{indvals}_i.\mathit{values} \cdot x_{\mathit{indvals}_i.\mathit{indices}}``)
 ``X_1 \geq \max_{i > 2} \lvert X_i\rvert``.
+An identifier should be returned that allows to uniquely identify this constraint among the ``\ell_\infty``-norm constraints in
+the solver for later processing.
 
 See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 
@@ -200,6 +227,8 @@ function add_constr_linf_complex! end
 
 Same as [`add_constr_linf!`](@ref), but now two successive items in `indvals` (starting from the second) are interpreted as
 determining the real and imaginary part of a component of the ``\ell_\infty`` norm cone.
+An identifier should be returned that allows to uniquely identify this constraint among the complex ``\ell_\infty``-norm
+constraints in the solver for later processing.
 
 !!! warning
     This function will only be called if [`supports_lnorm_complex`](@ref) returns `true` for the given state.
@@ -216,6 +245,8 @@ function add_constr_sdddual! end
 Add a constraint for membership in the dual cone to scaled diagonally dominant matrices to the solver. `data` is an iterator
 through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone
 that `M ∈ SDD(u) ⇔ M = uᵀ Q u` with `Q ∈ SDD`.
+An identifier should be returned that allows to uniquely identify this constraint among the dual-SDD constraints in the solver
+for later processing.
 
 !!! warning
     This function will only be called if [`supports_sdd`](@ref) returns `true` for the given state. If scaled diagonally
@@ -233,6 +264,8 @@ an iterator through the (unscaled) lower triangle of the matrix. A basis change 
 primal cone that `M ∈ SDD(u) ⇔ M = u† Q u` with `Q ∈ SDD`.
 For diagonal elements, there will be exactly one entry, which is the real part. For off-diagonal elements, the real part will
 be followed by the imaginary part. Therefore, the coefficients are real-valued.
+An identifier should be returned that allows to uniquely identify this constraint among the complex dual-SDD constraints in the
+solver for later processing.
 
 !!! warning
     This function will only be called if [`supports_sdd_complex`](@ref) returns `true` for the given state. If complex-valued

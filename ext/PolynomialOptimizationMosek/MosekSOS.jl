@@ -13,12 +13,12 @@ end
 
 function Base.append!(state::StateSOS, key)
     if state.num_used_cons == state.num_solver_cons
-        newcon = overallocation(state.num_solver_cons + one(Int32))
+        newcon = overallocation(state.num_solver_cons + one(state.num_solver_cons))
         appendcons(state.task, newcon - state.num_solver_cons)
         state.num_solver_cons = newcon
     end
     return state.mon_to_solver[FastKey(key)] = let uc=state.num_used_cons
-        state.num_used_cons += one(Int32)
+        state.num_used_cons += one(state.num_used_cons)
         uc
     end
 end
@@ -38,46 +38,61 @@ function Solver.add_constr_slack!(state::StateSOS, num::Int)
     return result
 end
 
+function Solver.add_var_nonnegative!(state::StateSOS, indvals::Indvals{Int32,Float64})
+    appendvars(state.task, 1)
+    id = state.num_vars
+    Mosek.@MSK_putacol(state.task.task, id, length(indvals), indvals.indices, indvals.values)
+    Mosek.@MSK_putvarbound(state.task.task, id, MSK_BK_LO.value, 0., Inf)
+    state.num_vars += one(state.num_vars)
+    return id
+end
+
 function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
     N = length(indvals)
-    task = state.task.task
-    Mosek.@MSK_appendvars(task, N)
-    Mosek.@MSK_putvarboundsliceconst(task, state.num_vars, state.num_vars + N, MSK_BK_LO.value, 0., Inf)
+    appendvars(state.task, N)
+    id = state.num_vars
+    curvar = id
     for indval in indvals
-        Mosek.@MSK_putacol(task, state.num_vars, length(indval), indval.indices, indval.values)
-        state.num_vars += 1
+        Mosek.@MSK_putacol(state.task.task, curvar, length(indval), indval.indices, indval.values)
+        curvar += one(curvar)
     end
-    return
+    Mosek.@MSK_putvarboundsliceconst(state.task.task, id, curcon, MSK_BK_LO.value, 0., Inf)
+    state.num_vars = curvar
+    return id:(curvar - one(curvar))
 end
 
 function Solver.add_var_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
     conedim = length(indvals)
     rhsdim = conedim -2
     appendvars(state.task, conedim)
-    Mosek.@MSK_putvarbound(state.task.task, state.num_vars, MSK_BK_LO.value, 0., Inf)
-    Mosek.@MSK_putvarboundsliceconst(state.task.task, state.num_vars + Int32(1), state.num_vars + Int32(conedim),
-        MSK_BK_FR.value, -Inf, Inf)
-    Mosek.@MSK_appendconeseq(state.task.task, MSK_CT_QUAD.value, 0., conedim, state.num_vars)
+    id = state.num_vars
+    Mosek.@MSK_putvarbound(state.task.task, id, MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(state.task.task, id + one(id), id + Int32(conedim), MSK_BK_FR.value, -Inf, Inf)
+    Mosek.@MSK_appendconeseq(state.task.task, MSK_CT_QUAD.value, 0., conedim, id)
+    curvar = id
     for indval in indvals
-        Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indval), indval.indices, indval.values)
-        state.num_vars += 1
+        Mosek.@MSK_putacol(state.task.task, curvar, length(indval), indval.indices, indval.values)
+        curvar += one(curvar)
     end
-    return
+    state.num_vars = curvar
+    return id:(curvar - one(curvar))
 end
 
 function Solver.add_var_rotated_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
     conedim = length(indvals)
     rhsdim = conedim -2
     appendvars(state.task, conedim)
-    Mosek.@MSK_putvarboundsliceconst(state.task.task, state.num_vars, state.num_vars + Int32(2), MSK_BK_LO.value, 0., Inf)
-    Mosek.@MSK_putvarboundsliceconst(state.task.task, state.num_vars + Int32(2), state.num_vars + Int32(conedim),
-        MSK_BK_FR.value, -Inf, Inf)
-    Mosek.@MSK_appendconeseq(state.task.task, MSK_CT_RQUAD.value, 0., conedim, state.num_vars)
+    id = state.num_vars
+    Mosek.@MSK_putvarboundsliceconst(state.task.task, id, id + Int32(2), MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(state.task.task, id + Int32(2), id + Int32(conedim), MSK_BK_FR.value, -Inf, Inf)
+    Mosek.@MSK_appendconeseq(state.task.task, MSK_CT_RQUAD.value, 0., conedim, id)
+    curvar = id
     for indval in indvals
-        Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indval), indval.indices, indval.values)
-        state.num_vars += 1
+        Mosek.@MSK_putacol(state.task.task, curvar, length(indval), indval.indices, indval.values)
+        curvar += one(curvar)
     end
-    return
+    state.num_vars = curvar
+    return id:(curvar - one(curvar))
 end
 
 function Solver.add_var_psd!(state::StateSOS, dim::Int, data::PSDMatrixCartesian{Int32,Float64})
@@ -88,8 +103,8 @@ function Solver.add_var_psd!(state::StateSOS, dim::Int, data::PSDMatrixCartesian
         Mosek.@MSK_appendsparsesymmat(state.task.task, dim, length(symrows), symrows, symcols, vals, outidx)
         Mosek.@MSK_putbaraij(state.task.task, midx, state.num_bar_vars, 1, outidx, oneref)
     end
-    state.num_bar_vars += 1
-    return
+    state.num_bar_vars += one(state.num_bar_vars)
+    return state.num_bar_vars - one(state.num_bar_vars)
 end
 
 function Solver.add_var_free_prepare!(state::StateSOS, num::Int)

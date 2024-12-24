@@ -55,12 +55,11 @@ function FastVector.prepare_push!(smc::SparseMatrixCOO, new_items::Integer)
 end
 
 """
-    append!(coo::SparseMatrixCOO, indvals::Union{Indvals,IndvalsIterator})
+    append!(coo::SparseMatrixCOO, indvals::Indvals)
 
-Appends the data given in `indvals` into successive rows in `coo` (`first(indvals)` to the first rows, the next to the second,
-...). Returns the index of the last row that was added.
+Appends the data given in `indvals` into the next row in `coo`. Returns the index of the row that was added.
 
-See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+See also [`Indvals`](@ref).
 """
 @inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prepare_push!(coo, length(indvals))
@@ -74,24 +73,26 @@ See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 end
 
 """
-    append!(coo::SparseMatrixCOO, psd::IndvalsIterator)
+    append!(coo::SparseMatrixCOO, indvals::IndvalsIterator)
 
-Appends the data given in `psd` into successive rows in `coo`. Returns the index of the last row that was added.
+Appends the data given in `indvals` into successive rows in `coo` (`first(indvals)` to the first row, the next to the second,
+...). Returns the range of indices of all rows that were added.
 
 See also [`IndvalsIterator`](@ref).
 """
-@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
-    prepare_push!(coo.rowinds, length(rowvals(psd)))
+@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+    prepare_push!(coo.rowinds, length(rowvals(indvals)))
     @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
-    for l in Base.index_lengths(psd)
+    firstv = v
+    for l in Base.index_lengths(indvals)
         for _ in 1:l
             unsafe_push!(coo.rowinds, v)
         end
         v += one(I)
     end
-    append!(coo.moninds, rowvals(psd))
-    append!(coo.nzvals, nonzeros(psd))
-    return v - one(I)
+    append!(coo.moninds, rowvals(indvals))
+    append!(coo.nzvals, nonzeros(indvals))
+    return firstv:(v - one(I))
 end
 
 struct COO_to_CSC_callback{Offset,CC<:Tuple,CP<:Tuple,CV<:Tuple,DV<:Tuple,I<:Tuple}

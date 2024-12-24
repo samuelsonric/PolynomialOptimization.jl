@@ -18,21 +18,18 @@ Solver.supports_quadratic(::StateMoment) = true
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
 function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
-    append!(state.Acoo, indvals)
     push!(state.cones, Clarabel.NonnegativeConeT(length(indvals)))
-    return
+    return append!(state.Acoo, indvals)
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
-    append!(state.Acoo, indvals)
     push!(state.cones, Clarabel.SecondOrderConeT(length(indvals)))
-    return
+    return append!(state.Acoo, indvals)
 end
 
 function Solver.add_constr_psd!(state::StateMoment{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K,V}
-    append!(state.Acoo, data)
     push!(state.cones, Clarabel.PSDTriangleConeT(dim))
-    return
+    return append!(state.Acoo, data)
 end
 
 function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
