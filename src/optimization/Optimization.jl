@@ -40,7 +40,7 @@ solver has been loaded.
 
 [^1]: This identifier will be a tuple, where the first element is a symbol - either `:objective`, `:nonneg`, or `:psd` - to
       indicate the general reason why the variable is there. The second element is an `Int` denoting the index of the
-      constraint (and will be undefined for the objective, but still present to avoid extra compilataion). The last element
+      constraint (and will be undefined for the objective, but still present to avoid extra compilation). The last element
       is an `Int` denoting the index of the grouping within the constraint/objective.
 """
 function poly_optimize(@nospecialize(v::Val), relaxation::AbstractRelaxation; verbose::Bool=false,
