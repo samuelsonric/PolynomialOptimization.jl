@@ -8,6 +8,7 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
     const psdsizes::FastVec{I}
     slack::K
     c::Tuple{Vector{K},Vector{Float64}}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{I,K}() where {I<:Integer,K<:Integer} = new{I,K,zero(I)}(
         SparseMatrixCOO{I,K,Float64,zero(I)}(),
@@ -69,7 +70,7 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         state = StateMoment{I,K}()
 
-        moment_setup!(state, relaxation, groupings; representation)
+        state.info = moment_setup!(state, relaxation, groupings; representation)
         customize(state)
 
         # We now must merge the all constraints together in an appropriate order

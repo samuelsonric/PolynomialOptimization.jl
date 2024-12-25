@@ -91,6 +91,8 @@ sos_add_equality!(state::AbstractSolver, args...) = moment_add_equality!(SOSWrap
 Sets up all the necessary SOS matrices, free variables, objective, and constraints of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
 second of the equality, the third of the inequality, and the fourth of the PSD constraints).
+The function returns a `Vector{<:Vector{<:Tuple{Symbol,Any}}}` that contains internal information on the problem. This
+information is required to obtain dual constraints and re-optimize the problem and should be stored in the `state`.
 
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)

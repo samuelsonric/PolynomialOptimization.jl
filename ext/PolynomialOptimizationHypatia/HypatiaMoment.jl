@@ -5,6 +5,7 @@ mutable struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int
     const cones::FastVec{Cones.Cone{V}}
     slack::K
     c::Tuple{Vector{K},Vector{V}}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K,V}() where {K<:Integer,V<:Real} = new{K,V}(
         SparseMatrixCOO{Int,K,V,1}(),
@@ -96,7 +97,7 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
         V = real(coefficient_type(poly_problem(relaxation).objective))
         state = StateMoment{K,V}()
 
-        moment_setup!(state, relaxation, groupings; representation)
+        state.info = moment_setup!(state, relaxation, groupings; representation)
         customize(state)
 
         # Now we have all the data in COO form. The reason for this choice is that we were able to assign arbitrary column

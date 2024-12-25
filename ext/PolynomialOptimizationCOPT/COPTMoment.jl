@@ -4,6 +4,7 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Cint,Float64}
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)
     num_symmat::Cint
     const mon_to_solver::Dict{FastKey{K},Cint}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K}(task::COPTProb) where {K<:Integer} = new{K}(
         task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}()
@@ -152,7 +153,7 @@ function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation
         _check_ret(copt_env, COPT_SetObjSense(task, COPT_MINIMIZE))
 
         state = StateMoment{K}(task)
-        moment_setup!(state, relaxation, groupings; representation)
+        state.info = moment_setup!(state, relaxation, groupings; representation)
         customize(state)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")

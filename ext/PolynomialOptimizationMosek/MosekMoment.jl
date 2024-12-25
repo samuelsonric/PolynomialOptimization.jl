@@ -5,6 +5,7 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     num_cons::Int32
     num_afes::Int64
     const mon_to_solver::Dict{FastKey{K},Int32}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
         task, zero(Int32), zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
@@ -156,7 +157,7 @@ function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxatio
         Mosek.@MSK_appendrquadraticconedomain(taskptr, 4, domidx_)
 
         state = StateMoment{K}(task)
-        moment_setup!(state, relaxation, groupings; representation)
+        state.info = moment_setup!(state, relaxation, groupings; representation)
         Mosek.@MSK_putvarboundsliceconst(taskptr, 0, state.num_used_vars, MSK_BK_FR.value, -Inf, Inf)
         customize(state)
     end

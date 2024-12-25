@@ -2,6 +2,22 @@ export moment_add_matrix!, moment_add_equality!, moment_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
 
+mutable struct Counters
+    nonneg::Int
+    quad::Int
+    rquad::Int
+    psd::Int
+    psd_complex::Int
+    dd::Int
+    dd_complex::Int
+    lnorm::Int
+    lnorm_complex::Int
+    sdd::Int
+    sdd_complex::Int
+
+    Counters() = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+end
+
 function to_soc!(indices, values, lens, supports_rotated)
     @assert(length(lens) ≥ 2)
     @inbounds if supports_rotated
@@ -52,7 +68,8 @@ end
 # - or DD/SDD representations in the real case and in the complex case if the quadratic cone is requested
 function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
-    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::RepresentationMethod) where {T,V,Tri}
+    type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::RepresentationMethod,
+    counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
     # function should not be called from the outside.
 
@@ -82,13 +99,14 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
     end
 
     # introduce a method barrier to fix the potentially unknown eltype of lens due to the dynamic maxlen
-    moment_add_matrix_helper!(state, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex), lg,
-        block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values), representation)
+    return moment_add_matrix_helper!(state, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex), lg,
+        block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values), representation, counters)
 end
 
 function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
-    ::Val{complex}, lg, block_size, dim, data, representation::RepresentationMethod) where {T,V,Tri,tri,matrix_indexing,complex}
+    ::Val{complex}, lg, block_size, dim, data, representation::RepresentationMethod,
+    counters::Counters) where {T,V,Tri,tri,matrix_indexing,complex}
     if matrix_indexing
         rows, indices, values = data
         row = zero(T)
@@ -217,17 +235,36 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
     if matrix_indexing # implies dim ≥ 3
         mc = PSDMatrixCartesian{_get_offset(indextype)}(dim, Tri, finish!(rows), finish!(indices), finish!(values))
         if representation isa RepresentationPSD
-            return (complex ? add_constr_psd_complex! : add_constr_psd!)(state, dim, mc)
+            if complex
+                add_constr_psd_complex!(state, dim, mc)
+                return :psd_complex, (counters.psd_complex += 1)
+            else
+                add_constr_psd!(state, dim, mc)
+                return :psd, (counters.psd += 1)
+            end
         elseif representation isa RepresentationDD
-            return (complex ? add_constr_dddual_complex! : add_constr_dddual!)(state, dim, mc)
+            if complex
+                add_constr_dddual_complex!(state, dim, mc)
+                return :dd_complex, (counters.dd_complex += 1)
+            else
+                add_constr_dddual!(state, dim, mc)
+                return :dd, (counters.dd += 1)
+            end
         else
-            return (complex ? add_constr_sdddual_complex! : add_constr_sdddual!)(state, dim, mc)
+            if complex
+                add_constr_sdddual_complex!(state, dim, mc)
+                return :sdd_complex, (counters.sdd_complex += 1)
+            else
+                add_constr_sdddual!(state, dim, mc)
+                return :sdd, (counters.sdd += 1)
+            end
         end
     else
         let indices=finish!(indices), values=finish!(values)
             @inbounds if dim == 1
                 @assert(length(lens) == 1)
                 add_constr_nonnegative!(state, Indvals(indices, values))
+                return :nonnegative, (counters.nonneg += 1)
             elseif dim == 2 && (rquad || quad)
                 @assert(length(lens) == (complex ? 4 : 3))
                 # Note: indices/values represent the vectorized PSD cone (lower triangle) with off-diagonals already
@@ -243,37 +280,53 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                 else
                     lens[2], lens[3] = lens[3], lens[2]
                 end
-                (rquad ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, rquad))
+                if rquad
+                    add_constr_rotated_quadratic!(state, to_soc!(indices, values, lens, true))
+                    return :rotated_quadratic, (counters.rquad += 1)
+                else
+                    add_constr_quadratic!(state, to_soc!(indices, values, lens, false))
+                    return :quadratic, (counters.quad += 1)
+                end
             else # implies dim ≥ 3
                 ii = IndvalsIterator(indices, values, lens)
                 if representation isa RepresentationPSD
-                    return (complex ? add_constr_psd_complex! : add_constr_psd!)(state, dim, ii)
+                    if complex
+                        add_constr_psd_complex!(state, dim, ii)
+                        return :psd_complex, (counters.psd_complex += 1)
+                    else
+                        add_constr_psd!(state, dim, ii)
+                        return :psd, (counters.psd += 1)
+                    end
                 elseif representation isa RepresentationDD
                     if complex
                         if supports_dd_complex(state)
-                            return add_constr_dddual_complex!(state, dim, ii, representation.u)
+                            add_constr_dddual_complex!(state, dim, ii, representation.u)
+                            return :dd_complex, (counters.dd_complex += 1)
                         else
-                            return moment_add_dddual_transform!(state, dim, ii, representation.u, true)
+                            return moment_add_dddual_transform!(state, dim, ii, representation.u, true, counters)
                         end
                     else
                         if supports_dd(state)
-                            return add_constr_dddual!(state, dim, ii, representation.u)
+                            add_constr_dddual!(state, dim, ii, representation.u)
+                            return :dd, (counters.dd += 1)
                         else
-                            return moment_add_dddual_transform!(state, dim, ii, representation.u, false)
+                            return moment_add_dddual_transform!(state, dim, ii, representation.u, false, counters)
                         end
                     end
                 else
                     if complex
                         if supports_sdd_complex(state)
-                            return add_constr_sdddual_complex!(state, dim, ii, representation.u)
+                            add_constr_sdddual_complex!(state, dim, ii, representation.u)
+                            return :sdd_complex, (counters.sdd_complex += 1)
                         else
-                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(true))
+                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(true), counters)
                         end
                     else
                         if supports_sdd(state)
-                            return add_constr_sdddual!(state, dim, ii, representation.u)
+                            add_constr_sdddual!(state, dim, ii, representation.u)
+                            return :sdd, (counters.sdd += 1)
                         else
-                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(false))
+                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(false), counters)
                         end
                     end
                 end
@@ -287,7 +340,8 @@ end
 # complex PSD cone explicitly
 function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where M<:SimpleMonomial,
     constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
-    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,<:RepresentationSDD,RepresentationPSD}) where {T,V,Tri}
+    ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,<:RepresentationSDD,RepresentationPSD},
+    counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
     # function should not be called from the outside.
 
@@ -442,8 +496,9 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         end
     end
     if matrix_indexing
-        return add_constr_psd!(state, dim2, PSDMatrixCartesian{_get_offset(indextype)}(dim2, Tri, finish!(rows),
+        add_constr_psd!(state, dim2, PSDMatrixCartesian{_get_offset(indextype)}(dim2, Tri, finish!(rows),
             finish!(indices), finish!(values)))
+        return :psd, (counters.psd += 1)
     else
         # We constructed everything in matrix form, as it was easier to assign arbitrary positions in this way; but now we need
         # to convert it to the iterative form. We cannot re-use rows for this, unfortunately. It may happen that some rows
@@ -479,18 +534,21 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
 
             ii = IndvalsIterator(indices, values, lens)
             if representation isa RepresentationPSD
-                return add_constr_psd!(state, 2dim, ii)
+                add_constr_psd!(state, 2dim, ii)
+                return :psd, (counters.psd += 1)
             elseif representation isa RepresentationDD
                 if supports_dd(state)
-                    return add_constr_dddual!(state, 2dim, ii, representation.u)
+                    add_constr_dddual!(state, 2dim, ii, representation.u)
+                    return :dd, (counters.dd += 1)
                 else
-                    return moment_add_dddual_transform!(state, 2dim, ii, representation.u, false)
+                    return moment_add_dddual_transform!(state, 2dim, ii, representation.u, false, counters)
                 end
             else
                 if supports_sdd(state)
-                    return add_constr_sdddual!(state, 2dim, ii, representation.u)
+                    add_constr_sdddual!(state, 2dim, ii, representation.u)
+                    return :sdd, (counters.sdd += 1)
                 else
-                    return moment_add_sdddual_transform!(state, 2dim, ii, representation.u, false)
+                    return moment_add_sdddual_transform!(state, 2dim, ii, representation.u, false, counters)
                 end
             end
         end
@@ -514,7 +572,7 @@ end
 # DD = ℓ₁ × ... × ℓ₁ plus equality constraints that enforce symmetry.
 # However, here we construct the moment representation; so we now need the dual formulation of diagonal dominance. Due to the
 # equality constraints, this is more complicated:
-# For side dimension n, there are n ℓ₁ cones (we just take the columns - also taking into account the rows would be even more
+# For side dimension n, there are n ℓ_∞ cones (we just take the columns - also taking into account the rows would be even more
 # restrictive). For every data entry, we need a new slack variable which we fix to be equal to this data entry (a variable for
 # each the real and the imaginary part). We need additional slacks for every entry in the strict upper triangle (twice in the
 # complex-valued case).
@@ -645,7 +703,7 @@ const DiagonalTransform = Union{<:UniformScaling,<:Diagonal}
 
 # We have the lnorm cone available, the transformation is diagonal
 function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{complex}, dim::Int, data::IndvalsIterator{T,V},
-    u::DiagonalTransform) where {T,V,complex}
+    u::DiagonalTransform, counters::Counters) where {T,V,complex}
     dsq = dim^2
     indices = FastVec{T}(buffer=if complex
             6dim -5 # 1 + 6(dim -1)
@@ -703,11 +761,13 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return
+    return complex ? (:dd_lnorm_complex_diag, (@view(slacks[1:dsq]), counters.lnorm_complex+1:(counters.lnorm_complex += dim))) :
+                     (:dd_lnorm_real_diag, (@view(slacks[1:trisize(dim)]), counters.lnorm_complex+1:(counters.lnorm += dim)))
 end
 
 # We have the lnorm cone available, the transformation is not diagonal
-function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{complex}, dim::Int, data::IndvalsIterator{T,V}, u) where {T,V,complex}
+function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{complex}, dim::Int, data::IndvalsIterator{T,V}, u,
+    counters::Counters) where {T,V,complex}
     ts = trisize(dim)
     dsq = dim^2
     indices = FastVec{T}(buffer=if complex
@@ -794,12 +854,13 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return
+    return complex ? (:dd_lnorm_complex, (@view(slacks[1:dsq]), counters.lnorm_complex+1:(counters.lnorm_complex += dim))) :
+                     (:dd_lnorm_real, (@view(slacks[1:trisize(dim)]), counters.lnorm+1:(counters.lnorm += dim)))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is diagonal
 function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false}, dim::Int, data::IndvalsIterator{T,V},
-    u::DiagonalTransform) where {T,V}
+    u::DiagonalTransform, counters::Counters) where {T,V}
     ts = trisize(dim)
     dsq = dim^2
     # If we don't have the ℓ_∞ cone, we must use linear constraints. While we could do the whole matrix in a single large
@@ -851,11 +912,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
-    return
+    return :dd_nonneg_diag, (@view(slacks[1:ts]), counters.nonneg+1:(counters.nonneg += dim))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is not diagonal
-function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false}, dim::Int, data::IndvalsIterator{T,V}, u) where {T,V}
+function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false}, dim::Int, data::IndvalsIterator{T,V}, u,
+    counters::Counters) where {T,V}
     ts = trisize(dim)
     dsq = dim^2
     # If we don't have the ℓ_∞ cone, we must use linear constraints. While we could do the whole matrix in a single large
@@ -963,12 +1025,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(values)
     end
 
-    return
+    return :dd_nonneg, (@view(slacks[1:ts]), counters.nonneg+1(counters.nonneg += dim))
 end
 
 # We don't have the lnorm cone available (but the quadratic cone), the problem is complex-valued, and the transform is diagonal
 function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}, dim::Int, data::IndvalsIterator{T,V},
-    u::DiagonalTransform) where {T,V}
+    u::DiagonalTransform, counters::Counters) where {T,V}
     ts = trisize(dim)
     dsq = dim^2
     # Here we use the quadratic cone to mimick the ℓ_∞ norm cone: x₁ ≥ ∑ᵢ (Re² xᵢ + Im² xᵢ). So we need to submit lots of
@@ -1014,11 +1076,13 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         empty!(values)
     end
 
-    return
+    return :dd_quad_diag, (slacks, counters.nonneg+1:(counters.nonneg += dim),
+                           counters.quad+1:(counters.quad += trisize(dim -1)))
 end
 
 # We don't have the lnorm cone available, the problem is complex-valued, and the transform is not diagonal
-function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}, dim::Int, data::IndvalsIterator{T,V}, u) where {T,V}
+function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}, dim::Int, data::IndvalsIterator{T,V}, u,
+    counters::Counters) where {T,V}
     ts = trisize(dim)
     dsq = dim^2
     # Here we use the quadratic cone to mimick the ℓ_∞ norm cone: x₁ ≥ ∑ᵢ (Re² xᵢ + Im² xᵢ). So we need to submit lots of
@@ -1085,10 +1149,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         #endregion
     end
 
-    return
+    return :dd_quad, (slacks, counters.nonneg+1:(counters.nonneg += dim),
+                      counters.quad+1:(counters.quad += trisize(dim -1)))
 end
 
-function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex) where {T,V}
+function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
+    counters::Counters) where {T,V}
     !complex && (Base.IteratorEltype(u) isa Base.HasEltype) && eltype(u) <: Complex &&
         throw(MethodError(moment_add_dddual_transform!, (state, dim, data, u, complex)))
     @assert(dim > 1)
@@ -1099,12 +1165,14 @@ function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data:
         Val(complex),
         dim,
         data,
-        u
+        u,
+        counters
     )
 end
 #endregion
 
-function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex}) where {T,V,complex}
+function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex},
+    counters::Counters) where {T,V,complex}
     diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
     # See the comment in add_constr_dddual!. Here, the fallback implementation is done in terms of rotated quadratic cones due
     # to the relationship of SDD matrices with factor-width-2 matrices.
@@ -1422,13 +1490,14 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
 function moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD()) where {P<:SimplePolynomial}
+    constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD(),
+    counters::Counters=Counters()) where {P<:SimplePolynomial}
     dim = length(grouping) * (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
     if (dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))))
         if representation isa RepresentationPSD
             indextype = PSDIndextypeVector(:U)
         else
-            return moment_add_matrix!(state, grouping, constraint, RepresentationPSD())
+            return moment_add_matrix!(state, grouping, constraint, RepresentationPSD(), counters)
         end
     else
         indextype = psd_indextype(state)
@@ -1472,7 +1541,8 @@ function moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where 
         constraint isa AbstractMatrix ? constraint : ScalarMatrix(constraint),
         indextype,
         (Val(real_valued), Val(complex_cone)),
-        representation
+        representation,
+        counters
     )
 end
 
@@ -1638,6 +1708,8 @@ end
 Sets up all the necessary moment matrices, variables, constraints, and objective of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
 second of the equality, the third of the inequality, and the fourth of the PSD constraints).
+The function returns a `Vector{<:Vector{<:Tuple{Symbol,Any}}}` that contains internal information on the problem. This
+information is required to obtain dual variables and re-optimize the problem and should be stored in the `state`.
 
 The following methods must be implemented by a solver to make this function work:
 - [`mindex`](@ref)
@@ -1739,28 +1811,39 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         end
     end
 
+    counters = Counters()
+    info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_nonneg) + length(problem.constr_psd))
+    infoᵢ = 1
+
     # SOS term for objective
     constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
+    @inbounds info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupings.obj))
     for (i, grouping) in enumerate(groupings.obj)
         g = collect_grouping(grouping)
-        moment_add_matrix!(state, g, constantP,
-            representation isa RepresentationMethod ? representation : representation((:objective, 0, i), length(g)))
+        @inbounds this_info[i] = moment_add_matrix!(state, g, constantP,
+            representation isa RepresentationMethod ? representation : representation((:objective, 0, i), length(g)), counters)
     end
+    infoᵢ += 1
     # localizing matrices
-    for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
+    @inbounds for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
+        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
         for (j, grouping) in enumerate(groupingsᵢ)
             g = collect_grouping(grouping)
-            moment_add_matrix!(state, g, constrᵢ,
-                representation isa RepresentationMethod ? representation : representation((:nonneg, i, j), length(g)))
+            this_info[j] = moment_add_matrix!(state, g, constrᵢ,
+                representation isa RepresentationMethod ? representation : representation((:nonneg, i, j), length(g)),
+                counters)
         end
+        infoᵢ += 1
     end
     for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.psds, problem.constr_psd))
+        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
         for (j, grouping) in enumerate(groupingsᵢ)
             g = collect_grouping(grouping)
-            moment_add_matrix!(state, g, constrᵢ,
+            this_info[j] = moment_add_matrix!(state, g, constrᵢ,
                 representation isa RepresentationMethod ? representation :
-                                                          representation((:psd, i, j), length(g) * size(constrᵢ, 1)))
+                                                          representation((:psd, i, j), length(g) * size(constrᵢ, 1)), counters)
         end
+        infoᵢ += 1
     end
 
     # Riesz functional in the objective
@@ -1791,5 +1874,5 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         fix_objective!(state, Indvals(finish!(indices), finish!(values)))
     end
 
-    return
+    return info
 end

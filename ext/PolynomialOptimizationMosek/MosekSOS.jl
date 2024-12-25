@@ -5,6 +5,7 @@ mutable struct StateSOS{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     num_solver_cons::Int32 # total number of constraints available in the solver
     num_used_cons::Int32 # number of constraints already used for something (might include scratch constraints)
     const mon_to_solver::Dict{FastKey{K},Int32}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateSOS{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
         task, zero(Int32), zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}()
@@ -135,7 +136,7 @@ function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation, 
         Mosek.@MSK_putobjsense(task.task, MSK_OBJECTIVE_SENSE_MAXIMIZE.value)
 
         state = StateSOS{K}(task)
-        sos_setup!(state, relaxation, groupings; representation)
+        state.info = sos_setup!(state, relaxation, groupings; representation)
         customize(state)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
