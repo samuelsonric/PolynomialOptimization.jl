@@ -24,17 +24,20 @@ Solver.supports_quadratic(::StateMoment) = true
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
 function Solver.add_constr_nonnegative!(state::StateMoment{<:Integer,K}, indvals::IndvalsIterator{K,Float64}) where {K}
-    return append!(state.minusAcoo_nonneg, indvals)
+    append!(state.minusAcoo_nonneg, indvals)
+    return
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment{<:Integer,K}, indvals::IndvalsIterator{K,Float64}) where {K}
+    append!(state.minusAcoo_soc, indvals)
     push!(state.socsizes, length(indvals))
-    return append!(state.minusAcoo_soc, indvals)
+    return
 end
 
 function Solver.add_constr_psd!(state::StateMoment{<:Integer,K}, dim::Int, data::IndvalsIterator{K,Float64}) where {K}
+    append!(state.minusAcoo_psd, data)
     push!(state.psdsizes, dim)
-    return append!(state.minusAcoo_psd, data)
+    return
 end
 
 function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)

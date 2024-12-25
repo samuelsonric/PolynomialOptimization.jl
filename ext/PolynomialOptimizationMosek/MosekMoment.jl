@@ -39,11 +39,11 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
 end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Int32,Float64})
-    id = state.num_cons
-    Mosek.@MSK_putarow(state.task.task, id, length(indvals), indvals.indices, indvals.values)
-    Mosek.@MSK_putconbound(state.task.task, id, MSK_BK_LO.value, 0., Inf)
+    appendcons(state.task, 1)
+    Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indvals), indvals.indices, indvals.values)
+    Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_LO, 0., Inf)
     state.num_cons += one(state.num_cons)
-    return id
+    return
 end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64})
@@ -57,7 +57,7 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     end
     Mosek.@MSK_putconboundsliceconst(state.task.task, id, curcon, MSK_BK_LO.value, 0., Inf)
     state.num_cons = curcon
-    return id:(curcon - one(curcon))
+    return
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}, ::Val{rotated}=Val(false)) where {rotated}
@@ -69,6 +69,7 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
         @capture(Mosek.@MSK_putafefrow(state.task.task, $curafe, length(indval), indval.indices, indval.values))
         curafe += one(curafe)
     end
+    state.num_afes = curafe
     # TODO: benchmark which approach is better, subsequence putafefrow as here or one putafefrowlist with preprocessing
     if !rotated && length(indvals) == 3
         Mosek.@MSK_appendaccseq(state.task.task, 1, 3, id, C_NULL)
@@ -85,8 +86,7 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
         end
         Mosek.@MSK_appendaccseq(state.task.task, dom[], N, id, C_NULL)
     end
-    state.num_afes = curafe
-    return id:(curafe - one(curafe))
+    return
 end
 
 Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterator{Int32,Float64}) =
@@ -95,8 +95,7 @@ Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterato
 function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::IndvalsIterator{Int32,Float64})
     n = trisize(dim)
     appendafes(state.task, n)
-    id = state.num_afes
-    curafe = id
+    curafe = state.num_afes
     # putafefrowlist would require us to create collect(state.num_afes:state.num_afes+length(data)) for the afeidx parameter
     # and accumulate Base.index_lengths(data) for ptrrow
     for indvals in data
@@ -109,7 +108,7 @@ function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::IndvalsItera
     Mosek.@MSK_appendsvecpsdconedomain(state.task.task, n, cone)
     Mosek.@MSK_appendaccseq(state.task.task, cone[], n, state.num_afes, C_NULL)
     state.num_afes = curafe
-    return id:(curafe - one(curafe))
+    return
 end
 
 function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
@@ -121,11 +120,10 @@ function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)
 end
 
 function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::Indvals{Int32,Float64}, rhs::Float64)
-    id = state.num_cons
-    Mosek.@MSK_putarow(state.task.task, id, length(indvals), indvals.indices, indvals.values)
-    iszero(rhs) || Mosek.@MSK_putconbound(state.task.task, id, MSK_BK_FX.value, rhs, rhs)
+    Mosek.@MSK_putarow(state.task.task, state.num_cons, length(indvals), indvals.indices, indvals.values)
+    iszero(rhs) || Mosek.@MSK_putconbound(state.task.task, state.num_cons, MSK_BK_FX, rhs, rhs)
     state.num_cons += one(state.num_cons)
-    return id
+    return
 end
 
 function Solver.fix_objective!(state::StateMoment, indvals::Indvals{Int32,Float64})

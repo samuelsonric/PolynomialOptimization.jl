@@ -26,38 +26,45 @@ Solver.supports_psd_complex(::StateMoment) = true
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
 function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.Nonnegative{V}(length(indvals)))
-    return append!(state.minusGcoo, indvals)
+    return
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiNormEucl{V}(length(indvals)))
-    return append!(state.minusGcoo, indvals)
+    return
 end
 
 function Solver.add_constr_rotated_quadratic!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiPerSquare{V}(length(indvals)))
-    return append!(state.minusGcoo, indvals)
+    return
 end
 
 function Solver.add_constr_linf!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiNormInf{V,V}(length(indvals)))
-    return append!(state.minusGcoo, indvals)
+    return
 end
 
 function Solver.add_constr_linf_complex!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.EpiNormInf{V,Complex{V}}(length(indvals)))
-    return append!(state.minusGcoo, indvals)
+    return
 end
 
 function Solver.add_constr_psd!(state::StateMoment{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, data)
     push!(state.cones, Cones.PosSemidefTri{V,V}(trisize(dim)))
-    return append!(state.minusGcoo, data)
+    return
 end
 
 function Solver.add_constr_psd_complex!(state::StateMoment{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K,V}
+    append!(state.minusGcoo, data)
     push!(state.cones, Cones.PosSemidefTri{V,Complex{V}}(dim^2))
-    return append!(state.minusGcoo, data)
+    return
 end
 
 function Solver.add_constr_fix_prepare!(state::StateMoment, num::Int)

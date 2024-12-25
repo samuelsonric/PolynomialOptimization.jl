@@ -3,12 +3,10 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Cint,Float64}
     num_solver_vars::Cint # total number of variables available in the solver
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)
     num_symmat::Cint
-    last_row::Cint
-    last_psd::Cint
     const mon_to_solver::Dict{FastKey{K},Cint}
 
     StateMoment{K}(task::COPTProb) where {K<:Integer} = new{K}(
-        task, zero(Cint), zero(Cint), zero(Cint), -one(Cint), -one(Cint), Dict{FastKey{K},Cint}()
+        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}()
     )
 end
 
@@ -46,7 +44,7 @@ end
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::Indvals{Cint,Float64})
     _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, 0., COPT_INFINITY,
         C_NULL))
-    return (state.last_row += one(state.last_row))
+    return
 end
 
 function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64})
@@ -58,7 +56,7 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     end
     _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, indvals.indices, indvals.values, C_NULL,
         fill(0., N), fill(COPT_INFINITY, N), C_NULL))
-    return (state.last_row + one(state.last_row)):(state.last_row += N)
+    return
 end
 
 function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64}, rotated::Bool=false)
@@ -97,7 +95,7 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
     _check_ret(copt_env, COPT_AddCones(state.problem, 1, Ref(Cint(rotated ? COPT_CONE_RQUAD : COPT_CONE_QUAD)), Ref(Cint(0)),
         Ref(Cint(N)), [state.num_used_vars + i for i in Cint(0):Cint(N -1)]))
     state.num_used_vars += N
-    return (state.last_row + one(state.last_row)):(state.last_row += N)
+    return
 end
 
 Solver.add_constr_rotated_quadratic!(state::StateMoment, indvals::IndvalsIterator{Cint,Float64}) =
@@ -121,12 +119,11 @@ function Solver.add_constr_psd!(state::StateMoment, dim::Int, data::PSDMatrixCar
     # - creation of a one-element symmat with just a zero entry works; but as soon as a quadratic constraint is present, the
     #   solver fails with Invalid Data.
     _check_ret(copt_env, COPT_AddLMIConstr(state.problem, dim, j -1, colIdx, symMatIdx, Cint(-1), C_NULL))
-    return (state.last_psd += one(state.last_psd))
+    return
 end
 
 function Solver.add_constr_fix!(state::StateMoment, ::Nothing, indvals::Indvals{Cint,Float64}, rhs::Float64)
     _check_ret(copt_env, COPT_AddRow(state.problem, length(indvals), indvals.indices, indvals.values, 0, rhs, rhs, C_NULL))
-    state.last_row += one(state.last_psd)
     return
 end
 

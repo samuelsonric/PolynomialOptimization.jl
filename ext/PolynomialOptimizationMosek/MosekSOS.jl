@@ -40,11 +40,10 @@ end
 
 function Solver.add_var_nonnegative!(state::StateSOS, indvals::Indvals{Int32,Float64})
     appendvars(state.task, 1)
-    id = state.num_vars
-    Mosek.@MSK_putacol(state.task.task, id, length(indvals), indvals.indices, indvals.values)
-    Mosek.@MSK_putvarbound(state.task.task, id, MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putacol(state.task.task, state.num_vars, length(indvals), indvals.indices, indvals.values)
+    Mosek.@MSK_putvarbound(state.task.task, state.num_vars, MSK_BK_LO.value, 0., Inf)
     state.num_vars += one(state.num_vars)
-    return id
+    return
 end
 
 function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
@@ -58,7 +57,7 @@ function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{I
     end
     Mosek.@MSK_putvarboundsliceconst(state.task.task, id, curcon, MSK_BK_LO.value, 0., Inf)
     state.num_vars = curvar
-    return id:(curvar - one(curvar))
+    return
 end
 
 function Solver.add_var_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
@@ -75,7 +74,7 @@ function Solver.add_var_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int
         curvar += one(curvar)
     end
     state.num_vars = curvar
-    return id:(curvar - one(curvar))
+    return
 end
 
 function Solver.add_var_rotated_quadratic!(state::StateSOS, indvals::IndvalsIterator{Int32,Float64})
@@ -92,7 +91,7 @@ function Solver.add_var_rotated_quadratic!(state::StateSOS, indvals::IndvalsIter
         curvar += one(curvar)
     end
     state.num_vars = curvar
-    return id:(curvar - one(curvar))
+    return
 end
 
 function Solver.add_var_psd!(state::StateSOS, dim::Int, data::PSDMatrixCartesian{Int32,Float64})
@@ -104,7 +103,7 @@ function Solver.add_var_psd!(state::StateSOS, dim::Int, data::PSDMatrixCartesian
         Mosek.@MSK_putbaraij(state.task.task, midx, state.num_bar_vars, 1, outidx, oneref)
     end
     state.num_bar_vars += one(state.num_bar_vars)
-    return state.num_bar_vars - one(state.num_bar_vars)
+    return
 end
 
 function Solver.add_var_free_prepare!(state::StateSOS, num::Int)
