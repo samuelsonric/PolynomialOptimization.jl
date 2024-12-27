@@ -135,7 +135,6 @@ as the inputs.
 """
 function SimpleMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
     vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv)))) where {I<:Integer}
-    isempty(vars) && throw(ArgumentError("Variables must be present"))
     any(isconj, vars) && throw(ArgumentError("The variables must not contain conjuates"))
     allunique(vars) || throw(ArgumentError("Variables must not contain duplicates"))
 
