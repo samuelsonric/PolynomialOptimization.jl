@@ -1,11 +1,18 @@
-export moment_add_matrix!, moment_add_equality!, moment_setup!
+export Counters, addtocounter!, @counter_is_scalar, @counter_alias, moment_add_matrix!, moment_add_equality!, moment_setup!
 # This file is for the commuting case; nevertheless, we already write the monomial index/multiplication calculation with a
 # possible extension to the noncommuting case in mind.
 
+"""
+    Counters
+
+Mutable struct that keeps track of the number of conic constraints/variables currently in use. Every possible symbol listed in
+the documentation for [`extract_sos`](@ref) has an `Int` field of the same name.
+"""
 mutable struct Counters
-    nonneg::Int
-    quad::Int
-    rquad::Int
+    fix::Int
+    nonnegative::Int
+    quadratic::Int
+    rotated_quadratic::Int
     psd::Int
     psd_complex::Int
     dd::Int
@@ -15,7 +22,7 @@ mutable struct Counters
     sdd::Int
     sdd_complex::Int
 
-    Counters() = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    Counters() = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 end
 
 function to_soc!(indices, values, lens, supports_rotated)
@@ -59,6 +66,67 @@ function to_soc!(indices, values, lens, supports_rotated)
         end
     end
     return IndvalsIterator(unsafe, indices, values, lens)
+end
+
+"""
+    addtocounter!(state, counters::Counters, ::Val{type}, dim::Integer) where {type} -> Int
+    addtocounter!(state, counters::Counters, ::Val{type}, num::Integer, dim::Integer) where {type} -> UnitRange{Int}
+
+Increments the internal information about how many constraints/variables of a certain type were already added. Usually, a
+solver implementation does not have to overwrite the default implementation; but it might be useful to do so if some types are
+for example counted in a single counter.
+`dim` is the length of the conic constraint or variable, while `num` indicates that multiple such constraints or variables of
+the same type are added.
+For a list of possible symbols `type`, see the documentation for [`extract_sos`](@ref).
+
+See also [`Counters`](@ref), [`@counter_is_scalar`](@ref).
+"""
+function addtocounter! end
+
+@inline addtocounter!(state::AnySolver, counters::Counters, ::Val{type}, ::Integer) where {type} =
+    setfield!(counters, type, getfield(counters, type) +1)
+
+@inline function addtocounter!(state::AnySolver, counters::Counters, ::Val{type}, num::Integer, ::Integer) where {type}
+    v = getfield(counters, type)
+    return v+1:setfield!(counters, type, v + num)
+end
+
+"""
+    @counter_is_scalar(::Type{<:AbstractSolver}, counter[, alias])
+
+Defines the [`addtocounter!`](@ref) function in such a way that contraints of type `counter` are always counted as if they were
+all one-dimensional, regardless of how they were added.
+This function may be called at most once for each counter when defining a solver.
+As a consequence, [`extract_sos`](@ref) will always have a `UnitRange{Int}` as `index` parameter for the `counter` type.
+If the `alias` parameter is present, whenever the type `counter` is encountered, the counter of type `alias` is incremented
+instead. Do not use [`@counter_alias`](@ref) together with this macro on the same `counter`.
+"""
+macro counter_is_scalar(S, counter::QuoteNode, alias::QuoteNode=counter)
+    m = Base.parentmodule(addtocounter!)
+    f = alias.value
+    esc(quote
+        @inline $m.addtocounter!(::$S, counters::$Counters, ::Val{$counter}, dim::Integer) =
+            counters.$f+1:(counters.$f += dim)
+        @inline $m.addtocounter!(::$S, counters::$Counters, ::Val{$counter}, num::Integer, dim::Integer) =
+            counters.$f+1:(counters.$f += num * dim)
+    end)
+end
+
+"""
+    @counter_alias(::Type{<:AbstractSolver}, counter[, alias])
+
+Defines the [`addtocounter!`](@ref) function in such a way that contraints of type `counter` instead only affect the counter
+`alias`. Do not use [`@counter_is_scalar`](@ref) together with this macro on the same `counter`.
+"""
+macro counter_alias(S, counter::QuoteNode, alias::QuoteNode=counter)
+    m = Base.parentmodule(addtocounter!)
+    f = alias.value
+    esc(quote
+        @inline $m.addtocounter!(::$S, counters::$Counters, ::Val{$counter}, dim::Integer) =
+            counters.$f += 1
+        @inline $m.addtocounter!(::$S, counters::$Counters, ::Val{$counter}, num::Integer, dim::Integer) =
+            counters.$f+1:(counters.$f += num)
+    end)
 end
 
 # generic moment matrix constraint with
@@ -237,26 +305,26 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         if representation isa RepresentationPSD
             if complex
                 add_constr_psd_complex!(state, dim, mc)
-                return :psd_complex, (counters.psd_complex += 1)
+                return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), dim)
             else
                 add_constr_psd!(state, dim, mc)
-                return :psd, (counters.psd += 1)
+                return :psd, addtocounter!(state, counters, Val(:psd), dim)
             end
         elseif representation isa RepresentationDD
             if complex
                 add_constr_dddual_complex!(state, dim, mc)
-                return :dd_complex, (counters.dd_complex += 1)
+                return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), dim)
             else
                 add_constr_dddual!(state, dim, mc)
-                return :dd, (counters.dd += 1)
+                return :dd, addtocounter!(state, counters, Val(:dd), dim)
             end
         else
             if complex
                 add_constr_sdddual_complex!(state, dim, mc)
-                return :sdd_complex, (counters.sdd_complex += 1)
+                return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), dim)
             else
                 add_constr_sdddual!(state, dim, mc)
-                return :sdd, (counters.sdd += 1)
+                return :sdd, addtocounter!(state, counters, Val(:sdd), dim)
             end
         end
     else
@@ -264,7 +332,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             @inbounds if dim == 1
                 @assert(length(lens) == 1)
                 add_constr_nonnegative!(state, Indvals(indices, values))
-                return :nonnegative, (counters.nonneg += 1)
+                return :nonnegative, addtocounter!(state, counters, Val(:nonnegative), dim)
             elseif dim == 2 && (rquad || quad)
                 @assert(length(lens) == (complex ? 4 : 3))
                 # Note: indices/values represent the vectorized PSD cone (lower triangle) with off-diagonals already
@@ -282,33 +350,33 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                 end
                 if rquad
                     add_constr_rotated_quadratic!(state, to_soc!(indices, values, lens, true))
-                    return :rotated_quadratic, (counters.rquad += 1)
+                    return :rotated_quadratic, addtocounter!(state, counters, Val(:rotated_quadratic), complex ? 4 : 3)
                 else
                     add_constr_quadratic!(state, to_soc!(indices, values, lens, false))
-                    return :quadratic, (counters.quad += 1)
+                    return :quadratic, addtocounter!(state, counters, Val(:quadratic), complex ? 4 : 3)
                 end
             else # implies dim ≥ 3
                 ii = IndvalsIterator(indices, values, lens)
                 if representation isa RepresentationPSD
                     if complex
                         add_constr_psd_complex!(state, dim, ii)
-                        return :psd_complex, (counters.psd_complex += 1)
+                        return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), dim)
                     else
                         add_constr_psd!(state, dim, ii)
-                        return :psd, (counters.psd += 1)
+                        return :psd, addtocounter!(state, counters, Val(:psd), dim)
                     end
                 elseif representation isa RepresentationDD
                     if complex
                         if supports_dd_complex(state)
                             add_constr_dddual_complex!(state, dim, ii, representation.u)
-                            return :dd_complex, (counters.dd_complex += 1)
+                            return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), dim)
                         else
                             return moment_add_dddual_transform!(state, dim, ii, representation.u, true, counters)
                         end
                     else
                         if supports_dd(state)
                             add_constr_dddual!(state, dim, ii, representation.u)
-                            return :dd, (counters.dd += 1)
+                            return :dd, addtocounter!(state, counters, Val(:dd), dim)
                         else
                             return moment_add_dddual_transform!(state, dim, ii, representation.u, false, counters)
                         end
@@ -317,14 +385,14 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                     if complex
                         if supports_sdd_complex(state)
                             add_constr_sdddual_complex!(state, dim, ii, representation.u)
-                            return :sdd_complex, (counters.sdd_complex += 1)
+                            return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), dim)
                         else
                             return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(true), counters)
                         end
                     else
                         if supports_sdd(state)
                             add_constr_sdddual!(state, dim, ii, representation.u)
-                            return :sdd, (counters.sdd += 1)
+                            return :sdd, addtocounter!(state, counters, Val(:sdd), dim)
                         else
                             return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(false), counters)
                         end
@@ -333,7 +401,6 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             end
         end
     end
-    return
 end
 
 # generic moment matrix constraint with complex-valued monomials involved in the grouping, but the solver does not support the
@@ -498,7 +565,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
     if matrix_indexing
         add_constr_psd!(state, dim2, PSDMatrixCartesian{_get_offset(indextype)}(dim2, Tri, finish!(rows),
             finish!(indices), finish!(values)))
-        return :psd, (counters.psd += 1)
+        return :psd, addtocounter!(state, counters, Val(:psd), dim2)
     else
         # We constructed everything in matrix form, as it was easier to assign arbitrary positions in this way; but now we need
         # to convert it to the iterative form. We cannot re-use rows for this, unfortunately. It may happen that some rows
@@ -534,21 +601,21 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
 
             ii = IndvalsIterator(indices, values, lens)
             if representation isa RepresentationPSD
-                add_constr_psd!(state, 2dim, ii)
-                return :psd, (counters.psd += 1)
+                add_constr_psd!(state, dim2, ii)
+                return :psd, addtocounter!(state, counters, Val(:psd), dim2)
             elseif representation isa RepresentationDD
                 if supports_dd(state)
-                    add_constr_dddual!(state, 2dim, ii, representation.u)
-                    return :dd, (counters.dd += 1)
+                    add_constr_dddual!(state, dim2, ii, representation.u)
+                    return :dd, addtocounter!(state, counters, Val(:dd), dim2)
                 else
-                    return moment_add_dddual_transform!(state, 2dim, ii, representation.u, false, counters)
+                    return moment_add_dddual_transform!(state, dim2, ii, representation.u, false, counters)
                 end
             else
                 if supports_sdd(state)
-                    add_constr_sdddual!(state, 2dim, ii, representation.u)
-                    return :sdd, (counters.sdd += 1)
+                    add_constr_sdddual!(state, dim2, ii, representation.u)
+                    return :sdd, addtocounter!(state, counters, Val(:sdd), dim2)
                 else
-                    return moment_add_sdddual_transform!(state, 2dim, ii, representation.u, false, counters)
+                    return moment_add_sdddual_transform!(state, dim2, ii, representation.u, false, counters)
                 end
             end
         end
@@ -637,7 +704,8 @@ end
 # different u will not change the structure of the solver problem (of course, we'd have to write support for re-using the
 # problem in the first place...).
 
-function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim::Int, data::IndvalsIterator{T,V}, slacks) where {T,V,complex}
+function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim::Int, data::IndvalsIterator{T,V}, slacks,
+    counters::Counters) where {T,V,complex}
     # Add the equality constraints first; this is independent of U or the method to model the cone
     @inbounds begin
         eqstate = @inline add_constr_fix_prepare!(state, complex ? dim^2 : trisize(dim))
@@ -696,6 +764,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
             end
         end
         @inline add_constr_fix_finalize!(state, eqstate)
+        addtocounter!(state, counters, Val(:fix), complex ? dim^2 : trisize(dim))
     end
 end
 
@@ -715,7 +784,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(complex), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
 
     upperslack = (complex ? dsq : trisize(dim)) +1
     lowerslack = 1
@@ -761,8 +830,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return complex ? (:dd_lnorm_complex_diag, (@view(slacks[1:dsq]), counters.lnorm_complex+1:(counters.lnorm_complex += dim))) :
-                     (:dd_lnorm_real_diag, (@view(slacks[1:trisize(dim)]), counters.lnorm_complex+1:(counters.lnorm += dim)))
+    return complex ? (:dd_lnorm_complex_diag,
+                      (@view(slacks[1:dsq]),
+                       addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
+                     (:dd_lnorm_real_diag,
+                      (@view(slacks[1:trisize(dim)]),
+                       addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim)))
 end
 
 # We have the lnorm cone available, the transformation is not diagonal
@@ -780,7 +853,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(complex), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
 
     upperslack = (complex ? dsq : ts) +1
     @inbounds for j in 1:dim
@@ -854,8 +927,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return complex ? (:dd_lnorm_complex, (@view(slacks[1:dsq]), counters.lnorm_complex+1:(counters.lnorm_complex += dim))) :
-                     (:dd_lnorm_real, (@view(slacks[1:trisize(dim)]), counters.lnorm+1:(counters.lnorm += dim)))
+    return complex ? (:dd_lnorm_complex, (@view(slacks[1:dsq]),
+                                          addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
+                     (:dd_lnorm_real, (@view(slacks[1:trisize(dim)]),
+                                       addtocounter!(state, counters, Val(:lnorm), dim, complex ? 2dim -1 : dim)))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is diagonal
@@ -870,7 +945,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(false), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
 
     upperslack = ts +1
     lowerslack = 1
@@ -912,7 +987,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
-    return :dd_nonneg_diag, (@view(slacks[1:ts]), counters.nonneg+1:(counters.nonneg += dim))
+    return :dd_nonneg_diag, (@view(slacks[1:ts]), addtocounter!(state, counters, Val(:nonnegative), dim, 2dim -2))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is not diagonal
@@ -926,7 +1001,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(false), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
 
     upperslack = ts +1
     @inbounds for j in 1:dim
@@ -1025,7 +1100,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(values)
     end
 
-    return :dd_nonneg, (@view(slacks[1:ts]), counters.nonneg+1(counters.nonneg += dim))
+    return :dd_nonneg, (@view(slacks[1:ts]), addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
 end
 
 # We don't have the lnorm cone available (but the quadratic cone), the problem is complex-valued, and the transform is diagonal
@@ -1039,7 +1114,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(true), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
     rowdiagslack = 1
     lowerslack = 1
@@ -1076,8 +1151,8 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         empty!(values)
     end
 
-    return :dd_quad_diag, (slacks, counters.nonneg+1:(counters.nonneg += dim),
-                           counters.quad+1:(counters.quad += trisize(dim -1)))
+    return :dd_quad_diag, (slacks, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
+                           addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
 end
 
 # We don't have the lnorm cone available, the problem is complex-valued, and the transform is not diagonal
@@ -1091,7 +1166,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(true), dim, data, slacks)
+    dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
     unsafe_append!(indices, slacks)
     unsafe_append!(indices, slacks)
@@ -1149,8 +1224,8 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         #endregion
     end
 
-    return :dd_quad, (slacks, counters.nonneg+1:(counters.nonneg += dim),
-                      counters.quad+1:(counters.quad += trisize(dim -1)))
+    return :dd_quad, (slacks, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
+                      addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
 end
 
 function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
@@ -1562,7 +1637,9 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 See also [`moment_add_matrix!`](@ref).
 """
 function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::P) where {T,Nr,Nc,I<:Integer,P<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}
+    constraint::P, counters::Counters) where {T,Nr,Nc,I<:Integer,P<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}
+    # keep in sync with SOSCertificate -> poly_decomposition
+
     # We need to traverse all unique elements in groupings * groupings†. For purely complex-valued groupings, this is the full
     # list; as soon as we have a real variable present, it is smaller.
     # To avoid rehashings, get an overestimator of the total grouping size first.
@@ -1699,6 +1776,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
         end
     end
     @inline add_constr_fix_finalize!(state, constrstate)
+    addtocounter!(state, counters, Val(:fix), totalsize)
     return
 end
 
@@ -1762,6 +1840,8 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     (real(coefficient_type(problem.objective)) <: V) ||
         @warn("Expected value type for the solver $V might not be compatible with polynomial coefficient type $(real(coefficient_type(problem.objective)))")
 
+    counters = Counters()
+
     # fixed items
     # fix constant term to 1
     if isone(problem.prefactor)
@@ -1805,13 +1885,14 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
             )
         end
     end
+    addtocounter!(state, counters, Val(:fix), 1)
+
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
         for grouping in groupingsᵢ
-            moment_add_equality!(state, collect_grouping(grouping), constrᵢ)
+            moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters)
         end
     end
 
-    counters = Counters()
     info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_nonneg) + length(problem.constr_psd))
     infoᵢ = 1
 

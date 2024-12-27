@@ -32,7 +32,8 @@ for (newname, oldname) in (
     (:add_var_free_prepare!, :add_constr_fix_prepare!), (:add_var_free!, :add_constr_fix!),
     (:add_var_free_finalize!, :add_constr_fix_finalize!),
     (:add_constr_slack!, :add_var_slack!),
-    (:fix_constraints!, :fix_objective!)
+    (:fix_constraints!, :fix_objective!),
+    (:addtocounter!, :addtocounter!)
 )
     @eval $oldname(state::SOSWrapper, args...) = $newname(state.state, args...)
 end
