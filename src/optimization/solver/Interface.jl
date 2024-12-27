@@ -22,6 +22,7 @@ The returned index is arbitrary as long as it is unique for the total monomial.
 include("./Support.jl")
 include("./DataTypes.jl")
 include("./Representations.jl")
+include("./Counters.jl")
 
 include("./MomentInterface.jl")
 include("./SOSInterface.jl")

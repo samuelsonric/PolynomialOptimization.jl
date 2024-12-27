@@ -38,6 +38,12 @@ for (newname, oldname) in (
     @eval $oldname(state::SOSWrapper, args...) = $newname(state.state, args...)
 end
 
+Base.getproperty(c::Counters, f::Symbol) = getfield(c, f === :free ? :fix : f)
+Base.setproperty!(c::Counters, f::Symbol, v) = setfield!(c, f === :free ? :fix : f, v)
+
+addtocounter!(state::SOSWrapper, counters::Counters, ::Val{:fix}, args...) =
+    addtocounter!(state.state, counters, Val(:free), args...)
+
 """
     sos_add_matrix!(state::AbstractSolver, grouping::SimpleMonomialVector,
         constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
