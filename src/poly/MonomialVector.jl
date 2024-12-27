@@ -1280,8 +1280,8 @@ struct FakeMonomialVector{S<:SimpleMonomialVector,V,M} <: AbstractVector{M}
     real_vars::Vector{V}
     complex_vars::Vector{V}
 
-    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {S<:SimpleMonomialVector,V<:AbstractVariable}
-        length(real_vars) + length(complex_vars) == nvariables(data) || error("Invalid monomial vector construction")
+    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {Nr,Nc,S<:SimpleMonomialVector{Nr,Nc},V<:AbstractVariable}
+        (length(real_vars) == Nr && length(complex_vars) == Nc) || error("Invalid monomial vector construction")
         new{S,V,monomial_type(V)}(data, real_vars, complex_vars)
     end
 end
@@ -1321,13 +1321,7 @@ function Base.getindex(fmv::FakeMonomialVector{S,V,M} where {V,S}, x) where {M}
                 @inbounds mon *= fmv.complex_vars[i] ^ expᵢ
             end
         end
-        i += 1
-        expit = iterate(exps, expitdata)
-    end
-    i = 1
-    while !isnothing(expit)
-        i > length(fmv.complex_vars) && break
-        expᵢ, expitdata = expit
+        expᵢ, expitdata = iterate(exps, expitdata)::Tuple
         if !iszero(expᵢ)
             if !havemon
                 @inbounds mon = conj(fmv.complex_vars[i]) ^ expᵢ
