@@ -628,7 +628,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
     @inbounds begin
         negate = negate_fix(state)
         if negate
-            rmul!(data.values, -one(V))
+            rmul!(nonzeros(data), -one(V))
         end
         eqstate = @inline add_constr_fix_prepare!(state, complex ? dim^2 : trisize(dim))
         # When iterating through data, we need to add our slack element; it does not matter whether at the beginning or the
@@ -1205,7 +1205,7 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
     #  U[i, i]² data(i, i),
     #  √2 U[i, i] U[j, j] data(i, j)
     # } ∈ ℛ𝒬₃
-    maxsize = maximum(data.lens, init=0) # how large is one dataᵢ at most?
+    maxsize = maximum(Base.index_lengths(data), init=0) # how large is one dataᵢ at most?
     scaling = sqrt(V(2))
 
     if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
@@ -1226,7 +1226,7 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
         @inbounds for j in 1:dim-1
             x = diagdataidxs[j]
             for _ in 0:(complex ? 2(dim-j) : dim-j)
-                x += data.lens[idx]
+                x += Base.index_lengths(data)[idx]
                 idx += 1
             end
             diagdataidxs[j+1] = x
@@ -1236,12 +1236,12 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
     @inbounds for j in 1:dim-1
         #region First item
         if diagu
-            len = Int(data.lens[idx])
+            len = Int(Base.index_lengths(data)[idx])
             r = dataidx:dataidx+len-1
             dataidx += len
             idx += 1
-            unsafe_append!(indices, @view(data.indices[r]))
-            unsafe_append!(values, @view(data.values[r]))
+            unsafe_append!(indices, @view(rowvals(data)[r]))
+            unsafe_append!(values, @view(nonzeros(data)[r]))
             u isa Diagonal && rmul!(values, abs2(u[j, j]))
         else
             idx = 1
@@ -1253,12 +1253,12 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
                 end
                 @twice impart (complex && row != col) begin
                     searchview = @view(indices[:])
-                    len = Int(data.lens[idx])
+                    len = Int(Base.index_lengths(data)[idx])
                     r = dataidx:dataidx+len-1
                     dataidx += len
                     idx += 1
                     thisuval = impart ? imag(uval) : real(uval)
-                    iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                    iszero(thisuval) || for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
                         dupidx = findfirst(isequal(ind), searchview)
                         if isnothing(dupidx)
                             unsafe_push!(indices, ind)
@@ -1279,11 +1279,11 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
         for i in j+1:dim
             #region Second item
             if diagu
-                len = Int(data.lens[otheridx])
+                len = Int(Base.index_lengths(data)[otheridx])
                 r = diagdataidxs[i]:diagdataidxs[i]+len-1
                 otheridx += (complex ? 2(dim - i)+1 : dim-i+1)
-                unsafe_append!(indices, @view(data.indices[r]))
-                unsafe_append!(values, @view(data.values[r]))
+                unsafe_append!(indices, @view(rowvals(data)[r]))
+                unsafe_append!(values, @view(nonzeros(data)[r]))
                 u isa Diagonal && rmul!(@view(values[end-len+1:end]), abs2(u[i, i]))
             else
                 idx = 1
@@ -1295,12 +1295,12 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
                     end
                     @twice impart (complex && row != col) begin
                         searchview = @view(indices[firstlen+1:end])
-                        len = Int(data.lens[idx])
+                        len = Int(Base.index_lengths(data)[idx])
                         r = dataidx:dataidx+len-1
                         dataidx += len
                         idx += 1
                         thisuval = impart ? imag(uval) : real(uval)
-                        iszero(thisuval) || for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                        iszero(thisuval) || for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
                             dupidx = findfirst(isequal(ind), searchview)
                             if isnothing(dupidx)
                                 unsafe_push!(indices, ind)
@@ -1321,21 +1321,21 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
                 end
                 @twice impart complex begin
                     startidx = length(indices) +1
-                    len = Int(data.lens[idx])
+                    len = Int(Base.index_lengths(data)[idx])
                     r = dataidx:dataidx+len-1
                     if u isa Diagonal
                         if !iszero(real(uval))
-                            unsafe_append!(indices, @view(data.indices[r]))
-                            unsafe_append!(values, @view(data.values[r]))
+                            unsafe_append!(indices, @view(rowvals(data)[r]))
+                            unsafe_append!(values, @view(nonzeros(data)[r]))
                             isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
                         end
                         if complex && !iszero(imag(uval))
-                            let lenalt=Int(data.lens[impart ? idx-1 : idx+1]),
+                            let lenalt=Int(Base.index_lengths(data)[impart ? idx-1 : idx+1]),
                                 dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1,
                                 uimval=impart ? imag(uval) : -imag(uval)
                                 searchrange = startidx:length(indices)
                                 searchview = @view(indices[searchrange])
-                                for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                                for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
                                     dupidx = findfirst(isequal(ind), searchview)
                                     if isnothing(dupidx)
                                         unsafe_push!(indices, ind)
@@ -1347,8 +1347,8 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
                             end
                         end
                     else
-                        unsafe_append!(indices, @view(data.indices[r]))
-                        unsafe_append!(values, @view(data.values[r]))
+                        unsafe_append!(indices, @view(rowvals(data)[r]))
+                        unsafe_append!(values, @view(nonzeros(data)[r]))
                         rmul!(@view(values[end-len+1:end]), scaling)
                     end
                     iszero(length(indices) - startidx +1) || unsafe_push!(lens, length(indices) - startidx +1)
@@ -1374,12 +1374,12 @@ function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data
                                 thisuval = impart ? imag(uval) : real(uval)
                             end
                             thisuval *= scaling
-                            len = Int(data.lens[idx])
+                            len = Int(Base.index_lengths(data)[idx])
                             r = dataidx:dataidx+len-1
                             dataidx += len
                             idx += 1
                             if !iszero(thisuval)
-                                for (ind, val) in zip(@view(data.indices[r]), @view(data.values[r]))
+                                for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
                                     dupidx = findfirst(isequal(ind), searchview)
                                     if isnothing(dupidx)
                                         unsafe_push!(indices, ind)

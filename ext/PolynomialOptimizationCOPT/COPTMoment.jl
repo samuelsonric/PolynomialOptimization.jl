@@ -57,10 +57,10 @@ function Solver.add_constr_nonnegative!(state::StateMoment, indvals::IndvalsIter
     N = length(indvals)
     rowMatBeg = Vector{Cint}(undef, N +1)
     @inbounds rowMatBeg[1] = 0
-    @inbounds for (i, len) in zip(Iterators.countfrom(2), indvals.lens)
+    @inbounds for (i, len) in zip(Iterators.countfrom(2), Base.index_lengths(indvals))
         rowMatBeg[i] = rowMatBeg[i-1] + len
     end
-    _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, indvals.indices, indvals.values, C_NULL,
+    _check_ret(copt_env, COPT_AddRows(state.problem, N, rowMatBeg, C_NULL, rowvals(indvals), nonzeros(indvals), C_NULL,
         fill(0., N), fill(COPT_INFINITY, N), C_NULL))
     return
 end
@@ -81,10 +81,10 @@ function Solver.add_constr_quadratic!(state::StateMoment, indvals::IndvalsIterat
     end
     rowMatBeg = Vector{Cint}(undef, N +1)
     @inbounds rowMatBeg[1] = 0
-    @inbounds for (i, len) in zip(Iterators.countfrom(2), indvals.lens)
+    @inbounds for (i, len) in zip(Iterators.countfrom(2), Base.index_lengths(indvals))
         rowMatBeg[i] = rowMatBeg[i-1] + len +1
     end
-    rowMatIdx = Vector{Cint}(undef, length(indvals.indices) + N)
+    rowMatIdx = Vector{Cint}(undef, length(rowvals(indvals)) + N)
     rowMatElem = similar(rowMatIdx, Cdouble)
     i = 1
     @inbounds for (j, indval) in zip(Iterators.countfrom(Cint(0)), indvals)

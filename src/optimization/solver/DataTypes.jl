@@ -85,7 +85,7 @@ end
 end
 SparseArrays.rowvals(psdi::IndvalsIterator) = psdi.indices
 SparseArrays.nonzeros(psdi::IndvalsIterator) = psdi.values
-Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}) = Iterators.repeated(psdi.lens, length(psdi))
+Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:Integer}) = ConstantVector(psdi.lens, length(psdi))
 Base.index_lengths(psdi::IndvalsIterator{<:Any,<:Any,<:AbstractVector{<:Integer}}) = psdi.lens
 
 """
