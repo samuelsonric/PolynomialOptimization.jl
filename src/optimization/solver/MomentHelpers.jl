@@ -626,6 +626,10 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
     counters::Counters) where {T,V,complex}
     # Add the equality constraints first; this is independent of U or the method to model the cone
     @inbounds begin
+        negate = negate_fix(state)
+        if negate
+            rmul!(data.values, -one(V))
+        end
         eqstate = @inline add_constr_fix_prepare!(state, complex ? dim^2 : trisize(dim))
         # When iterating through data, we need to add our slack element; it does not matter whether at the beginning or the
         # end. So under the assertion that data contains more than just a single Indvals (which is always true, else this
@@ -640,7 +644,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
         storedind = indices.parent[pos]
         storedval = values.parent[pos]
         indices.parent[pos] = slacks[1]
-        values.parent[pos] = -one(V)
+        values.parent[pos] = negate ? one(V) : -one(V)
         eqstate = @inline add_constr_fix!(state, eqstate, Indvals(view(indices.parent, indices.offset1+1:pos),
                                                                   view(values.parent, indices.offset1+1:pos)), zero(V))
         indices.parent[pos] = storedind
@@ -654,7 +658,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
                 indices, values = indvals.indices, indvals.values
                 pos = indices.offset1
                 indices.parent[pos] = slacks[slack]
-                values.parent[pos] = -one(V)
+                values.parent[pos] = negate ? one(V) : -one(V)
                 if iszero(offdiags)
                     col += 1
                     offdiags = dim - col
@@ -670,7 +674,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
                         indices, values = indvals.indices, indvals.values
                         pos = indices.offset1
                         indices.parent[pos] = slacks[slack]
-                        values.parent[pos] = -one(V)
+                        values.parent[pos] = negate ? one(V) : -one(V)
                     end
                     offdiags -= 1
                 end
