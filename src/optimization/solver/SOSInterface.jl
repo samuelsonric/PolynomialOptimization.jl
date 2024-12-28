@@ -1,6 +1,6 @@
 export add_var_nonnegative!, add_var_rotated_quadratic!, add_var_quadratic!, add_var_l1!, add_var_l1_complex!, add_var_psd!,
-    add_var_psd_complex!, add_var_dd!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, fix_constraints!,
-    add_constr_slack!
+    add_var_psd_complex!, add_var_dd!, add_var_free_prepare!, add_var_free!, add_var_free_finalize!, negate_free,
+    fix_constraints!, add_constr_slack!
 
 function add_var_nonnegative! end
 
@@ -271,6 +271,14 @@ Finishes the addition of free variables to `state`; the value of `eqstate` is th
 The default implementation does nothing.
 """
 add_var_free_finalize!(::AbstractSolver, _) = nothing
+
+"""
+    negate_free(::AbstractSolver)
+
+Depending on the exact definition of equality constraints (where to put the minus), the dual solutions, i.e., the SOS
+decomposition, may yield wrong values; then define this function to return `true`, which will flip the sign of free variables.
+"""
+negate_free(::AbstractSolver) = false
 
 """
     fix_constraints!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where {T,V}

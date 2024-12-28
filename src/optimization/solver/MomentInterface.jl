@@ -1,6 +1,6 @@
 export add_constr_nonnegative!, add_constr_rotated_quadratic!, add_constr_quadratic!, add_constr_linf!,
     add_constr_linf_complex!, add_constr_psd!, add_constr_psd_complex!, add_constr_dddual!, add_constr_dddual_complex!,
-    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, fix_objective!, add_var_slack!
+    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, negate_fix, fix_objective!, add_var_slack!
 
 function add_constr_nonnegative! end
 
@@ -275,6 +275,15 @@ Finishes the addition of fixed constraints to `state`; the value of `constrstate
 The default implementation does nothing.
 """
 add_constr_fix_finalize!(::AbstractSolver, _) = nothing
+
+"""
+    negate_fix(::AbstractSolver)
+
+Depending on the exact definition of equality constraints (where to put the minus), the dual solutions, i.e., the SOS
+decomposition, may yield wrong values; then define this function to return `true`, which will pass the equality constraints
+with opposite sign.
+"""
+negate_fix(::AbstractSolver) = false
 
 """
     fix_objective!(state, indvals::Indvals)

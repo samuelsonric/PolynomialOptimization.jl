@@ -1628,6 +1628,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
         totalsize *= 2
     end
 
+    negate = @inline negate_fix(state)
     constrstate = @inline add_constr_fix_prepare!(state, totalsize)
     V = real(coefficient_type(P))
     indices₁ = FastVec{T}(buffer=2length(constraint))
@@ -1653,6 +1654,10 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
             coeff_constr = coefficient(term_constr)
             recoeff = real(coeff_constr)
             imcoeff = imag(coeff_constr)
+            if negate
+                recoeff = -recoeff
+                imcoeff = -imcoeff
+            end
             repart, impart, canonical = getreim(state, grouping, mon_constr)
             if !iszero(recoeff)
                 pushorupdate!(indices₁, repart, values₁, recoeff)
@@ -1763,6 +1768,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     infoᵢ = 2
 
     # fixed items
+    negate = @inline negate_fix(state)
     # fix constant term to 1
     if isone(problem.prefactor)
         @inline add_constr_fix_finalize!(
@@ -1770,8 +1776,8 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
             add_constr_fix!(
                 state,
                 add_constr_fix_prepare!(state, 1),
-                Indvals(StackVec(mindex(state, constant_monomial(P))), StackVec(one(V))),
-                one(V)
+                Indvals(StackVec(mindex(state, constant_monomial(P))), StackVec(negate ? -one(V) : one(V))),
+                negate ? -one(V) : one(V)
             )
         )
     else
@@ -1783,6 +1789,10 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
                 coeff = coefficient(t)
                 recoeff = real(coeff)
                 imcoeff = imag(coeff)
+                if negate
+                    recoeff = -recoeff
+                    imcoeff = -imcoeff
+                end
                 repart, impart, canonical = getreim(state, mon)
                 if repart == impart
                     @assert(iszero(imcoeff)) # else the objective would not be real-valued
@@ -1801,7 +1811,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
             end
             @inline add_constr_fix_finalize!(
                 state,
-                add_constr_fix!(state, add_constr_fix_prepare!(state, 1), Indvals(indices, values), one(V))
+                add_constr_fix!(state, add_constr_fix_prepare!(state, 1), Indvals(indices, values), negate ? -one(V) : one(V))
             )
         end
     end
