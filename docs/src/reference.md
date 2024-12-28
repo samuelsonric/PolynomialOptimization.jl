@@ -71,6 +71,8 @@ poly_solution_badness
 moment_matrix
 MomentVector
 MomentAssociation
+SOSCertificate
+sos_matrix
 ```
 
 ## Newton polytope construction (manually)

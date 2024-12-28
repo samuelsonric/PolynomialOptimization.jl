@@ -116,6 +116,39 @@ Note that this is just a sufficient criterion, and the solution might be optimal
 certificate will involve calculating the ranks of several matrices (and is more complicated in the complex case), it is not
 necessarily cheaper than trying to extract solutions; as the latter is more informative, it should usually be the way to go.
 
+### Extracting a SOS certificate
+Whenever the optimization was successful, a valid sums-of-squares certificate will be available, i.e., a decomposition of the
+objective (in this simple, unconstrained, case). Here, the minimum value of the objective was found to be `0.9166...`.
+We can therefore obtain a certificate for the positivity of the original objective minus this global minimum:
+```jldoctest walkthrough
+julia> cert = SOSCertificate(res)
+Sum-of-squares certificate for polynomial optimization problem
+1.0 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴ - 0.9166666672624658
+= (-0.2492464642498061 + 0.0 + 0.0 + 0.0 + 0.6811832979888123x₃² - 0.13316036665354078x₂x₃ + 0.6812065898234094x₂² + 0.0 + 0.0 + 0.7152479291533441x₁²)²
++ (-0.00015840159683466377 + 0.0 + 0.0 + 0.0 + 0.6360091467299869x₃² + 0.0011902230323755974x₂x₃ - 0.6338687294141168x₂² + 0.0 + 0.0 - 0.0018514462038562963x₁²)²
++ (0.050599062148224884 + 0.0 + 0.0 + 0.0 - 0.35322230868481075x₃² - 0.40669620906370346x₂x₃ - 0.3569973936050725x₂² + 0.0 + 0.0 + 0.6183225665112776x₁²)²
++ (0.0 - 0.6307886589586179x₃ - 0.6307886578526084x₂ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.5707311041008931x₁x₃ - 0.5706316416095126x₁x₂ + 0.0)²
++ (0.1365622366906534 + 0.0 + 0.0 + 0.0 - 0.08194926810609472x₃² + 0.6553389692882523x₂x₃ - 0.08198096663343958x₂² + 0.0 + 0.0 + 0.32572101226607164x₁²)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.43861947273884583x₁x₃ + 0.4386959251861786x₁x₂ + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.4527802849918676x₁ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
+```
+This certificate consists of a number of polynomials that, when squared and added, should give rise to the original objective.
+Note that when printing the certificate, values that are below a certain threshold will be set to zero by default.
+We can also explicitly iterate through all the polynomials and sum them up, although we have to be careful to map them back to
+their original representation for this:
+```jldoctest walkthrough
+julia> p = zero(polynomial_type(x, Float64));
+
+julia> for pᵢ in cert[:objective, 1] # no sparsity, so there is just a single grouping
+           p += PolynomialOptimization.change_backend(pᵢ, x)^2
+       end
+
+julia> map_coefficients!(x -> round(x, digits=8), p)
+0.08333334 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴
+```
+Note how this is precisely the objective minus the global minimum.
+
 ### Using the Newton polytope
 The current example is an unconstrained optimization problem; hence, the size of the full basis, which is 10, may be larger
 than actually necessary. It is not a simple problem to determine the relevant basis elements in general; but unconstrained
