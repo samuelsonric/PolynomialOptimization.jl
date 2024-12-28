@@ -246,26 +246,3 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
     end
     return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end
-
-# To compute the slacks, we can simply interpret the slackindex as a signed value (in fact, this is not really necessary, we
-# could just overflow); then, the largest slackvalue corresponding to the last index would yield -1. The bitcast is more a
-# sanity check that the types actually have the same bit size. It should be eliminated by the compiler.
-"""
-    get_slack(state::AbstractSparseMatrixSolver, solution::Vector,
-        slackindex::Union{<:Integer,<:AbstractUnitRange})
-
-Helper function that returns the value or a view to the values of a given slack variable at the index/indices `slackindex`.
-"""
-Base.@propagate_inbounds get_slack(state::AbstractSparseMatrixSolver, solution::Vector, slackindex::Integer) =
-    solution[state.slack isa Signed ? slackindex :
-                                      Core.bitcast(signed(typeof(state.slack)), slackindex) + length(solution) +1]
-
-Base.@propagate_inbounds function get_slack(state::AbstractSparseMatrixSolver, solution::Vector, slackindices::AbstractUnitRange)
-    if state.slack isa Signed
-        return @view(solution[slackindices])
-    else
-        T = signed(typeof(state.slack))
-        δ = length(solution) +1
-        return view(solution, Core.bitcast(T, first(slackindices))+δ:Core.bitcast(T, last(slackindices))+δ)
-    end
-end

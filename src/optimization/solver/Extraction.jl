@@ -39,10 +39,9 @@ extract_sos_prepare(::AbstractRelaxation, _) = nothing
         index::Union{<:Integer,<:AbstractUnitRange}, rawstate) where {type}
 
 Extracts data that contains the raw solver information about the SOS data contained in the result. For moment optimizations,
-this corresponds to the dual data (except for the type `slack`, which is primal information); for SOS optimizations, this is
-the primal data (except for the type `slack`, which is dual information). `rawstate` is the return value of the preceding call
-to [`extract_sos_prepare`](@ref) (by default, `nothing`). Note that the SOS data may be queried in any order, partially or
-completely.
+this corresponds to the dual data; for SOS optimizations, this is the primal data. `rawstate` is the return value of the
+preceding call to [`extract_sos_prepare`](@ref) (by default, `nothing`). Note that the SOS data may be queried in any order,
+partially or completely.
 
 The parameters `type` and `index` indicates which constraint/variable the data corresponds to. `type` is a symbol, `index` is
 the range of indices within constraints of the same type, although both the type as well as the interpretation of `index` may
@@ -67,10 +66,6 @@ relations should hold:
 | `:lnorm_complex`     | vector[^5]               |
 | `:sdd`               | vector                   |
 | `:sdd_complex`       | vector[^5]               |
-| `:slack`             | vector                   |
-
-Note that to obtain the slacks, for implementations of [`AbstractSparseMatrixSolver`](@ref), the helper function
-[`get_slack`](@ref) is useful.
 
 !!! info
     It is guaranteed that the range that is queries using `index` always corresponds to data that was added contiguously, with

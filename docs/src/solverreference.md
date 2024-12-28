@@ -110,7 +110,6 @@ extract_moments
 extract_sos
 extract_sos_prepare
 extract_info
-get_slack
 ```
 In order to relate aspects of the problem with data in the solver, the cones that are added are counted. This works
 automatically, keeping a separate counter for every type of cone and counting vector-valued cones (which are most) with their

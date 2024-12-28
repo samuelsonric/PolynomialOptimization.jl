@@ -4,11 +4,10 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Cint,Float64}
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)
     num_symmat::Cint
     const mon_to_solver::Dict{FastKey{K},Cint}
-    const slacks::FastVec{UnitRange{Cint}}
     info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K}(task::COPTProb) where {K<:Integer} = new{K}(
-        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}(), FastVec{UnitRange{Cint}}()
+        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}()
     )
 end
 
@@ -44,7 +43,6 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
         state.num_solver_vars = newnum
     end
     result = state.num_used_vars:state.num_used_vars+Cint(num -1)
-    push!(state.slacks, result)
     state.num_used_vars += num
     return result
 end
@@ -205,6 +203,3 @@ function Solver.extract_sos(relaxation::AbstractRelaxation, state::StateMoment, 
     _check_ret(copt_env, COPT_GetLMIConstrInfo(state.problem, COPT_DBLINFO_DUAL, index -1, z))
     return z
 end
-
-Solver.extract_sos(relaxation::AbstractRelaxation, state::StateMoment, ::Val{:slack}, index::AbstractUnitRange, (x, _)) =
-    @view(x[get_slack(state.slacks, index)])

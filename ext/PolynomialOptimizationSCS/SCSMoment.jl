@@ -183,7 +183,4 @@ Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val
 Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:psd}, index::AbstractUnitRange, ::Nothing) =
     view(state[3][4], index)
 
-Solver.extract_sos(::AbstractRelaxation, (state, x, _, _)::Tuple{StateMoment,Vararg}, ::Val{:slack}, index, ::Nothing) =
-    get_slack(state, x, index)
-
 Solver.psd_indextype(::Tuple{StateMoment,Vararg}) = PSDIndextypeVector(:L)
