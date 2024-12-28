@@ -103,10 +103,23 @@ as the optimal value and the status of the solver.
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver
 to be chosen automatically. Apart from the exact specification `:<solvername>Moment` or `:<solvername>SOS`, a short form
 `:<solvername>` that chooses the recommended method should also be implemented. For this, the [`@solver_alias`](@ref) macro can
-be used. When details on the solution data a requested, the [`extract_moments`](@ref) function is called, which has to be
-implemented for each solver:
+be used. When details on the solution data a requested, the [`extract_moments`](@ref), [`extract_sos`](@ref), or
+[`extract_info`](@ref) function is called, where at least the former two have to be implemented for each solver:
 ```@docs
 extract_moments
+extract_sos
+extract_sos_prepare
+extract_info
+get_slack
+```
+In order to relate aspects of the problem with data in the solver, the cones that are added are counted. This works
+automatically, keeping a separate counter for every type of cone and counting vector-valued cones (which are most) with their
+actual length. This behavior can be customized:
+```@docs
+@counter_alias
+@counter_atomic
+addtocounter!
+Counters
 ```
 
 While this page documents in detail how a new solver can be implemented, the explanation is far more extensive than an actual

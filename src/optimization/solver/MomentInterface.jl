@@ -21,9 +21,7 @@ add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where
 
 Adds multiple nonnegative constraints to the solver that contain the decision variables (columns in the linear constraint
 matrix) indices according to the entries in `indvals`.
-Falls back to calling the scalar-valued version multiple times if not implemented. Note that in this case, it should be made
-sure that [`addtocounter!`](@ref), when called with a `:nonnegative` type actually returns a range of all indices instead of
-the full cone, which can be achieved by calling [`@counter_is_scalar`](@ref).
+Falls back to calling the scalar-valued version multiple times if not implemented.
 
 See also [`IndvalsIterator`](@ref).
 """

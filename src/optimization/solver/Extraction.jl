@@ -45,44 +45,41 @@ to [`extract_sos_prepare`](@ref) (by default, `nothing`). Note that the SOS data
 completely.
 
 The parameters `type` and `index` indicates which constraint/variable the data corresponds to. `type` is a symbol, `index` is
-the index or range of indices within constraints of the same type.
+the range of indices within constraints of the same type, although both the type as well as the interpretation of `index` may
+change by providing custom definitions for [`addtocounter!`](@ref) or using the macros [`@counter_atomic`](@ref) and
+[`@counter_alias`](@ref).
 
 The return value of this function should be a scalar, vector, or matrix, depending on what data was requested. The following
 relations should hold:
 
-| `type`               | `index`   | result type              |
-| -------------------: | :-------: | :----------------------- |
-| `:fix` (moment only) | `Int`     | vector                   |
-| `:free` (SOS only)   | `Int`     | vector                   |
-| `:nonnegative`       | `Int`     | vector                   |
-| `:quadratic`         | `Int`     | vector                   |
-| `:rotated_quadratic` | `Int`     | vector                   |
-| `:psd`               | `Int`     | vector[^5] or matrix     |
-| `:psd_complex`       | `Int`     | vector[^5][^6] or matrix |
-| `:dd`                | `Int`     | vector[^5] or matrix     |
-| `:dd_complex`        | `Int`     | vector[^5][^6] or matrix |
-| `:lnorm`             | `Int`     | vector                   |
-| `:lnorm_complex`     | `Int`     | vector[^6]               |
-| `:sdd`               | `Int`     | vector                   |
-| `:sdd_complex`       | `Int`     | vector[^6]               |
-| `:slack`             | range[^4] | vector                   |
+| `type`               | result type              |
+| -------------------: | :----------------------- |
+| `:fix` (moment only) | vector                   |
+| `:free` (SOS only)   | vector                   |
+| `:nonnegative`       | vector                   |
+| `:quadratic`         | vector                   |
+| `:rotated_quadratic` | vector                   |
+| `:psd`               | vector[^4] or matrix     |
+| `:psd_complex`       | vector[^4][^5] or matrix |
+| `:dd`                | vector[^4] or matrix     |
+| `:dd_complex`        | vector[^4][^5] or matrix |
+| `:lnorm`             | vector                   |
+| `:lnorm_complex`     | vector[^5]               |
+| `:sdd`               | vector                   |
+| `:sdd_complex`       | vector[^5]               |
+| `:slack`             | vector                   |
 
 Note that to obtain the slacks, for implementations of [`AbstractSparseMatrixSolver`](@ref), the helper function
 [`get_slack`](@ref) is useful.
 
-This table is based on the default implementation of [`addtocounter!`](@ref), whose return type is actually what enters into
-the `index` parameter. If this is overwritten for some types, then the type of `index` may differ.
+!!! info
+    It is guaranteed that the range that is queries using `index` always corresponds to data that was added contiguously, with
+    no other cones interspersed.
 
-See also [`@counter_is_scalar`](@ref).
-
-[^4]: It is guaranteed that during the construction of the problem, the corresponding `add...` functions for this cone were all
-      called consecutively, with no other cones interspersed. For nonnegative variables or constraints, regardless if they were
-      called with the vector version or one-by-one, each constraint/variable will be exactly one entry, even if the solver
-      might internally subsume consecutive nonnegative variables in a single cone.
-[^5]: If the return type is a vector, [`psd_indextype`](@ref) should be defined on `state`, and it must return a
+[^4]: If the return type is a vector, [`psd_indextype`](@ref) should be defined on `state`, and it must return a
       [`PSDIndextypeVector`](@ref). However, the scaling operation on the off-diagonals is now inverted: To go from the vector
       of the triangle to the full matrix, off-diagonals must be scaled by ``\\frac{1}{\\sqrt2}``.
-[^6]: Complex values can be treated either by returning a vector of `Complex` element type, or by returning a real-valued
+[^5]: Complex values can be treated either by returning a vector of `Complex` element type, or by returning a real-valued
       vector where the diagonals (PSD/DD/SDD)/first elements (``\\ell``-norm) have a single entry and off-diagonals two.
 """
 function extract_sos end
