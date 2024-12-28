@@ -102,6 +102,7 @@ Every implementation of [`poly_optimize`](@ref) should return a tuple that conta
 as the optimal value and the status of the solver. A method for [`issuccess`](@ref issuccess(::Val, ::Any)) should then
 translate this status into a simple boolean, where deciding on ambiguities (near success) is up to the solver implementation.
 ```@docs; canonical=false
+poly_optimize(::Val, ::AbstractRelaxation, ::RelaxationGroupings)
 issuccess(::Val, ::Any)
 ```
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver

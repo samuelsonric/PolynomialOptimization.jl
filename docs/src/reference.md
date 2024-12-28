@@ -57,7 +57,8 @@ TermMode
 CurrentModule = PolynomialOptimization
 ```
 ```@docs
-poly_optimize
+poly_optimize(::Val, ::AbstractRelaxation)
+poly_optimize(::Val, ::Problem, ::Tuple{Vararg})
 Solver.RepresentationMethod
 RepresentationPSD
 RepresentationSDD

@@ -42,6 +42,21 @@ macro solver_alias(alias, original)
 end
 
 """
+    poly_optimize(::Val{method}, relaxation::AbstractRelaxation,
+        groupings::RelaxationGroupings; representation, verbose, kwargs...)
+
+This is the central entry point that a solver has to implement. It has to carry out the optimization and must return a tuple of
+three values:
+1. An internal state that can be used later on to access the solver again to extract solutions or (if possible) reoptimization.
+2. The success status as returned by the solver and understood by the [`issuccess`](@ref issuccess(::Val, ::Any))
+   implementation.
+3. The minimum value of the objective.
+
+See also [`moment_setup!`](@ref), [`sos_setup!`](@ref).
+"""
+poly_optimize(::Val, ::AbstractRelaxation, ::RelaxationGroupings)
+
+"""
     issuccess(::Val{method}, status)
 
 A solver must implement this method for all of its possible methods to indicate whether a status `status` signifies success.
