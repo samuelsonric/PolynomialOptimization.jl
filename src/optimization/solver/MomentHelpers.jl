@@ -1692,8 +1692,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
         end
     end
     @inline add_constr_fix_finalize!(state, constrstate)
-    addtocounter!(state, counters, Val(:fix), totalsize)
-    return
+    return addtocounter!(state, counters, Val(:fix), totalsize)
 end
 
 """
@@ -1757,6 +1756,9 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         @warn("Expected value type for the solver $V might not be compatible with polynomial coefficient type $(real(coefficient_type(problem.objective)))")
 
     counters = Counters()
+    info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_zero) + length(problem.constr_nonneg) +
+                                                      length(problem.constr_psd))
+    infoᵢ = 2
 
     # fixed items
     # fix constant term to 1
@@ -1801,26 +1803,25 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
             )
         end
     end
-    addtocounter!(state, counters, Val(:fix), 1)
+    addtocounter!(state, counters, Val(:fix), 1) # we don't store this info
 
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
-        for grouping in groupingsᵢ
-            moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters)
+        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
+        for (j, grouping) in enumerate(groupingsᵢ)
+            this_info[j] = (:fix, moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters))
         end
+        infoᵢ += 1
     end
-
-    info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_nonneg) + length(problem.constr_psd))
-    infoᵢ = 1
 
     # SOS term for objective
     constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
-    @inbounds info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupings.obj))
+    @inbounds info[1] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupings.obj))
     for (i, grouping) in enumerate(groupings.obj)
         g = collect_grouping(grouping)
         @inbounds this_info[i] = moment_add_matrix!(state, g, constantP,
             representation isa RepresentationMethod ? representation : representation((:objective, 0, i), length(g)), counters)
     end
-    infoᵢ += 1
+
     # localizing matrices
     @inbounds for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
