@@ -185,7 +185,7 @@ end
 function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int,
                     ::Union{Val{:dd_lnorm_real_diag},Val{:dd_lnorm_real},Val{:dd_nonneg_diag},Val{:dd_nonneg}},
                     (position, _)::Tuple{AbstractUnitRange,Any}, rawdata)
-    data = Solver.extract_sos(relaxation, state, Val(:slack), position, rawdata)
+    data = Solver.extract_sos(relaxation, state, Val(:fix), position, rawdata)
     if Solver.trisize(2dim) == length(position)
         ddim = 2dim
         complex_to_real = true
@@ -212,7 +212,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int,
                     ::Union{Val{:dd_lnorm_complex_diag},Val{:dd_lnorm_complex},Val{:dd_quad_diag},Val{:dd_quad}},
                     pos::Tuple{AbstractUnitRange,Vararg}, rawdata)
     position = pos[1]
-    data = Solver.extract_sos(relaxation, state, Val(:slack), position, rawdata)
+    data = Solver.extract_sos(relaxation, state, Val(:fix), position, rawdata)
     T = eltype(data)
     # We need to recreate the complex-valued matrix, but the vector does not contain imaginary parts for the diagonal; so we
     # need to re-create our data.

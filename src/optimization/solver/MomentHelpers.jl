@@ -682,7 +682,7 @@ function dddual_transform_equalities!(state::AnySolver{T,V}, ::Val{complex}, dim
             end
         end
         @inline add_constr_fix_finalize!(state, eqstate)
-        addtocounter!(state, counters, Val(:fix), complex ? dim^2 : trisize(dim))
+        return addtocounter!(state, counters, Val(:fix), complex ? dim^2 : trisize(dim))
     end
 end
 
@@ -702,7 +702,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
 
     upperslack = (complex ? dsq : trisize(dim)) +1
     lowerslack = 1
@@ -749,11 +749,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     end
 
     return complex ? (:dd_lnorm_complex_diag,
-                      (@view(slacks[1:dsq]),
-                       addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
+                      (valat, addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
                      (:dd_lnorm_real_diag,
-                      (@view(slacks[1:trisize(dim)]),
-                       addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim)))
+                      (valat, addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim)))
 end
 
 # We have the lnorm cone available, the transformation is not diagonal
@@ -771,7 +769,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
 
     upperslack = (complex ? dsq : ts) +1
     @inbounds for j in 1:dim
@@ -845,10 +843,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return complex ? (:dd_lnorm_complex, (@view(slacks[1:dsq]),
+    return complex ? (:dd_lnorm_complex, (valat,
                                           addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
-                     (:dd_lnorm_real, (@view(slacks[1:trisize(dim)]),
-                                       addtocounter!(state, counters, Val(:lnorm), dim, complex ? 2dim -1 : dim)))
+                     (:dd_lnorm_real, (valat, addtocounter!(state, counters, Val(:lnorm), dim, complex ? 2dim -1 : dim)))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is diagonal
@@ -863,7 +860,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
 
     upperslack = ts +1
     lowerslack = 1
@@ -905,7 +902,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
-    return :dd_nonneg_diag, (@view(slacks[1:ts]), addtocounter!(state, counters, Val(:nonnegative), dim, 2dim -2))
+    return :dd_nonneg_diag, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2dim -2))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is not diagonal
@@ -919,7 +916,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
 
     upperslack = ts +1
     @inbounds for j in 1:dim
@@ -1018,7 +1015,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(values)
     end
 
-    return :dd_nonneg, (@view(slacks[1:ts]), addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
+    return :dd_nonneg, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
 end
 
 # We don't have the lnorm cone available (but the quadratic cone), the problem is complex-valued, and the transform is diagonal
@@ -1032,7 +1029,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
     rowdiagslack = 1
     lowerslack = 1
@@ -1069,7 +1066,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         empty!(values)
     end
 
-    return :dd_quad_diag, (slacks, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
+    return :dd_quad_diag, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
                            addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
 end
 
@@ -1084,7 +1081,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
     unsafe_append!(indices, slacks)
     unsafe_append!(indices, slacks)
@@ -1142,7 +1139,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         #endregion
     end
 
-    return :dd_quad, (slacks, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
+    return :dd_quad, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
                       addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
 end
 
