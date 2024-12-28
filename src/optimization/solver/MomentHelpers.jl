@@ -221,26 +221,26 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         if representation isa RepresentationPSD
             if complex
                 add_constr_psd_complex!(state, dim, mc)
-                return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), dim)
+                return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), dim^2)
             else
                 add_constr_psd!(state, dim, mc)
-                return :psd, addtocounter!(state, counters, Val(:psd), dim)
+                return :psd, addtocounter!(state, counters, Val(:psd), trisize(dim))
             end
         elseif representation isa RepresentationDD
             if complex
                 add_constr_dddual_complex!(state, dim, mc)
-                return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), dim)
+                return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), dim^2)
             else
                 add_constr_dddual!(state, dim, mc)
-                return :dd, addtocounter!(state, counters, Val(:dd), dim)
+                return :dd, addtocounter!(state, counters, Val(:dd), trisize(dim))
             end
         else
             if complex
                 add_constr_sdddual_complex!(state, dim, mc)
-                return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), dim)
+                return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), dim^2)
             else
                 add_constr_sdddual!(state, dim, mc)
-                return :sdd, addtocounter!(state, counters, Val(:sdd), dim)
+                return :sdd, addtocounter!(state, counters, Val(:sdd), trisize(dim))
             end
         end
     else
@@ -273,26 +273,27 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                 end
             else # implies dim ≥ 3
                 ii = IndvalsIterator(indices, values, lens)
+                cl = length(lens)
                 if representation isa RepresentationPSD
                     if complex
                         add_constr_psd_complex!(state, dim, ii)
-                        return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), dim)
+                        return :psd_complex, addtocounter!(state, counters, Val(:psd_complex), cl)
                     else
                         add_constr_psd!(state, dim, ii)
-                        return :psd, addtocounter!(state, counters, Val(:psd), dim)
+                        return :psd, addtocounter!(state, counters, Val(:psd), cl)
                     end
                 elseif representation isa RepresentationDD
                     if complex
                         if supports_dd_complex(state)
                             add_constr_dddual_complex!(state, dim, ii, representation.u)
-                            return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), dim)
+                            return :dd_complex, addtocounter!(state, counters, Val(:dd_complex), cl)
                         else
                             return moment_add_dddual_transform!(state, dim, ii, representation.u, true, counters)
                         end
                     else
                         if supports_dd(state)
                             add_constr_dddual!(state, dim, ii, representation.u)
-                            return :dd, addtocounter!(state, counters, Val(:dd), dim)
+                            return :dd, addtocounter!(state, counters, Val(:dd), cl)
                         else
                             return moment_add_dddual_transform!(state, dim, ii, representation.u, false, counters)
                         end
@@ -301,14 +302,14 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                     if complex
                         if supports_sdd_complex(state)
                             add_constr_sdddual_complex!(state, dim, ii, representation.u)
-                            return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), dim)
+                            return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), cl)
                         else
                             return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(true), counters)
                         end
                     else
                         if supports_sdd(state)
                             add_constr_sdddual!(state, dim, ii, representation.u)
-                            return :sdd, addtocounter!(state, counters, Val(:sdd), dim)
+                            return :sdd, addtocounter!(state, counters, Val(:sdd), cl)
                         else
                             return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(false), counters)
                         end
@@ -481,7 +482,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
     if matrix_indexing
         add_constr_psd!(state, dim2, PSDMatrixCartesian{_get_offset(indextype)}(dim2, Tri, finish!(rows),
             finish!(indices), finish!(values)))
-        return :psd, addtocounter!(state, counters, Val(:psd), dim2)
+        return :psd, addtocounter!(state, counters, Val(:psd), dim2^2)
     else
         # We constructed everything in matrix form, as it was easier to assign arbitrary positions in this way; but now we need
         # to convert it to the iterative form. We cannot re-use rows for this, unfortunately. It may happen that some rows
@@ -516,20 +517,21 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             fill!(@view(lens[i:end]), zero(eltype(lens)))
 
             ii = IndvalsIterator(indices, values, lens)
+            cl = length(lens)
             if representation isa RepresentationPSD
                 add_constr_psd!(state, dim2, ii)
-                return :psd, addtocounter!(state, counters, Val(:psd), dim2)
+                return :psd, addtocounter!(state, counters, Val(:psd), cl)
             elseif representation isa RepresentationDD
                 if supports_dd(state)
                     add_constr_dddual!(state, dim2, ii, representation.u)
-                    return :dd, addtocounter!(state, counters, Val(:dd), dim2)
+                    return :dd, addtocounter!(state, counters, Val(:dd), cl)
                 else
                     return moment_add_dddual_transform!(state, dim2, ii, representation.u, false, counters)
                 end
             else
                 if supports_sdd(state)
                     add_constr_sdddual!(state, dim2, ii, representation.u)
-                    return :sdd, addtocounter!(state, counters, Val(:sdd), dim2)
+                    return :sdd, addtocounter!(state, counters, Val(:sdd), cl)
                 else
                     return moment_add_sdddual_transform!(state, dim2, ii, representation.u, false, counters)
                 end
