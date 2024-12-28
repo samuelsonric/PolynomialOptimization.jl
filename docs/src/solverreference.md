@@ -174,6 +174,8 @@ PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
 psd_indextype
+negate_fix
+negate_free
 ```
 
 #### Working with data from the interface
