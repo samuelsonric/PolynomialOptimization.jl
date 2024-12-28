@@ -66,3 +66,27 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
     end
     return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end
+
+"""
+    get_slack(slack_positions::AbstractVector{<:AbstractUnitRange}, slackindex::Union{<:Integer,<:AbstractUnitRange})
+
+Helper function that returns the actual positions of a range of slack indices `slackindex` within the solver, assuming that
+those positions are stored in `slack_positions`.
+"""
+Base.@propagate_inbounds get_slack(slack_positions::AbstractVector{<:AbstractUnitRange}, slackindex::Integer) =
+    slack_positions[slackindex]
+
+Base.@propagate_inbounds function get_slack(slack_positions::AbstractVector{<:AbstractUnitRange},
+    slackindices::AbstractUnitRange)
+    istop = length(slack_positions[1])
+    i = 1
+    while istop < last(slackindices)
+        i += 1
+        istop += length(slack_positions[i])
+    end
+    @inbounds slack = slack_positions[i]
+    length(slackindices) ≤ length(slack) || error("Internal error") # we are guaranteed that this is one contiguous slice
+    istart = istop - length(slack) +1
+    start = first(slack) + (first(slackindices) - istart)
+    return start:start+length(slackindices)-1
+end

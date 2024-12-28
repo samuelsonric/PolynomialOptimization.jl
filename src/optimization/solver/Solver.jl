@@ -15,7 +15,7 @@ export
     AbstractRelaxation, RelaxationGroupings, # from Relaxation
     SimpleMonomialOrConj, SimpleConjMonomial, monomial_index, _get_I, # from SimplePolynomials
     overallocation, # from FastVector (not exported)
-    poly_optimize, solver_methods, @solver_alias
+    poly_optimize, solver_methods, @solver_alias, get_slack
 
 function poly_optimize end
 
