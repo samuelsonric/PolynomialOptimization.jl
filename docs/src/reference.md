@@ -63,6 +63,7 @@ RepresentationPSD
 RepresentationSDD
 RepresentationDD
 Result
+issuccess(::Result)
 poly_problem(::Result)
 optimality_certificate
 poly_all_solutions

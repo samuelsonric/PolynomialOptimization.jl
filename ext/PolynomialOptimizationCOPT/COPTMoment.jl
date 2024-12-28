@@ -11,6 +11,8 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Cint,Float64}
     )
 end
 
+Solver.issuccess(::Val{:COPTMoment}, status::Cint) = status == COPT_LPSTATUS_OPTIMAL # maybe also COPT_LPSTATUS_IMPRECISE
+
 function Base.append!(state::StateMoment, key)
     if state.num_used_vars == state.num_solver_vars
         newnum = overallocation(state.num_solver_vars + one(state.num_solver_vars))

@@ -20,6 +20,9 @@ mutable struct StateMoment{I<:Integer,K<:Integer,Offset} <: AbstractSparseMatrix
     )
 end
 
+Solver.issuccess(::Val{:SCSMoment}, status::Integer) = isone(status)
+# maybe also 2 = inaccurate, because SCS is inaccurate anyway?
+
 Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)

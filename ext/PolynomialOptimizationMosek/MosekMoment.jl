@@ -12,6 +12,8 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     )
 end
 
+Solver.issuccess(::Val{:MosekMoment}, status::Mosek.Solsta) = status === Mosek.MSK_SOL_STA_OPTIMAL
+
 function Base.append!(state::StateMoment, key)
     if state.num_used_vars == state.num_solver_vars
         newnum = overallocation(state.num_solver_vars + one(state.num_solver_vars))

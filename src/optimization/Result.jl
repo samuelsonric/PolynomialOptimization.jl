@@ -1,3 +1,7 @@
+export issuccess
+
+import LinearAlgebra: issuccess
+
 """
     MomentVector(relaxation::AbstractRelaxation, values::AbstractVector{R} where {R<:Real})
 
@@ -185,7 +189,8 @@ A `Result` struct `r` contains information about
 - the optimized problem (available via [`poly_problem`](@ref poly_problem(::Result)))
 - the used method (`r.method`)
 - the time required for the optimization in seconds (`r.time`)
-- the status of the solver (`r.status`), which also depends on the solver type
+- the status of the solver (`r.status`), which also depends on the solver type. Use [`issuccess`](@ref) to check whether this
+  is a successful status.
 - the returned primal value of the solver (`r.objective`), which, if the status was successful, is a lower bound to the true
   minimum
 - the moment information in vector form (`r.moments`), which allows to construct a [moment matrix](@ref moment_matrix),
@@ -233,6 +238,18 @@ function Base.show(io::IO, ::MIME"text/plain", x::Result)
 end
 
 Base.eltype(::Type{<:(Result{<:AbstractRelaxation,V})}) where {V} = V
+
+"""
+    issuccess(r::Result)
+
+Returns `true` if the solver successfully solved the relaxation and provided a solution, and `false` otherwise.
+
+!!! info
+    Solvers often do not have just a single "good" status code, but also "near successes". Whether they will return `true` or
+    `false` is dependent on the implementation. The `status` field of the result is always available to get the original return
+    value.
+"""
+issuccess(r::Result) = issuccess(Val(r.method), r.status)
 
 """
     poly_problem(r::Result)

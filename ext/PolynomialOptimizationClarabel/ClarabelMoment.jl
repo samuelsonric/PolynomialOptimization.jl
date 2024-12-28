@@ -14,6 +14,8 @@ mutable struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int
     )
 end
 
+Solver.issuccess(::Val{:ClarabelMoment}, status::Clarabel.SolverStatus) = status === Clarabel.SOLVED
+
 Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)

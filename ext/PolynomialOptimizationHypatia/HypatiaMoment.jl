@@ -16,6 +16,8 @@ mutable struct StateMoment{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int
     )
 end
 
+Solver.issuccess(::Val{:HypatiaMoment}, status::Solvers.Status) = status ∈ (Solvers.Optimal, Solvers.NearOptimal)
+
 Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.supports_lnorm(::StateMoment) = true

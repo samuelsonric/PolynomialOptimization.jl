@@ -55,6 +55,12 @@ constructed. Normally, this must be done explicitly by instantiating a decendant
 minimal degree.
 Therefore, "optimal" in fact only means that the _relaxation_ was solved to global optimality, which in general will only yield
 an underestimator to the original problem.
+Note that while Clarabel has a very clear return code - `SOLVED` says that things went well - this is not necessarily the case
+for other solvers. Use [`issuccess`](@ref) on the result object to check whether the reported solver status is a good one:
+```jldoctest walkthrough
+julia> issuccess(res)
+true
+```
 
 Further note that the optimization time seems to be pretty high for such a small problem. However, this is purely due to the
 compilation time. Running the optimization again will give a time of the order of a millisecond. Finally, it is not necessary

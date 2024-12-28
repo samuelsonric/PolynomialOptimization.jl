@@ -99,7 +99,11 @@ AbstractSolver
 mindex
 ```
 Every implementation of [`poly_optimize`](@ref) should return a tuple that contains some internal state of the solver as well
-as the optimal value and the status of the solver.
+as the optimal value and the status of the solver. A method for [`issuccess`](@ref issuccess(::Val, ::Any)) should then
+translate this status into a simple boolean, where deciding on ambiguities (near success) is up to the solver implementation.
+```@docs; canonical=false
+issuccess(::Val, ::Any)
+```
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver
 to be chosen automatically. Apart from the exact specification `:<solvername>Moment` or `:<solvername>SOS`, a short form
 `:<solvername>` that chooses the recommended method should also be implemented. For this, the [`@solver_alias`](@ref) macro can

@@ -8,6 +8,7 @@ using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @un
 import ..PolynomialOptimization: MomentVector
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
+import LinearAlgebra: issuccess
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
 # likely need
 export
@@ -15,7 +16,8 @@ export
     AbstractRelaxation, RelaxationGroupings, # from Relaxation
     SimpleMonomialOrConj, SimpleConjMonomial, monomial_index, _get_I, # from SimplePolynomials
     overallocation, # from FastVector (not exported)
-    poly_optimize, solver_methods, @solver_alias
+    poly_optimize, solver_methods, @solver_alias,
+    issuccess # from LinearAlgebra
 
 function poly_optimize end
 
@@ -38,6 +40,13 @@ macro solver_alias(alias, original)
             $poly_optimize(Val($(QuoteNode(original))), relaxation, args...; kwargs...)
     end
 end
+
+"""
+    issuccess(::Val{method}, status)
+
+A solver must implement this method for all of its possible methods to indicate whether a status `status` signifies success.
+"""
+issuccess(::Val, ::Any)
 
 
 include("./Helpers.jl")
