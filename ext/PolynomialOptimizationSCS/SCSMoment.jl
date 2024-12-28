@@ -24,6 +24,8 @@ Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
+Solver.negate_fix(::StateMoment) = true
+
 function Solver.add_constr_nonnegative!(state::StateMoment{<:Integer,K}, indvals::IndvalsIterator{K,Float64}) where {K}
     append!(state.minusAcoo_nonneg, indvals)
     return
@@ -138,7 +140,6 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
         x = Vector{Float64}(undef, moncount)
         y = Vector{Float64}(undef, m)
         s = Vector{Float64}(undef, m)
-        _y = Base.@_gc_preserve_begin y
         _s = Base.@_gc_preserve_begin s
         scs_solution = ScsSolution(pointer(x), pointer(y), pointer(s))
         scs_info = ScsInfo{I}()
@@ -157,11 +158,32 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
     Base.@_gc_preserve_end _scs_A
     Base.@_gc_preserve_end _b
     Base.@_gc_preserve_end _c
-    Base.@_gc_preserve_end _y
     Base.@_gc_preserve_end _s
 
-    return (Val(:SCSMoment), x, state.slack, Acoo), status, scs_info.pobj
+    i = 1
+    zerodual = @view(y[i:nzero])
+    i += nzero
+    nonnegdual = @view(y[i:i+nnonneg-1])
+    i += nnonneg
+    socdual = @view(y[i:i+nsoc-1])
+    i += nsoc
+    psddual = @view(y[i:i+npsd-1])
+    return (state, x, (zerodual, nonnegdual, socdual, psddual), Acoo), status, scs_info.pobj
 end
 
-Solver.extract_moments(relaxation::AbstractRelaxation, (_, x, slack, Acoo)::Tuple{Val{:SCSMoment},Vararg}) =
-    MomentVector(relaxation, x, slack, Acoo)
+Solver.extract_moments(relaxation::AbstractRelaxation, (state, x, _, Acoo)::Tuple{StateMoment,Vararg}) =
+    MomentVector(relaxation, x, state.slack, Acoo)
+
+Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:fix}, index::AbstractUnitRange, ::Nothing) =
+    view(state[3][1], index)
+Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:nonnegative}, index::AbstractUnitRange, ::Nothing) =
+    view(state[3][2], index)
+Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:quadratic}, index::AbstractUnitRange, ::Nothing) =
+    view(state[3][3], index)
+Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:psd}, index::AbstractUnitRange, ::Nothing) =
+    view(state[3][4], index)
+
+Solver.extract_sos(::AbstractRelaxation, (state, x, _, _)::Tuple{StateMoment,Vararg}, ::Val{:slack}, index, ::Tuple) =
+    get_slack(state, x, index)
+
+Solver.psd_indextype(::Tuple{StateMoment,Vararg}) = PSDIndextypeVector(:L)

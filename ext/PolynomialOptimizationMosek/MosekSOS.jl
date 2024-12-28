@@ -5,10 +5,11 @@ mutable struct StateSOS{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     num_solver_cons::Int32 # total number of constraints available in the solver
     num_used_cons::Int32 # number of constraints already used for something (might include scratch constraints)
     const mon_to_solver::Dict{FastKey{K},Int32}
+    const slacks::FastVec{UnitRange{Int32}}
     info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateSOS{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
-        task, zero(Int32), zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}()
+        task, zero(Int32), zero(Int32), zero(Int32), zero(Int32), Dict{FastKey{K},Int32}(), FastVec{UnitRange{Int32}}()
     )
 end
 
@@ -27,6 +28,9 @@ end
 Solver.supports_rotated_quadratic(::StateSOS) = true
 
 Solver.psd_indextype(::StateSOS) = PSDIndextypeMatrixCartesian(:L, zero(Int32))
+
+@counter_alias(StateSOS, (:nonnegative, :quadratic, :rotated_quadratic), :free)
+@counter_atomic(StateSOS, :psd)
 
 function Solver.add_constr_slack!(state::StateSOS, num::Int)
     if state.num_used_cons + num > state.num_solver_cons
@@ -151,4 +155,25 @@ function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateSOS)
     y = Vector{Float64}(undef, length(state.mon_to_solver))
     Mosek.@MSK_getyslice(state.task.task, MSK_SOL_ITR.value, 0, length(y), y)
     return MomentVector(relaxation, y, state)
+end
+
+function Solver.extract_sos(::AbstractRelaxation, state::StateSOS, ::Val, index::AbstractUnitRange, ::Nothing)
+    x = Vector{Float64}(undef, length(index))
+    Mosek.@MSK_getxxslice(state.task.task, MSK_SOL_ITR.value, first(index) -1, last(index), x)
+    return x
+end
+
+function Solver.extract_sos(::AbstractRelaxation, state::StateSOS, ::Val{:psd}, index::Integer, ::Nothing)
+    dim = Ref{Int32}()
+    Mosek.@MSK_getdimbarvarj(state.task.task, index -1, dim)
+    s = Vector{Float64}(undef, trisize(dim[]))
+    Mosek.@MSK_getbarxj(state.task.task, MSK_SOL_ITR.value, index -1, s)
+    return SPMatrix(dim[], s, :L)
+end
+
+function Solver.extract_sos(::AbstractRelaxation, state::StateSOS, ::Val{:slack}, index::AbstractUnitRange, ::Nothing)
+    range = get_slack(state.slacks, index)
+    s = Vector{Float64}(undef, length(range))
+    Mosek.@MSK_getyslice(state.task.task, MSK_SOL_ITR.value, first(range) -1, last(range), s)
+    return s
 end

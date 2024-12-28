@@ -5,10 +5,11 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Int32,Float64}
     num_cons::Int32
     num_afes::Int64
     const mon_to_solver::Dict{FastKey{K},Int32}
+    const slacks::FastVec{UnitRange{Int32}}
     info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K}(task::Mosek.Task) where {K<:Integer} = new{K}(
-        task, zero(Int32), zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}()
+        task, zero(Int32), zero(Int32), zero(Int32), zero(Int64), Dict{FastKey{K},Int32}(), FastVec{UnitRange{Int32}}()
     )
 end
 
@@ -28,6 +29,10 @@ Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
 
+@counter_alias(StateMoment, :nonnegative, :fix)
+@counter_atomic(StateMoment, :quadratic)
+@counter_atomic(StateMoment, (:rotated_quadratic, :psd), :quadratic)
+
 function Solver.add_var_slack!(state::StateMoment, num::Int)
     if state.num_used_vars + num > state.num_solver_vars
         newnum = overallocation(state.num_used_vars + Int32(num))
@@ -35,6 +40,7 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
         state.num_solver_vars = newnum
     end
     result = state.num_used_vars:state.num_used_vars+Int32(num -1)
+    push!(state.slacks, result)
     state.num_used_vars += num
     return result
 end
@@ -173,4 +179,22 @@ function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateMome
     x = Vector{Float64}(undef, state.num_used_vars)
     Mosek.@MSK_getxxslice(state.task.task, MSK_SOL_ITR.value, 0, length(x), x)
     return MomentVector(relaxation, x, state)
+end
+
+function Solver.extract_sos(::AbstractRelaxation, state::StateMoment, ::Union{Val{:fix},Val{:nonnegative}},
+    index::AbstractUnitRange, ::Nothing)
+    y = Vector{Float64}(undef, length(index))
+    Mosek.@MSK_getyslice(state.task.task, MSK_SOL_ITR.value, first(index) -1, last(index), y)
+    return y
+end
+
+Solver.extract_sos(::AbstractRelaxation, state::StateMoment,
+    ::Union{Val{:quadratic},Val{:rotated_quadratic},Val{:psd}}, index::Integer, ::Nothing) =
+    Mosek.getaccdoty(state.task, MSK_SOL_ITR, index)
+
+function Solver.extract_sos(::AbstractRelaxation, state::StateMoment, ::Val{:slack}, index::AbstractUnitRange, ::Nothing)
+    range = get_slack(state.slacks, index)
+    s = Vector{Float64}(undef, length(range))
+    Mosek.@MSK_getxxslice(state.task.task, MSK_SOL_ITR.value, first(range) -1, last(range), s)
+    return s
 end

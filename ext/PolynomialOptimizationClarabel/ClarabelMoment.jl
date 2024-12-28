@@ -18,6 +18,8 @@ Solver.supports_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
+@counter_alias(StateMoment, Any, :nonnegative)
+
 function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.Acoo, indvals)
     push!(state.cones, Clarabel.NonnegativeConeT(length(indvals)))
@@ -98,3 +100,11 @@ end
 
 Solver.extract_moments(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}) =
     MomentVector(relaxation, solution.x, state.slack, state.Acoo)
+
+Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, type::Val,
+    index::AbstractUnitRange, ::Nothing) = @view(solution.z[index])
+
+Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, ::Val{:slack}, index,
+    ::Nothing) = get_slack(state, solution.x, index)
+
+Solver.psd_indextype(::Tuple{StateMoment,Any}) = PSDIndextypeVector(:U)

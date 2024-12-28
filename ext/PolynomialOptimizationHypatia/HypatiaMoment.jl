@@ -26,6 +26,10 @@ Solver.supports_psd_complex(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
 
+Solver.negate_fix(::StateMoment) = true
+
+@counter_alias(StateMoment, (:quadratic, :rotated_quadratic, :lnorm, :lnorm_complex, :psd, :psd_complex), :nonnegative)
+
 function Solver.add_constr_nonnegative!(state::StateMoment{K,V}, indvals::IndvalsIterator{K,V}) where {K,V}
     append!(state.minusGcoo, indvals)
     push!(state.cones, Cones.Nonnegative{V}(length(indvals)))
@@ -139,3 +143,14 @@ end
 
 Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}) =
     MomentVector(relaxation, Solvers.get_x(solver), state.slack, state.Acoo, state.minusGcoo)
+
+Solver.extract_sos(::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}, type::Val, index::AbstractUnitRange,
+    ::Nothing) = @view(Solvers.get_z(solver)[index])
+
+Solver.extract_sos(::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}, ::Val{:fix}, index::AbstractUnitRange,
+    ::Nothing) = @view(Solvers.get_y(solver)[index])
+
+Solver.extract_sos(::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}, ::Val{:slack}, index, ::Nothing) =
+    get_slack(state, Solvers.get_x(solver), index)
+
+Solver.psd_indextype(::Tuple{StateMoment,Any}) = PSDIndextypeVector(:U)

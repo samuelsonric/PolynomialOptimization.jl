@@ -4,10 +4,11 @@ mutable struct StateMoment{K<:Integer} <: AbstractAPISolver{K,Cint,Float64}
     num_used_vars::Cint # number of variables already used for something (might include scratch variables)
     num_symmat::Cint
     const mon_to_solver::Dict{FastKey{K},Cint}
+    const slacks::FastVec{UnitRange{Cint}}
     info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateMoment{K}(task::COPTProb) where {K<:Integer} = new{K}(
-        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}()
+        task, zero(Cint), zero(Cint), zero(Cint), Dict{FastKey{K},Cint}(), FastVec{UnitRange{Cint}}()
     )
 end
 
@@ -29,6 +30,11 @@ Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
 
+Solver.negate_fix(::StateMoment) = true
+
+@counter_alias(StateMoment, (:nonnegative, :quadratic, :rotated_quadratic), :fix)
+@counter_atomic(StateMoment, :psd)
+
 function Solver.add_var_slack!(state::StateMoment, num::Int)
     if state.num_used_vars + num > state.num_solver_vars
         newnum = overallocation(state.num_used_vars + Cint(num))
@@ -38,6 +44,7 @@ function Solver.add_var_slack!(state::StateMoment, num::Int)
         state.num_solver_vars = newnum
     end
     result = state.num_used_vars:state.num_used_vars+Cint(num -1)
+    push!(state.slacks, result)
     state.num_used_vars += num
     return result
 end
@@ -177,3 +184,27 @@ function Solver.extract_moments(relaxation::AbstractRelaxation, state::StateMome
     _check_ret(copt_env, COPT_GetLpSolution(state.problem, x, C_NULL, C_NULL, C_NULL))
     return MomentVector(relaxation, resize!(x, state.num_used_vars), state)
 end
+
+function Solver.extract_sos_prepare(relaxation::AbstractRelaxation, state::StateMoment)
+    num = Ref{Cint}()
+    _check_ret(copt_env, COPT_GetIntAttr(state.problem, COPT_INTATTR_ROWS, num))
+    need_slack = state.num_used_vars > length(state.mon_to_solver)
+    x = Vector{Cdouble}(undef, need_slack ? state.num_solver_vars : 0)
+    z = Vector{Cdouble}(undef, num[])
+    _check_ret(copt_env, COPT_GetLpSolution(state.problem, need_slack ? x : C_NULL, C_NULL, z, C_NULL))
+    return x, z
+end
+
+Solver.extract_sos(relaxation::AbstractRelaxation, state::StateMoment, ::Val, index::AbstractUnitRange, (_, z)) =
+    @view(z[index])
+
+function Solver.extract_sos(relaxation::AbstractRelaxation, state::StateMoment, ::Val{:psd}, index::Integer, _)
+    dim = Ref{Cint}()
+    _check_ret(copt_env, COPT_GetLMIConstr(state.problem, index -1, dim, C_NULL, C_NULL, C_NULL, C_NULL, 0, C_NULL))
+    z = Matrix{Cdouble}(undef, dim[], dim[])
+    _check_ret(copt_env, COPT_GetLMIConstrInfo(state.problem, COPT_DBLINFO_DUAL, index -1, z))
+    return z
+end
+
+Solver.extract_sos(relaxation::AbstractRelaxation, state::StateMoment, ::Val{:slack}, index::AbstractUnitRange, (x, _)) =
+    @view(x[get_slack(state.slacks, index)])
