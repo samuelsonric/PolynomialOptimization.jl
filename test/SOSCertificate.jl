@@ -5,30 +5,34 @@ roundfn(tol) = x -> round(x, digits=tol)
 hs(x) = x' * x
 almost_equal(x::P, y::P; tol=6) where {P<:AbstractPolynomial} = iszero(map_coefficients!(roundfn(tol), x - y))
 almost_equal(x::Vector{<:SimplePolynomial}, y::AbstractPolynomial; tol=6) =
-    almost_equal(sum(let v=variables(y); p -> hs(PolynomialOptimization.change_backend(p, v)) end, x), y; tol)
+    almost_equal(sum(let v=variables(y); p -> hs(PolynomialOptimization.change_backend(p, v)) end, x, init=zero(y)), y; tol)
 
 @testset "No constraints" begin
     DynamicPolynomials.@polyvar x[1:3];
     DynamicPolynomials.@complex_polyvar z[1:2];
 
-    for (str, obj, vars) in (("Real-valued PSD",
-                              1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3], x),
-                             ("Complex-valued PSD", hs(1 + z[1]*z[2]) + hs(1 + z[1]^2) + hs(3 - z[2]), z),
-                             ("Real-valued quadratic", 9 + x[1] + x[1]^2, [x[1]]),
-                             ("Complex-valued quadratic", 9 + z[1] + conj(z[1]) + z[1]*conj(z[1]), [z[1]]),
-                             ("Scalar", one(polynomial_type(x)), typeof(x[1])[]))
+    for (str, obj, vars, success) in (
+        ("Real-valued PSD", 1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3], x, true),
+        ("Complex-valued PSD", hs(1 + z[1]*z[2]) + hs(1 + z[1]^2) + hs(3 - z[2]), z, false),
+        ("Real-valued quadratic", 9 + x[1] + x[1]^2, [x[1]], true),
+        ("Complex-valued quadratic", 9 + z[1] + conj(z[1]) + z[1]*conj(z[1]), [z[1]], true),
+        ("Scalar", one(polynomial_type(x)), typeof(x[1])[], true)
+    )
         @testset "$str" begin
             prob = poly_problem(obj)
             rel = Relaxation.Dense(prob)
             g = PolynomialOptimization.change_backend(Relaxation.groupings(rel).obj[1], vars)
-            for solver in solvers
-                @testset let solver=solver
-                    res = solver === :SCSMoment ? poly_optimize(solver, rel, eps_abs=1e-8, eps_rel=1e-8) :
-                                                  poly_optimize(solver, rel)
-                    cert = SOSCertificate(res)
-                    sosc = dot(g, cert.data[1][1], g)
-                    @test almost_equal(cert[:objective, 1], sosc)
-                    @test almost_equal(sosc, obj - res.objective)
+            for solver in solvers, representation in (RepresentationPSD(), RepresentationDD())
+                @testset let solver=solver, representation=representation
+                    res = solver === :SCSMoment ? poly_optimize(solver, rel; eps_abs=1e-8, eps_rel=1e-8, representation) :
+                                                  poly_optimize(solver, rel; representation)
+                    @test issuccess(res) == (representation isa RepresentationPSD || success)
+                    if success
+                        cert = SOSCertificate(res)
+                        sosc = dot(g, cert.data[1][1], g)
+                        @test almost_equal(cert[:objective, 1], sosc)
+                        @test almost_equal(sosc, obj - res.objective)
+                    end
                 end
             end
         end
