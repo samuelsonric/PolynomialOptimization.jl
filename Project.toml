@@ -12,6 +12,7 @@ MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+StandardPacked = "65f29c17-9e56-4606-972f-81e04007695c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [weakdeps]

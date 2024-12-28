@@ -2,12 +2,14 @@ export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationD
 
 include("./Result.jl")
 include("./MomentMatrix.jl")
+include("./SOSCertificate.jl")
 include("./OptimalityCertificate.jl")
 include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
 using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDD,
     RepresentationSDD
 import .Solver: poly_optimize
+using StandardPacked: SPMatrix
 
 _val_of(::Val{S}) where {S} = S
 
