@@ -96,7 +96,7 @@ Defines the [`addtocounter!`](@ref) function in such a way that contraints of ty
 `counter` may either be a Symbol, a tuple of Symbols, or the value `Any`. Note that `Any` has weakest precendence, irrespective
 of when the macro was called.
 
-!!! warn
+!!! warning
     Regardless of whether `counter` or `alias` where made atomic before, after this macro, `counter` will not be so (although
     it shares the same counter as `alias`). This may or may not be desirable (most likely not), so always make atomic counters
     explicit using [`@counter_atomic`](@ref), which allows the definition of aliases.
