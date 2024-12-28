@@ -68,12 +68,12 @@ macro counter_is_scalar(S, counter::QuoteNode, alias::QuoteNode=counter)
 end
 
 """
-    @counter_alias(::Type{<:AbstractSolver}, counter[, alias])
+    @counter_alias(::Type{<:AbstractSolver}, counter, alias)
 
 Defines the [`addtocounter!`](@ref) function in such a way that contraints of type `counter` instead only affect the counter
 `alias`. Do not use [`@counter_is_scalar`](@ref) together with this macro on the same `counter`.
 """
-macro counter_alias(S, counter::QuoteNode, alias::QuoteNode=counter)
+macro counter_alias(S, counter::QuoteNode, alias::QuoteNode)
     m = Base.parentmodule(addtocounter!)
     f = alias.value
     esc(quote
