@@ -289,10 +289,15 @@ function SOSCertificate(result::Result)
 end
 
 function sos_decomposition(matrix, grouping::SimpleMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
+    # What to do with negative eigenvalues? We might get very small negative eigenvalues just due to numerical error; this is
+    # fine. We could raise an error if the smallest eigenvalue is smaller than -ϵ. But if ϵ = 0, the user wants to keep
+    # everything, though obviously negative eigenvalues have to be discarded. So we decide not to raise an error at all.
+    # However, this risks not catching an error in the optimization (or, beware, the solver implementation).
     if isone(length(grouping))
         # while we reshaped the vector into a matrix, let's skip the overload here
         @assert(isone(length(matrix)))
-        return [SimplePolynomial([sqrt(first(matrix))], grouping)]
+        val = first(matrix)
+        return [SimplePolynomial([val > 0 ? sqrt(val) : zero(val)], grouping)]
     end
     matrixdim = LinearAlgebra.checksquare(matrix)
     n = length(grouping)
