@@ -43,7 +43,7 @@ function addtocounter! end
     return v+1:setproperty!(counters, type, v + dim)
 end
 
-@inline function addtocounter!(state::AbstractSolver, counters::Counters, ::Val{type}, num::Integer, ::Integer) where {type}
+@inline function addtocounter!(state::AbstractSolver, counters::Counters, ::Val{type}, num::Integer, dim::Integer) where {type}
     v = getproperty(counters, type)
     return v+1:setproperty!(counters, type, v + num * dim)
 end

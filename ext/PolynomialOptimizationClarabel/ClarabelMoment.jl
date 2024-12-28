@@ -104,7 +104,7 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solution)::Tuple{
 Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, type::Val,
     index::AbstractUnitRange, ::Nothing) = @view(solution.z[index])
 
-Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, ::Val{:slack}, index,
-    ::Nothing) = get_slack(state, solution.x, index)
+Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, ::Val{:slack},
+    index::AbstractUnitRange, ::Nothing) = get_slack(state, solution.x, index)
 
 Solver.psd_indextype(::Tuple{StateMoment,Any}) = PSDIndextypeVector(:U)

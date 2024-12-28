@@ -39,6 +39,7 @@ function Solver.add_constr_slack!(state::StateSOS, num::Int)
         state.num_solver_cons = newnum
     end
     result = state.num_used_cons:state.num_used_cons+Int32(num -1)
+    push!(state.slacks, result)
     state.num_used_cons += num
     return result
 end
@@ -61,7 +62,7 @@ function Solver.add_var_nonnegative!(state::StateSOS, indvals::IndvalsIterator{I
         @capture(Mosek.@MSK_putacol(task, $curvar, length(indval), indval.indices, indval.values))
         curvar += one(curvar)
     end
-    Mosek.@MSK_putvarboundsliceconst(task, id, curcon, MSK_BK_LO.value, 0., Inf)
+    Mosek.@MSK_putvarboundsliceconst(task, id, curvar, MSK_BK_LO.value, 0., Inf)
     state.num_vars = curvar
     return
 end
