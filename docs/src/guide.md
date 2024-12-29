@@ -377,11 +377,12 @@ Lower bound to optimum (in case of good status): 0.9166666672685418
 Time required for optimization: 0.1599203 seconds
 ```
 So first, `PolynomialOptimization` will determine the bases for the matrices according to the sparsity pattern.
-At this step, if the optional keyword argument `clique_merging` is set to `true` (default is `false`), an attempt will be made
-to merge bases if their heuristic cost for treating them separately would be worse than joining them (this concept is nicely
-explained in the [COSMO documenation](https://oxfordcontrol.github.io/COSMO.jl/stable/decomposition/#Clique-merging)). In
-general, doing clique merging will lead to faster optimizations; however, the merging process itself can be quite costly and in
-fact for large problems might cost much more time than it gains - hence, it is turned off by default.
+Note that after this step, the if the resulting relaxation is wrapped into a [`Relaxation.CliqueMerged`](@ref), an attempt will
+be made to merge bases if their heuristic cost for treating them separately would be worse than joining them (this concept is
+nicely explained in the [COSMO documenation](https://oxfordcontrol.github.io/COSMO.jl/stable/decomposition/#Clique-merging)).
+In general, doing clique merging will lead to faster optimizations; however, the merging process itself can be quite costly and
+in fact for large problems might cost much more time than it gains - hence, it must be enabled by explicitly constructing the
+merged relaxation.
 After this step is done, the Clarabel data (or any other optimizer structure, which we all address directly without `JuMP`) is
 constructed; then the solver runs.
 

@@ -4,7 +4,6 @@ include("./Result.jl")
 include("./MomentMatrix.jl")
 include("./SOSCertificate.jl")
 include("./OptimalityCertificate.jl")
-include("./CliqueMerging.jl")
 include("./solver/Solver.jl")
 using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDD,
     RepresentationSDD
@@ -15,13 +14,10 @@ _val_of(::Val{S}) where {S} = S
 
 """
     poly_optimize([method, ]relaxation::AbstractRelaxation; verbose=false,
-        clique_merging=false, representation=RepresentationPSD(), kwargs...)
+        representation=RepresentationPSD(), kwargs...)
 
 Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
 [`AbstractRelaxation`](@ref). Returns a [`Result`](@ref) object.
-
-Clique merging is a way to improve the performance of the solver in case a sparse analysis led to cliques with a lot of
-overlap; however, the process itself may be time-consuming and is therefore disabled by default.
 
 Instead of modeling the moment/SOS matrices as positive semidefinite, other representations such as the (scaled) diagonally
 dominant description are also possible. The `representation` parameter can be used to define a representation that is employed
@@ -46,20 +42,11 @@ solver has been loaded.
       is an `Int` denoting the index of the grouping within the constraint/objective.
 """
 function poly_optimize(@nospecialize(v::Val), relaxation::AbstractRelaxation; verbose::Bool=false,
-    representation=RepresentationPSD(), clique_merging::Bool=false, kwargs...)
+    representation=RepresentationPSD(), kwargs...)
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
         groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation
                                        # was constructed.
-        if clique_merging
-            clique_merging && @verbose_info("Merging cliques...")
-            t = @elapsed begin
-                groups = merge_cliques(groups)
-            end
-            @verbose_info("Cliques merged in ", t, " seconds.")
-        else
-            @verbose_info("Clique merging disabled.")
-        end
         if verbose
             bs = StatsBase.countmap(length.(groups.obj))
             @unroll for constrs in (groups.nonnegs, groups.psds)

@@ -35,7 +35,7 @@ mutable struct SparsityTerm{
     G<:RelaxationGroupings
 } <: AbstractRelaxationSparse{P}
     const problem::P
-    const parent # no specialization
+    const parent # no specialization, therefore keep a typed problem field
     const parentgroupings::PG
     support_union::Set{I}
     const localizing_supports::Vector{S}

@@ -50,6 +50,7 @@ SparsityTermBlock
 SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
+CliqueMerged
 ```
 
 ## Optimization and problem solutions
