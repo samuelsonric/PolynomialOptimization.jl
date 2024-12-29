@@ -203,7 +203,7 @@ mutable struct Result{Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
     const relaxation::Rx
     const method::Symbol
     const time::Float64
-    const state
+    state
     const status
     const objective::V
     moments

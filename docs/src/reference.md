@@ -59,11 +59,13 @@ CurrentModule = PolynomialOptimization
 ```
 ```@docs
 poly_optimize(::Val, ::AbstractRelaxation)
-poly_optimize(::Val, ::Problem, ::Tuple{Vararg})
+poly_optimize(::Val, ::Problem, ::Vararg{Any})
+poly_optimize(::Result)
 Solver.RepresentationMethod
 RepresentationPSD
 RepresentationSDD
 RepresentationDD
+RepresentationNondiagI
 Result
 issuccess(::Result)
 poly_problem(::Result)

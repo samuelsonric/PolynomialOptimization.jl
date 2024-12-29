@@ -23,8 +23,10 @@ Note that if rewritten, `u` must be real-valued and have twice the side dimensio
 struct RepresentationSDD{M,Complex}
     u::M
 
-    RepresentationSDD(u::M=I; complex=true) where {M} = new{M,complex}(u)
+    RepresentationSDD(u::M=I; complex::Bool=true) where {M} = new{M,complex}(u)
 end
+
+(::Type{<:RepresentationSDD{<:Any,complex}})(u) where {complex} = RepresentationSDD(u; complex)
 
 @doc raw"""
     RepresentationDD([u]; complex=true) <: RepresentationMethod
@@ -45,11 +47,13 @@ Note that if rewritten, `u` must be real-valued and have twice the side dimensio
 struct RepresentationDD{M,Complex}
     u::M
 
-    RepresentationDD(u::M=I; complex=true) where {M} = new{M,complex}(u)
+    RepresentationDD(u::M=I; complex::Bool=true) where {M} = new{M,complex}(u)
 end
 
+(::Type{<:RepresentationDD{<:Any,complex}})(u) where {complex} = RepresentationDD(u; complex)
+
 """
-    RepresentationMethod
+    RepresentationMethod{M,Complex}
 
 Union type that defines how the optimizer constraint σ ⪰ 0 is interpreted. Usually, "⪰" means positive semidefinite;
 however, there are various other possibilities giving rise to weaker results, but scale more favorably. The following methods
@@ -57,5 +61,21 @@ are supported:
 - [`RepresentationPSD`](@ref)
 - [`RepresentationSDD`](@ref)
 - [`RepresentationDD`](@ref)
+
+See also [`RepresentationNondiagI`](@ref).
 """
-const RepresentationMethod = Union{RepresentationPSD,<:RepresentationSDD,<:RepresentationDD}
+const RepresentationMethod{M,Complex} = Union{RepresentationPSD,RepresentationSDD{M,Complex},RepresentationDD{M,Complex}}
+
+"""
+    RepresentationNondiagI(r::Type{RepresentationDD,RepresentationSDD}; complex=true)
+
+Default callable that will instantiate a correctly-sized representation of type `r` with an identity rotation that is, however,
+not recognized as a diagonal rotation. Use this type in the first call to [`poly_optimize`](@ref) if you want to re-optimize
+the problem afterwards using arbitrary rotations.
+"""
+struct RepresentationNondiagI{R<:Union{RepresentationDD,RepresentationSDD},Complex}
+    RepresentationNondiagI(r::R; complex::Bool=true) where {R<:Type{<:Union{RepresentationDD,RepresentationSDD}}} =
+        new{r,complex}()
+end
+
+(::RepresentationNondiagI{R,complex})(_, dim) where {R,complex} = R(Matrix(I, dim, dim); complex)

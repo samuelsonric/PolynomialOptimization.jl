@@ -125,6 +125,10 @@ actual length. This behavior can be customized:
 addtocounter!
 Counters
 ```
+Using this information, an additional implementation may be provided for a faster re-optimization of the same problem:
+```@docs
+poly_optimize(::Val, ::Any, ::AbstractRelaxation, ::RelaxationGroupings)
+```
 
 While this page documents in detail how a new solver can be implemented, the explanation is far more extensive than an actual
 implementation. In order to implement a new solver, it is therefore recommended to first determine the category in which it

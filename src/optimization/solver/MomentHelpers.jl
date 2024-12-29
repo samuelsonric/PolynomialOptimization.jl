@@ -45,6 +45,13 @@ function to_soc!(indices, values, lens, supports_rotated)
     return IndvalsIterator(unsafe, indices, values, lens)
 end
 
+const INFO_PSD = (:psd, :psd_complex, :rotated_quadratic, :quadratic, :nonnegative)
+const INFO_SDD = (:sdd, :sdd_complex)
+const INFO_DD = (:dd, :dd_complex, :dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_lnorm_real, :dd_lnorm_complex,
+    :dd_nonneg_diag, :dd_nonneg, :dd_quad_diag, :dd_quad)
+const INFO_COMPLEX = (:psd_complex, :sdd_complex, :dd_complex, :dd_lnorm_complex_diag, :dd_lnorm_complex)
+const INFO_DIAG = (:dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_nonneg_diag, :dd_quad_diag)
+
 # generic moment matrix constraint with
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
 #   contains complex coefficients/monomials, imaginary parts cancel out)

@@ -19,8 +19,6 @@ export
     poly_optimize, solver_methods, @solver_alias,
     issuccess # from LinearAlgebra
 
-function poly_optimize end
-
 const solver_methods = Symbol[]
 
 function default_solver_method()
@@ -40,6 +38,8 @@ macro solver_alias(alias, original)
             $poly_optimize(Val($(QuoteNode(original))), relaxation, args...; kwargs...)
     end
 end
+
+function poly_optimize end
 
 """
     poly_optimize(::Val{method}, relaxation::AbstractRelaxation,
@@ -62,6 +62,24 @@ poly_optimize(::Val, ::AbstractRelaxation, ::RelaxationGroupings)
 A solver must implement this method for all of its possible methods to indicate whether a status `status` signifies success.
 """
 issuccess(::Val, ::Any)
+
+struct _Copied{X}
+    data::X
+end
+
+"""
+    poly_optimize(::Val{method}, oldstate, relaxation::AbstractRelaxation,
+        groupings::RelaxationGroupings; representation, verbose, kwargs)
+
+A solver that supports re-optimization of an already optimized problem with changed rotations on the DD and SDD representations
+should implement this method. It is guaranteed that only the rotations change, and only in a structure-preserving way (diagonal
+and nondiagonal rotations will not interchange). The return value is as documented in [`poly_optimize`](@ref), and the
+`oldstate` parameter holds the first return value of the previous call to [`poly_optimize`](@ref).
+"""
+function poly_optimize(method::Val, ::Any, relaxation::AbstractRelaxation, groupings::RelaxationGroupings; kwargs...)
+    @info("The chosen solver does not support re-optimization. Starting from the beginning.")
+    return _Copied(poly_optimize(method, relaxation, groupings; kwargs...))
+end
 
 
 include("./Helpers.jl")
