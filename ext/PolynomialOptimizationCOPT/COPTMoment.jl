@@ -31,8 +31,6 @@ Solver.supports_rotated_quadratic(::StateMoment) = true
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeMatrixCartesian(:L, zero(Cint))
 
-Solver.negate_fix(::StateMoment) = true
-
 @counter_alias(StateMoment, (:nonnegative, :quadratic, :rotated_quadratic), :fix)
 @counter_atomic(StateMoment, :psd)
 
