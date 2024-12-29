@@ -46,8 +46,7 @@ solver has been loaded.
       is an `Int` denoting the index of the grouping within the constraint/objective.
 """
 function poly_optimize(@nospecialize(v::Val), relaxation::AbstractRelaxation; verbose::Bool=false,
-    representation::Union{<:RepresentationMethod,<:Base.Callable}=RepresentationPSD(),
-    clique_merging::Bool=false, kwargs...)
+    representation=RepresentationPSD(), clique_merging::Bool=false, kwargs...)
     otime = @elapsed begin
         @verbose_info("Beginning optimization...")
         groups = groupings(relaxation) # This is instantaneous, as the groupings were already calculated when the relaxation

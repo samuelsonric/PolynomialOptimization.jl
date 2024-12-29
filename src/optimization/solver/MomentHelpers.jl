@@ -1758,7 +1758,7 @@ See also [`sos_setup!`](@ref), [`moment_add_matrix!`](@ref), [`moment_add_equali
 [`RepresentationMethod`](@ref).
 """
 function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings;
-    representation::Union{<:RepresentationMethod,<:Base.Callable}=RepresentationPSD()) where {T,V,P}
+    representation=RepresentationPSD()) where {T,V,P}
     problem = poly_problem(relaxation)
     (real(coefficient_type(problem.objective)) <: V) ||
         @warn("Expected value type for the solver $V might not be compatible with polynomial coefficient type $(real(coefficient_type(problem.objective)))")

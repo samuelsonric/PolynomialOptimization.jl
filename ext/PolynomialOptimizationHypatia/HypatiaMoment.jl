@@ -96,8 +96,8 @@ function Solver.fix_objective!(state::StateMoment{K,V}, indvals::Indvals{K,V}) w
 end
 
 function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor),
-    customize::Base.Callable=_ -> nothing, parameters...)
+    representation, verbose::Bool=false, dense::Bool=!isone(poly_problem(relaxation).prefactor), customize=_ -> nothing,
+    parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))

@@ -129,7 +129,7 @@ function Solver.fix_constraints!(state::StateSOS, indvals::Indvals{Int32,Float64
 end
 
 function Solver.poly_optimize(::Val{:MosekSOS}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize::Base.Callable=(state) -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=(state) -> nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
