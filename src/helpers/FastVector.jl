@@ -277,7 +277,7 @@ Ensures that the internal buffer can hold at least `n` items (meaning that large
 will be increased to exactly `n`) and sets the length of the vector to `n`.
 """
 function Base.resize!(v::FastVec, n::Integer)
-    n > v.len && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
+    n > length(v.data) && resize!(v.data, n) # assume we know what we are doing, so no overallocation here
     v.len = n
     return v
 end
