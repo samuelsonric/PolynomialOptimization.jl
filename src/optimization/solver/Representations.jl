@@ -79,3 +79,46 @@ struct RepresentationNondiagI{R<:Union{RepresentationDD,RepresentationSDD},Compl
 end
 
 (::RepresentationNondiagI{R,complex})(_, dim) where {R,complex} = R(Matrix(I, dim, dim); complex)
+
+struct RepresentationChangedError <: Exception end
+
+struct Rerepresent{C<:SOSCertificate,F}
+    info::Vector{Vector{Symbol}}
+    cert::C
+    fn::F
+    fix_structure::Bool
+end
+
+Rerepresent(r::Rerepresent, fix_structure::Bool) = Rerepresent(r.info, r.cert, r.fn, fix_structure)
+
+function (r::Rerepresent)((type, index, grouping), dim)
+    idx = id_to_index(r.cert.relaxation, (type, index, grouping))
+    oldtype = r.info[idx][grouping]
+    if oldtype in Solver.INFO_PSD
+        oldrep = RepresentationPSD
+        complex = false # just to make it compatible with the checks below
+        diagonal = true
+    else
+        complex = oldtype in Solver.INFO_COMPLEX
+        diagonal = oldtype in Solver.INFO_DIAG
+        if oldtype in Solver.INFO_SDD
+            oldrep = diagonal ? RepresentationSDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
+                                RepresentationSDD{<:Matrix,complex}
+        else
+            @assert(oldtype in Solver.INFO_DD)
+            oldrep = diagonal ? RepresentationDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
+                                RepresentationDD{<:Matrix,complex}
+        end
+    end
+    newrep = r.fn((type, index, grouping), dim, oldrep, r.cert.data[idx][grouping])::RepresentationMethod
+    if r.fix_structure
+        ((oldtype in Solver.INFO_PSD && !(newtype isa RepresentationPSD)) ||
+         (oldtype in Solver.INFO_SDD && !(newrep isa RepresentationSDD)) ||
+         (oldtype in Solver.INFO_DD && !(newrep isa RepresentationDD)) ||
+         (complex && newrep isa RepresentationMethod{<:Any,false}))
+        throw(RepresentationChangedError())
+    end
+    newdiag = newrep isa RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}}
+    !r.fix_structure || diagonal == newdiag || throw(RepresentationChangedError())
+    return newrep
+end

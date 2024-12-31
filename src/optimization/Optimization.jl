@@ -1,4 +1,5 @@
-export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDD, RepresentationSDD, RepresentationNondiagI
+export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDD, RepresentationSDD, RepresentationNondiagI,
+    IterateRepresentation
 
 include("./Result.jl")
 include("./MomentMatrix.jl")
@@ -90,10 +91,26 @@ function poly_optimize(args...; kwargs...)
     poly_optimize(Val(method), args...; kwargs...)
 end
 
-const warned_diagonal = Ref(false)
+struct IterateRepresentation
+    keep_diagonal::Bool
 
-function iterate_representation((type, index, grouping), _, oldrep::Type{<:RepresentationMethod}, oldsos)
-    @assert(!(oldrep <: RepresentationPSD))
+    @doc """
+        IterateRepresentation(; keep_diagonal=false)
+
+    Default iteration method for DD and SDD representations. This is will perform a Cholesky decomposition of the old SOS
+    matrix and use it as the new rotation, ensuring that results never get worse (at least in theory; since a positive definite
+    SOS matrix is only guaranteed up to a certain tolerance, bad things could still happen).
+
+    Note that this breaks existing diagonal structures; by setting `keep_diagonal` to `true`, only the diagonal of the Cholesky
+    factor will be taken (with no theoretical guarantees, not even about convergence).
+
+    See also [`poly_optimize`](@ref poly_optimize(::Result))
+    """
+    IterateRepresentation(; keep_diagonal::Bool=false) = new(keep_diagonal)
+end
+
+function (i::IterateRepresentation)((type, index, grouping), _, oldrep::Type{<:RepresentationMethod}, oldsos)
+    oldrep <: RepresentationPSD && return RepresentationPSD()
     # We need to perfom a Cholesky decomposition in the form oldsos = Uᵀ * U, where U is upper triangular.
     # We have multiple issues here:
     # - oldsos might be a Hermitian matrix with the lower triangle specified, so cholesky will return the L * Lᵀ form.
@@ -128,64 +145,34 @@ function iterate_representation((type, index, grouping), _, oldrep::Type{<:Repre
             warned_diagonal[] = true
         end
         return oldrep(Diagonal(newrot))
+    if i.keep_diagonal && oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} &&
+        !(newrot isa Union{<:UniformScaling,<:Diagonal})
+        return oldrep(Diagonal(newrot)) # well, maybe we should care...
     else
         return oldrep(newrot)
     end
 end
 
-struct _Rerepresent{C<:SOSCertificate,F}
-    info::Vector{Vector{Symbol}}
-    cert::C
-    fn::F
-end
-
-function (r::_Rerepresent)((type, index, grouping), dim)
-    idx = id_to_index(r.cert.relaxation, (type, index, grouping))
-    oldtype = r.info[idx][grouping]
-    if oldtype in Solver.INFO_PSD
-        # nothing can be changed
-        return RepresentationPSD()
-    end
-    complex = oldtype in Solver.INFO_COMPLEX
-    diagonal = oldtype in Solver.INFO_DIAG
-    if oldtype in Solver.INFO_SDD
-        oldrep = diagonal ? RepresentationSDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
-                            RepresentationSDD{<:Matrix,complex}
-    else
-        @assert(oldtype in Solver.INFO_DD)
-        oldrep = diagonal ? RepresentationDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
-                            RepresentationDD{<:Matrix,complex}
-    end
-    newrep = r.fn((type, index, grouping), dim, oldrep, r.cert.data[idx][grouping])
-    if (oldtype in Solver.INFO_SDD && !(newrep isa RepresentationSDD)) ||
-        (oldtype in Solver.INFO_DD && !(newrep isa RepresentationDD)) ||
-        (complex && newrep isa RepresentationMethod{<:Any,false})
-        error("The representation of individual types must not change")
-    end
-    newdiag = newrep isa RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}}
-    diagonal == newdiag || error("A representation must not change from a diagonal to a nondiagonal type or vice versa")
-    return newrep
-end
-
 """
-    poly_optimize(result::Result; [representation, ]kwargs...)
+    poly_optimize(result::Result; [representation=IterateRepresentation(), ]kwargs...)
 
 Re-optimizes a previously optimized polynomial optimization problem. This is usually pointless, as the employed optimizers will
 find globally optimal solutions. However, this method allows to change the representation used for the constraints (or
-objective) in a very limited way: It is possible to adjust the rotation of the DD and SDD representation. If `representation`
-is a callable, it will now receive as a third parameter the type of the [`RepresentationMethod`](@ref) used before for this
-constraint[^2], and as a fourth parameter the associated SOS matrix from the previous optimization.
-
-The default implementation will take this SOS matrix, perform a Cholesky decomposition, and return the result as the new
-rotation for the DD or SDD cone. However, note that only structure-preserving rotations are possible; i.e., if the rotation was
-diagonal before, it must be diagonal afterwards. In order to allow for non-diagonal rotations, start using the
-[`RepresentationNondiagI`](@ref) representation in the first optimization.
+objective). If `representation` is a callable, it will now receive as a third parameter the type of the
+[`RepresentationMethod`](@ref) used before for this constraint[^2], and as a fourth parameter the associated SOS matrix from
+the previous optimization. For efficiency reasons, this should only be used for changes that preserve the structure of the
+representation (i.e., whether it was PSD/DD/SDD and if its rotation was diagonal or not). If a structure non-preserving change
+is made, the problem needs to be constructed from scratch. For non-diagonal rotations, consider using
+[`RepresentationNondiagI`](@ref) in the first optimization.
 
 !!! warning
     The internal state of the previous solver run will be re-used whenever possible. Therefore, no further data may be queried
-    from the previous result afterwards. While `result` will still be able to offer information about the relaxation, method,
-    time, status, and objective value, moment matrices can only be accessed if they were already cached (i.e., accessed)
-    before. Existing SOS certificates of the previous result will still be available, but new ones may not be constructed.
+    from the previous result afterwards, unless a re-optimization from scratch was necessary. While `result` will still be able
+    to offer information about the relaxation, method, time, status, and objective value, moment matrices can only be accessed
+    if they were already cached (i.e., accessed) before. Existing SOS certificates of the previous result will still be
+    available, but new ones may not be constructed.
+
+See also [`IterateRepresentation`](@ref).
 
 [^2]: Roughly, as the exact type is not known. For sure, it will be possible to distinguish between [`RepresentationDD`](@ref)
       and [`RepresentationSDD`](@ref) (the callback will not be invoked for [`RepresentationPSD`](@ref), as nothing can be
@@ -195,18 +182,34 @@ diagonal before, it must be diagonal afterwards. In order to allow for non-diago
       simply be ignored). Despite not being concrete, these two possible union types can be used as constructors accepting the
       new rotation matrix as parameter.
 """
-function poly_optimize(result::Result; representation=iterate_representation, verbose::Bool=false, kwargs...)
+function poly_optimize(result::Result; representation=IterateRepresentation(), verbose::Bool=false, kwargs...)
     ismissing(result.state) && throw(ArgumentError("The given result does not contain any data."))
     @verbose_info("Beginning re-optimization...")
     oldstate = result.state
     if !(representation isa RepresentationMethod)
-        representation = _Rerepresent([[s for (s, _) in x] for x in Solver.extract_info(result.state)], SOSCertificate(result),
-            representation)
+        representation = Solver.Rerepresent([[s for (s, _) in x] for x in Solver.extract_info(result.state)],
+            SOSCertificate(result), representation, true)
     end
     relaxation = result.relaxation
-    otime = @elapsed begin
-        new_result = poly_optimize(Val(result.method), result.state, relaxation, Relaxation.groupings(relaxation);
-            verbose, representation, kwargs...)
+    local otime
+    try
+        otime = @elapsed begin
+            new_result = poly_optimize(Val(result.method), result.state, relaxation, Relaxation.groupings(relaxation);
+                verbose, representation, kwargs...)
+        end
+    catch e
+        if e isa Solver.RepresentationChangedError && representation isa Solver.Rerepresent
+            @warn("The representation of at least one grouping changed, either in type or diagonally. The problem has to be \
+                   set-up from the beginning. If this is due to a change in diagonality, consider using \
+                   RepresentationNondiagI as initial value.")
+            representation = Solver.Rerepresent(representation, false)
+            otime = @elapsed begin
+                new_result = Solver._Copied(poly_optimize(Val(result.method), relaxation, Relaxation.groupings(relaxation),
+                    verbose, representation, kwargs...))
+            end
+        else
+            rethrow(e)
+        end
     end
     if new_result isa Solver._Copied
         new_result = new_result.data

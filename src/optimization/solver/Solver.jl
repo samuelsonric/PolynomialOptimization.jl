@@ -4,7 +4,8 @@ using ..SimplePolynomials, ..PolynomialOptimization, MultivariatePolynomials, Li
 using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
 @reexport using ..FastVector
 using ..FastVector: overallocation
-using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!
+using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!,
+    id_to_index
 import ..PolynomialOptimization: MomentVector
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
@@ -76,9 +77,14 @@ should implement this method. It is guaranteed that only the rotations change, a
 and nondiagonal rotations will not interchange). The return value is as documented in [`poly_optimize`](@ref), and the
 `oldstate` parameter holds the first return value of the previous call to [`poly_optimize`](@ref).
 """
-function poly_optimize(method::Val, ::Any, relaxation::AbstractRelaxation, groupings::RelaxationGroupings; kwargs...)
+function poly_optimize(method::Val, ::Any, relaxation::AbstractRelaxation, groupings::RelaxationGroupings; representation,
+    kwargs...)
     @info("The chosen solver does not support re-optimization. Starting from the beginning.")
-    return _Copied(poly_optimize(method, relaxation, groupings; kwargs...))
+    if representation isa Rerepresent
+        # we can disable any constraints on not changing the representation, as everything is new anyway
+        representation = Rerepresent(representation, false)
+    end
+    return _Copied(poly_optimize(method, relaxation, groupings; representation, kwargs...))
 end
 
 

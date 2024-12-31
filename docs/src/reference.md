@@ -78,6 +78,7 @@ MomentVector
 MomentAssociation
 SOSCertificate
 sos_matrix
+IterateRepresentation
 ```
 
 ## Newton polytope construction (manually)

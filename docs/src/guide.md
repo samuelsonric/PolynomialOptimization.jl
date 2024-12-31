@@ -458,55 +458,41 @@ process can be iterated and the diagonally dominant cone can be [rotated](https:
 the data from the previous optimization. This is call re-optimization, and while a lot of details can be customized, if none
 are specified, `PolynomialOptimization` will take the Cholesky decomposition of the matrix underlying the SOS certificate of
 the previous iteration as a new rotation basis.
+!!! info
+    Different representations lead to different problems from the perspective of the solver - in particular, different with
+    respect to which solver functions are used or how the data is aligned in memory. Therefore, changing the _type_ of the
+    representation requires a completely new problem to be set up. However, if only the _data within_ the representatin is
+    changed, the old problem can be re-used, reducing the setup time. This is irrelevant if a solver is used whose interface
+    in `PolynomialOptimization` does not support this faster reoptimization.
+    Note that by default, the default rotations used for the DD and SDD representation are identities of the type
+    `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationNondiagI`](@ref) to "fake" a
+    fully dense identity at the beginning.
+
 ```jldoctest walkthrough
 julia> res_dd_rotated = poly_optimize(res_dd)
-[ Info: The chosen solver does not support re-optimization. Starting from the beginning.
-[ Warning: The reoptimization was done enforcing a diagonal rotation. This may lead to suboptimal result or numerical problems. Use a non-diagonal rotation in the initial optimization (e.g., RepresentationNondiagI) to allow for arbitrary rotations. This warning will only be shown once in the current Julia session.
-Polynomial optimization result
-Relaxation method: Dense
-Used optimization method: ClarabelMoment
-Status of the solver: SOLVED
-Lower bound to optimum (in case of good status): 0.6956904364778128
-Time required for optimization: 0.5870458 seconds
-```
-Now, the result is already better as before, and this can in turn be iterated, approaching the optimum, but ending in numerical
-trouble. However, note the warning: For efficiency reasons, the kind of a rotation - i.e., whether it was diagonal or dense -
-must not change between optimization. Therefore, if it is intended to use rotation, it is better to start with a "fake"
-nondiagonal identity matrix from the beginning.
-```jldoctest walkthrough
-julia> res_dd = poly_optimize(:Clarabel, prob, representation=RepresentationNondiagI(RepresentationDD))
-[ Info: Automatically selecting minimal degree cutoff 2
-Polynomial optimization result
-Relaxation method: Dense
-Used optimization method: ClarabelMoment
-Status of the solver: SOLVED
-Lower bound to optimum (in case of good status): 0.5000000105896544
-Time required for optimization: 0.6865235 seconds
-
-julia> res_dd_rotated = poly_optimize(res_dd)
 # output truncated
-Lower bound to optimum (in case of good status): 0.8108255997748417
-Time required for optimization: 0.6872705 seconds
+Lower bound to optimum (in case of good status): 0.7882579368640297
+Time required for optimization: 1.5101965 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9032494974374045
-Time required for optimization: 0.0068198 seconds
+Lower bound to optimum (in case of good status): 0.8744697853614662
+Time required for optimization: 0.0355882 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9153677888602395
-Time required for optimization: 0.0091484 seconds
+Lower bound to optimum (in case of good status): 0.9122827868379025
+Time required for optimization: 0.0097173 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9164975784185007
-Time required for optimization: 0.0095358 seconds
+Lower bound to optimum (in case of good status): 0.9160797411325013
+Time required for optimization: 0.0102907 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9166633122606138
-Time required for optimization: 0.0098992 seconds
+Lower bound to optimum (in case of good status): 0.9165662778912137
+Time required for optimization: 0.0123682 seconds
 ```
 So indeed, after a couple of iterations, the optimum is approached pretty well. We could have used the scaled diagonally
 dominant representation instead, which relies on quadratic instead of linear programs, which for this particular example would
