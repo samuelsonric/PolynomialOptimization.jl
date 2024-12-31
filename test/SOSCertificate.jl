@@ -22,11 +22,11 @@ almost_equal(x::Vector{<:SimplePolynomial}, y::AbstractPolynomial; tol=6) =
             prob = poly_problem(obj)
             rel = Relaxation.Dense(prob)
             g = PolynomialOptimization.change_backend(Relaxation.groupings(rel).obj[1], vars)
-            for solver in solvers, representation in (RepresentationPSD(), RepresentationDD())
+            for solver in solvers, representation in (RepresentationPSD(), RepresentationDD(), RepresentationSDD())
                 @testset let solver=solver, representation=representation
                     res = solver === :SCSMoment ? poly_optimize(solver, rel; eps_abs=1e-8, eps_rel=1e-8, representation) :
                                                   poly_optimize(solver, rel; representation)
-                    @test issuccess(res) == (representation isa RepresentationPSD || success)
+                    @test issuccess(res) == !(representation isa RepresentationDD) || success
                     if success
                         cert = SOSCertificate(res)
                         sosc = dot(g, cert.data[1][1], g)
