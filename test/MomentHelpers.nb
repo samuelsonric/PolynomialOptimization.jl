@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    948572,      18039]
-NotebookOptionsPosition[    936509,      17834]
-NotebookOutlinePosition[    936941,      17851]
-CellTagsIndexPosition[    936898,      17848]
+NotebookDataLength[    958453,      18262]
+NotebookOptionsPosition[    946361,      18056]
+NotebookOutlinePosition[    946798,      18073]
+CellTagsIndexPosition[    946755,      18070]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -12795,10 +12795,10 @@ Cell[BoxData[{
              "]"}], "[", 
            RowBox[{"[", "2", "]"}], "]"}]}], "\[IndentingNewLine]", "]"}]}], 
        "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}], ";"}], 
-  "\n", 
+  "\[IndentingNewLine]", 
   RowBox[{"(*", " ", 
    RowBox[{"Store", " ", "the", " ", "default", " ", 
-    RowBox[{"rotations", ":"}]}], " ", "*)"}]}], "\[IndentingNewLine]", 
+    RowBox[{"rotations", ":"}]}], " ", "*)"}]}], "\n", 
  RowBox[{
   RowBox[{
    RowBox[{"rotateMatrix", "[", "0", "]"}], "=", 
@@ -13219,53 +13219,54 @@ Cell[BoxData[{
              RowBox[{"1", ",", "1"}], "}"}]}], ",", "2"}], "]"}], 
          RowBox[{"toInd", "[", "sosMatrix", "]"}]}]}]}], "}"}], ",", 
      "\[IndentingNewLine]", 
-     RowBox[{"{", 
-      RowBox[{
-       RowBox[{"\"\<sos-slack\>\"", "->", 
-        RowBox[{"currentId", "->", 
-         SuperscriptBox["dim", "2"]}]}], ",", "\[IndentingNewLine]", 
-       RowBox[{"\"\<sos-ddf\>\"", "->", 
-        RowBox[{"currentId", "->", 
-         RowBox[{"(*", " ", 
-          RowBox[{
-           RowBox[{
-           "We", " ", "first", " ", "have", " ", "to", " ", "check", " ", 
-            "equality", " ", "with", " ", "the", " ", "data"}], ";", " ", 
+     RowBox[{"Splice", "@", 
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"\"\<sos-slack\>\"", "->", 
+         RowBox[{"currentId", "->", 
+          SuperscriptBox["dim", "2"]}]}], ",", "\[IndentingNewLine]", 
+        RowBox[{"\"\<sos-ddf\>\"", "->", 
+         RowBox[{"currentId", "->", 
+          RowBox[{"(*", " ", 
            RowBox[{
             RowBox[{
-            "then", " ", "equality", " ", "of", " ", "the", " ", "mirrored", 
-             " ", "off"}], "-", "diagonals"}]}], " ", "*)"}], 
-         "\[IndentingNewLine]", 
-         RowBox[{"Block", "[", 
-          RowBox[{
-           RowBox[{"{", 
+            "We", " ", "first", " ", "have", " ", "to", " ", "check", " ", 
+             "equality", " ", "with", " ", "the", " ", "data"}], ";", " ", 
             RowBox[{
-             RowBox[{"it", "=", "0"}], ",", 
-             RowBox[{"slackconstr", "=", 
-              RowBox[{"-", 
-               SuperscriptBox["dim", "2"]}]}]}], "}"}], ",", 
-           "\[IndentingNewLine]", 
-           RowBox[{
-            RowBox[{"StringRiffle", "[", 
              RowBox[{
-              RowBox[{"Flatten", "@", 
-               RowBox[{"Table", "[", "\[IndentingNewLine]", 
-                RowBox[{
-                 RowBox[{"\"\<if state.it == \>\"", "<>", 
-                  RowBox[{"ToString", "[", 
-                   RowBox[{"it", "++"}], "]"}], "<>", 
-                  "\"\<\n    checkequality(indvals, BigInt\>\"", "<>", 
-                  RowBox[{"getnz", "[", 
-                   RowBox[{
+             "then", " ", "equality", " ", "of", " ", "the", " ", "mirrored", 
+              " ", "off"}], "-", "diagonals"}]}], " ", "*)"}], 
+          "\[IndentingNewLine]", 
+          RowBox[{"Block", "[", 
+           RowBox[{
+            RowBox[{"{", 
+             RowBox[{
+              RowBox[{"it", "=", "0"}], ",", 
+              RowBox[{"slackconstr", "=", 
+               RowBox[{"-", 
+                SuperscriptBox["dim", "2"]}]}]}], "}"}], ",", 
+            "\[IndentingNewLine]", 
+            RowBox[{
+             RowBox[{"StringRiffle", "[", 
+              RowBox[{
+               RowBox[{"Flatten", "@", 
+                RowBox[{"Table", "[", "\[IndentingNewLine]", 
+                 RowBox[{
+                  RowBox[{"\"\<if state.it == \>\"", "<>", 
+                   RowBox[{"ToString", "[", 
+                    RowBox[{"it", "++"}], "]"}], "<>", 
+                   "\"\<\n    checkequality(indvals, BigInt\>\"", "<>", 
+                   RowBox[{"getnz", "[", 
+                    RowBox[{
                     RowBox[{"inds", "[", 
                     RowBox[{"[", 
                     RowBox[{"i", ",", "j"}], "]"}], "]"}], ",", 
                     "\"\<NonzeroPositions\>\"", ",", 
                     RowBox[{"{", 
                     RowBox[{"slackconstr", "++"}], "}"}]}], "]"}], "<>", 
-                  "\"\<, BigFloat[-1,\>\"", "<>", 
-                  RowBox[{"StringTake", "[", 
-                   RowBox[{
+                   "\"\<, BigFloat[-1,\>\"", "<>", 
+                   RowBox[{"StringTake", "[", 
+                    RowBox[{
                     RowBox[{"getnz", "[", 
                     RowBox[{
                     RowBox[{"inds", "[", 
@@ -13273,78 +13274,69 @@ Cell[BoxData[{
                     RowBox[{"i", ",", "j"}], "]"}], "]"}], ",", 
                     "\"\<NonzeroValues\>\""}], "]"}], ",", 
                     RowBox[{"2", ";;"}]}], "]"}], "<>", "\"\<)\>\""}], ",", 
-                 RowBox[{"{", 
-                  RowBox[{"j", ",", "dim"}], "}"}], ",", 
-                 RowBox[{"{", 
-                  RowBox[{"i", ",", "j", ",", "dim"}], "}"}]}], 
-                "\[IndentingNewLine]", "]"}]}], ",", "\"\<\\nelse\>\""}], 
-             "]"}], "<>", 
-            "\"\<\\n    state.it = -1\\nelse\\n    @test false\\nend\>\""}]}],
-           "\[IndentingNewLine]", "]"}]}]}]}], "\[IndentingNewLine]", "}"}]}],
-     "\[IndentingNewLine]", "]"}]}], ";"}], "\[IndentingNewLine]", 
+                  RowBox[{"{", 
+                   RowBox[{"j", ",", "dim"}], "}"}], ",", 
+                  RowBox[{"{", 
+                   RowBox[{"i", ",", "j", ",", "dim"}], "}"}]}], 
+                 "\[IndentingNewLine]", "]"}]}], ",", "\"\<\\nelse\>\""}], 
+              "]"}], "<>", 
+             "\"\<\\n    state.it = -1\\nelse\\n    @test \
+false\\nend\>\""}]}], "\[IndentingNewLine]", "]"}]}]}]}], 
+       "\[IndentingNewLine]", "}"}]}]}], "\[IndentingNewLine]", "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{
     RowBox[{"makeVarDDhelper", "[", 
      RowBox[{"sosMatrix_", ",", "\"\<DDR-L1\>\"", ",", "rot_"}], "]"}], ":=", 
     "\[IndentingNewLine]", 
-    RowBox[{"Splice", "@", 
-     RowBox[{"Append", "[", 
-      RowBox[{
-       RowBox[{"makeVarDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}], ",", 
-       "\[IndentingNewLine]", 
-       RowBox[{"With", "[", 
+    RowBox[{"With", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"dim", "=", 
+        RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"With", "[", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"rotatedSOS", "=", 
+          RowBox[{"Transpose", "[", 
+           RowBox[{
+            RowBox[{"rotateDD", "[", 
+             RowBox[{"dim", ",", "rot", ",", "False"}], "]"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"2", ",", "3", ",", "1"}], "}"}]}], "]"}]}], "}"}], ",", 
+        "\[IndentingNewLine]", 
+        RowBox[{"(*", " ", 
+         RowBox[{
+         "Entries", " ", "in", " ", "the", " ", "lower", " ", "triangle", " ",
+           "are", " ", "made", " ", "equal", " ", "to", " ", "the", " ", 
+          "lower", " ", "triangle", " ", "of", " ", 
+          RowBox[{"rotatedSOS", ".", " ", "Strict"}], " ", "upper", " ", 
+          "and", " ", "strict", " ", "lower", " ", "must", " ", 
+          RowBox[{"coincide", "."}]}], " ", "*)"}], "\[IndentingNewLine]", 
         RowBox[{
-         RowBox[{"{", 
-          RowBox[{"dim", "=", 
-           RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
-         "\[IndentingNewLine]", 
-         RowBox[{"\"\<sos-ddl1r\>\"", "->", 
-          RowBox[{"currentId", "->", 
-           RowBox[{"With", "[", 
+        "\"\<iter = iterate(data)\\nif \>\"", "<>", "\[IndentingNewLine]", 
+         RowBox[{"StringRiffle", "[", 
+          RowBox[{
+           RowBox[{"Block", "[", 
             RowBox[{
              RowBox[{"{", 
-              RowBox[{"rotatedSOS", "=", 
-               RowBox[{"Transpose", "[", 
-                RowBox[{
-                 RowBox[{"rotateDD", "[", 
-                  RowBox[{"dim", ",", "rot", ",", "False"}], "]"}], ",", 
-                 RowBox[{"{", 
-                  RowBox[{"2", ",", "3", ",", "1"}], "}"}]}], "]"}]}], "}"}], 
-             ",", "\[IndentingNewLine]", 
-             RowBox[{"(*", " ", 
+              RowBox[{"l1idx", "=", "1"}], "}"}], ",", 
+             RowBox[{"Table", "[", "\[IndentingNewLine]", 
               RowBox[{
-              "Entries", " ", "in", " ", "the", " ", "lower", " ", "triangle",
-                " ", "are", " ", "made", " ", "equal", " ", "to", " ", "the", 
-               " ", "lower", " ", "triangle", " ", "of", " ", 
-               RowBox[{"rotatedSOS", ".", " ", "Strict"}], " ", "upper", " ", 
-               "and", " ", "strict", " ", "lower", " ", "must", " ", 
-               RowBox[{"coincide", "."}]}], " ", "*)"}], 
-             "\[IndentingNewLine]", 
-             RowBox[{
-             "\"\<iter = iterate(data)\\nif \>\"", "<>", 
-              "\[IndentingNewLine]", 
-              RowBox[{"StringRiffle", "[", 
-               RowBox[{
-                RowBox[{"Block", "[", 
+               RowBox[{"\"\<state.it == \>\"", "<>", 
+                RowBox[{"ToString", "[", 
+                 RowBox[{"j", "-", "1"}], "]"}], "<>", "\"\<\\n\>\"", "<>", 
+                RowBox[{"StringRiffle", "[", 
                  RowBox[{
-                  RowBox[{"{", 
-                   RowBox[{"l1idx", "=", "1"}], "}"}], ",", 
-                  RowBox[{"Table", "[", "\[IndentingNewLine]", 
-                   RowBox[{
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"j", "-", "1"}], "]"}], "<>", "\"\<\\n\>\"", "<>", 
-                    RowBox[{"StringRiffle", "[", 
-                    RowBox[{
-                    RowBox[{"Join", "[", "\[IndentingNewLine]", 
-                    RowBox[{"(*", " ", 
+                  RowBox[{"Join", "[", "\[IndentingNewLine]", 
+                   RowBox[{"(*", " ", 
                     RowBox[{"diagonal", " ", "entry", " ", 
                     RowBox[{"first", ":", " ", 
                     RowBox[{"must", " ", "equal", " ", "rotatedSOS"}]}]}], 
                     " ", "*)"}], "\[IndentingNewLine]", 
-                    RowBox[{
+                   RowBox[{
                     RowBox[{"With", "[", 
                     RowBox[{
                     RowBox[{"{", 
@@ -13446,16 +13438,14 @@ Cell[BoxData[{
                     RowBox[{"{", 
                     RowBox[{"i", ",", 
                     RowBox[{"j", "+", "1"}], ",", "dim"}], "}"}]}], "]"}]}], 
-                    "\[IndentingNewLine]", "]"}], ",", "\"\<\\n\>\""}], 
-                    "]"}]}], "\[IndentingNewLine]", ",", 
-                    RowBox[{"{", 
-                    RowBox[{"j", ",", "dim"}], "}"}]}], "]"}]}], "]"}], ",", 
-                "\"\<\\nelseif \>\""}], "]"}], "<>", "\[IndentingNewLine]", 
-              "\"\<\\n    state.it = -1\\nelse\\n    @test \
-false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}], 
-            "\[IndentingNewLine]", "]"}]}]}]}], "\[IndentingNewLine]", 
-        "]"}]}], "\[IndentingNewLine]", "]"}]}]}], ";"}], 
-  "\[IndentingNewLine]", 
+                   "\[IndentingNewLine]", "]"}], ",", "\"\<\\n\>\""}], 
+                 "]"}]}], "\[IndentingNewLine]", ",", 
+               RowBox[{"{", 
+                RowBox[{"j", ",", "dim"}], "}"}]}], "]"}]}], "]"}], ",", 
+           "\"\<\\nelseif \>\""}], "]"}], "<>", "\[IndentingNewLine]", 
+         "\"\<\\n    state.it = -1\\nelse\\n    @test false\\nend\\nstate.it \
++= 1\\n@test isnothing(iter)\>\""}]}], "\[IndentingNewLine]", "]"}]}], 
+     "\[IndentingNewLine]", "]"}]}], ";"}], "\[IndentingNewLine]", 
   RowBox[{"(*", " ", 
    RowBox[{
     RowBox[{
@@ -13486,73 +13476,63 @@ false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}],
    RowBox[{"makeVarDDhelper", "[", 
     RowBox[{"sosMatrix_", ",", "\"\<DDR-Linear\>\"", ",", "rot_"}], "]"}], ":=",
     "\[IndentingNewLine]", 
-   RowBox[{"Splice", "@", 
-    RowBox[{"Append", "[", 
-     RowBox[{
-      RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}], ",", 
-      "\[IndentingNewLine]", 
-      RowBox[{"With", "[", 
-       RowBox[{
-        RowBox[{"{", 
-         RowBox[{"dim", "=", 
-          RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
-        "\[IndentingNewLine]", 
-        RowBox[{"\"\<sos-ddrlin\>\"", "->", 
-         RowBox[{"currentId", "->", 
-          RowBox[{"With", "[", 
-           RowBox[{
-            RowBox[{"{", 
-             RowBox[{"rotatedSOS", "=", 
-              RowBox[{
-               RowBox[{"SparseArray", "[", 
-                RowBox[{"(*", " ", 
-                 RowBox[{
-                  RowBox[{
-                  "This", " ", "sparse", " ", "array", " ", "will", " ", 
-                   "perform", " ", "the", " ", 
-                   RowBox[{"mapping", ":", " ", 
-                    RowBox[{
-                    "What", " ", "were", " ", "the", " ", "vectorized", " ", 
-                    "entries", " ", "of", " ", "the", " ", "lower", " ", 
-                    "triangle", " ", "is", " ", "now", " ", "the", " ", 
-                    "nonnegative", " ", "variables", " ", "one", " ", "after",
-                     " ", "the", " ", 
-                    RowBox[{"other", ".", " ", "Note"}], " ", "that", " ", 
-                    "the", " ", "variables", " ", "making", " ", "up", " ", 
-                    "the", " ", "strict", " ", "upper", " ", "triangle", " ", 
-                    "are", " ", "only", " ", "part", " ", "in", " ", "the", 
-                    " ", "diagonals", " ", "here"}]}]}], ";", " ", 
-                  RowBox[{
-                  "we", " ", "need", " ", "also", " ", "enforce", " ", 
-                   "equality", " ", 
-                   RowBox[{"(", 
-                    RowBox[{
-                    RowBox[{
-                    "but", " ", "only", " ", "of", " ", "the", " ", 
-                    "difference"}], ",", " ", 
-                    RowBox[{
-                    "which", " ", "is", " ", "why", " ", "we", " ", "need", 
-                    " ", "the", " ", "variables", " ", "at", " ", 
-                    RowBox[{"all", "."}]}]}], ")"}]}]}], " ", "*)"}], 
-                "\[IndentingNewLine]", 
+   RowBox[{"With", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"dim", "=", 
+       RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
+     RowBox[{"With", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"rotatedSOS", "=", 
+         RowBox[{
+          RowBox[{"SparseArray", "[", 
+           RowBox[{"(*", " ", 
+            RowBox[{
+             RowBox[{
+             "This", " ", "sparse", " ", "array", " ", "will", " ", "perform",
+               " ", "the", " ", 
+              RowBox[{"mapping", ":", " ", 
+               RowBox[{
+               "What", " ", "were", " ", "the", " ", "vectorized", " ", 
+                "entries", " ", "of", " ", "the", " ", "lower", " ", 
+                "triangle", " ", "is", " ", "now", " ", "the", " ", 
+                "nonnegative", " ", "variables", " ", "one", " ", "after", 
+                " ", "the", " ", 
+                RowBox[{"other", ".", " ", "Note"}], " ", "that", " ", "the", 
+                " ", "variables", " ", "making", " ", "up", " ", "the", " ", 
+                "strict", " ", "upper", " ", "triangle", " ", "are", " ", 
+                "only", " ", "part", " ", "in", " ", "the", " ", "diagonals", 
+                " ", "here"}]}]}], ";", " ", 
+             RowBox[{
+             "we", " ", "need", " ", "also", " ", "enforce", " ", "equality", 
+              " ", 
+              RowBox[{"(", 
+               RowBox[{
                 RowBox[{
-                 RowBox[{"Block", "[", 
+                "but", " ", "only", " ", "of", " ", "the", " ", 
+                 "difference"}], ",", " ", 
+                RowBox[{
+                "which", " ", "is", " ", "why", " ", "we", " ", "need", " ", 
+                 "the", " ", "variables", " ", "at", " ", 
+                 RowBox[{"all", "."}]}]}], ")"}]}]}], " ", "*)"}], 
+           "\[IndentingNewLine]", 
+           RowBox[{
+            RowBox[{"Block", "[", 
+             RowBox[{
+              RowBox[{"{", 
+               RowBox[{"pos", "=", "1"}], "}"}], ",", "\[IndentingNewLine]", 
+              RowBox[{"Flatten", "@", 
+               RowBox[{"Table", "[", 
+                RowBox[{
+                 RowBox[{"{", "\[IndentingNewLine]", 
                   RowBox[{
-                   RowBox[{"{", 
-                    RowBox[{"pos", "=", "1"}], "}"}], ",", 
-                   "\[IndentingNewLine]", 
-                   RowBox[{"Flatten", "@", 
-                    RowBox[{"Table", "[", 
-                    RowBox[{
-                    RowBox[{"{", "\[IndentingNewLine]", 
-                    RowBox[{
-                    RowBox[{
+                   RowBox[{
                     RowBox[{"{", 
                     RowBox[{"col", ",", "_", ",", 
                     RowBox[{"pos", "++"}]}], "}"}], "->", "1"}], ",", 
-                    "\[IndentingNewLine]", 
-                    RowBox[{"Table", "[", "\[IndentingNewLine]", 
+                   "\[IndentingNewLine]", 
+                   RowBox[{"Table", "[", "\[IndentingNewLine]", 
                     RowBox[{
                     RowBox[{
                     RowBox[{"{", 
@@ -13579,59 +13559,59 @@ false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}],
                     RowBox[{"row", ",", 
                     RowBox[{"col", "+", "1"}], ",", "dim"}], "}"}]}], 
                     "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
-                    "}"}], ",", 
-                    RowBox[{"{", 
-                    RowBox[{"col", ",", "dim"}], "}"}]}], "]"}]}]}], 
-                  "\[IndentingNewLine]", "]"}], ",", 
+                  "}"}], ",", 
                  RowBox[{"{", 
-                  RowBox[{"dim", ",", 
-                   RowBox[{"2", 
-                    RowBox[{"(", 
-                    RowBox[{"dim", "-", "1"}], ")"}]}], ",", 
-                   RowBox[{"dim", 
-                    RowBox[{
-                    RowBox[{"(", 
-                    RowBox[{"dim", "+", "1"}], ")"}], "/", "2"}]}]}], "}"}]}],
-                 "\[IndentingNewLine]", "]"}], ".", 
-               RowBox[{"Transpose", "[", 
-                RowBox[{
-                 RowBox[{"rotateDD", "[", 
-                  RowBox[{"dim", ",", "rot", ",", "False"}], "]"}], ",", 
-                 RowBox[{"{", 
-                  RowBox[{"2", ",", "3", ",", "1"}], "}"}]}], "]"}]}]}], 
-             "}"}], ",", "\[IndentingNewLine]", 
-            RowBox[{"(*", " ", 
-             RowBox[{
-             "Entries", " ", "in", " ", "the", " ", "lower", " ", "triangle", 
-              " ", "are", " ", "made", " ", "equal", " ", "to", " ", "the", 
-              " ", "lower", " ", "triangle", " ", "of", " ", 
-              RowBox[{"rotatedSOS", ".", " ", "Strict"}], " ", "upper", " ", 
-              "and", " ", "strict", " ", "lower", " ", "must", " ", 
-              RowBox[{"coincide", "."}]}], " ", "*)"}], "\[IndentingNewLine]", 
-            RowBox[{
-            "\"\<iter = iterate(data)\\nif \>\"", "<>", "\[IndentingNewLine]", 
+                  RowBox[{"col", ",", "dim"}], "}"}]}], "]"}]}]}], 
+             "\[IndentingNewLine]", "]"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"dim", ",", 
+              RowBox[{"2", 
+               RowBox[{"(", 
+                RowBox[{"dim", "-", "1"}], ")"}]}], ",", 
+              RowBox[{"dim", 
+               RowBox[{
+                RowBox[{"(", 
+                 RowBox[{"dim", "+", "1"}], ")"}], "/", "2"}]}]}], "}"}]}], 
+           "\[IndentingNewLine]", "]"}], ".", 
+          RowBox[{"Transpose", "[", 
+           RowBox[{
+            RowBox[{"rotateDD", "[", 
+             RowBox[{"dim", ",", "rot", ",", "False"}], "]"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"2", ",", "3", ",", "1"}], "}"}]}], "]"}]}]}], "}"}], 
+       ",", "\[IndentingNewLine]", 
+       RowBox[{"(*", " ", 
+        RowBox[{
+        "Entries", " ", "in", " ", "the", " ", "lower", " ", "triangle", " ", 
+         "are", " ", "made", " ", "equal", " ", "to", " ", "the", " ", 
+         "lower", " ", "triangle", " ", "of", " ", 
+         RowBox[{"rotatedSOS", ".", " ", "Strict"}], " ", "upper", " ", "and",
+          " ", "strict", " ", "lower", " ", "must", " ", 
+         RowBox[{"coincide", "."}]}], " ", "*)"}], "\[IndentingNewLine]", 
+       RowBox[{
+       "\"\<iter = iterate(data)\\nif \>\"", "<>", "\[IndentingNewLine]", 
+        RowBox[{"StringRiffle", "[", 
+         RowBox[{
+          RowBox[{"Table", "[", "\[IndentingNewLine]", 
+           RowBox[{
+            RowBox[{"\"\<state.it == \>\"", "<>", 
+             RowBox[{"ToString", "[", 
+              RowBox[{"j", "-", "1"}], "]"}], "<>", "\"\<\\n\>\"", "<>", 
              RowBox[{"StringRiffle", "[", 
               RowBox[{
-               RowBox[{"Table", "[", "\[IndentingNewLine]", 
+               RowBox[{"Join", "[", "\[IndentingNewLine]", 
+                RowBox[{"(*", " ", 
+                 RowBox[{
+                 "there", " ", "is", " ", "no", " ", "dedicated", " ", 
+                  "variable", " ", "for", " ", "the", " ", "diagonal"}], " ", 
+                 "*)"}], "\[IndentingNewLine]", 
+                RowBox[{"(*", " ", 
+                 RowBox[{"strict", " ", "upper", " ", "triangle"}], " ", 
+                 "*)"}], "\[IndentingNewLine]", 
                 RowBox[{
-                 RowBox[{"\"\<state.it == \>\"", "<>", 
-                  RowBox[{"ToString", "[", 
-                   RowBox[{"j", "-", "1"}], "]"}], "<>", "\"\<\\n\>\"", "<>", 
-                  RowBox[{"StringRiffle", "[", 
+                 RowBox[{"Flatten", "@", 
+                  RowBox[{"Table", "[", 
                    RowBox[{
-                    RowBox[{"Join", "[", "\[IndentingNewLine]", 
-                    RowBox[{"(*", " ", 
-                    RowBox[{
-                    "there", " ", "is", " ", "no", " ", "dedicated", " ", 
-                    "variable", " ", "for", " ", "the", " ", "diagonal"}], 
-                    " ", "*)"}], "\[IndentingNewLine]", 
-                    RowBox[{"(*", " ", 
-                    RowBox[{"strict", " ", "upper", " ", "triangle"}], " ", 
-                    "*)"}], "\[IndentingNewLine]", 
-                    RowBox[{
-                    RowBox[{"Flatten", "@", 
-                    RowBox[{"Table", "[", 
-                    RowBox[{
                     RowBox[{"With", "[", 
                     RowBox[{
                     RowBox[{"{", 
@@ -13688,18 +13668,18 @@ false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}],
                     RowBox[{
                     RowBox[{"2", "i"}], "-", "1"}], ",", 
                     RowBox[{"2", "i"}]}], "}"}]}], "}"}]}], "]"}]}], ",", 
-                    "\[IndentingNewLine]", 
-                    RowBox[{"(*", " ", 
-                    RowBox[{
-                    RowBox[{
-                    "finally", " ", "strict", " ", "lower", " ", "triangle"}],
-                     ",", " ", 
-                    RowBox[{
-                    "which", " ", "are", " ", "two", " ", "entries"}]}], " ", 
-                    "*)"}], "\[IndentingNewLine]", 
-                    RowBox[{"Flatten", "@", 
-                    RowBox[{"Table", "[", 
-                    RowBox[{
+                 "\[IndentingNewLine]", 
+                 RowBox[{"(*", " ", 
+                  RowBox[{
+                   RowBox[{
+                   "finally", " ", "strict", " ", "lower", " ", "triangle"}], 
+                   ",", " ", 
+                   RowBox[{
+                   "which", " ", "are", " ", "two", " ", "entries"}]}], " ", 
+                  "*)"}], "\[IndentingNewLine]", 
+                 RowBox[{"Flatten", "@", 
+                  RowBox[{"Table", "[", 
+                   RowBox[{
                     RowBox[{"With", "[", 
                     RowBox[{
                     RowBox[{"{", 
@@ -13756,15 +13736,14 @@ false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}],
                     RowBox[{"2", "i"}], "-", "3"}], ",", 
                     RowBox[{
                     RowBox[{"2", "i"}], "-", "2"}]}], "}"}]}], "}"}]}], 
-                    "]"}]}]}], "\[IndentingNewLine]", "]"}], ",", 
-                    "\"\<\\n\>\""}], "]"}]}], "\[IndentingNewLine]", ",", 
-                 RowBox[{"{", 
-                  RowBox[{"j", ",", "dim"}], "}"}]}], "]"}], ",", 
-               "\"\<\\nelseif \>\""}], "]"}], "<>", "\[IndentingNewLine]", 
-             "\"\<\\n    state.it = -1\\nelse\\n    @test \
-false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}], 
-           "\[IndentingNewLine]", "]"}]}]}]}], "\[IndentingNewLine]", "]"}]}],
-      "\[IndentingNewLine]", "]"}]}]}], ";"}]}], "Input",
+                   "]"}]}]}], "\[IndentingNewLine]", "]"}], ",", 
+               "\"\<\\n\>\""}], "]"}]}], "\[IndentingNewLine]", ",", 
+            RowBox[{"{", 
+             RowBox[{"j", ",", "dim"}], "}"}]}], "]"}], ",", 
+          "\"\<\\nelseif \>\""}], "]"}], "<>", "\[IndentingNewLine]", 
+        "\"\<\\n    state.it = -1\\nelse\\n    @test false\\nend\\nstate.it \
++= 1\\n@test isnothing(iter)\>\""}]}], "\[IndentingNewLine]", "]"}]}], 
+    "\[IndentingNewLine]", "]"}]}], ";"}]}], "Input",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.},
  InitializationCell->True,
  CellLabel->"In[68]:=",ExpressionUUID->"ead2e6d7-bcec-a342-adb3-79f174099bcd"]
@@ -13923,19 +13902,19 @@ Cell[BoxData[{
     RowBox[{"sosMatrix_", ",", "\"\<DDC-L1\>\"", ",", "rot_"}], "]"}], ":=", 
    "\[IndentingNewLine]", 
    RowBox[{"Splice", "@", 
-    RowBox[{"Append", "[", 
+    RowBox[{"Append", "[", "\[IndentingNewLine]", 
      RowBox[{
       RowBox[{"makeVarDDhelper", "[", 
        RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\"", ",", "True"}], "]"}],
        ",", "\[IndentingNewLine]", 
-      RowBox[{"With", "[", 
-       RowBox[{
-        RowBox[{"{", 
-         RowBox[{"dim", "=", 
-          RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
-        "\[IndentingNewLine]", 
-        RowBox[{"\"\<sos-ddl1c\>\"", "->", 
-         RowBox[{"currentId", "->", 
+      RowBox[{"\"\<sos-ddl1c\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"With", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{"dim", "=", 
+            RowBox[{"Length", "@", "sosMatrix"}]}], "}"}], ",", 
+          "\[IndentingNewLine]", 
           RowBox[{"With", "[", 
            RowBox[{
             RowBox[{"{", 
@@ -14110,7 +14089,7 @@ Cell[BoxData[{
                "\"\<\\nelseif \>\""}], "]"}], "<>", "\[IndentingNewLine]", 
              "\"\<\\n    state.it = -1\\nelse\\n    @test \
 false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}], 
-           "\[IndentingNewLine]", "]"}]}]}]}], "\[IndentingNewLine]", "]"}]}],
+           "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}]}]}],
       "\[IndentingNewLine]", "]"}]}]}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
@@ -14120,9 +14099,11 @@ false\\nend\\nstate.it += 1\\n@test isnothing(iter)\>\""}]}],
    RowBox[{"Splice", "@", 
     RowBox[{"Join", "[", "\[IndentingNewLine]", 
      RowBox[{
-      RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\"", ",", "False"}], 
-       "]"}], ",", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"++", "currentId"}], ";", 
+       RowBox[{"makeVarDDhelper", "[", 
+        RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\"", ",", "False"}], 
+        "]"}]}], ",", "\[IndentingNewLine]", 
       RowBox[{"With", "[", 
        RowBox[{
         RowBox[{"{", 
@@ -14352,27 +14333,49 @@ Cell[BoxData[{
          RowBox[{"sosMatrix", ",", "\"\<PSDR-V\>\""}], "]"}]}]}], ",", 
       "\[IndentingNewLine]", 
       RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "0"}], "]"}], ",", 
+       RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}], ",", 
       "\[IndentingNewLine]", 
-      RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "0"}], "]"}], ",",
-       "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddl1r\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "0"}], "]"}]}]}], 
+      ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddrlin\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "0"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", "\[IndentingNewLine]", 
        RowBox[{"makeVarDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "1"}], "]"}]}], ",", 
+        RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}]}], ",", 
       "\[IndentingNewLine]", 
-      RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "1"}], "]"}], ",",
-       "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddl1r\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "1"}], "]"}]}]}], 
+      ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddrlin\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "1"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", "\[IndentingNewLine]", 
        RowBox[{"makeVarDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "2"}], "]"}]}], ",", 
+        RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}]}], ",", 
       "\[IndentingNewLine]", 
-      RowBox[{"makeVarDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "2"}], "]"}]}], 
-     "\[IndentingNewLine]", "}"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddl1r\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-L1\>\"", ",", "2"}], "]"}]}]}], 
+      ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-ddrlin\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<DDR-Linear\>\"", ",", "2"}], 
+         "]"}]}]}]}], "\[IndentingNewLine]", "}"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{"makeVar", "[", 
@@ -14891,8 +14894,8 @@ Cell[BoxData[
    RowBox[{
     SubscriptBox["q", 
      RowBox[{"i", ",", "j", ",", "3"}]], "/", 
-    SqrtBox["2"]}]}]}]], "Input",ExpressionUUID->"e8da68cb-57b1-9a48-b835-\
-5c51e4806485"],
+    SqrtBox["2"]}]}]}]], "Input",
+ Evaluatable->False,ExpressionUUID->"e8da68cb-57b1-9a48-b835-5c51e4806485"],
 
 Cell[CellGroupData[{
 
@@ -15008,31 +15011,18 @@ Cell[BoxData[{
  RowBox[{
   RowBox[{
    RowBox[{"makeVarSDDhelper", "[", 
-    RowBox[{"sosMatrix_", ",", "str_", ",", "u_"}], "]"}], ":=", 
-   RowBox[{"makeVarSDDhelper", "[", 
-    RowBox[{
-     RowBox[{"rotateDD", "[", 
-      RowBox[{"sosMatrix", ",", "u"}], "]"}], ",", "str"}], "]"}]}], 
-  ";"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{
-   RowBox[{"makeVarSDDhelper", "[", 
-    RowBox[{
-     RowBox[{"sosMatrix_", "?", "LowerTriangularMatrixQ"}], ",", 
-     RowBox[{"str", ":", 
-      RowBox[{"\"\<SDDR-V\>\"", "|", "\"\<SDDC-V\>\""}]}]}], "]"}], ":=", 
-   RowBox[{"makeVarDDhelper", "[", 
-    RowBox[{"sosMatrix", ",", 
-     RowBox[{"StringDrop", "[", 
-      RowBox[{"str", ",", "1"}], "]"}]}], "]"}]}], 
-  ";"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{
-   RowBox[{"makeVarSDDhelper", "[", 
-    RowBox[{
-     RowBox[{"sosMatrix_", "?", "LowerTriangularMatrixQ"}], ",", 
-     RowBox[{"str", ":", "\"\<SDD-Quadratic\>\""}]}], "]"}], ":=", 
+    RowBox[{"sosMatrix_", ",", "\"\<R-Equalities\>\""}], "]"}], ":=", 
    "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"This", " ", "is", " ", "a", " ", "preprocessing", " ", 
+     RowBox[{"step", ":", " ", 
+      RowBox[{
+      "We", " ", "introduce", " ", "free", " ", "variables", " ", "for", " ", 
+       "every", " ", "entry", " ", "in", " ", "the", " ", "SOS", " ", 
+       "matrix", " ", "and", " ", "force", " ", "its", " ", "equality", " ", 
+       "with", " ", "whatever", " ", "the", " ", "matrix", " ", "entry", " ", 
+       "was", " ", "supposed", " ", "to", " ", "be", " ", 
+       RowBox[{"equal", "."}]}]}]}], " ", "*)"}], "\[IndentingNewLine]", 
    RowBox[{"With", "[", 
     RowBox[{
      RowBox[{"{", 
@@ -15040,95 +15030,148 @@ Cell[BoxData[{
        RowBox[{"dim", "=", 
         RowBox[{"Length", "@", "sosMatrix"}]}], ",", 
        RowBox[{"inds", "=", 
-        RowBox[{"toInd", "[", "sosMatrix", "]"}]}]}], "}"}], ",", 
+        RowBox[{
+         RowBox[{"SparseArray", "[", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"Band", "[", 
+             RowBox[{"{", 
+              RowBox[{"1", ",", "1"}], "}"}], "]"}], "->", "1"}], ",", 
+           RowBox[{
+            RowBox[{"Length", "@", "sosMatrix"}], 
+            RowBox[{"{", 
+             RowBox[{"1", ",", "1"}], "}"}]}], ",", "2"}], "]"}], 
+         RowBox[{"toInd", "[", "sosMatrix", "]"}]}]}]}], "}"}], ",", 
      "\[IndentingNewLine]", 
-     RowBox[{"Block", "[", 
-      RowBox[{
-       RowBox[{"{", 
-        RowBox[{"data", "=", 
-         RowBox[{"Flatten", "@", 
+     RowBox[{"Splice", "@", 
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"\"\<sos-slack\>\"", "->", 
+         RowBox[{"currentId", "->", 
+          RowBox[{"dim", 
+           RowBox[{
+            RowBox[{"(", 
+             RowBox[{"dim", "+", "1"}], ")"}], "/", "2"}]}]}]}], ",", 
+        "\[IndentingNewLine]", 
+        RowBox[{"\"\<sos-sddf\>\"", "->", 
+         RowBox[{"currentId", "->", 
+          RowBox[{"(*", " ", 
+           RowBox[{
+            RowBox[{
+            "We", " ", "first", " ", "have", " ", "to", " ", "check", " ", 
+             "equality", " ", "with", " ", "the", " ", "data"}], ";", " ", 
+            RowBox[{
+             RowBox[{
+             "then", " ", "equality", " ", "of", " ", "the", " ", "mirrored", 
+              " ", "off"}], "-", "diagonals"}]}], " ", "*)"}], 
+          "\[IndentingNewLine]", 
           RowBox[{"Block", "[", 
            RowBox[{
             RowBox[{"{", 
              RowBox[{
-              RowBox[{"it", "=", "0"}], ",", "getstr"}], "}"}], ",", 
-            "\[IndentingNewLine]", 
+              RowBox[{"it", "=", "0"}], ",", 
+              RowBox[{"slackconstr", "=", 
+               RowBox[{
+                RowBox[{"-", "dim"}], 
+                RowBox[{
+                 RowBox[{"(", 
+                  RowBox[{"dim", "+", "1"}], ")"}], "/", "2"}]}]}]}], "}"}], 
+            ",", "\[IndentingNewLine]", 
             RowBox[{
-             RowBox[{
-              RowBox[{"getstr", "[", 
-               RowBox[{"x_", ",", 
-                RowBox[{"off_", ":", "False"}], ",", 
-                RowBox[{"free_", ":", "False"}]}], "]"}], ":=", 
-              RowBox[{"\"\<\\n    \>\"", "<>", 
-               RowBox[{"If", "[", 
-                RowBox[{
-                "free", ",", "\"\<checkequality(indvals, \>\"", ",", 
-                 "\"\<@checkequals(\>\""}], "]"}], "<>", "\"\<BigInt\>\"", "<>", 
-               RowBox[{"getnz", "[", 
-                RowBox[{"x", ",", "\"\<NonzeroPositions\>\""}], "]"}], "<>", 
-               "\"\<, BigFloat\>\"", "<>", 
-               RowBox[{"getnz", "[", 
-                RowBox[{"x", ",", "\"\<NonzeroValues\>\""}], "]"}], "<>", 
-               RowBox[{"If", "[", 
-                RowBox[{
-                "off", ",", "\"\< ./ sqrt2, false)\>\"", ",", 
-                 "\"\<, true)\>\""}], "]"}]}]}], ";", "\[IndentingNewLine]", 
-             RowBox[{"Table", "[", "\[IndentingNewLine]", 
+             RowBox[{"StringRiffle", "[", 
               RowBox[{
-               RowBox[{"If", "[", 
-                RowBox[{
+               RowBox[{"Flatten", "@", 
+                RowBox[{"Table", "[", "\[IndentingNewLine]", 
                  RowBox[{
-                  RowBox[{"Norm", "@", 
-                   RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "j"}], "]"}], "]"}]}], "==", "0"}], ",",
-                  "\[IndentingNewLine]", 
-                 RowBox[{"If", "[", 
-                  RowBox[{
-                   RowBox[{
+                  RowBox[{"\"\<if state.it == \>\"", "<>", 
+                   RowBox[{"ToString", "[", 
+                    RowBox[{"it", "++"}], "]"}], "<>", 
+                   "\"\<\n    checkequality(indvals, BigInt\>\"", "<>", 
+                   RowBox[{"getnz", "[", 
                     RowBox[{
-                    RowBox[{"Norm", "@", 
                     RowBox[{"inds", "[", 
                     RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}]}], "!=", "0"}], "||", 
-                    RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}]}], "!=", "0"}]}], 
-                   ",", "\[IndentingNewLine]", 
-                   RowBox[{"\"\<sos-sddp\>\"", "->", 
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", "\[IndentingNewLine]", 
+                    RowBox[{"i", ",", "j"}], "]"}], "]"}], ",", 
+                    "\"\<NonzeroPositions\>\"", ",", 
                     RowBox[{"{", 
+                    RowBox[{"slackconstr", "++"}], "}"}]}], "]"}], "<>", 
+                   "\"\<, BigFloat[-1,\>\"", "<>", 
+                   RowBox[{"StringTake", "[", 
                     RowBox[{
-                    RowBox[{"If", "[", 
+                    RowBox[{"getnz", "[", 
                     RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", 
                     RowBox[{"inds", "[", 
                     RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}]}], "!=", "0"}], ",", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}], "]"}], ",", 
-                    "\"\<\>\""}], "]"}], ",", "\[IndentingNewLine]", 
-                    RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}]}], "!=", "0"}], ",", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}], "]"}], ",", 
-                    "\"\<\>\""}], "]"}]}], "}"}]}]}], ",", 
-                   "\[IndentingNewLine]", "Nothing"}], "\[IndentingNewLine]", 
-                  "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"i", ",", "j"}], "]"}], "]"}], ",", 
+                    "\"\<NonzeroValues\>\""}], "]"}], ",", 
+                    RowBox[{"2", ";;"}]}], "]"}], "<>", "\"\<)\>\""}], ",", 
+                  RowBox[{"{", 
+                   RowBox[{"j", ",", "dim"}], "}"}], ",", 
+                  RowBox[{"{", 
+                   RowBox[{"i", ",", "j", ",", "dim"}], "}"}]}], 
+                 "\[IndentingNewLine]", "]"}]}], ",", "\"\<\\nelse\>\""}], 
+              "]"}], "<>", 
+             "\"\<\\n    state.it = -1\\nelse\\n    @test \
+false\\nend\>\""}]}], "\[IndentingNewLine]", "]"}]}]}]}], 
+       "\[IndentingNewLine]", "}"}]}]}], "\[IndentingNewLine]", "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"makeVarSDDhelper", "[", 
+   RowBox[{"sosMatrix_", ",", "\"\<C-Equalities\>\""}], "]"}], ":=", 
+  "\[IndentingNewLine]", 
+  RowBox[{"With", "[", 
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"dim", "=", 
+       RowBox[{"Length", "@", "sosMatrix"}]}], ",", 
+      RowBox[{"inds", "=", 
+       RowBox[{
+        RowBox[{"SparseArray", "[", 
+         RowBox[{
+          RowBox[{
+           RowBox[{"Band", "[", 
+            RowBox[{"{", 
+             RowBox[{"1", ",", "1"}], "}"}], "]"}], "->", "1"}], ",", 
+          RowBox[{
+           RowBox[{"Length", "@", "sosMatrix"}], 
+           RowBox[{"{", 
+            RowBox[{"1", ",", "1"}], "}"}]}], ",", "2"}], "]"}], 
+        RowBox[{"toInd", "[", "sosMatrix", "]"}]}]}]}], "}"}], ",", 
+    "\[IndentingNewLine]", 
+    RowBox[{"Splice", "@", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"\"\<sos-slack\>\"", "->", 
+        RowBox[{"currentId", "->", 
+         SuperscriptBox["dim", "2"]}]}], ",", "\[IndentingNewLine]", 
+       RowBox[{"\"\<sos-sddf\>\"", "->", 
+        RowBox[{"currentId", "->", 
+         RowBox[{"(*", " ", 
+          RowBox[{
+           RowBox[{
+           "We", " ", "first", " ", "have", " ", "to", " ", "check", " ", 
+            "equality", " ", "with", " ", "the", " ", "data"}], ";", " ", 
+           RowBox[{
+            RowBox[{
+            "then", " ", "equality", " ", "of", " ", "the", " ", "mirrored", 
+             " ", "off"}], "-", "diagonals"}]}], " ", "*)"}], 
+         "\[IndentingNewLine]", 
+         RowBox[{"Block", "[", 
+          RowBox[{
+           RowBox[{"{", 
+            RowBox[{
+             RowBox[{"it", "=", "0"}], ",", 
+             RowBox[{"slackconstr", "=", 
+              RowBox[{"-", 
+               SuperscriptBox["dim", "2"]}]}]}], "}"}], ",", 
+           "\[IndentingNewLine]", 
+           RowBox[{
+            RowBox[{"StringRiffle", "[", 
+             RowBox[{
+              RowBox[{"Flatten", "@", 
+               RowBox[{"Table", "[", "\[IndentingNewLine]", 
+                RowBox[{
                  RowBox[{"With", "[", 
                   RowBox[{
                    RowBox[{"{", 
@@ -15144,146 +15187,257 @@ Cell[BoxData[{
                     RowBox[{"[", 
                     RowBox[{"i", ",", "j"}], "]"}], "]"}]}]}]}], "}"}], ",", 
                    "\[IndentingNewLine]", 
-                   RowBox[{"If", "[", 
+                   RowBox[{"\"\<if state.it == \>\"", "<>", 
+                    RowBox[{"ToString", "[", 
+                    RowBox[{"it", "++"}], "]"}], "<>", 
+                    "\"\<\n    checkequality(indvals, BigInt\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"re", ",", "\"\<NonzeroPositions\>\"", ",", 
+                    RowBox[{"{", 
+                    RowBox[{"slackconstr", "++"}], "}"}]}], "]"}], "<>", 
+                    "\"\<, BigFloat[-1,\>\"", "<>", 
+                    RowBox[{"StringTake", "[", 
                     RowBox[{
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"re", ",", "\"\<NonzeroValues\>\""}], "]"}], ",", 
+                    RowBox[{"2", ";;"}]}], "]"}], "<>", "\"\<)\>\"", "<>", 
+                    "\[IndentingNewLine]", 
+                    RowBox[{"If", "[", 
                     RowBox[{
+                    RowBox[{"i", "==", "j"}], ",", "\"\<\>\"", ",", 
+                    "\[IndentingNewLine]", 
+                    RowBox[{"\"\<\\nelseif state.it == \>\"", "<>", 
+                    RowBox[{"ToString", "[", 
+                    RowBox[{"it", "++"}], "]"}], "<>", 
+                    "\"\<\n    checkequality(indvals, BigInt\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"im", ",", "\"\<NonzeroPositions\>\"", ",", 
+                    RowBox[{"{", 
+                    RowBox[{"slackconstr", "++"}], "}"}]}], "]"}], "<>", 
+                    "\"\<, BigFloat[-1,\>\"", "<>", 
+                    RowBox[{"StringTake", "[", 
                     RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"im", ",", "\"\<NonzeroValues\>\""}], "]"}], ",", 
+                    RowBox[{"2", ";;"}]}], "]"}], "<>", "\"\<)\>\""}]}], 
+                    "\[IndentingNewLine]", "]"}]}]}], "\[IndentingNewLine]", 
+                  "]"}], ",", 
+                 RowBox[{"{", 
+                  RowBox[{"j", ",", "dim"}], "}"}], ",", 
+                 RowBox[{"{", 
+                  RowBox[{"i", ",", "j", ",", "dim"}], "}"}]}], 
+                "\[IndentingNewLine]", "]"}]}], ",", "\"\<\\nelse\>\""}], 
+             "]"}], "<>", 
+            "\"\<\\n    state.it = -1\\nelse\\n    @test false\\nend\>\""}]}],
+           "\[IndentingNewLine]", "]"}]}]}]}], "\[IndentingNewLine]", 
+      "}"}]}]}], "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"makeVarSDDhelper", "[", 
+    RowBox[{"sosMatrix_", ",", 
+     RowBox[{"str", ":", 
+      RowBox[{
+      "\"\<SDDR-RQuadratic\>\"", "|", "\"\<SDDC-RQuadratic\>\"", "|", 
+       "\"\<SDDR-Quadratic\>\"", "|", "\"\<SDDC-Quadratic\>\""}]}], ",", 
+     "rot_"}], "]"}], ":=", "\[IndentingNewLine]", 
+   RowBox[{"With", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"complex", "=", 
+        RowBox[{"StringStartsQ", "[", 
+         RowBox[{"str", ",", "\"\<SDDC\>\""}], "]"}]}], ",", 
+       RowBox[{"rotated", "=", 
+        RowBox[{"StringEndsQ", "[", 
+         RowBox[{"str", ",", "\"\<RQuadratic\>\""}], "]"}]}]}], "}"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"With", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"dim", "=", 
+          RowBox[{"Length", "@", "sosMatrix"}]}], ",", 
+         RowBox[{"cp", "=", 
+          RowBox[{
+           RowBox[{"If", "[", 
+            RowBox[{"complex", ",", 
+             RowBox[{
+              RowBox[{"Complex", "->", "Real"}], "&"}], ",", "Sequence"}], 
+            "]"}], "[", "]"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"With", "[", 
+        RowBox[{
+         RowBox[{"{", 
+          RowBox[{
+           RowBox[{"rotatedSOS", "=", 
+            RowBox[{"Transpose", "[", 
+             RowBox[{
+              RowBox[{"rotateDD", "[", 
+               RowBox[{"dim", ",", "rot", ",", "complex"}], "]"}], ",", 
+              RowBox[{"{", 
+               RowBox[{"2", ",", "3", ",", "1"}], "}"}]}], "]"}]}], ",", 
+           RowBox[{"index", "=", 
+            RowBox[{"If", "[", 
+             RowBox[{"complex", ",", 
+              RowBox[{
+               RowBox[{"{", 
+                RowBox[{"row", ",", "col"}], "}"}], "|->", 
+               RowBox[{
+                RowBox[{"-", "1"}], "+", 
+                RowBox[{"2", " ", "row"}], "+", 
+                RowBox[{"2", " ", "dim", " ", 
+                 RowBox[{"(", 
+                  RowBox[{"col", "-", "1"}], ")"}]}], "-", 
+                SuperscriptBox["col", "2"], "+", 
+                RowBox[{"Boole", "[", 
+                 RowBox[{"row", "==", "col"}], "]"}]}]}], ",", 
+              RowBox[{
+               RowBox[{"{", 
+                RowBox[{"row", ",", "col"}], "}"}], "|->", 
+               RowBox[{"row", "+", 
+                FractionBox[
+                 RowBox[{
+                  RowBox[{"(", 
+                   RowBox[{
+                    RowBox[{"2", "dim"}], "-", "col"}], ")"}], 
+                  RowBox[{"(", 
+                   RowBox[{"col", "-", "1"}], ")"}]}], "2"]}]}]}], "]"}]}]}], 
+          "}"}], ",", "\[IndentingNewLine]", 
+         RowBox[{
+         "\"\<iter = iterate(data)\\nif \>\"", "<>", "\[IndentingNewLine]", 
+          RowBox[{"StringRiffle", "[", 
+           RowBox[{
+            RowBox[{"Block", "[", 
+             RowBox[{
+              RowBox[{"{", 
+               RowBox[{"it", "=", "0"}], "}"}], ",", 
+              RowBox[{"Flatten", "@", 
+               RowBox[{"Table", "[", "\[IndentingNewLine]", 
+                RowBox[{
+                 RowBox[{"With", "[", 
+                  RowBox[{
+                   RowBox[{"{", 
+                    RowBox[{
+                    RowBox[{"firstdiag", "=", 
+                    RowBox[{"SparseArray", "@", 
+                    RowBox[{"lowerTri", "[", 
+                    RowBox[{
+                    RowBox[{"rotatedSOS", "[", 
                     RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}]}], "==", "0"}], "||", 
+                    RowBox[{"index", "[", 
+                    RowBox[{"j", ",", "j"}], "]"}], "]"}], "]"}], ",", "cp"}],
+                     "]"}]}]}], ",", 
+                    RowBox[{"seconddiag", "=", 
+                    RowBox[{"SparseArray", "@", 
+                    RowBox[{"lowerTri", "[", 
                     RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
+                    RowBox[{"rotatedSOS", "[", 
                     RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}]}], "==", "0"}]}], 
-                    ",", "\[IndentingNewLine]", 
+                    RowBox[{"index", "[", 
+                    RowBox[{"i", ",", "i"}], "]"}], "]"}], "]"}], ",", "cp"}],
+                     "]"}]}]}], ",", 
+                    RowBox[{"offre", "=", 
+                    RowBox[{"SparseArray", "@", 
+                    RowBox[{"lowerTri", "[", 
+                    RowBox[{
+                    RowBox[{"rotatedSOS", "[", 
+                    RowBox[{"[", 
+                    RowBox[{"index", "[", 
+                    RowBox[{"i", ",", "j"}], "]"}], "]"}], "]"}], ",", "cp"}],
+                     "]"}]}]}], ",", 
+                    RowBox[{"offim", "=", 
+                    RowBox[{"SparseArray", "@", 
+                    RowBox[{"lowerTri", "[", 
+                    RowBox[{
+                    RowBox[{"rotatedSOS", "[", 
+                    RowBox[{"[", 
+                    RowBox[{
+                    RowBox[{"index", "[", 
+                    RowBox[{"i", ",", "j"}], "]"}], "+", "1"}], "]"}], "]"}], 
+                    ",", "cp"}], "]"}]}]}], ",", 
+                    RowBox[{"sub", "=", 
+                    RowBox[{
+                    RowBox[{"If", "[", 
+                    RowBox[{"complex", ",", 
+                    RowBox[{"dim", "^", "2"}], ",", 
+                    RowBox[{"dim", 
+                    RowBox[{
+                    RowBox[{"(", 
+                    RowBox[{"dim", "+", "1"}], ")"}], "/", "2"}]}]}], "]"}], 
+                    "+", "1"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
+                   RowBox[{"With", "[", 
+                    RowBox[{
                     RowBox[{"{", 
                     RowBox[{
+                    RowBox[{"first", "=", 
                     RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}]}], "!=", "0"}], ",", 
-                    RowBox[{"\"\<sos-sddp\>\"", "->", 
+                    RowBox[{"rotated", ",", "firstdiag", ",", 
+                    RowBox[{"SparseArray", "[", 
+                    RowBox[{"firstdiag", "+", "seconddiag"}], "]"}]}], 
+                    "]"}]}], ",", 
+                    RowBox[{"second", "=", 
+                    RowBox[{"If", "[", 
+                    RowBox[{"rotated", ",", "seconddiag", ",", 
+                    RowBox[{"SparseArray", "[", 
+                    RowBox[{"firstdiag", "-", "seconddiag"}], "]"}]}], 
+                    "]"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
                     RowBox[{"\"\<state.it == \>\"", "<>", 
                     RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}], "]"}]}]}], ",", 
-                    "Nothing"}], "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"it", "++"}], "]"}], "<>", "\"\<\\n\>\"", "<>", 
+                    "\[IndentingNewLine]", "\"\<    @checkequals(BigInt\>\"", 
+                    "<>", 
+                    RowBox[{"toJu", "[", 
+                    RowBox[{
+                    RowBox[{"Flatten", "[", 
+                    RowBox[{"first", "[", "\"\<NonzeroPositions\>\"", "]"}], 
+                    "]"}], "-", "sub"}], "]"}], "<>", "\"\<, BigFloat\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"first", ",", "\"\<NonzeroValues\>\""}], "]"}], 
+                    "<>", "\"\<)\n    @checkequals(BigInt\>\"", "<>", 
+                    RowBox[{"toJu", "[", 
+                    RowBox[{
+                    RowBox[{"Flatten", "[", 
+                    RowBox[{"second", "[", "\"\<NonzeroPositions\>\"", "]"}], 
+                    "]"}], "-", "sub"}], "]"}], "<>", "\"\<, BigFloat\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"second", ",", "\"\<NonzeroValues\>\""}], "]"}], 
+                    "<>", "\"\<)\n    @checkequals(BigInt\>\"", "<>", 
+                    RowBox[{"toJu", "[", 
+                    RowBox[{
+                    RowBox[{"Flatten", "[", 
+                    RowBox[{"offre", "[", "\"\<NonzeroPositions\>\"", "]"}], 
+                    "]"}], "-", "sub"}], "]"}], "<>", "\"\<, BigFloat\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"offre", ",", "\"\<NonzeroValues\>\""}], "]"}], 
+                    "<>", "\"\< ./ \>\"", "<>", 
                     RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}]}], "!=", "0"}], ",", 
-                    RowBox[{"\"\<sos-sddp\>\"", "->", 
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}], "]"}]}]}], ",", 
-                    "Nothing"}], "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"rotated", ",", "\"\<sqrt\>\"", ",", "\"\<\>\""}],
+                     "]"}], "<>", "\"\<2, false)\>\"", "<>", 
+                    "\[IndentingNewLine]", 
                     RowBox[{"If", "[", 
+                    RowBox[{"complex", ",", "\[IndentingNewLine]", 
+                    RowBox[{"\"\<\\n    @checkequals(BigInt\>\"", "<>", 
+                    RowBox[{"toJu", "[", 
                     RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", "re"}], "!=", "0"}], ",", 
-                    RowBox[{"\"\<sos-sddf\>\"", "->", 
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"re", ",", "True", ",", "True"}], "]"}]}]}], ",", 
-                    "Nothing"}], "]"}], ",", "\[IndentingNewLine]", 
+                    RowBox[{"Flatten", "[", 
+                    RowBox[{"offim", "[", "\"\<NonzeroPositions\>\"", "]"}], 
+                    "]"}], "-", "sub"}], "]"}], "<>", "\"\<, BigFloat\>\"", "<>", 
+                    RowBox[{"getnz", "[", 
+                    RowBox[{"offim", ",", "\"\<NonzeroValues\>\""}], "]"}], 
+                    "<>", "\"\< ./ \>\"", "<>", 
                     RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", "im"}], "!=", "0"}], ",", 
-                    RowBox[{"\"\<sos-sddf\>\"", "->", 
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"im", ",", "True", ",", "True"}], "]"}]}]}], ",", 
-                    "Nothing"}], "]"}]}], "}"}], ",", "\[IndentingNewLine]", 
-                    RowBox[{"\"\<sos-sddq\>\"", "->", 
-                    RowBox[{"\"\<state.it == \>\"", "<>", 
-                    RowBox[{"ToString", "[", 
-                    RowBox[{"it", "++"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"j", ",", "j"}], "]"}], "]"}], "]"}], "<>", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"inds", "[", 
-                    RowBox[{"[", 
-                    RowBox[{"i", ",", "i"}], "]"}], "]"}], "]"}], "<>", 
-                    RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", "re"}], "!=", "0"}], ",", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"re", ",", "True"}], "]"}], ",", "\"\<\>\""}], 
-                    "]"}], "<>", 
-                    RowBox[{"If", "[", 
-                    RowBox[{
-                    RowBox[{
-                    RowBox[{"Norm", "@", "im"}], "!=", "0"}], ",", 
-                    RowBox[{"getstr", "[", 
-                    RowBox[{"im", ",", "True"}], "]"}], ",", "\"\<\>\""}], 
-                    "]"}]}]}]}], "\[IndentingNewLine]", "]"}]}], 
-                  "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
-                "]"}], ",", 
-               RowBox[{"{", 
-                RowBox[{"j", ",", "dim"}], "}"}], ",", 
-               RowBox[{"{", 
-                RowBox[{"i", ",", 
-                 RowBox[{"j", "+", "1"}], ",", "dim"}], "}"}]}], "]"}]}]}], 
-           "]"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
-       RowBox[{
-        RowBox[{
-         RowBox[{"data", "[", 
-          RowBox[{"[", 
-           RowBox[{
-            RowBox[{"-", "1"}], ",", "2"}], "]"}], "]"}], "=", 
-         RowBox[{
-          RowBox[{"data", "[", 
-           RowBox[{"[", 
-            RowBox[{
-             RowBox[{"-", "1"}], ",", "2"}], "]"}], "]"}], "<>", 
-          "\"\<\\n    state.it = -1\>\""}]}], ";", "\[IndentingNewLine]", 
-        RowBox[{"Splice", "[", 
-         RowBox[{"KeyValueMap", "[", 
-          RowBox[{
-           RowBox[{
-            RowBox[{"{", 
-             RowBox[{"k", ",", "v"}], "}"}], "|->", 
-            RowBox[{"k", "->", 
-             RowBox[{"currentId", "->", 
-              RowBox[{
-               RowBox[{"If", "[", 
-                RowBox[{
-                 RowBox[{"k", "!=", "\"\<sos-sddf\>\""}], ",", 
-                 "\"\<iter = iterate(data)\\n\>\"", ",", "\"\<\>\""}], "]"}], 
-               "<>", "\"\<if \>\"", "<>", 
-               RowBox[{"StringRiffle", "[", 
-                RowBox[{"v", ",", "\"\<\\nelseif \>\""}], "]"}], "<>", 
-               "\"\<\\nelse\\n    @test false\\nend\\nstate.it += 1\>\"", "<>", 
-               RowBox[{"If", "[", 
-                RowBox[{
-                 RowBox[{"k", "!=", "\"\<sos-sddf\>\""}], ",", 
-                 "\"\<\\n@test isnothing(iter)\>\"", ",", "\"\<\>\""}], 
-                "]"}]}]}]}]}], ",", 
-           RowBox[{"Merge", "[", 
-            RowBox[{"data", ",", "Join"}], "]"}]}], "]"}], "]"}]}]}], 
+                    RowBox[{"rotated", ",", "\"\<sqrt\>\"", ",", "\"\<\>\""}],
+                     "]"}], "<>", "\"\<2, false)\>\""}], ",", "\"\<\>\""}], 
+                    "]"}]}]}], "\[IndentingNewLine]", "]"}]}], "]"}], 
+                 "\[IndentingNewLine]", ",", 
+                 RowBox[{"{", 
+                  RowBox[{"j", ",", "dim"}], "}"}], ",", 
+                 RowBox[{"{", 
+                  RowBox[{"i", ",", 
+                   RowBox[{"j", "+", "1"}], ",", "dim"}], "}"}]}], "]"}]}]}], 
+             "]"}], ",", "\"\<\\nelseif \>\""}], "]"}], "<>", 
+          "\[IndentingNewLine]", 
+          "\"\<\\nelse\\n    @test false\\nend\\nstate.it += 1\\n@test \
+isnothing(iter)\>\""}]}], "\[IndentingNewLine]", "]"}]}], 
       "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}], 
   ";"}]}], "Input",
  InitializationCell->True,
@@ -15298,7 +15452,7 @@ Cell[BoxData[{
       RowBox[{"sosMatrix_", "?", "SquareMatrixQ"}], "/;", 
       RowBox[{
        RowBox[{
-        RowBox[{"Length", "[", "sosMatrix", "]"}], ">", "1"}], "&&", 
+        RowBox[{"Length", "[", "sosMatrix", "]"}], ">", "2"}], "&&", 
        RowBox[{"FreeQ", "[", 
         RowBox[{"sosMatrix", ",", "_Complex"}], "]"}]}]}], ",", 
      "\"\<SDD\>\""}], "]"}], ":=", 
@@ -15308,22 +15462,52 @@ Cell[BoxData[{
       RowBox[{"\"\<sos-sddr\>\"", "->", 
        RowBox[{
         RowBox[{"++", "currentId"}], "->", 
-        RowBox[{"makeVarSDDhelper", "[", 
-         RowBox[{"sosMatrix", ",", "\"\<SDDR-V\>\"", ",", "0"}], "]"}]}]}], 
-      ",", "\[IndentingNewLine]", 
+        RowBox[{"makeConstraintPSDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<PSDR-V\>\""}], "]"}]}]}], ",", 
+      "\[IndentingNewLine]", 
       RowBox[{"makeVarSDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "0"}], "]"}], 
-      ",", "\[IndentingNewLine]", 
+       RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-RQuadratic\>\"", ",", "0"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-Quadratic\>\"", ",", "0"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", 
        RowBox[{"makeVarSDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "1"}], 
-        "]"}]}], ",", "\[IndentingNewLine]", 
+        RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}]}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-RQuadratic\>\"", ",", "1"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-Quadratic\>\"", ",", "1"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", 
        RowBox[{"makeVarSDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "2"}], 
-        "]"}]}]}], "\[IndentingNewLine]", "}"}], "]"}]}], 
+        RowBox[{"sosMatrix", ",", "\"\<R-Equalities\>\""}], "]"}]}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-RQuadratic\>\"", ",", "2"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDR-Quadratic\>\"", ",", "2"}], 
+         "]"}]}]}]}], "\[IndentingNewLine]", "}"}], "]"}]}], 
   ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
@@ -15333,7 +15517,7 @@ Cell[BoxData[{
       RowBox[{"sosMatrix_", "?", "SquareMatrixQ"}], "/;", 
       RowBox[{
        RowBox[{
-        RowBox[{"Length", "[", "sosMatrix", "]"}], ">", "1"}], "&&", 
+        RowBox[{"Length", "[", "sosMatrix", "]"}], ">", "2"}], "&&", 
        RowBox[{"!", 
         RowBox[{"FreeQ", "[", 
          RowBox[{"sosMatrix", ",", "_Complex"}], "]"}]}]}]}], ",", 
@@ -15344,26 +15528,56 @@ Cell[BoxData[{
       RowBox[{"\"\<sos-sddc\>\"", "->", 
        RowBox[{
         RowBox[{"++", "currentId"}], "->", 
-        RowBox[{"makeVarSDDhelper", "[", 
-         RowBox[{"sosMatrix", ",", "\"\<SDDC-V\>\"", ",", "0"}], "]"}]}]}], 
-      ",", "\[IndentingNewLine]", 
+        RowBox[{"makeConstraintPSDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<PSDC-V\>\""}], "]"}]}]}], ",", 
+      "\[IndentingNewLine]", 
       RowBox[{"makeVarSDDhelper", "[", 
-       RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "0"}], "]"}], 
-      ",", "\[IndentingNewLine]", 
+       RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\""}], "]"}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-RQuadratic\>\"", ",", "0"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-Quadratic\>\"", ",", "0"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", 
        RowBox[{"makeVarSDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "3"}], 
-        "]"}]}], ",", "\[IndentingNewLine]", 
+        RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\""}], "]"}]}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-RQuadratic\>\"", ",", "3"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-Quadratic\>\"", ",", "3"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
       RowBox[{
        RowBox[{"++", "currentId"}], ";", 
        RowBox[{"makeVarSDDhelper", "[", 
-        RowBox[{"sosMatrix", ",", "\"\<SDD-Quadratic\>\"", ",", "4"}], 
-        "]"}]}]}], "\[IndentingNewLine]", "}"}], "]"}]}], ";"}]}], "Input",
+        RowBox[{"sosMatrix", ",", "\"\<C-Equalities\>\""}], "]"}]}], ",", 
+      "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddrq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-RQuadratic\>\"", ",", "4"}], 
+         "]"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"\"\<sos-sddq\>\"", "->", 
+       RowBox[{"currentId", "->", 
+        RowBox[{"makeVarSDDhelper", "[", 
+         RowBox[{"sosMatrix", ",", "\"\<SDDC-Quadratic\>\"", ",", "4"}], 
+         "]"}]}]}]}], "\[IndentingNewLine]", "}"}], "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellLabel->"In[81]:=",ExpressionUUID->"3db24dc2-e246-be46-a705-0beff9f03347"]
 }, Closed]]
-}, Open  ]],
+}, Closed]],
 
 Cell[CellGroupData[{
 
@@ -15604,34 +15818,46 @@ representation=Solver.RepresentationDD(uf)))\n    elseif type === :sos_ddc\n  \
 complex=true, representation=Solver.RepresentationDD()),\n                  \
 SOSSolverSetup(instance; l1=true, complex=true, \
 representation=Solver.RepresentationDD()),\n                  \
-SOSSolverSetup(instance; quadratic=true, \
-representation=Solver.RepresentationDD()),\n\n                  \
-SOSSolverSetup(instance +1; l1=true, complex=true, \
-representation=Solver.RepresentationDD(udc)),\n                  \
 SOSSolverSetup(instance +1; quadratic=true, \
+representation=Solver.RepresentationDD()),\n\n                  \
+SOSSolverSetup(instance +2; l1=true, complex=true, \
+representation=Solver.RepresentationDD(udc)),\n                  \
+SOSSolverSetup(instance +3; quadratic=true, \
 representation=Solver.RepresentationDD(udc)),\n                  \n           \
-       SOSSolverSetup(instance +2; l1=true, complex=true, \
+       SOSSolverSetup(instance +4; l1=true, complex=true, \
 representation=Solver.RepresentationDD(ufc)),\n                  \
-SOSSolverSetup(instance +2; quadratic=true, \
+SOSSolverSetup(instance +5; quadratic=true, \
 representation=Solver.RepresentationDD(ufc)))\n    elseif type === :sos_sddr\n\
-        states = (SOSSolverSetup(instance, sdd=true, \
+        states = (SOSSolverSetup(instance, sdd=PSDIndextypeVector(:U), \
 representation=Solver.RepresentationSDD(complex=false)),\n                  \
 SOSSolverSetup(instance, rquadratic=true, \
+representation=Solver.RepresentationSDD(complex=false)),\n                  \
+SOSSolverSetup(instance, quadratic=true, \
 representation=Solver.RepresentationSDD(complex=false)),\n\n                  \
 SOSSolverSetup(instance +1, rquadratic=true, \
+representation=Solver.RepresentationSDD(ud, complex=false)),\n                \
+  SOSSolverSetup(instance +1, quadratic=true, \
 representation=Solver.RepresentationSDD(ud, complex=false)),\n\n              \
     SOSSolverSetup(instance +2, rquadratic=true, \
-representation=Solver.RepresentationSDD(uf, complex=false)))\n        type = \
-:sos_sdd\n    elseif type === :sos_sddc\n        states = \
-(SOSSolverSetup(instance, sdd=true, complex=true, \
+representation=Solver.RepresentationSDD(uf, complex=false)),\n                \
+  SOSSolverSetup(instance +2, quadratic=true, \
+representation=Solver.RepresentationSDD(uf, complex=false)))\n    elseif type \
+=== :sos_sddc\n        states = (SOSSolverSetup(instance, \
+sdd=PSDIndextypeVector(:U), complex=true, \
 representation=Solver.RepresentationSDD()),\n                  \
-SOSSolverSetup(instance, rquadratic=true, \
+SOSSolverSetup(instance, rquadratic=true, complex=true, \
+representation=Solver.RepresentationSDD()),\n                  \
+SOSSolverSetup(instance, quadratic=true, complex=true, \
 representation=Solver.RepresentationSDD()),\n\n                  \
-SOSSolverSetup(instance +1, rquadratic=true, \
+SOSSolverSetup(instance +1, rquadratic=true, complex=true, \
+representation=Solver.RepresentationSDD(udc)),\n                  \
+SOSSolverSetup(instance +1, quadratic=true, complex=true, \
 representation=Solver.RepresentationSDD(udc)),\n\n                  \
-SOSSolverSetup(instance +2, rquadratic=true, \
-representation=Solver.RepresentationSDD(ufc)))\n        type = :sos_sdd\n    \
-else\n        @assert(false)\n    end\n    for state in states\n        \
+SOSSolverSetup(instance +2, rquadratic=true, complex=true, \
+representation=Solver.RepresentationSDD(ufc)),\n                  \
+SOSSolverSetup(instance +2, quadratic=true, complex=true, \
+representation=Solver.RepresentationSDD(ufc)))\n    else\n        \
+@assert(false)\n    end\n    for state in states\n        \
 sos_add_matrix!(state, grouping, constraint, state.representation)\n        \
 @test state.lastcall === type\n    end\n    return\nend\n\n\>\""}]}], 
   ";"}]], "Input",
@@ -15751,19 +15977,20 @@ Cell[BoxData[{
            RowBox[{"sosMatrix", "[", 
             RowBox[{"grouping", ",", "constraint"}], "]"}]}], "}"}], ",", 
          "\[IndentingNewLine]", 
-         RowBox[{
-          RowBox[{"AppendTo", "[", 
-           RowBox[{"collections", ",", 
-            RowBox[{"addTestDetails", "[", 
-             RowBox[{
-              RowBox[{"makeVar", "[", 
-               RowBox[{"sm", ",", "\"\<DD\>\""}], "]"}], ",", "grouping", ",",
-               "constraint"}], "]"}]}], "]"}], ";"}]}], "\[IndentingNewLine]", 
-        RowBox[{"(*", 
+         RowBox[{"(*", 
+          RowBox[{
+           RowBox[{"AppendTo", "[", 
+            RowBox[{"collections", ",", 
+             RowBox[{"addTestDetails", "[", 
+              RowBox[{
+               RowBox[{"makeVar", "[", 
+                RowBox[{"sm", ",", "\"\<DD\>\""}], "]"}], ",", "grouping", 
+               ",", "constraint"}], "]"}]}], "]"}], ";"}], "*)"}], 
+         "\[IndentingNewLine]", 
          RowBox[{"If", "[", 
           RowBox[{
            RowBox[{
-            RowBox[{"Length", "@", "sm"}], ">", "2"}], ",", 
+            RowBox[{"Length", "@", "sm"}], ">", "3"}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{
             RowBox[{"AppendTo", "[", 
@@ -15773,9 +16000,9 @@ Cell[BoxData[{
                 RowBox[{"makeVar", "[", 
                  RowBox[{"sm", ",", "\"\<SDD\>\""}], "]"}], ",", "grouping", 
                 ",", "constraint"}], "]"}]}], "]"}], ";"}]}], 
-          "\[IndentingNewLine]", "]"}], "*)"}], "\[IndentingNewLine]", 
-        "]"}]}], "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
-    "]"}]}], ";"}], "\[IndentingNewLine]", 
+          "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}], 
+      "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{"addTestEquality", "[", 
@@ -15898,8 +16125,9 @@ Solver.add_var_l1!(state::SOSSolverSetup{false,false,false,false,true,false,\
 false}, data::IndvalsIterator{BigInt,BigFloat}) =\n    @maybeinterpret \
 add_var_l1_worker!(state, data)\n\n\
 Solver.add_var_free!(state::Union{<:SOSSolverSetup{false,false,false,false,\
-true,false},SOSSolverSetup{true,false,false,false,false,false,false},\
-SOSSolverSetup{false,true,false,false,false,false,false}}, eqstate::UInt, \
+true,false},SOSSolverSetup{true,false,false,false,false,false,false},<:\
+SOSSolverSetup{false,true,false,false,false,false},<:SOSSolverSetup{false,\
+false,true,false,false,false}}, eqstate::UInt, \
 indvals::Indvals{BigInt,BigFloat}, obj::BigFloat) =\n    @maybeinterpret \
 add_var_free_worker!(state, eqstate, indvals, obj)\n\n\
 Solver.add_var_nonnegative!(state::SOSSolverSetup{true,false,false,false,\
@@ -15916,18 +16144,19 @@ Solver.add_var_nonnegative!(state::SOSSolverSetup{false,true,false,false,\
 false,false,false}, indvals::Indvals{BigInt,BigFloat}) =\n    @maybeinterpret \
 add_var_nonnegative_worker!(state, indvals)\n\n\
 Solver.add_var_quadratic!(state::SOSSolverSetup{false,true,false,false,false,\
-false,false}, indvals::IndvalsIterator{BigInt,BigFloat}) =\n    \
-@maybeinterpret add_var_quadratic_worker!(state, indvals)\n\n\
-#=Solver.add_var_rotated_quadratic!(state::SOSSolverSetup{false,false,true,\
-false,false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}) =\n    \
-@maybeinterpret add_var_rotated_quadratic_worker!(state, indvals)\n\n\
-Solver.add_var_sdd!(state::SOSSolverSetup{false,false,false,false,false,true,\
+false}, indvals::IndvalsIterator{BigInt,BigFloat}) =\n    @maybeinterpret \
+add_var_quadratic_worker!(state, indvals)\n\n\
+Solver.add_var_sdd!(state::SOSSolverSetup{false,false,false,false,false,<:Any,\
 false}, dim::Int, data::IndvalsIterator{BigInt,BigFloat}, u) =\n    \
-@maybeinterpret add_var_sdd_worker!(state, dim, data, u)\n\n\
-Solver.add_var_sdd_complex!(state::SOSSolverSetup{false,false,false,false,\
-false,true,true}, dim::Int, data::IndvalsIterator{BigInt,BigFloat}, u) =\n    \
-@maybeinterpret add_var_sdd_complex_worker!(state, dim, data, u)=#\n\n\>\""}],
-           "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+@maybeinterpret add_var_sdd_worker!(state, dim, psd_indextype(state), data, \
+u)\n\nSolver.add_var_sdd_complex!(state::SOSSolverSetup{false,false,false,\
+false,false,<:Any,true}, dim::Int, data::IndvalsIterator{BigInt,BigFloat}, u) \
+=\n    @maybeinterpret add_var_sdd_complex_worker!(state, dim, \
+psd_indextype(state), data, u)\n\n\
+Solver.add_var_rotated_quadratic!(state::SOSSolverSetup{false,false,true,\
+false,false,false}, indvals::IndvalsIterator{BigInt,BigFloat}) =\n    \
+@maybeinterpret add_var_rotated_quadratic_worker!(state, indvals)\n\n\>\""}], 
+          "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
          RowBox[{"finalize", "[", 
           RowBox[{
           "file", ",", "tests", ",", "\"\<moment-linear\>\"", ",", 
@@ -16077,10 +16306,10 @@ state.lastcall === :none\n    state.lastcall = :sos_ddc\>\""}], "]"}], ";",
              RowBox[{
              "\"\<function \
 Solver.add_constr_slack!(state::Union{<:SOSSolverSetup{false,false,false,\
-false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},\
-SOSSolverSetup{false,true,false,false,false,false,false}}, num::Int)\n    \
-@test state.lastcall === :none\n    state.lastcall = :sos_slack\n    if \>\"",
-               "<>", 
+false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},<:\
+SOSSolverSetup{false,true,false,false,false,false},<:SOSSolverSetup{false,\
+false,true,false,false,false}}, num::Int)\n    @test state.lastcall === :none\
+\n    state.lastcall = :sos_slack\n    if \>\"", "<>", 
               RowBox[{"StringRiffle", "[", "\[IndentingNewLine]", 
                RowBox[{
                 RowBox[{"KeyValueMap", "[", 
@@ -16120,28 +16349,33 @@ SOSSolverSetup{false,true,false,false,false,false,false}}, num::Int)\n    \
            "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
          RowBox[{"If", "[", 
           RowBox[{
-           RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<sos-ddf\>\""}], "]"}], ",", 
+           RowBox[{
+            RowBox[{"KeyExistsQ", "[", 
+             RowBox[{"tests", ",", "\"\<sos-ddf\>\""}], "]"}], "||", 
+            RowBox[{"KeyExistsQ", "[", 
+             RowBox[{"tests", ",", "\"\<sos-sddf\>\""}], "]"}]}], ",", 
            "\[IndentingNewLine]", 
            RowBox[{"BinaryWrite", "[", 
             RowBox[{"file", ",", "\[IndentingNewLine]", 
              RowBox[{
              "\"\<function \
 Solver.add_var_free_prepare!(state::Union{<:SOSSolverSetup{false,false,false,\
-false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},\
-SOSSolverSetup{false,true,false,false,false,false,false}}, num::Int)\n    \
-@test state.lastcall === :sos_slack\n    @test isempty(state.free_available)\n\
-    state.lastcall = :add_var_free\n    union!(state.free_available, \
-UInt(1):UInt(num))\n    return UInt(num)\nend\n\nfunction \
+false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},<:\
+SOSSolverSetup{false,true,false,false,false,false},<:SOSSolverSetup{false,\
+false,true,false,false,false}}, num::Int)\n    @test state.lastcall === \
+:sos_slack\n    @test isempty(state.free_available)\n    state.lastcall = \
+:add_var_free\n    union!(state.free_available, UInt(1):UInt(num))\n    \
+return UInt(num)\nend\n\nfunction \
 Solver.add_var_free_finalize!(state::Union{<:SOSSolverSetup{false,false,false,\
-false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},\
-SOSSolverSetup{false,true,false,false,false,false,false}}, eqstate::UInt)\n   \
- @test state.lastcall === :add_var_free\n    state.lastcall = \
-:add_var_free_finalize\n    @test iszero(eqstate)\n    @test \
-isempty(state.free_available)\nend\n\nfunction \
+false,true,false},SOSSolverSetup{true,false,false,false,false,false,false},<:\
+SOSSolverSetup{false,true,false,false,false,false},<:SOSSolverSetup{false,\
+false,true,false,false,false}}, eqstate::UInt)\n    @test state.lastcall === \
+:add_var_free\n    state.lastcall = :add_var_free_finalize\n    @test \
+iszero(eqstate)\n    @test isempty(state.free_available)\nend\n\nfunction \
 add_var_free_worker!(state::Union{<:SOSSolverSetup{false,false,false,false,\
-true,false},SOSSolverSetup{true,false,false,false,false,false,false},\
-SOSSolverSetup{false,true,false,false,false,false,false}}, eqstate::UInt, \
+true,false},SOSSolverSetup{true,false,false,false,false,false,false},<:\
+SOSSolverSetup{false,true,false,false,false,false},<:SOSSolverSetup{false,\
+false,true,false,false,false}}, eqstate::UInt, \
 indvals::Indvals{BigInt,BigFloat}, rhs::BigFloat)\n    @test state.lastcall \
 === :add_var_free\n    @test iszero(rhs)\n    pop!(state.free_available, \
 UInt(state.it +1))\n    if \>\"", "<>", 
@@ -16173,11 +16407,18 @@ UInt(state.it +1))\n    if \>\"", "<>",
                     "]"}]}], ",", "\[IndentingNewLine]", 
                   RowBox[{"{", 
                    RowBox[{"test", ",", 
-                    RowBox[{"tests", "[", "\"\<sos-ddf\>\"", "]"}]}], "}"}]}],
-                  "]"}], ",", "\[IndentingNewLine]", 
-                "\"\<\\n    elseif \>\""}], "]"}], "<>", 
-              "\"\<\n    else\n         @test false\n    end\n    state.it += \
-1\n    eqstate -= one(UInt)\n    @test eqstate == \
+                    RowBox[{"Join", "[", 
+                    RowBox[{
+                    RowBox[{"Lookup", "[", 
+                    RowBox[{"tests", ",", 
+                    RowBox[{"\"\<sos-ddf\>\"", 
+                    RowBox[{"{", "}"}]}]}], "]"}], ",", 
+                    RowBox[{"Lookup", "[", 
+                    RowBox[{"tests", ",", "\"\<sos-sddf\>\"", ",", 
+                    RowBox[{"{", "}"}]}], "]"}]}], "]"}]}], "}"}]}], "]"}], 
+                ",", "\[IndentingNewLine]", "\"\<\\n    elseif \>\""}], "]"}],
+               "<>", "\"\<\n    else\n         @test false\n    end\n    \
+state.it += 1\n    eqstate -= one(UInt)\n    @test eqstate == \
 length(state.free_available)\n    return eqstate\nend\n\n\>\""}]}], "]"}]}], 
           "\[IndentingNewLine]", "]"}], ";", "\[IndentingNewLine]", 
          "\[IndentingNewLine]", 
@@ -16227,69 +16468,48 @@ state.lastcall = :sos_ddc\>\""}], "]"}], ";", "\[IndentingNewLine]",
            "\"\<function \
 add_var_quadratic_worker!(state::SOSSolverSetup{false,true,false,false,false,\
 false,false}, data::IndvalsIterator{BigInt,BigFloat})\n    @test \
-state.lastcall === :sos_ddc\>\""}], "]"}], ";"}]}], "\[IndentingNewLine]", 
-       RowBox[{"(*", "\[IndentingNewLine]", 
-        RowBox[{
+state.lastcall === :sos_ddc\>\""}], "]"}], ";", "\[IndentingNewLine]", 
+         "\[IndentingNewLine]", 
          RowBox[{"finalize", "[", 
           RowBox[{
           "file", ",", "tests", ",", "\"\<sos-sddr\>\"", ",", 
+           "\[IndentingNewLine]", 
            "\"\<function \
-add_var_sdd_worker!(state::SOSSolverSetup{false,false,false,false,false,true,\
-false}, dim::Int, data::IndvalsIterator{BigInt,BigFloat}, u)\n    @test \
-state.lastcall === :none\n    state.lastcall = :sos_sdd\>\""}], "]"}], ";", 
+add_var_sdd_worker!(state::SOSSolverSetup{false,false,false,false,false,<:Any}\
+, dim::Int, ::PSDIndextypeVector{tri}, \
+data::IndvalsIterator{BigInt,BigFloat}, u) where {tri}\n    @test \
+state.lastcall === :none\n    state.lastcall = :sos_sddr\>\""}], "]"}], ";", 
          "\[IndentingNewLine]", "\[IndentingNewLine]", 
          RowBox[{"finalize", "[", 
           RowBox[{
           "file", ",", "tests", ",", "\"\<sos-sddc\>\"", ",", 
+           "\[IndentingNewLine]", 
            "\"\<function \
 add_var_sdd_complex_worker!(state::SOSSolverSetup{false,false,false,false,\
-false,true,true}, dim::Int, data::IndvalsIterator{BigInt,BigFloat}, u)\n    \
-@test state.lastcall === :none\n    state.lastcall = :sos_sdd\>\""}], "]"}], 
-         ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+false,<:Any,true}, dim::Int, ::PSDIndextypeVector{tri}, \
+data::IndvalsIterator{BigInt,BigFloat}, u) where {tri}\n    @test \
+state.lastcall === :none\n    state.lastcall = :sos_sddc\>\""}], "]"}], ";", 
+         "\[IndentingNewLine]", "\[IndentingNewLine]", 
          RowBox[{"finalize", "[", 
           RowBox[{
           "file", ",", "tests", ",", "\"\<sos-sddq\>\"", ",", 
+           "\[IndentingNewLine]", 
+           "\"\<function \
+add_var_quadratic_worker!(state::SOSSolverSetup{false,true,false,false,false,\
+false,complex}, data::IndvalsIterator{BigInt,BigFloat}) where {complex}\n    \
+@test state.lastcall === (iszero(state.it) ? :add_var_free_finalize : \
+(complex ? :sos_sddc : :sos_sddr))\n    state.lastcall = complex ? :sos_sddc \
+: :sos_sddr\>\""}], "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+         RowBox[{"finalize", "[", 
+          RowBox[{
+          "file", ",", "tests", ",", "\"\<sos-sddrq\>\"", ",", 
+           "\[IndentingNewLine]", 
            "\"\<function \
 add_var_rotated_quadratic_worker!(state::SOSSolverSetup{false,false,true,\
-false,false,false,false}, data::IndvalsIterator{BigInt,BigFloat})\n    @test \
-state.lastcall === (iszero(state.it) ? :none : :sos_sdd)\n    state.lastcall \
-= :sos_sdd\>\""}], "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
-         RowBox[{"finalize", "[", 
-          RowBox[{
-          "file", ",", "tests", ",", "\"\<sos-sddp\>\"", ",", 
-           "\[IndentingNewLine]", 
-           "\"\<function \
-add_var_nonnegative_worker!(state::SOSSolverSetup{false,false,true,false,\
-false,false,false}, data::IndvalsIterator{BigInt,BigFloat})\n    @test \
-state.lastcall === (iszero(state.it) ? :none : :sos_sdd)\n    state.lastcall \
-= :sos_sdd\>\""}], "]"}], ";", "\[IndentingNewLine]", "\[IndentingNewLine]", 
-         RowBox[{"If", "[", 
-          RowBox[{
-           RowBox[{"KeyExistsQ", "[", 
-            RowBox[{"tests", ",", "\"\<sos-sddf\>\""}], "]"}], ",", 
-           "\[IndentingNewLine]", 
-           RowBox[{"BinaryWrite", "[", 
-            RowBox[{
-            "file", ",", "\[IndentingNewLine]", 
-             "\"\<function \
-Solver.add_var_free_prepare!(state::SOSSolverSetup{false,false,true,false,\
-false,false,false}, num::Int)\n    @test state.lastcall === (iszero(state.it) \
-? :none : :sos_sdd)\n    state.lastcall = :add_var_free\n    return UInt(num)\
-\nend\n\nfunction \
-Solver.add_var_free_finalize!(state::SOSSolverSetup{false,false,true,false,\
-false,false,false}, eqstate::UInt)\n    @test state.lastcall === \
-:add_var_free\n    state.lastcall = :sos_sdd\n    @test iszero(eqstate)\nend\n\
-\n\>\""}], "]"}]}], "\[IndentingNewLine]", "]"}], ";", "\[IndentingNewLine]", 
-         "\[IndentingNewLine]", 
-         RowBox[{"finalize", "[", 
-          RowBox[{
-          "file", ",", "tests", ",", "\"\<sos-sddf\>\"", ",", 
-           "\[IndentingNewLine]", 
-           "\"\<function \
-add_var_free_worker!(state::SOSSolverSetup{false,false,true,false,false,false,\
-false}, eqstate::UInt, indvals::Indvals{BigInt,BigFloat}, obj::BigFloat)\n    \
-@test state.lastcall === :add_var_free\>\"", ",", 
-           "\"\<    return eqstate - one(UInt)\>\""}], "]"}], ";"}], "*)"}], 
+false,false,false,complex}, data::IndvalsIterator{BigInt,BigFloat}) where \
+{complex}\n    @test state.lastcall === (iszero(state.it) ? \
+:add_var_free_finalize : (complex ? :sos_sddc : :sos_sddr))\n    \
+state.lastcall = complex ? :sos_sddc : :sos_sddr\>\""}], "]"}], ";"}]}], 
        "\[IndentingNewLine]", "]"}], ";", "\[IndentingNewLine]", 
       "\[IndentingNewLine]", 
       RowBox[{"BinaryWrite", "[", 
@@ -16368,10 +16588,12 @@ false}, eqstate::UInt, indvals::Indvals{BigInt,BigFloat}, obj::BigFloat)\n    \
                     "\"\<sos_ddl1r\>\"", "|", "\"\<sos_slack\>\"", "|", 
                     "\"\<sos_ddf\>\"", "|", "\"\<sos_ddrlin\>\"", "|", 
                     "\"\<sos_ddl1c\>\"", "|", "\"\<sos_ddclin\>\"", "|", 
-                    "\"\<sos_ddq\>\""}]}], "}"}]}], "]"}]}], "}"}]}], "]"}], 
-                    ",", "\"\<\\n\>\""}], "]"}], "<>", "\[IndentingNewLine]", 
-                    "\"\<\\n        end\>\""}], "\[IndentingNewLine]", 
-                    ")"}]}], ",", "\[IndentingNewLine]", 
+                    "\"\<sos_ddq\>\"", "|", "\"\<sos_sddf\>\"", "|", 
+                    "\"\<sos_sddrq\>\"", "|", "\"\<sos_sddq\>\""}]}], "}"}]}],
+                     "]"}]}], "}"}]}], "]"}], ",", "\"\<\\n\>\""}], "]"}], "<>",
+                     "\[IndentingNewLine]", "\"\<\\n        end\>\""}], 
+                    "\[IndentingNewLine]", ")"}]}], ",", 
+                    "\[IndentingNewLine]", 
                     RowBox[{"KeySortBy", "[", 
                     RowBox[{
                     RowBox[{"Merge", "[", 
@@ -16755,7 +16977,7 @@ Cell[BoxData[{
      RowBox[{
       RowBox[{"grouping", "=", 
        RowBox[{"{", 
-        RowBox[{
+        RowBox[{"1", ",", 
          RowBox[{
           SubsuperscriptBox["x", "2", "2"], 
           SubscriptBox["z", "1"]}], ",", 
@@ -16801,11 +17023,11 @@ Cell[BoxData[{
         "\[IndentingNewLine]", 
         RowBox[{"{", 
          RowBox[{"type", ",", 
-          RowBox[{"{", "\"\<DD\>\"", 
+          RowBox[{"{", 
            RowBox[{"(*", 
-            RowBox[{",", "\"\<SDD\>\""}], "*)"}], "}"}]}], "}"}]}], 
-       "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", "]"}]}], 
-   "\[IndentingNewLine]", "]"}], ";"}], "\n", 
+            RowBox[{"\"\<DD\>\"", ","}], "*)"}], "\"\<SDD\>\"", "}"}]}], 
+         "}"}]}], "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+     "]"}]}], "\[IndentingNewLine]", "]"}], ";"}], "\n", 
  RowBox[{
   RowBox[{"Do", "[", "\[IndentingNewLine]", 
    RowBox[{
@@ -17832,8 +18054,8 @@ Cell[BoxData[
   "In[112]:=",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 },
-WindowSize->{1440, 777.75},
-WindowMargins->{{-6, Automatic}, {Automatic, -6}},
+WindowSize->{1362, 562.5},
+WindowMargins->{{Automatic, -5.25}, {-5.25, Automatic}},
 Magnification:>0.9 Inherited,
 FrontEndVersion->"14.1 for Microsoft Windows (64-bit) (July 16, 2024)",
 StyleDefinitions->"Default.nb",
@@ -17966,80 +18188,81 @@ Cell[743880, 13127, 1511, 46, 56, "Input",ExpressionUUID->"80f23538-f968-664c-87
 Cell[CellGroupData[{
 Cell[745416, 13177, 137, 3, 30, "Text",ExpressionUUID->"cb142fb4-2206-384b-bb05-76a7f3bc6584",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.}],
-Cell[745556, 13182, 26764, 587, 1921, "Input",ExpressionUUID->"ead2e6d7-bcec-a342-adb3-79f174099bcd",
+Cell[745556, 13182, 25352, 566, 1842, "Input",ExpressionUUID->"ead2e6d7-bcec-a342-adb3-79f174099bcd",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.},
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[772357, 13774, 140, 3, 27, "Text",ExpressionUUID->"3592ba8d-1862-c747-b0f5-712f95979ec9",
+Cell[770945, 13753, 140, 3, 27, "Text",ExpressionUUID->"3592ba8d-1862-c747-b0f5-712f95979ec9",
  CellGroupingRules->{"GroupTogetherGrouping", 10000.}],
-Cell[772500, 13779, 25455, 549, 1674, "Input",ExpressionUUID->"abf1e9d2-13c9-3b40-8c14-45ad1008da35",
+Cell[771088, 13758, 25548, 551, 1691, "Input",ExpressionUUID->"abf1e9d2-13c9-3b40-8c14-45ad1008da35",
  CellGroupingRules->{"GroupTogetherGrouping", 10000.},
  InitializationCell->True]
 }, Closed]],
-Cell[797970, 14331, 3723, 89, 396, "Input",ExpressionUUID->"5380bceb-9483-9845-b113-528b4d7cc2dd",
+Cell[796651, 14312, 4672, 111, 447, "Input",ExpressionUUID->"5380bceb-9483-9845-b113-528b4d7cc2dd",
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[801730, 14425, 80, 0, 33, "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
-Cell[801813, 14427, 81, 0, 30, "Text",ExpressionUUID->"f0cf1b6b-3989-d649-8b25-70071cd2c1e5"],
-Cell[801897, 14429, 395, 14, 31, "Input",ExpressionUUID->"e611c6ab-1b42-d047-bf7c-53723e295023"],
-Cell[802295, 14445, 117, 0, 30, "Text",ExpressionUUID->"4faab166-5437-aa4e-85fb-3b0ea6e2dd1b"],
-Cell[802415, 14447, 225, 7, 31, "Input",ExpressionUUID->"5341f5b6-4bf6-1f4e-9a65-34280fad66f2"],
-Cell[802643, 14456, 1273, 44, 33, "Text",ExpressionUUID->"0df48dcc-85df-8d4f-8437-8cee11facd6b"],
+Cell[801360, 14428, 80, 0, 33, "Subsection",ExpressionUUID->"18b258f7-345a-364c-a900-6c35fcc7ac98"],
+Cell[801443, 14430, 81, 0, 30, "Text",ExpressionUUID->"f0cf1b6b-3989-d649-8b25-70071cd2c1e5"],
+Cell[801527, 14432, 395, 14, 31, "Input",ExpressionUUID->"e611c6ab-1b42-d047-bf7c-53723e295023"],
+Cell[801925, 14448, 117, 0, 30, "Text",ExpressionUUID->"4faab166-5437-aa4e-85fb-3b0ea6e2dd1b"],
+Cell[802045, 14450, 225, 7, 31, "Input",ExpressionUUID->"5341f5b6-4bf6-1f4e-9a65-34280fad66f2"],
+Cell[802273, 14459, 1273, 44, 33, "Text",ExpressionUUID->"0df48dcc-85df-8d4f-8437-8cee11facd6b"],
 Cell[CellGroupData[{
-Cell[803941, 14504, 1348, 41, 32, "Input",ExpressionUUID->"b02b96e1-1cbc-7c48-be6c-d849fb7cefc8"],
-Cell[805292, 14547, 5448, 141, 104, "Output",ExpressionUUID->"fd1503b6-364c-cd40-afc0-172713bb861a"]
+Cell[803571, 14507, 1348, 41, 32, "Input",ExpressionUUID->"b02b96e1-1cbc-7c48-be6c-d849fb7cefc8"],
+Cell[804922, 14550, 5448, 141, 104, "Output",ExpressionUUID->"fd1503b6-364c-cd40-afc0-172713bb861a"]
 }, Open  ]],
-Cell[810755, 14691, 93, 0, 30, "Text",ExpressionUUID->"8a666b2c-6699-3846-931f-9b8804e079c3"],
+Cell[810385, 14694, 93, 0, 30, "Text",ExpressionUUID->"8a666b2c-6699-3846-931f-9b8804e079c3"],
 Cell[CellGroupData[{
-Cell[810873, 14695, 1182, 36, 31, "Input",ExpressionUUID->"6a081d0f-da8b-7c4c-b297-e102346a820d"],
-Cell[812058, 14733, 3540, 106, 104, "Output",ExpressionUUID->"f4218d4b-aac1-8942-bdd7-a1e5d6206de7"]
+Cell[810503, 14698, 1182, 36, 31, "Input",ExpressionUUID->"6a081d0f-da8b-7c4c-b297-e102346a820d"],
+Cell[811688, 14736, 3540, 106, 104, "Output",ExpressionUUID->"f4218d4b-aac1-8942-bdd7-a1e5d6206de7"]
 }, Open  ]],
-Cell[815613, 14842, 176, 3, 30, "Text",ExpressionUUID->"1c26fc70-66eb-344e-95fd-1a204839693b"],
-Cell[815792, 14847, 1500, 47, 40, "Input",ExpressionUUID->"e8da68cb-57b1-9a48-b835-5c51e4806485"],
+Cell[815243, 14845, 176, 3, 30, "Text",ExpressionUUID->"1c26fc70-66eb-344e-95fd-1a204839693b"],
+Cell[815422, 14850, 1519, 47, 40, "Input",ExpressionUUID->"e8da68cb-57b1-9a48-b835-5c51e4806485",
+ Evaluatable->False],
 Cell[CellGroupData[{
-Cell[817317, 14898, 1270, 34, 130, "Input",ExpressionUUID->"cff3672f-48d9-574c-9fd7-ea7eb5fa8c2c"],
-Cell[818590, 14934, 2028, 66, 98, "Output",ExpressionUUID->"cea0e386-c47d-194a-b32d-2220f180f273"]
+Cell[816966, 14901, 1270, 34, 130, "Input",ExpressionUUID->"cff3672f-48d9-574c-9fd7-ea7eb5fa8c2c"],
+Cell[818239, 14937, 2028, 66, 98, "Output",ExpressionUUID->"cea0e386-c47d-194a-b32d-2220f180f273"]
 }, Open  ]],
-Cell[820633, 15003, 12530, 286, 587, "Input",ExpressionUUID->"c08e531f-291f-954b-9842-884c44368d28",
+Cell[820282, 15006, 19334, 437, 1058, "Input",ExpressionUUID->"c08e531f-291f-954b-9842-884c44368d28",
  InitializationCell->True],
-Cell[833166, 15291, 2799, 72, 228, "Input",ExpressionUUID->"3db24dc2-e246-be46-a705-0beff9f03347",
+Cell[839619, 15445, 5623, 132, 433, "Input",ExpressionUUID->"3db24dc2-e246-be46-a705-0beff9f03347",
+ InitializationCell->True]
+}, Closed]]
+}, Closed]],
+Cell[CellGroupData[{
+Cell[845291, 15583, 114, 0, 47, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
+Cell[845408, 15585, 265, 4, 30, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
+Cell[845676, 15591, 3128, 74, 211, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
+ InitializationCell->True]
+}, Closed]],
+Cell[CellGroupData[{
+Cell[848841, 15670, 92, 0, 47, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
+Cell[CellGroupData[{
+Cell[848958, 15674, 83, 0, 47, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
+Cell[849044, 15676, 12509, 188, 3533, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
+ InitializationCell->True]
+}, Closed]],
+Cell[CellGroupData[{
+Cell[861590, 15869, 84, 0, 33, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
+Cell[861677, 15871, 5619, 147, 467, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
+ InitializationCell->True]
+}, Closed]],
+Cell[CellGroupData[{
+Cell[867333, 16023, 89, 0, 33, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
+Cell[867425, 16025, 31886, 612, 5022, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
+ InitializationCell->True],
+Cell[899314, 16639, 4791, 137, 245, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
+ InitializationCell->True],
+Cell[904108, 16778, 2274, 59, 176, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
  InitializationCell->True]
 }, Closed]]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[836014, 15369, 114, 0, 59, "Section",ExpressionUUID->"a04bd08d-97f4-2f41-aee3-ab35b67317f1"],
-Cell[836131, 15371, 265, 4, 30, "Text",ExpressionUUID->"2b990ae9-a1c7-db4c-adb8-f2224c3b11fb"],
-Cell[836399, 15377, 3128, 74, 211, "Input",ExpressionUUID->"59d77774-1ac5-e04e-b1b5-14db8ab36e19",
- InitializationCell->True]
-}, Closed]],
-Cell[CellGroupData[{
-Cell[839564, 15456, 92, 0, 47, "Section",ExpressionUUID->"341b0c9a-fa10-a448-ada2-5fb82b133f9f"],
-Cell[CellGroupData[{
-Cell[839681, 15460, 83, 0, 47, "Subsection",ExpressionUUID->"6a015de3-3f6c-cb4f-afd8-7df2590aefe3"],
-Cell[839767, 15462, 11723, 176, 3447, "Input",ExpressionUUID->"027d1274-ac3b-2b48-8168-8a5839ce4c25",
- InitializationCell->True]
-}, Closed]],
-Cell[CellGroupData[{
-Cell[851527, 15643, 84, 0, 33, "Subsection",ExpressionUUID->"6f2500dd-121c-204e-8cf7-cd3590ac0bc4"],
-Cell[851614, 15645, 5604, 146, 467, "Input",ExpressionUUID->"ccce65f6-3b66-9142-9ff3-c5928c76926a",
- InitializationCell->True]
-}, Closed]],
-Cell[CellGroupData[{
-Cell[857255, 15796, 89, 0, 33, "Subsection",ExpressionUUID->"82f3c418-ccb8-2548-8022-8216bc3828fd"],
-Cell[857347, 15798, 32126, 617, 5314, "Input",ExpressionUUID->"da37894a-c279-d347-92ad-941fb4bab08d",
- InitializationCell->True],
-Cell[889476, 16417, 4791, 137, 245, "Input",ExpressionUUID->"f5f97ec8-c695-7844-bac4-b0fee40873a3",
- InitializationCell->True],
-Cell[894270, 16556, 2274, 59, 176, "Input",ExpressionUUID->"5dd2270c-46fd-cf45-9ca7-93667490753e",
- InitializationCell->True]
-}, Closed]]
-}, Open  ]],
-Cell[CellGroupData[{
-Cell[896593, 16621, 78, 0, 59, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
-Cell[896674, 16623, 39580, 1200, 1714, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
-Cell[936257, 17825, 236, 6, 25, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
+Cell[906431, 16843, 78, 0, 59, "Section",ExpressionUUID->"9b54adc4-bb9d-564a-a790-8ab7fe28038e"],
+Cell[906512, 16845, 39594, 1200, 1714, "Input",ExpressionUUID->"4fa21511-25fb-364c-9f2e-b429e2d21d03"],
+Cell[946109, 18047, 236, 6, 25, "Input",ExpressionUUID->"d150a306-d6e6-9d40-96d1-740a0f5912ed"]
 }, Open  ]]
 }
 ]

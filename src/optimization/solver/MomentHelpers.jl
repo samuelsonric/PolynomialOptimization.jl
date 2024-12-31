@@ -46,11 +46,13 @@ function to_soc!(indices, values, lens, supports_rotated)
 end
 
 const INFO_PSD = (:psd, :psd_complex, :rotated_quadratic, :quadratic, :nonnegative)
-const INFO_SDD = (:sdd, :sdd_complex)
+const INFO_SDD = (:sdd, :sdd_complex, :sdd_quad_real_diag, :sdd_quad_real, :sdd_quad_complex_diag, :sdd_quad_complex)
 const INFO_DD = (:dd, :dd_complex, :dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_lnorm_real, :dd_lnorm_complex,
     :dd_nonneg_diag, :dd_nonneg, :dd_quad_diag, :dd_quad)
-const INFO_COMPLEX = (:psd_complex, :sdd_complex, :dd_complex, :dd_lnorm_complex_diag, :dd_lnorm_complex)
-const INFO_DIAG = (:dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_nonneg_diag, :dd_quad_diag)
+const INFO_COMPLEX = (:psd_complex, :sdd_complex, :dd_complex, :dd_lnorm_complex_diag, :dd_lnorm_complex,
+    :sdd_quad_complex_diag, :sdd_quad_complex)
+const INFO_DIAG = (:dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_nonneg_diag, :dd_quad_diag, :sdd_quad_real_diag,
+    :sdd_quad_complex_diag)
 
 # generic moment matrix constraint with
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
@@ -311,14 +313,14 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                             add_constr_sdddual_complex!(state, dim, ii, representation.u)
                             return :sdd_complex, addtocounter!(state, counters, Val(:sdd_complex), cl)
                         else
-                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(true), counters)
+                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, true, counters)
                         end
                     else
                         if supports_sdd(state)
                             add_constr_sdddual!(state, dim, ii, representation.u)
                             return :sdd, addtocounter!(state, counters, Val(:sdd), cl)
                         else
-                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, Val(false), counters)
+                            return moment_add_sdddual_transform!(state, dim, ii, representation.u, false, counters)
                         end
                     end
                 end
@@ -584,8 +586,7 @@ end
 # row < col (strict upper triangle), this corresponds to a free slack variable required due to symmetry.
 
 # For a general U and complex-valued data, we then have for the column j:
-# {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) slackᵣ(row, col) +
-#                                     Im(U[j, col] Ū[j, row]) slackᵢ(row, col)),
+# {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) slackᵣ(row, col) + Im(U[j, col] Ū[j, row]) slackᵢ(row, col)),
 #  slackᵣ(i, j), slackᵢ(i, j) for i ∈ 1, ..., j -1,
 #  ∑_{col = 1}^dim ∑_{row = col}^dim ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) slackᵣ(row, col) -
 #                                     (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) slackᵢ(row, col)) - slackᵣ(j, i),
@@ -1112,10 +1113,8 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         #region Below diagonal
         for i in j+1:dim
             # first the diagonal, which is our col diagonal plus the row diagonal that we must recompute.
-            slack = 1
             for col in 1:dim
                 unsafe_push!(values, abs2(u[j, col]) + abs2(u[i, col]))
-                slack += 1
                 for row in col+1:dim
                     uval = u[j, col] * conj(u[j, row]) + u[i, col] * conj(u[i, row])
                     unsafe_push!(values, real(uval), imag(uval))
@@ -1123,11 +1122,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
             end
             # then every off-diagonal
             @twice impart true begin
-                slack = 1
                 for col in 1:dim
                     uval = 2u[i, col] * conj(u[j, col])
                     unsafe_push!(values, impart ? imag(uval) : real(uval))
-                    slack += 1
                     for row in col+1:dim
                         @twice imdata true begin
                             uval = u[i, row] * conj(u[j, col])
@@ -1139,7 +1136,6 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
                                 thisuval = impart ? imag(uval) : real(uval)
                             end
                             unsafe_push!(values, thisuval)
-                            slack += 1
                         end
                     end
                 end
@@ -1172,294 +1168,215 @@ function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data:
 end
 #endregion
 
-function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, ::Val{complex},
-    counters::Counters) where {T,V,complex}
-    diagu = u isa UniformScaling || u isa Diagonal # we just ignore uniform scaling completely as if it were 𝟙
-    # See the comment in add_constr_dddual!. Here, the fallback implementation is done in terms of rotated quadratic cones due
-    # to the relationship of SDD matrices with factor-width-2 matrices.
-    # We must take care of scaling the off-diagonal data; as we didn't know about the rotation, this could not have been done
-    # before. The rotated quadratic cone is 2x₁ x₂ ≥ ∑ᵢ xᵢ², so we'll scale the x₃ by √2 (i.e. multiply all the coefficients
-    # that use x₃ by 1/√2) to make this equivalent to [x₁ x₃; x₃ x₂] ⪰ 0. However, since only one triangle is considered, we
-    # also need to scale the coefficients by 2, so in total we end up with √2.
+#region Rewrite the SDD cone in terms of other cones.
 
-    # For a general U and complex-valued data, we have the following rotated quadratic constraints for the column j and the row
-    # i > j:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[j, col] Ū[j, row]) dataᵣ(row, col) +
-    #                                                        Im(U[j, col] Ū[j, row]) dataᵢ(row, col)),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) (Re(U[i, col] Ū[i, row]) dataᵣ(row, col) +
-    #                                                        Im(U[i, col] Ū[i, row]) dataᵢ(row, col)),
-    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) -
-    #                                        (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col)),
-    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) dataᵣ(row, col) +
-    #                                        (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) dataᵢ(row, col))
-    # } ∈ ℛ𝒬₄
+# See the comment for the diagonally-dominant representation. Here, the fallback implementation is done in terms of rotated
+# quadratic cones due to the relationship of SDD matrices with factor-width-2 matrices.
+# We must take care of scaling the off-diagonal data; as we didn't know about the rotation, this could not have been done
+# before. The rotated quadratic cone is 2x₁ x₂ ≥ ∑ᵢ xᵢ², so we'll scale the x₃ by √2 (i.e. multiply all the coefficients
+# that use x₃ by 1/√2) to make this equivalent to [x₁ x₃; x₃ x₂] ⪰ 0. While only one triangle is considered, we the scaling by
+# 2 is already done in the rewriting with slacks.
 
-    # Let's specialize the formula. If U is diagonal:
-    # {|U[j, j]|² dataᵣ(j, j),
-    #  |U[i, i]|² dataᵣ(i, i),
-    #  √2 (Re(U[i, i] Ū[j, j]) dataᵣ(i, j) - Im(U[i, i] Ū[j, j]) dataᵢ(i, j)),
-    #  √2 (Im(U[i, i] Ū[j, j]) dataᵣ(i, j) + Re(U[i, i] Ū[j, j]) dataᵢ(i, j))
-    # } ∈ ℛ𝒬₄
+# For a general U and complex-valued data, we have the following rotated quadratic constraints for the column j and the row
+# i > j:
+# {∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[j, col] Ū[j, row]) slackᵣ(row, col) + Im(U[j, col] Ū[j, row]) slackᵢ(row, col)),
+#  ∑_{col = 1}^dim ∑_{row = col}^dim (Re(U[i, col] Ū[i, row]) slackᵣ(row, col) + Im(U[i, col] Ū[i, row]) slackᵢ(row, col)),
+#  1/√2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Re(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) slackᵣ(row, col) -
+#                                          (Im(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) slackᵢ(row, col)),
+#  1/√2 ∑_{col = 1}^dim ∑_{row = col}^dim ((Im(U[i, row] Ū[j, col] + U[i, col] Ū[j, row]) slackᵣ(row, col) +
+#                                          (Re(U[i, row] Ū[j, col] - U[i, col] Ū[j, row]) slackᵢ(row, col))
+# } ∈ ℛ𝒬₄
 
-    # If everything is instead real-valued:
-    # {∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[j, col] U[j, row] data(row, col),
-    #  ∑_{col = 1}^dim ∑_{row = col}^dim (2 - δ_{row, col}) U[i, col] U[i, row] data(row, col),
-    #  √2 ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) data(row, col)
-    # } ∈ ℛ𝒬₃
+# Let's specialize the formula. If U is diagonal:
+# {|U[j, j]|² slackᵣ(j, j),
+#  |U[i, i]|² slackᵣ(i, i),
+#  1/√2 (Re(U[i, i] Ū[j, j]) slackᵣ(i, j) - Im(U[i, i] Ū[j, j]) slackᵢ(i, j)),
+#  1/√2 (Im(U[i, i] Ū[j, j]) slackᵣ(i, j) + Re(U[i, i] Ū[j, j]) slackᵢ(i, j))
+# } ∈ ℛ𝒬₄
 
-    # If everything is real and U is diagonal:
-    # {U[j, j]² data(j, j),
-    #  U[i, i]² data(i, i),
-    #  √2 U[i, i] U[j, j] data(i, j)
-    # } ∈ ℛ𝒬₃
-    maxsize = maximum(Base.index_lengths(data), init=0) # how large is one dataᵢ at most?
-    scaling = sqrt(V(2))
+# If everything is instead real-valued:
+# {∑_{col = 1}^dim ∑_{row = col}^dim U[j, col] U[j, row] slack(row, col),
+#  ∑_{col = 1}^dim ∑_{row = col}^dim U[i, col] U[i, row] slack(row, col),
+#  1/√2 ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] U[j, col] + U[i, col] U[j, row]) slack(row, col)
+# } ∈ ℛ𝒬₃
 
-    if complex && (!(Base.IteratorEltype(u) isa Base.HasEltype) || eltype(u) <: Complex)
-        maxsize *= 2
-    end
-    if !diagu
-        maxsize *= trisize(dim) # how large are all the dataᵢ that might be used in a single cell at most?
-    end
+# If everything is real and U is diagonal:
+# {U[j, j]² slack(j, j),
+#  U[i, i]² slack(i, i),
+#  1/√2 U[i, i] U[j, j] slack(i, j)
+# } ∈ ℛ𝒬₃
+
+# The transformation is diagonal
+function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Integer, data::IndvalsIterator{T,V},
+    u::DiagonalTransform, counters::Counters) where {T,V,complex}
     have_rot = supports_rotated_quadratic(state)
-    indices = FastVec{T}(buffer=4maxsize)
+    scaling = inv(have_rot ? sqrt(V(2)) : V(2))
+    indices = Vector{T}(undef, complex ? (have_rot ? 6 : 8) : (have_rot ? 3 : 5))
+    lens = complex ? (have_rot ? [1, 1, 2, 2] : 2) : (have_rot ? 1 : [2, 2, 1])
+    slacks = add_var_slack!(state, complex ? dim^2 : trisize(dim))
     values = similar(indices, V)
-    lens = FastVec{Int}(buffer=complex ? 4 : 3)
-    if diagu
-        idx = 1
-        dataidx = 1
-        diagdataidxs = Vector{Int}(undef, dim)
-        @inbounds diagdataidxs[1] = 1
-        @inbounds for j in 1:dim-1
-            x = diagdataidxs[j]
-            for _ in 0:(complex ? 2(dim-j) : dim-j)
-                x += Base.index_lengths(data)[idx]
-                idx += 1
-            end
-            diagdataidxs[j+1] = x
+
+    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+
+    rowdiagslack = 1
+    offstart = (have_rot ? 3 : 5)
+    @inbounds for j in 1:dim-1
+        lowerslack = rowdiagslack +1
+        urowval = u isa Diagonal ? u[j, j] : one(V)
+        #region First item
+        indices[1] = slacks[rowdiagslack]
+        if have_rot
+            values[1] = abs2(urowval)
+        else
+            indices[3] = slacks[rowdiagslack]
+            urowvalsq = abs2(urowval)
         end
-        idx = 1
+        rowdiagslack += (complex ? 2(dim - j) : dim - j) +1
+        #endregion
+        srowdiag = rowdiagslack
+        for i in j+1:dim
+            ucolval = u isa Diagonal ? u[i, i] : one(V)
+            #region Second item
+            indices[2] = slacks[srowdiag]
+            if have_rot
+                values[2] = abs2(ucolval)
+            else
+                indices[4] = slacks[srowdiag]
+                ucolvalsq = abs2(ucolval)
+                values[3] = values[1] = urowvalsq
+                values[4] = -(values[2] = ucolvalsq)
+            end
+            srowdiag += (complex ? 2(dim - i) : dim - i) +1
+            #endregion
+            #region Third and fourth item
+            uval = ucolval * conj(urowval) * scaling
+            if complex
+                indices[offstart+2] = indices[offstart+0] = slacks[lowerslack]
+                indices[offstart+3] = indices[offstart+1] = slacks[lowerslack+1]
+                values[offstart+0] = real(uval)
+                values[offstart+1] = -imag(uval)
+                values[offstart+2] = imag(uval)
+                values[offstart+3] = real(uval)
+                lowerslack += 2
+            else
+                indices[offstart] = slacks[lowerslack]
+                values[offstart] = uval
+                lowerslack += 1
+            end
+            #endregion
+            @inline (have_rot ? add_constr_rotated_quadratic! : add_constr_quadratic!)(
+                state, IndvalsIterator(unsafe, indices, values, lens)
+            )
+        end
+    end
+    return (complex ? :sdd_quad_complex_complex : :sdd_quad_real_diag),
+           (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic),
+                                 complex ? 4 : 3, trisize(dim)))
+end
+
+function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Integer, data::IndvalsIterator{T,V}, u,
+    counters::Counters) where {T,V,complex}
+    have_rot = supports_rotated_quadratic(state)
+    scaling = inv(have_rot ? sqrt(V(2)) : V(2))
+    total = complex ? dim^2 : trisize(dim)
+    indices = FastVec{T}(buffer=complex ? 4total : 3total)
+    slacks = add_var_slack!(state, total)
+    values = similar(indices, V)
+
+    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+
+    for _ in 1:(complex ? 4 : 3)
+        unsafe_append!(indices, slacks)
+    end
+    if !have_rot
+        first_values = FastVec{V}(buffer=total)
+        resize!(values, total)
+    else
+        first_values = values
     end
     @inbounds for j in 1:dim-1
         #region First item
-        if diagu
-            len = Int(Base.index_lengths(data)[idx])
-            r = dataidx:dataidx+len-1
-            dataidx += len
-            idx += 1
-            unsafe_append!(indices, @view(rowvals(data)[r]))
-            unsafe_append!(values, @view(nonzeros(data)[r]))
-            u isa Diagonal && rmul!(values, abs2(u[j, j]))
-        else
-            idx = 1
-            dataidx = 1
-            for col in 1:dim, row in col:dim
+        @inbounds for col in 1:dim
+            unsafe_push!(first_values, abs2(u[j, col]))
+            for row in col+1:dim
                 uval = u[j, col] * conj(u[j, row])
-                if row != col
-                    uval *= V(2)
-                end
-                @twice impart (complex && row != col) begin
-                    searchview = @view(indices[:])
-                    len = Int(Base.index_lengths(data)[idx])
-                    r = dataidx:dataidx+len-1
-                    dataidx += len
-                    idx += 1
-                    thisuval = impart ? imag(uval) : real(uval)
-                    iszero(thisuval) || for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
-                        dupidx = findfirst(isequal(ind), searchview)
-                        if isnothing(dupidx)
-                            unsafe_push!(indices, ind)
-                            unsafe_push!(values, thisuval * val)
-                        else
-                            values[dupidx] += thisuval * val
-                        end
-                    end
+                if complex
+                    unsafe_push!(first_values, real(uval), imag(uval))
+                else
+                    unsafe_push!(first_values, uval)
                 end
             end
         end
-        firstlen = length(indices)
-        unsafe_push!(lens, firstlen)
         #endregion
-        if diagu
-            otheridx = idx + (complex ? 2(dim - j) : dim-j)
-        end
         for i in j+1:dim
             #region Second item
-            if diagu
-                len = Int(Base.index_lengths(data)[otheridx])
-                r = diagdataidxs[i]:diagdataidxs[i]+len-1
-                otheridx += (complex ? 2(dim - i)+1 : dim-i+1)
-                unsafe_append!(indices, @view(rowvals(data)[r]))
-                unsafe_append!(values, @view(nonzeros(data)[r]))
-                u isa Diagonal && rmul!(@view(values[end-len+1:end]), abs2(u[i, i]))
-            else
-                idx = 1
-                dataidx = 1
-                for col in 1:dim, row in col:dim
+            for col in 1:dim
+                unsafe_push!(values, abs2(u[i, col]))
+                for row in col+1:dim
                     uval = u[i, col] * conj(u[i, row])
-                    if row != col
-                        uval *= V(2)
-                    end
-                    @twice impart (complex && row != col) begin
-                        searchview = @view(indices[firstlen+1:end])
-                        len = Int(Base.index_lengths(data)[idx])
-                        r = dataidx:dataidx+len-1
-                        dataidx += len
-                        idx += 1
-                        thisuval = impart ? imag(uval) : real(uval)
-                        iszero(thisuval) || for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
-                            dupidx = findfirst(isequal(ind), searchview)
-                            if isnothing(dupidx)
-                                unsafe_push!(indices, ind)
-                                unsafe_push!(values, thisuval * val)
-                            else
-                                values[firstlen+dupidx] += thisuval * val
-                            end
-                        end
+                    if complex
+                        unsafe_push!(values, real(uval), imag(uval))
+                    else
+                        unsafe_push!(values, uval)
                     end
                 end
             end
-            unsafe_push!(lens, length(indices) - firstlen)
             #endregion
             #region Third and fourth item
-            if diagu
-                if u isa Diagonal
-                    uval = u[i, i] * conj(u[j, j]) * scaling
-                end
-                @twice impart complex begin
-                    startidx = length(indices) +1
-                    len = Int(Base.index_lengths(data)[idx])
-                    r = dataidx:dataidx+len-1
-                    if u isa Diagonal
-                        if !iszero(real(uval))
-                            unsafe_append!(indices, @view(rowvals(data)[r]))
-                            unsafe_append!(values, @view(nonzeros(data)[r]))
-                            isone(real(uval)) || rmul!(@view(values[startidx:end]), real(uval))
-                        end
-                        if complex && !iszero(imag(uval))
-                            let lenalt=Int(Base.index_lengths(data)[impart ? idx-1 : idx+1]),
-                                dataidx=impart ? dataidx - lenalt : dataidx + len, r=dataidx:dataidx+lenalt-1,
-                                uimval=impart ? imag(uval) : -imag(uval)
-                                searchrange = startidx:length(indices)
-                                searchview = @view(indices[searchrange])
-                                for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
-                                    dupidx = findfirst(isequal(ind), searchview)
-                                    if isnothing(dupidx)
-                                        unsafe_push!(indices, ind)
-                                        unsafe_push!(values, uimval * val)
-                                    else
-                                        values[first(searchrange)+dupidx-1] += uimval * val
-                                    end
-                                end
-                            end
-                        end
-                    else
-                        unsafe_append!(indices, @view(rowvals(data)[r]))
-                        unsafe_append!(values, @view(nonzeros(data)[r]))
-                        rmul!(@view(values[end-len+1:end]), scaling)
-                    end
-                    iszero(length(indices) - startidx +1) || unsafe_push!(lens, length(indices) - startidx +1)
-                    dataidx += len
-                    idx += 1
-                end
-            else
-                @twice impart complex begin
-                    startidx = length(indices) +1
-                    idx = 1
-                    dataidx = 1
-                    for col in 1:dim, row in col:dim
-                        @twice imdata (complex && row != col) begin
+            @twice impart complex begin
+                for col in 1:dim
+                    uval = 2u[i, col] * conj(u[j, col])
+                    unsafe_push!(values, (impart ? imag(uval) : real(uval)) * scaling)
+                    for row in col+1:dim
+                        @twice imdata complex begin
                             uval = u[i, row] * conj(u[j, col])
-                            searchview = @view(indices[startidx:end])
                             if imdata
                                 uval -= u[i, col] * conj(u[j, row])
                                 thisuval = impart ? real(uval) : -imag(uval)
                             else
-                                if row != col
-                                    uval += u[i, col] * conj(u[j, row])
-                                end
+                                uval += u[i, col] * conj(u[j, row])
                                 thisuval = impart ? imag(uval) : real(uval)
                             end
-                            thisuval *= scaling
-                            len = Int(Base.index_lengths(data)[idx])
-                            r = dataidx:dataidx+len-1
-                            dataidx += len
-                            idx += 1
-                            if !iszero(thisuval)
-                                for (ind, val) in zip(@view(rowvals(data)[r]), @view(nonzeros(data)[r]))
-                                    dupidx = findfirst(isequal(ind), searchview)
-                                    if isnothing(dupidx)
-                                        unsafe_push!(indices, ind)
-                                        unsafe_push!(values, thisuval * val)
-                                    else
-                                        values[dupidx+startidx-1] += thisuval * val
-                                    end
-                                end
-                            end
+                            unsafe_push!(values, thisuval * scaling)
                         end
                     end
-                    iszero(length(indices) - startidx +1) || unsafe_push!(lens, length(indices) - startidx +1)
                 end
             end
             #endregion
-            # Some possible reductions to simpler cones:
-            rg₁ = 1:lens[1]
-            rg₂ = lens[1]+1:lens[1]+lens[2]
-            @views if length(lens) == 2 || all(iszero, values[last(rg₂)+1:end])
-                @label lastzero
-                # 2x₁x₂ ≥ 0, x₁, x₂ ≥ 0
-                has₁ = !iszero(lens[1]) && any(!iszero, values[rg₁])
-                has₂ = !iszero(lens[2]) && any(!iszero, values[rg₂])
-                if has₁ || has₂
-                    if has₁ && has₂
-                        # x₁, x₂ ≥ 0
-                        add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lens))
-                    else
-                        # x₁ ≥ 0 or x₂ ≥ 0
-                        add_constr_nonnegative!(state, Indvals(indices, values))
-                    end
-                # else 0 ≥ 0
-                end
+            if have_rot
+                @inline add_constr_rotated_quadratic!(state, IndvalsIterator(unsafe, indices, values, total))
             else
-                zero₁ = iszero(lens[1]) && all(iszero, values[rg₁])
-                zero₂ = iszero(lens[2]) && all(iszero, values[rg₂])
-                if zero₁ || zero₂
-                    # 0 ≥ x₃² + x₄², x₁, x₂ ≥ 0
-                    if zero₁
-                        # x₂ ≥ 0
-                        add_constr_nonnegative!(state, Indvals(indices[rg₂], values[rg₂]))
-                    else
-                        # x₁ ≥ 0
-                        add_constr_nonnegative!(state, Indvals(indices[rg₁], values[rg₁]))
-                    end
-                    # x₃ = x₄ = 0
-                    rg₃ = last(rg₂)+1:last(rg₂)+lens[3]
-                    zero₃ = all(iszero, values[rg₃])
-                    zero₄ = length(lens) < 4 || all(iszero, values[last(rg₃)+1:end])
-                    zero₃ && zero₄ && @goto lastzero
-                    prep = add_constr_fix_prepare!(state, !zero₃ + !zero₄)
-                    zero₃ ||
-                        (prep = @views add_constr_fix!(state, prep, Indvals(indices[rg₃], values[rg₃]), zero(V)))
-                    zero₄ ||
-                        (prep = @views add_constr_fix!(state, prep, Indvals(indices[last(rg₃)+1:end], values[last(rg₃)+1:end]),
-                            zero(V)))
-                    add_constr_fix_finalize!(state, prep)
-                else
-                    # full case
-                    (have_rot ? add_constr_rotated_quadratic! : add_constr_quadratic!)(state, to_soc!(indices, values, lens, have_rot))
+                # This is a more efficient version of to_soc!, as we already know exactly all our duplicates: all entries have
+                # exactly the same indices, in the same order.
+                for i in 1:total
+                    values[i], values[i+total] = (first_values[i] + values[i+total], first_values[i] - values[i+total])
                 end
+                @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, total))
             end
-            # we can keep the first element
-            resize!(indices, firstlen)
-            resize!(values, firstlen)
-            resize!(lens, 1)
+            resize!(values, total)
         end
-        empty!(indices)
-        empty!(values)
-        empty!(lens)
+        empty!(first_values)
     end
-    return
+    return (complex ? :sdd_quad_complex : :sdd_quad_real),
+           (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic), total, trisize(dim)))
 end
+
+function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
+    counters::Counters) where {T,V}
+    !complex && (Base.IteratorEltype(u) isa Base.HasEltype) && eltype(u) <: Complex &&
+        throw(MethodError(moment_add_sdddual_transform!, (state, dim, data, u, complex)))
+    @assert(dim > 2)
+
+    return sdddual_transform_cone!(
+        state,
+        Val(complex),
+        dim,
+        data,
+        u,
+        counters
+    )
+end
+#endregion
 
 """
     moment_add_matrix!(state::AbstractSolver, grouping::SimpleMonomialVector,
