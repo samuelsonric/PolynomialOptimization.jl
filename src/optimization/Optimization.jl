@@ -10,6 +10,7 @@ using .Solver: default_solver_method, monomial_count, RepresentationMethod, Repr
     RepresentationSDD, RepresentationNondiagI
 import .Solver: poly_optimize
 using StandardPacked: SPMatrix, SPMatrixUpper, SPMatrixLower
+import PositiveFactorizations
 
 _val_of(::Val{S}) where {S} = S
 
@@ -111,40 +112,31 @@ end
 
 function (i::IterateRepresentation)((type, index, grouping), _, oldrep::Type{<:RepresentationMethod}, oldsos)
     oldrep <: RepresentationPSD && return RepresentationPSD()
-    # We need to perfom a Cholesky decomposition in the form oldsos = Uᵀ * U, where U is upper triangular.
-    # We have multiple issues here:
-    # - oldsos might be a Hermitian matrix with the lower triangle specified, so cholesky will return the L * Lᵀ form.
-    # - oldsos might be a SPMatrix, so that the pptrf is called, which is numerically less stable.
-    # - oldsos might have tiny negative eigenvalues, strictly speaking making the Cholesky decomposition undefined.
-    # Individually, these issues are unproblematic; just take the adjoint, don't worry about the instability, disable the
-    # check. However, combined, cholesky(oldsos, check=false).U can lead to extremely bad quality, even to worsening from
-    # iteration to iteration. Therefore, we must do the more laborious thing: We make sure we can apply the more stable full
-    # storage methods, natively use the upper triangle. For the negative eigenvalues, we really just ignore them.
+    # We need to perfom a Cholesky decomposition in the form oldsos = Uᵀ * U, where U is upper triangular. However, oldsos
+    # will have tiny negative eigenvalues as numerical artifacts of the solver. Our regular BLAS cholesky with disabled checks
+    # may yield results that are good for improvement nevertheless; but it might instead also stall or even be detrimental.
+    # So we'll use are more stable version that is still quite efficient, which is the implementation in
+    # PositiveFactorizations. While success is not guaranteed any more, as Uᵀ * U might not hold and therefore the convergence
+    # proof fails, it is still quite likely. And in fact, nothing that we could do (even truncating the negative eigenvalues
+    # using an eigendecomposition, then Choleskying, very expensive...) would give this guarantee, so why not.
+    # To have it actually efficient, we unwrap the symmetric structure, although it would work on any AbstractMatrix.
     if oldsos isa (Symmetric{T,Matrix{T}} where {T<:Real}) || oldsos isa (Hermitian{T,Matrix{T}} where {T})
-        if oldsos.uplo == 'U'
-            fullm = Hermitian(parent(oldsos), :U) # just for type stability
-        else
-            fullm = Hermitian(LinearAlgebra.copytri!(parent(oldsos), 'L', true), :U)
-        end
+        fullm = LinearAlgebra.copytri!(parent(oldsos), oldsos.uplo, true)
+        inplace = false
     elseif oldsos isa Matrix
-        fullm = Hermitian(oldsos, :U)
+        fullm = oldsos
+        inplace = false
     elseif oldsos isa SPMatrixUpper
-        fullm = Hermitian(convert(Matrix{eltype(oldsos)}, oldsos), :U)
+        fullm = LinearAlgebra.copytri!(convert(Matrix{eltype(oldsos)}, oldsos), 'U', true)
+        inplace = true
     elseif oldsos isa SPMatrixLower
-        fullm = Hermitian(LinearAlgebra.copytri!(convert(Matrix{eltype(oldsos)}, oldsos), 'L', true), :U)
+        fullm = LinearAlgebra.copytri!(convert(Matrix{eltype(oldsos)}, oldsos), 'L', true)
+        inplace = true
     else
-        fullm = Hermitian(Matrix(oldsos)::Matrix{eltype(oldsos)}, :U)
+        fullm = Matrix(oldsos)::Matrix{eltype(oldsos)}
+        inplace = true
     end
-    newrot = cholesky(fullm, check=false).U
-    if oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} && !(newrot isa Union{<:UniformScaling,<:Diagonal})
-        # we just force it to be diagonal, but let's issue a warning once
-        if !warned_diagonal[]
-            @warn("The reoptimization was done enforcing a diagonal rotation. This may lead to suboptimal result or numerical \
-                   problems. Use a non-diagonal rotation in the initial optimization (e.g., RepresentationNondiagI) to allow \
-                   for arbitrary rotations. This warning will only be shown once in the current Julia session.")
-            warned_diagonal[] = true
-        end
-        return oldrep(Diagonal(newrot))
+    newrot = (inplace ? cholesky! : cholesky)(PositiveFactorizations.Positive, fullm).U
     if i.keep_diagonal && oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} &&
         !(newrot isa Union{<:UniformScaling,<:Diagonal})
         return oldrep(Diagonal(newrot)) # well, maybe we should care...
