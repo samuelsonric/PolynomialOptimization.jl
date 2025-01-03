@@ -625,6 +625,28 @@ end
 # now implicit. Translated into the moment domain, we get a dim-dimensional nonnegative cone and trisize(dim -1) norm cones.
 # The first entry in the norm cone is the sum of the nonnegative variables corresponding to the current row and column.
 
+# If we don't have a full matrix u, but also not diagonal, we'll specialize two other cases: the triangular ones (and the upper
+# triangular is the important one for our default Cholesky update strategy). This is not as sophisticated as in the diagonal
+# case, we don't adjust the creation of slack variables etc., but we suppress adding unnecessary zeros.
+# Therefore, the loops will always be col in 1:dim, row in col:dim, and these methods should return whether the result is known
+# to be zero, already knowing these bounds.
+# ∑_{col = 1}^dim ∑_{row = col}^dim U[j, col] Ū[j, row]
+dddual_transform_inrange(::Any, j, col) = true
+dddual_transform_inrange(::Val{:diag}, ::Any, j, row) = true
+# ↪ TRIU: j ≤ col ≤ row ≤ dim
+dddual_transform_inrange(::UpperOrUnitUpperTriangular, j, col) = col ≥ j
+dddual_transform_inrange(::Val{:diag}, ::UpperOrUnitUpperTriangular, j, row) = true
+# ↪ TRIL: 1 ≤ col ≤ j, col ≤ row ≤ j
+dddual_transform_inrange(::LowerOrUnitLowerTriangular, j, col) = col ≤ j
+dddual_transform_inrange(::Val{:diag}, ::LowerOrUnitLowerTriangular, j, row) = row ≤ j
+
+# ∑_{col = 1}^dim ∑_{row = col}^dim (U[i, row] Ū[j, col] + U[i, col] Ū[j, row])
+dddual_transform_inrange(::Val{:offdiag}, ::Any, i, row) = true
+# ↪ TRIU: j ≤ col ≤ dim, max(col, i) ≤ row ≤ dim
+dddual_transform_inrange(::Val{:offdiag}, ::UpperOrUnitUpperTriangular, i, row) = row ≥ i
+# ↪ TRIL: 1 ≤ col ≤ j, col ≤ row ≤ i
+dddual_transform_inrange(::Val{:offdiag}, ::LowerOrUnitLowerTriangular, i, row) = row ≤ i
+
 # Note: We always add the items and don't check whether the value is zero, potentially reducing the sparsity pattern (only for
 # diagonal u, we respect it). This is so that the solver data is always at the same position and re-optimizations with a
 # different u will not change the structure of the solver problem (of course, we'd have to write support for re-using the
@@ -788,16 +810,24 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         #region Diagonal (naturally is the first item in the L order, and must be the first in the ℓ_∞ cone)
         lowerslack = 1
         for col in 1:dim
-            unsafe_push!(indices, slacks[lowerslack])
-            unsafe_push!(values, abs2(u[j, col]))
+            if !dddual_transform_inrange(u, j, col)
+                lowerslack += 1 + (complex ? 2 : 1) * (dim - col)
+                continue
+            end
+            if dddual_transform_inrange(Val(:diag), u, j, col)
+                unsafe_push!(indices, slacks[lowerslack])
+                unsafe_push!(values, abs2(u[j, col]))
+            end
             lowerslack += 1
             for row in col+1:dim
-                uval = u[j, col] * conj(u[j, row])
-                @twice imdata complex begin
-                    unsafe_push!(indices, slacks[lowerslack+imdata])
-                    unsafe_push!(values, imdata ? imag(uval) : real(uval))
+                if dddual_transform_inrange(Val(:diag), u, j, row)
+                    uval = u[j, col] * conj(u[j, row])
+                    @twice imdata complex begin
+                        unsafe_push!(indices, slacks[lowerslack+imdata])
+                        unsafe_push!(values, imdata ? imag(uval) : real(uval))
+                    end
                 end
-                lowerslack += (complex ? 2 : 1)
+                lowerslack += complex ? 2 : 1
             end
         end
         unsafe_push!(lens, length(indices))
@@ -816,24 +846,32 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
                 beforeidx = length(indices)
                 slack = 1
                 for col in 1:dim
-                    uval = 2u[i, col] * conj(u[j, col])
-                    unsafe_push!(indices, slacks[slack])
-                    unsafe_push!(values, impart ? imag(uval) : real(uval))
+                    if !dddual_transform_inrange(u, j, col)
+                        slack += 1 + (complex ? 2 : 1) * (dim - col)
+                        continue
+                    end
+                    if dddual_transform_inrange(Val(:offdiag), u, j, col)
+                        uval = 2u[i, col] * conj(u[j, col])
+                        unsafe_push!(indices, slacks[slack])
+                        unsafe_push!(values, impart ? imag(uval) : real(uval))
+                    end
                     slack += 1
                     for row in col+1:dim
-                        @twice imdata complex begin
+                        if dddual_transform_inrange(Val(:offdiag), u, j, row)
                             uval = u[i, row] * conj(u[j, col])
-                            if imdata
-                                uval -= u[i, col] * conj(u[j, row])
-                                thisuval = impart ? real(uval) : -imag(uval)
-                            else
-                                uval += u[i, col] * conj(u[j, row])
-                                thisuval = impart ? imag(uval) : real(uval)
+                            @twice imdata complex begin
+                                if imdata
+                                    uval -= u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? real(uval) : -imag(uval)
+                                else
+                                    uval += u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? imag(uval) : real(uval)
+                                end
+                                unsafe_push!(indices, slacks[slack+imdata])
+                                unsafe_push!(values, thisuval)
                             end
-                            unsafe_push!(indices, slacks[slack])
-                            unsafe_push!(values, thisuval)
-                            slack += 1
                         end
+                        slack += complex ? 2 : 1
                     end
                 end
                 unsafe_push!(indices, slacks[sbelow])
@@ -927,43 +965,52 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     indices = FastVec{T}(buffer=2 * (ts +1) * (dim -1))
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
+    lens = FastVec{Int}(buffer=2 * (dim -1))
 
     valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
 
     upperslack = ts +1
     @inbounds for j in 1:dim
         #region Above diagonal (slacks)
-        lowerslack = 1
-        for col in 1:dim
-            unsafe_push!(indices, slacks[lowerslack])
-            unsafe_push!(values, u[j, col]^2)
-            lowerslack += 1
-            for row in col+1:dim
-                unsafe_push!(indices, slacks[lowerslack])
-                unsafe_push!(values, u[j, col] * u[j, row])
+        if !isone(j)
+            lowerslack = 1
+            for col in 1:dim
+                if !dddual_transform_inrange(u, j, col)
+                    lowerslack += dim - col +1
+                    continue
+                end
+                if dddual_transform_inrange(Val(:diag), u, j, col)
+                    unsafe_push!(indices, slacks[lowerslack])
+                    unsafe_push!(values, u[j, col]^2)
+                end
                 lowerslack += 1
+                for row in col+1:dim
+                    if dddual_transform_inrange(Val(:diag), u, j, row)
+                        unsafe_push!(indices, slacks[lowerslack])
+                        unsafe_push!(values, u[j, col] * u[j, row])
+                    end
+                    lowerslack += 1
+                end
             end
-        end
-        diagvalues = @view(values[1:lowerslack-1]) # these are the isolated values for the diagonal u, we can use them to save
-                                                   # some re-computations. But beware: if j = 1, there is no slack, so we
-                                                   # should not even have inserted the values in this way here! We need to
-                                                   # account for this later. [Note 1:lowerslack-1 = begin:end]
-        diagslacks = @view(slacks[1:lowerslack-1])
-        unsafe_push!(indices, slacks[upperslack]) # for j = 1, these are also invalid
-        unsafe_push!(values, -one(V)) # this should be 1 on the upper triangle, but we need it to be -1 for the lower
-        unsafe_append!(indices, diagslacks)
-        unsafe_append!(values, diagvalues)
-        unsafe_push!(indices, slacks[upperslack])
-        unsafe_push!(values, one(V)) # and this should be -1
-        for i in 1:j-2
-            unsafe_append!(indices, diagslacks)
-            unsafe_append!(values, diagvalues)
-            unsafe_push!(indices, slacks[upperslack+i])
+            diagvalues = @view(values[:])
+            diagslacks = @view(slacks[1:length(indices)])
+            unsafe_push!(indices, slacks[upperslack])
             unsafe_push!(values, one(V))
+            unsafe_append!(lens, Iterators.repeated(length(indices), 2 * (j -1)))
             unsafe_append!(indices, diagslacks)
             unsafe_append!(values, diagvalues)
-            unsafe_push!(indices, slacks[upperslack+i])
+            unsafe_push!(indices, slacks[upperslack])
             unsafe_push!(values, -one(V))
+            for i in 1:j-2
+                unsafe_append!(indices, diagslacks)
+                unsafe_append!(values, diagvalues)
+                unsafe_push!(indices, slacks[upperslack+i])
+                unsafe_push!(values, one(V))
+                unsafe_append!(indices, diagslacks)
+                unsafe_append!(values, diagvalues)
+                unsafe_push!(indices, slacks[upperslack+i])
+                unsafe_push!(values, -one(V))
+            end
         end
         #endregion
         #region Below diagonal
@@ -976,55 +1023,43 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         if isone(j)
             sbelow += j
         end
-        for i in (isone(j) ? 3 : j +1):dim
+        for i in j+1:dim
             @twice negative true begin
                 slack = 1
                 for col in 1:dim
-                    unsafe_push!(indices, slacks[slack])
-                    unsafe_push!(values, diagvalues[slack] + (negative ? -2 : 2) * u[i, col] * u[j, col])
+                    if !dddual_transform_inrange(u, j, col)
+                        slack += dim - col +1
+                        continue
+                    end
+                    if dddual_transform_inrange(Val(:diag), u, j, col) ||
+                        dddual_transform_inrange(Val(:offdiag), u, i, col)
+                        unsafe_push!(indices, slacks[slack])
+                        unsafe_push!(values, u[j, col]^2 + (negative ? -2 : 2) * u[i, col] * u[j, col])
+                    end
                     slack += 1
                     for row in col+1:dim
-                        uval = u[i, row] * u[j, col] + u[i, col] * u[j, row]
-                        unsafe_push!(indices, slacks[slack])
-                        unsafe_push!(values, diagvalues[slack] + (negative ? -uval : uval))
+                        if dddual_transform_inrange(Val(:diag), u, j, row) ||
+                            dddual_transform_inrange(Val(:offdiag), u, i, row)
+                            uval = u[i, row] * u[j, col] + u[i, col] * u[j, row]
+                            unsafe_push!(indices, slacks[slack])
+                            unsafe_push!(values, u[j, col] * u[j, row] + (negative ? -uval : uval))
+                        end
                         slack += 1
                     end
                 end
                 unsafe_push!(indices, slacks[sbelow])
                 unsafe_push!(values, negative ? one(V) : -one(V))
+                unsafe_push!(lens, slack)
             end
             sbelow += i -1
         end
-        # Now let's take care of (2, 1). indices and lens are already set up properly, only the values have to be adjusted.
-        if isone(j)
-            @twice negative true begin
-                slack = 1
-                for col in 1:dim
-                    diagvalues[slack] += (negative ? -2 : 2) * u[2, col] * u[1, col]
-                    slack += 1
-                    for row in col+1:dim
-                        uval = u[2, row] * u[1, col] + u[2, col] * u[1, row]
-                        diagvalues[slack] += (negative ? -uval : uval)
-                        slack += 1
-                    end
-                end
-                if !negative
-                    # now map to the next value range
-                    diagvalues = @view(values[diagvalues.offset1+length(diagvalues)+2:diagvalues.offset1+2length(diagvalues)+1])
-                end
-            end
-        else
-            # Finally correct the signs (actually, it does not matter at all if our upper triangle is represented by
-            # dummy₁ - dummy₂ or dummy₁ + dummy₂; let's just do this for consistency).
-            values[lowerslack] = one(V)
-            values[2lowerslack] = -one(V)
-        end
         #endregion
         #region Add the whole column
-        add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lowerslack))
+        add_constr_nonnegative!(state, IndvalsIterator(unsafe, indices, values, lens))
         #endregion
         empty!(indices)
         empty!(values)
+        empty!(lens)
     end
 
     return :dd_nonneg, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
@@ -1092,55 +1127,98 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     indices = FastVec{T}(buffer=max(6, 3dsq))
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
+    lens = Vector{Int}(undef, 3)
 
     valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
-    unsafe_append!(indices, slacks)
-    unsafe_append!(indices, slacks)
-    unsafe_append!(indices, slacks)
     @inbounds for j in 1:dim
         #region Diagonal (naturally is the first item in the L order, and we must put it separately in the nonneg cone)
+        slack = 1
         @inbounds for col in 1:dim
-            unsafe_push!(values, abs2(u[j, col]))
+            if !dddual_transform_inrange(u, j, col)
+                slack += 1 + 2(dim - col)
+                continue
+            end
+            if dddual_transform_inrange(Val(:diag), u, j, col)
+                unsafe_push!(indices, slacks[slack])
+                unsafe_push!(values, abs2(u[j, col]))
+            end
+            slack += 1
             for row in col+1:dim
-                uval = u[j, col] * conj(u[j, row])
-                unsafe_push!(values, real(uval), imag(uval))
+                if dddual_transform_inrange(Val(:diag), u, j, row)
+                    uval = u[j, col] * conj(u[j, row])
+                    unsafe_push!(indices, slacks[slack], slacks[slack+1])
+                    unsafe_push!(values, real(uval), imag(uval))
+                end
+                slack += 2
             end
         end
-        add_constr_nonnegative!(state, Indvals(@view(slacks[1:dsq]), values))
+        add_constr_nonnegative!(state, Indvals(indices, values))
+        empty!(indices)
         empty!(values)
         #endregion
         #region Below diagonal
         for i in j+1:dim
             # first the diagonal, which is our col diagonal plus the row diagonal that we must recompute.
+            slack = 1
             for col in 1:dim
-                unsafe_push!(values, abs2(u[j, col]) + abs2(u[i, col]))
+                if !dddual_transform_inrange(u, j, col)
+                    slack += 1 + 2(dim - col)
+                    continue
+                end
+                if dddual_transform_inrange(Val(:diag), u, j, col)
+                    unsafe_push!(indices, slacks[slack])
+                    unsafe_push!(values, abs2(u[j, col]) + abs2(u[i, col]))
+                end
+                slack += 1
                 for row in col+1:dim
-                    uval = u[j, col] * conj(u[j, row]) + u[i, col] * conj(u[i, row])
-                    unsafe_push!(values, real(uval), imag(uval))
+                    if dddual_transform_inrange(Val(:diag), u, j, row)
+                        uval = u[j, col] * conj(u[j, row]) + u[i, col] * conj(u[i, row])
+                        unsafe_push!(indices, slacks[slack], slacks[slack+1])
+                        unsafe_push!(values, real(uval), imag(uval))
+                    end
+                    slack += 2
                 end
             end
+            startind = length(indices)
+            lens[1] = startind
             # then every off-diagonal
             @twice impart true begin
+                slack = 1
                 for col in 1:dim
-                    uval = 2u[i, col] * conj(u[j, col])
-                    unsafe_push!(values, impart ? imag(uval) : real(uval))
+                    if !dddual_transform_inrange(u, j, col)
+                        slack += 1 + 2(dim - col)
+                        continue
+                    end
+                    if dddual_transform_inrange(Val(:offdiag), u, i, col)
+                        uval = 2u[i, col] * conj(u[j, col])
+                        unsafe_push!(indices, slacks[slack])
+                        unsafe_push!(values, impart ? imag(uval) : real(uval))
+                    end
+                    slack += 1
                     for row in col+1:dim
-                        @twice imdata true begin
-                            uval = u[i, row] * conj(u[j, col])
-                            if imdata
-                                uval -= u[i, col] * conj(u[j, row])
-                                thisuval = impart ? real(uval) : -imag(uval)
-                            else
-                                uval += u[i, col] * conj(u[j, row])
-                                thisuval = impart ? imag(uval) : real(uval)
+                        if dddual_transform_inrange(Val(:offdiag), u, i, row)
+                            @twice imdata true begin
+                                uval = u[i, row] * conj(u[j, col])
+                                if imdata
+                                    uval -= u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? real(uval) : -imag(uval)
+                                else
+                                    uval += u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? imag(uval) : real(uval)
+                                end
+                                unsafe_push!(indices, slacks[slack+imdata])
+                                unsafe_push!(values, thisuval)
                             end
-                            unsafe_push!(values, thisuval)
                         end
+                        slack += 2
                     end
                 end
+                lens[2+impart] = length(indices) - startind
+                startind = length(indices)
             end
-            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, dsq))
+            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
+            empty!(indices)
             empty!(values)
         end
         #endregion
@@ -1274,6 +1352,7 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
                                  complex ? 4 : 3, trisize(dim)))
 end
 
+# The transform is not diagonal
 function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Integer, data::IndvalsIterator{T,V}, u,
     counters::Counters) where {T,V,complex}
     have_rot = supports_rotated_quadratic(state)
@@ -1282,79 +1361,141 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
     indices = FastVec{T}(buffer=complex ? 4total : 3total)
     slacks = add_var_slack!(state, total)
     values = similar(indices, V)
+    lens = Vector{Int}(undef, complex ? 4 : 3)
 
     valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
 
-    for _ in 1:(complex ? 4 : 3)
-        unsafe_append!(indices, slacks)
-    end
     if !have_rot
         first_values = FastVec{V}(buffer=total)
-        resize!(values, total)
+        first_indices = u isa UpperOrUnitUpperTriangular || u isa LowerOrUnitLowerTriangular ? FastVec{T}(buffer=total) :
+                                                                                               indices
     else
         first_values = values
+        first_indices = indices
     end
     @inbounds for j in 1:dim-1
         #region First item
+        slack = 1
         @inbounds for col in 1:dim
-            unsafe_push!(first_values, abs2(u[j, col]))
+            if !dddual_transform_inrange(u, j, col)
+                slack += 1 + (complex ? 2 : 1) * (dim - col)
+                continue
+            end
+            if dddual_transform_inrange(Val(:diag), u, j, col)
+                unsafe_push!(first_indices, slacks[slack])
+                unsafe_push!(first_values, abs2(u[j, col]))
+            end
+            slack += 1
             for row in col+1:dim
-                uval = u[j, col] * conj(u[j, row])
-                if complex
-                    unsafe_push!(first_values, real(uval), imag(uval))
-                else
-                    unsafe_push!(first_values, uval)
+                if dddual_transform_inrange(Val(:diag), u, j, row)
+                    uval = u[j, col] * conj(u[j, row])
+                    if complex
+                        unsafe_push!(first_indices, slacks[slack], slacks[slack+1])
+                        unsafe_push!(first_values, real(uval), imag(uval))
+                    else
+                        unsafe_push!(first_indices, slacks[slack])
+                        unsafe_push!(first_values, uval)
+                    end
                 end
+                slack += complex ? 2 : 1
+            end
+        end
+        lens[1] = firstlen = length(first_indices)
+        if !have_rot
+            resize!(values, length(first_indices))
+            if u isa UpperOrUnitUpperTriangular || u isa LowerOrUnitLowerTriangular
+                resize!(indices, length(first_indices))
             end
         end
         #endregion
         for i in j+1:dim
             #region Second item
+            slack = 1
             for col in 1:dim
-                unsafe_push!(values, abs2(u[i, col]))
+                if !dddual_transform_inrange(u, i, col)
+                    slack += 1 + (complex ? 2 : 1) * (dim - col)
+                    continue
+                end
+                if dddual_transform_inrange(Val(:diag), u, i, col)
+                    unsafe_push!(indices, slacks[slack])
+                    unsafe_push!(values, abs2(u[i, col]))
+                end
+                slack += 1
                 for row in col+1:dim
-                    uval = u[i, col] * conj(u[i, row])
-                    if complex
-                        unsafe_push!(values, real(uval), imag(uval))
-                    else
-                        unsafe_push!(values, uval)
+                    if dddual_transform_inrange(Val(:diag), u, i, row)
+                        uval = u[i, col] * conj(u[i, row])
+                        if complex
+                            unsafe_push!(indices, slacks[slack], slacks[slack+1])
+                            unsafe_push!(values, real(uval), imag(uval))
+                        else
+                            unsafe_push!(indices, slacks[slack])
+                            unsafe_push!(values, uval)
+                        end
                     end
+                    slack += complex ? 2 : 1
                 end
             end
+            startind = length(indices)
+            lens[2] = startind - lens[1]
             #endregion
             #region Third and fourth item
             @twice impart complex begin
+                slack = 1
                 for col in 1:dim
-                    uval = 2u[i, col] * conj(u[j, col])
-                    unsafe_push!(values, (impart ? imag(uval) : real(uval)) * scaling)
+                    if !dddual_transform_inrange(u, j, col)
+                        slack += 1 + (complex ? 2 : 1) * (dim - col)
+                        continue
+                    end
+                    if dddual_transform_inrange(Val(:offdiag), u, i, col)
+                        uval = 2u[i, col] * conj(u[j, col])
+                        unsafe_push!(indices, slacks[slack])
+                        unsafe_push!(values, (impart ? imag(uval) : real(uval)) * scaling)
+                    end
+                    slack += 1
                     for row in col+1:dim
-                        @twice imdata complex begin
-                            uval = u[i, row] * conj(u[j, col])
-                            if imdata
-                                uval -= u[i, col] * conj(u[j, row])
-                                thisuval = impart ? real(uval) : -imag(uval)
-                            else
-                                uval += u[i, col] * conj(u[j, row])
-                                thisuval = impart ? imag(uval) : real(uval)
+                        if dddual_transform_inrange(Val(:offdiag), u, i, row)
+                            @twice imdata complex begin
+                                uval = u[i, row] * conj(u[j, col])
+                                if imdata
+                                    uval -= u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? real(uval) : -imag(uval)
+                                else
+                                    uval += u[i, col] * conj(u[j, row])
+                                    thisuval = impart ? imag(uval) : real(uval)
+                                end
+                                unsafe_push!(indices, slacks[slack+imdata])
+                                unsafe_push!(values, thisuval * scaling)
                             end
-                            unsafe_push!(values, thisuval * scaling)
                         end
+                        slack += complex ? 2 : 1
                     end
                 end
+                lens[3+impart] = length(indices) - startind
+                startind = length(indices)
             end
             #endregion
             if have_rot
-                @inline add_constr_rotated_quadratic!(state, IndvalsIterator(unsafe, indices, values, total))
+                @inline add_constr_rotated_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
             else
-                # This is a more efficient version of to_soc!, as we already know exactly all our duplicates: all entries have
-                # exactly the same indices, in the same order.
-                for i in 1:total
-                    values[i], values[i+total] = (first_values[i] + values[i+total], first_values[i] - values[i+total])
+                if !(u isa UpperOrUnitUpperTriangular) && !(u isa LowerOrUnitLowerTriangular)
+                    # This is a more efficient version of to_soc!, as we already know exactly all our duplicates: all entries
+                    # have exactly the same indices, in the same order.
+                    for i in 1:total
+                        values[i], values[i+total] = (first_values[i] + values[i+total], first_values[i] - values[i+total])
+                    end
+                    @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
+                else
+                    @inbounds copyto!(indices, first_indices)
+                    @inbounds copyto!(values, first_values)
+                    @inline add_constr_quadratic!(state, to_soc!(indices, values, lens, false))
+                    resize!(lens, complex ? 4 : 3) # just to make sure, to_soc! might trim zero items
+                    lens[1] = firstlen
                 end
-                @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, total))
             end
-            resize!(values, total)
+            resize!(values, firstlen)
+            resize!(indices, firstlen)
         end
+        empty!(first_indices)
         empty!(first_values)
     end
     return (complex ? :sdd_quad_complex : :sdd_quad_real),

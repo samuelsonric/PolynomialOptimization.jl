@@ -9,7 +9,7 @@ using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @un
 import ..PolynomialOptimization: MomentVector
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
-import LinearAlgebra: issuccess
+import LinearAlgebra: issuccess, UpperOrUnitUpperTriangular, LowerOrUnitLowerTriangular
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
 # likely need
 export

@@ -302,6 +302,48 @@ end
     return v
 end
 
+function Base._growbeg!(v::FastVec, delta::Integer)
+    delta = Int(delta)
+    delta == 0 && return # avoid attempting to index off the end
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    if v.len + delta ≤ length(v.data)
+        @inbounds copyto!(v.data, delta +1, v.data, 1, v.len)
+    else
+        newdelta = (v.len + delta) - length(v.data)
+        Base._growbeg!(v.data, newdelta)
+        @inbounds copyto!(v.data, delta +1, v.data, newdelta +1, v.len) # unfortunately, we have to copy twice
+    end
+    v.len += delta
+    return v
+end
+
+function Base._growend!(v::FastVec, delta::Integer)
+    delta = Int(delta)
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    v.len + delta ≤ length(v.data) || Base._growend!(v.data, delta - (length(v.data) - v.len))
+    v.len += delta
+    return v
+end
+
+function Base._growat!(v::FastVec, i::Integer, delta::Integer)
+    delta = Int(delta)
+    i = Int(i)
+    i == 1 && return Base._growbeg!(v, delta)
+    len = v.len
+    i == len + 1 && return Base._growend!(v, delta)
+    delta ≥ 0 || throw(ArgumentError("grow requires delta >= 0"))
+    1 < i ≤ len || throw(BoundsError(v, i))
+    if v.len + delta ≤ length(v.data)
+        @inbounds copyto!(v.data, i + delta, v.data, i, v.len - i +1)
+    else
+        newdelta = (v.len + delta) - length(v.data)
+        Base._growat!(v.data, i, newdelta)
+        @inbounds copyto!(v.data, i + delta, v.data, i + newdelta, v.len - i +1)
+    end
+    v.len += delta
+    return v
+end
+
 # inspired by KristofferC's PushVector
 """
     finish!(v::FastVec)
