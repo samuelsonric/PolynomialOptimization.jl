@@ -114,10 +114,10 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             # In the case of a (normal) quadratic cone, we canonically take the rotated cone and transform it by multiplying
             # the left-hand side by 1/√2, giving (x₁/√2)² ≥ (x₂/√2)² + ∑ᵢ (√2 xᵢ)² ⇔ x₁² ≥ x₂² + ∑ᵢ (2 xᵢ)².
             scaleoffdiags = tri !== :F
-            if scaleoffdiags
-                if dim == 2
-                    rquad = supports_rotated_quadratic(state)
-                    quad = supports_quadratic(state)
+            if dim == 2
+                rquad = supports_rotated_quadratic(state)
+                quad = supports_quadratic(state)
+                if scaleoffdiags
                     if !rquad && quad
                         scaling = V(2)
                     else
@@ -126,6 +126,8 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                 else
                     scaling = sqrt(V(2))
                 end
+            elseif scaleoffdiags
+                scaling = sqrt(V(2))
             end
         else
             rquad = quad = false
@@ -1621,7 +1623,7 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 See also [`moment_add_matrix!`](@ref).
 """
 function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::P, counters::Counters) where {T,Nr,Nc,I<:Integer,P<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}
+    constraint::P, counters::Counters=Counters()) where {T,Nr,Nc,I<:Integer,P<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}
     # keep in sync with SOSCertificate -> poly_decomposition
 
     # We need to traverse all unique elements in groupings * groupings†. For purely complex-valued groupings, this is the full
