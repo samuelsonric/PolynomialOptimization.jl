@@ -5,6 +5,7 @@ using Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOpt
 using PolynomialOptimization: @assert, @inbounds, @allocdiff
 using PolynomialOptimization.SimplePolynomials: veciter
 using Mosek: msk_global_env, Env, deletetask
+using StandardPacked: SPMatrix
 import PolynomialOptimization
 
 printstream(msg::String) = (print(msg); flush(stdout))

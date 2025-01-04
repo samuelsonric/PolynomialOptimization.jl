@@ -53,5 +53,6 @@ Base.prepend!(::FastVec{V}, ::AbstractVector) where {V}
 unsafe_prepend!
 Base.similar(::FastVec{V}) where {V}
 Base.copyto!(::FastVec, ::Integer, ::FastVec, ::Integer, ::Integer)
+Base.deleteat!(::FastVec, ::Integer)
 finish!
 ```

@@ -50,6 +50,7 @@ SparsityTermBlock
 SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
+CliqueMerged
 ```
 
 ## Optimization and problem solutions
@@ -57,12 +58,16 @@ TermMode
 CurrentModule = PolynomialOptimization
 ```
 ```@docs
-poly_optimize
-Solver.AbstractRepresentationMethod
+poly_optimize(::Val, ::AbstractRelaxation)
+poly_optimize(::Val, ::Problem, ::Vararg{Any})
+poly_optimize(::Result)
+Solver.RepresentationMethod
 RepresentationPSD
-RepresentationSDSOS
-RepresentationDSOS
+RepresentationSDD
+RepresentationDD
+RepresentationIAs
 Result
+issuccess(::Result)
 poly_problem(::Result)
 optimality_certificate
 poly_all_solutions
@@ -71,6 +76,9 @@ poly_solution_badness
 moment_matrix
 MomentVector
 MomentAssociation
+SOSCertificate
+sos_matrix
+IterateRepresentation
 ```
 
 ## Newton polytope construction (manually)

@@ -48,7 +48,7 @@ let
                     let task=task.task, nv=nv, nvertices=nvertices, idxs=idxs, tmp=tmp
                         Mosek.@MSK_putarow(task, nv, nvertices, idxs, tmp)
                     end
-                    $checkall || putconbound(task, nv +1, MSK_BK_FX, 1.0, 1.0)
+                    $checkall || putconbound(task, nv +1, MSK_BK_FX, 1., 1.)
                 end
 
                 removed = 0
@@ -144,7 +144,7 @@ function Newton.prepare(::Val{:Mosek}, mons, num, verbose; parameters...)
             Mosek.@MSK_putarow(task, nv, nc, idxs, tmp)
         end
     end
-    putconbound(task, nv +1, MSK_BK_FX, 1.0, 1.0)
+    putconbound(task, nv +1, MSK_BK_FX, 1., 1.)
     if num < 10_000 || isone(nv)
         nthreads = 1
         secondtask = nothing

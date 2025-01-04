@@ -91,19 +91,7 @@ function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Boo
     out = halfpolytope(method, SimplePolynomial(poly); verbose, kwargs...)
     if out isa SimpleMonomialVector
         conv_time = @elapsed begin
-            real_vars = variable_union_type(poly)[]
-            complex_vars = similar(real_vars)
-            for v in variables(poly)
-                if isreal(v)
-                    push!(real_vars, v)
-                elseif isconj(v)
-                    vo = conj(v)
-                    vo ∈ complex_vars || push!(complex_vars, vo)
-                else
-                    push!(complex_vars, v)
-                end
-            end
-            mv = monomial_vector(FakeMonomialVector(out, real_vars, complex_vars))
+            mv = change_backend(out, variables(poly))
         end
         @verbose_info("Converted monomials back to a $(typeof(mv)) with length $(length(mv)) in $conv_time seconds")
         return mv

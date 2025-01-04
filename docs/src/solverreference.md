@@ -91,17 +91,44 @@ problem. Usually, a solver falls in one of two categories:
 - Problem data is constructed incrementally via various calls to API functions of the solver, which does not provide access to
   its internals. In this case, the new type should be a descendant of [`AbstractAPISolver`](@ref). Usually, commercial solvers
   fall in this category.
-However, it is not required that the type is in fact a subtype of either of those. If it is not, then [`mindex`](@ref) needs to
-be implemented.
+However, it is not required that the type is in fact a subtype of either of those; the most general possible supertype is
+[`AbstractSolver`](@ref), which does not make any assumptions or provide any but the most skeleton fallback implementations and
+a default for [`mindex`](@ref).
 ```@docs
+AbstractSolver
 mindex
 ```
-Every implementation of [`poly_optimize`](@ref) should return a tuple consisting of the optimal value, the status of the
-solver, and an instance of a [`MomentVector`](@ref) containing the resulting moment data.
+Every implementation of [`poly_optimize`](@ref) should return a tuple that contains some internal state of the solver as well
+as the optimal value and the status of the solver. A method for [`issuccess`](@ref issuccess(::Val, ::Any)) should then
+translate this status into a simple boolean, where deciding on ambiguities (near success) is up to the solver implementation.
+```@docs; canonical=false
+poly_optimize(::Val, ::AbstractRelaxation, ::RelaxationGroupings)
+issuccess(::Val, ::Any)
+```
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver
 to be chosen automatically. Apart from the exact specification `:<solvername>Moment` or `:<solvername>SOS`, a short form
 `:<solvername>` that chooses the recommended method should also be implemented. For this, the [`@solver_alias`](@ref) macro can
-be used.
+be used. When details on the solution data a requested, the [`extract_moments`](@ref), [`extract_sos`](@ref), or
+[`extract_info`](@ref) function is called, where at least the former two have to be implemented for each solver:
+```@docs
+extract_moments
+extract_sos
+extract_sos_prepare
+extract_info
+```
+In order to relate aspects of the problem with data in the solver, the cones that are added are counted. This works
+automatically, keeping a separate counter for every type of cone and counting vector-valued cones (which are most) with their
+actual length. This behavior can be customized:
+```@docs
+@counter_alias
+@counter_atomic
+addtocounter!
+Counters
+```
+Using this information, an additional implementation may be provided for a faster re-optimization of the same problem:
+```@docs
+poly_optimize(::Val, ::Any, ::AbstractRelaxation, ::RelaxationGroupings)
+```
 
 While this page documents in detail how a new solver can be implemented, the explanation is far more extensive than an actual
 implementation. In order to implement a new solver, it is therefore recommended to first determine the category in which it
@@ -122,7 +149,7 @@ SparseMatrixCOO
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
-MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::K, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
 #### [`AbstractAPISolver`](@ref)
@@ -144,11 +171,19 @@ which cones are supported; these should return constants.
 ```@docs
 supports_rotated_quadratic
 supports_quadratic
-supports_complex_psd
-AbstractPSDIndextype
+supports_psd_complex
+supports_dd
+supports_dd_complex
+supports_lnorm
+supports_lnorm_complex
+supports_sdd
+supports_sdd_complex
+PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
 psd_indextype
+negate_fix
+negate_free
 ```
 
 #### Working with data from the interface
@@ -176,6 +211,12 @@ add_constr_rotated_quadratic!
 add_constr_quadratic!
 add_constr_psd!
 add_constr_psd_complex!
+add_constr_dddual!
+add_constr_dddual_complex!
+add_constr_linf!
+add_constr_linf_complex!
+add_constr_sdddual!
+add_constr_sdddual_complex!
 add_constr_fix_prepare!
 add_constr_fix!
 add_constr_fix_finalize!
@@ -198,6 +239,12 @@ add_var_rotated_quadratic!
 add_var_quadratic!
 add_var_psd!
 add_var_psd_complex!
+add_var_dd!
+add_var_dd_complex!
+add_var_l1!
+add_var_l1_complex!
+add_var_sdd!
+add_var_sdd_complex!
 add_var_free_prepare!
 add_var_free!
 add_var_free_finalize!
@@ -255,7 +302,7 @@ which enables this solver to be chosen automatically.
 CurrentModule = PolynomialOptimization
 ```
 Automatic tightening of a polynomial optimization problem requires a linear solver that finds a solution to a system of linear
-equations that minimizes the ℓ₁-norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
+equations that minimizes the ℓ₁ norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
 number of rows is smaller than the number of columns; else, the solution is calculated using SPQR's direct solver.
 
 ### [List of supported solvers](@id solvers_tighten)
