@@ -12,18 +12,12 @@ or `typemax(K)` if it is unsigned.
 
 See also [`SparseMatrixCOO`](@ref).
 """
-abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} end
+abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} <: AbstractSolver{K,V} end
 
 Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
     monomial_index(monomials...)::K
 
 function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
-    stop = state.slack
-    state.slack -= num
-    return (state.slack + one(K)):stop
-end
-
-function Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
     stop = state.slack
     state.slack -= num
     return (state.slack + one(K)):stop
@@ -61,12 +55,11 @@ function FastVector.prepare_push!(smc::SparseMatrixCOO, new_items::Integer)
 end
 
 """
-    append!(coo::SparseMatrixCOO, indvals::Union{Indvals,IndvalsIterator})
+    append!(coo::SparseMatrixCOO, indvals::Indvals)
 
-Appends the data given in `indvals` into successive rows in `coo` (`first(indvals)` to the first rows, the next to the second,
-...). Returns the index of the last row that was added.
+Appends the data given in `indvals` into the next row in `coo`. Returns the index of the row that was added.
 
-See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
+See also [`Indvals`](@ref).
 """
 @inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
     prepare_push!(coo, length(indvals))
@@ -80,24 +73,26 @@ See also [`Indvals`](@ref), [`IndvalsIterator`](@ref).
 end
 
 """
-    append!(coo::SparseMatrixCOO, psd::IndvalsIterator)
+    append!(coo::SparseMatrixCOO, indvals::IndvalsIterator)
 
-Appends the data given in `psd` into successive rows in `coo`. Returns the index of the last row that was added.
+Appends the data given in `indvals` into successive rows in `coo` (`first(indvals)` to the first row, the next to the second,
+...). Returns the range of indices of all rows that were added.
 
 See also [`IndvalsIterator`](@ref).
 """
-@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, psd::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
-    prepare_push!(coo.rowinds, length(rowvals(psd)))
+@inline function Base.append!(coo::SparseMatrixCOO{I,K,V,Offset}, indvals::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+    prepare_push!(coo.rowinds, length(rowvals(indvals)))
     @inbounds v = isempty(coo.rowinds) ? Offset : coo.rowinds[end] + one(I)
-    for l in Base.index_lengths(psd)
+    firstv = v
+    for l in Base.index_lengths(indvals)
         for _ in 1:l
             unsafe_push!(coo.rowinds, v)
         end
         v += one(I)
     end
-    append!(coo.moninds, rowvals(psd))
-    append!(coo.nzvals, nonzeros(psd))
-    return v - one(I)
+    append!(coo.moninds, rowvals(indvals))
+    append!(coo.nzvals, nonzeros(indvals))
+    return firstv:(v - one(I))
 end
 
 struct COO_to_CSC_callback{Offset,CC<:Tuple,CP<:Tuple,CV<:Tuple,DV<:Tuple,I<:Tuple}
@@ -213,14 +208,18 @@ sparse vector depending on the relaxation. To establish the mapping between the 
 column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the problem construction needs to be passed on.
 `slack` must contain the current value of the `slack` field of the `AbstractSparseMatrixSolver`.
 """
-function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
-    slack::Integer, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, _moments::Vector{V},
+    slack::K, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
-    coo₁moninds = @view(coo₁.moninds[slack isa Signed ? (-slack:length(coo₁.moninds)) :
-                                                        (1:length(coo₁.moninds)-(typemax(slack)-slack))])
-    cooₙmoninds = ((@view(coo.moninds[slack isa Signed ? (-slack:length(coo.moninds)) :
-                                                         (1:length(coo.moninds)-(typemax(slack)-slack))]) for coo in cooₙ)...,)
+    if slack isa Signed
+        coo₁moninds = @view(coo₁.moninds[searchsortedfirst(coo₁.moninds, one(slack)):end])
+        cooₙmoninds = ((@view(coo.moninds[searchsortedfirst(coo.moninds, one(slack)):end]) for coo in cooₙ)...,)
+    else
+        coo₁moninds = @view(coo₁.moninds[1:searchsortedlast(coo₁.moninds, slack)])
+        cooₙmoninds = ((@view(coo.moninds[1:searchsortedlast(coo.moninds, slack)]) for coo in cooₙ)...,)
+    end
     max_mons = max(coo₁moninds[end], (moninds[end] for moninds in cooₙmoninds)...) # coos are sorted according to the columns
+    moments = @view(_moments[slack isa Signed ? (-slack:K(length(_moments))) : (one(K):K(length(_moments))-(typemax(slack)-slack))])
     @assert(length(moments) ≤ max_mons)
     if length(moments) == max_mons # (real) dense case
         solution = moments
@@ -239,7 +238,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
             throw(MethodError(MomentVector, (relaxation, moments, coo₁, cooₙ...)))
         end
         if 3length(moments) < max_mons
-            solution = SparseVector(max_mons, mon_pos, moments)
+            solution = SparseVector(max_mons, mon_pos, iszero(slack) ? _moments : collect(moments))
         else
             solution = fill(NaN, max_mons)
             copy!(@view(solution[mon_pos]), moments)

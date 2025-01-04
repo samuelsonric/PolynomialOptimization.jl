@@ -44,8 +44,8 @@ Polynomial optimization result
 Relaxation method: Dense
 Used optimization method: ClarabelMoment
 Status of the solver: SOLVED
-Lower bound to optimum (in case of good status): 0.9166666672567123
-Time required for optimization: 0.5510448 seconds
+Lower bound to optimum (in case of good status): 0.9166666672624658
+Time required for optimization: 0.9356329 seconds
 ```
 The solution that we found was indeed optimal and the value is `0.9166...`.
 Note that "optimal" here means that the solver converged for the given problem. However, a polynomial optimization problem is
@@ -55,6 +55,12 @@ constructed. Normally, this must be done explicitly by instantiating a decendant
 minimal degree.
 Therefore, "optimal" in fact only means that the _relaxation_ was solved to global optimality, which in general will only yield
 an underestimator to the original problem.
+Note that while Clarabel has a very clear return code - `SOLVED` says that things went well - this is not necessarily the case
+for other solvers. Use [`issuccess`](@ref) on the result object to check whether the reported solver status is a good one:
+```jldoctest walkthrough
+julia> issuccess(res)
+true
+```
 
 Further note that the optimization time seems to be pretty high for such a small problem. However, this is purely due to the
 compilation time. Running the optimization again will give a time of the order of a millisecond. Finally, it is not necessary
@@ -115,6 +121,39 @@ julia> optimality_certificate(res)
 Note that this is just a sufficient criterion, and the solution might be optimal even if it is violated. As calculating the
 certificate will involve calculating the ranks of several matrices (and is more complicated in the complex case), it is not
 necessarily cheaper than trying to extract solutions; as the latter is more informative, it should usually be the way to go.
+
+### Extracting a SOS certificate
+Whenever the optimization was successful, a valid sums-of-squares certificate will be available, i.e., a decomposition of the
+objective (in this simple, unconstrained, case). Here, the minimum value of the objective was found to be `0.9166...`.
+We can therefore obtain a certificate for the positivity of the original objective minus this global minimum:
+```jldoctest walkthrough
+julia> cert = SOSCertificate(res)
+Sum-of-squares certificate for polynomial optimization problem
+1.0 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴ - 0.9166666672624658
+= (-0.2492464642498061 + 0.0 + 0.0 + 0.0 + 0.6811832979888123x₃² - 0.13316036665354078x₂x₃ + 0.6812065898234094x₂² + 0.0 + 0.0 + 0.7152479291533441x₁²)²
++ (-0.00015840159683466377 + 0.0 + 0.0 + 0.0 + 0.6360091467299869x₃² + 0.0011902230323755974x₂x₃ - 0.6338687294141168x₂² + 0.0 + 0.0 - 0.0018514462038562963x₁²)²
++ (0.050599062148224884 + 0.0 + 0.0 + 0.0 - 0.35322230868481075x₃² - 0.40669620906370346x₂x₃ - 0.3569973936050725x₂² + 0.0 + 0.0 + 0.6183225665112776x₁²)²
++ (0.0 - 0.6307886589586179x₃ - 0.6307886578526084x₂ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.5707311041008931x₁x₃ - 0.5706316416095126x₁x₂ + 0.0)²
++ (0.1365622366906534 + 0.0 + 0.0 + 0.0 - 0.08194926810609472x₃² + 0.6553389692882523x₂x₃ - 0.08198096663343958x₂² + 0.0 + 0.0 + 0.32572101226607164x₁²)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.43861947273884583x₁x₃ + 0.4386959251861786x₁x₂ + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.4527802849918676x₁ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
+```
+This certificate consists of a number of polynomials that, when squared and added, should give rise to the original objective.
+Note that when printing the certificate, values that are below a certain threshold will be set to zero by default.
+We can also explicitly iterate through all the polynomials and sum them up, although we have to be careful to map them back to
+their original representation for this:
+```jldoctest walkthrough
+julia> p = zero(polynomial_type(x, Float64));
+
+julia> for pᵢ in cert[:objective, 1] # no sparsity, so there is just a single grouping
+           p += PolynomialOptimization.change_backend(pᵢ, x)^2
+       end
+
+julia> map_coefficients!(x -> round(x, digits=8), p)
+0.08333334 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴
+```
+Note how this is precisely the objective minus the global minimum.
 
 ### Using the Newton polytope
 The current example is an unconstrained optimization problem; hence, the size of the full basis, which is 10, may be larger
@@ -338,11 +377,12 @@ Lower bound to optimum (in case of good status): 0.9166666672685418
 Time required for optimization: 0.1599203 seconds
 ```
 So first, `PolynomialOptimization` will determine the bases for the matrices according to the sparsity pattern.
-At this step, if the optional keyword argument `clique_merging` is set to `true` (default is `false`), an attempt will be made
-to merge bases if their heuristic cost for treating them separately would be worse than joining them (this concept is nicely
-explained in the [COSMO documenation](https://oxfordcontrol.github.io/COSMO.jl/stable/decomposition/#Clique-merging)). In
-general, doing clique merging will lead to faster optimizations; however, the merging process itself can be quite costly and in
-fact for large problems might cost much more time than it gains - hence, it is turned off by default.
+Note that after this step, the if the resulting relaxation is wrapped into a [`Relaxation.CliqueMerged`](@ref), an attempt will
+be made to merge bases if their heuristic cost for treating them separately would be worse than joining them (this concept is
+nicely explained in the [COSMO documenation](https://oxfordcontrol.github.io/COSMO.jl/stable/decomposition/#Clique-merging)).
+In general, doing clique merging will lead to faster optimizations; however, the merging process itself can be quite costly and
+in fact for large problems might cost much more time than it gains - hence, it must be enabled by explicitly constructing the
+merged relaxation.
 After this step is done, the Clarabel data (or any other optimizer structure, which we all address directly without `JuMP`) is
 constructed; then the solver runs.
 
@@ -395,6 +435,68 @@ another nonlinear solver that will deliver the true global optimum.
 guess).
 Note that adding a perturbation may degrade sparsity. For this, you may also give a vector of the same length as the number of
 variables, specifying a different perturbation magnitude for each variable (or just disabling the perturbation by passing `0`).
+
+### Changing the internal representation
+Usually, the moment matrix is modeled as a semidefinite constraint in the solver. However, semidefinite programs scale much
+less favorably than other types of convex optimization programs such as linear or quadratic ones. It is possible to change
+between the internal representations that are used for the moment matrix: apart from semidefinite, also the
+[diagonally dominant and scaled diagonally dominant cones](https://doi.org/10.1137/18M118935X) are supported. While they scale
+better, they usually provide worse bounds:
+```jldoctest walkthrough
+julia> res_dd = poly_optimize(:Clarabel, prob, representation=RepresentationDD())
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.5000000105896211
+Time required for optimization: 0.5579216 seconds
+```
+Again, the long time is purely due to precompilation of the new methods.
+
+This time, no semidefinite constraint was employed, only linear ones. As is clearly visible, the bound is quite bad. But this
+process can be iterated and the diagonally dominant cone can be [rotated](https://doi.org/10.48550/arXiv.1510.01597) based on
+the data from the previous optimization. This is call re-optimization, and while a lot of details can be customized, if none
+are specified, `PolynomialOptimization` will take the Cholesky decomposition of the matrix underlying the SOS certificate of
+the previous iteration as a new rotation basis.
+!!! info
+    Different representations lead to different problems from the perspective of the solver - in particular, different with
+    respect to which solver functions are used or how the data is aligned in memory. Therefore, changing the _type_ of the
+    representation requires a completely new problem to be set up. However, if only the _data within_ the representatin is
+    changed, the old problem can be re-used, reducing the setup time. This is irrelevant if a solver is used whose interface
+    in `PolynomialOptimization` does not support this faster reoptimization.
+    Note that by default, the default rotations used for the DD and SDD representation are identities of the type
+    `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationIAs`](@ref) to "fake" an
+    upper triangular identity at the beginning.
+
+```jldoctest walkthrough
+julia> res_dd_rotated = poly_optimize(res_dd)
+# output truncated
+Lower bound to optimum (in case of good status): 0.7882579368640297
+Time required for optimization: 1.5101965 seconds
+
+julia> res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.8744697853614662
+Time required for optimization: 0.0355882 seconds
+
+julia> res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.9122827868379025
+Time required for optimization: 0.0097173 seconds
+
+julia> res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.9160797411325013
+Time required for optimization: 0.0102907 seconds
+
+julia> res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.9165662778912137
+Time required for optimization: 0.0123682 seconds
+```
+So indeed, after a couple of iterations, the optimum is approached pretty well. We could have used the scaled diagonally
+dominant representation instead, which relies on quadratic instead of linear programs, which for this particular example would
+have been exact without any iteration.
 
 ## Constraints
 

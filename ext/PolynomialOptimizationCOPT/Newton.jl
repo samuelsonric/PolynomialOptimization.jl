@@ -48,7 +48,7 @@ let
                         _check_ret(copt_env, COPT_AddCol(task, 0., nv, idxs, tmp, COPT_CONTINUOUS, 0., COPT_INFINITY, C_NULL))
                     end
                     @inbounds fill!(@view(tmp[1:nvertices]), 1.)
-                    _check_ret(copt_env, COPT_AddRow(task, nvertices, idxs, tmp, 0, $((checkall ? (0.0, 0.0) : (1.0, 1.0))...),
+                    _check_ret(copt_env, COPT_AddRow(task, nvertices, idxs, tmp, 0, $((checkall ? (0., 0.) : (1., 1.))...),
                         C_NULL))
                 end
 

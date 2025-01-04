@@ -1,4 +1,4 @@
-export SimpleMonomialVector, effective_nvariables
+export SimpleMonomialVector, effective_nvariables, change_backend
 
 struct SimpleMonomialVector{Nr,Nc,I<:Integer,E,T<:SimpleMonomial{Nr,Nc,I}} <: AbstractVector{T}
     data::E
@@ -135,7 +135,6 @@ as the inputs.
 """
 function SimpleMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
     vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv)))) where {I<:Integer}
-    isempty(vars) && throw(ArgumentError("Variables must be present"))
     any(isconj, vars) && throw(ArgumentError("The variables must not contain conjuates"))
     allunique(vars) || throw(ArgumentError("Variables must not contain duplicates"))
 
@@ -1273,4 +1272,91 @@ end
         :(return SimpleMonomialVector{Nr,Nc}(unsafe, e, finish!(indices)))
     )
     return :(@inbounds($result))
+end
+
+struct FakeMonomialVector{S<:SimpleMonomialVector,V,M} <: AbstractVector{M}
+    data::S
+    real_vars::Vector{V}
+    complex_vars::Vector{V}
+
+    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {Nr,Nc,S<:SimpleMonomialVector{Nr,Nc},V<:AbstractVariable}
+        (length(real_vars) == Nr && length(complex_vars) == Nc) || error("Invalid monomial vector construction")
+        new{S,V,monomial_type(V)}(data, real_vars, complex_vars)
+    end
+end
+
+Base.length(fmv::FakeMonomialVector) = length(fmv.data)
+Base.size(fmv::FakeMonomialVector) = (length(fmv.data),)
+function Base.getindex(fmv::FakeMonomialVector{S,V,M} where {V,S}, x) where {M}
+    mon = fmv.data[x]
+    isconstant(mon) && return constant_monomial(M)
+    exps = exponents(mon)
+    expit = iterate(exps)
+    i = 1
+    havemon = false
+    while !isnothing(expit)
+        i > length(fmv.real_vars) && break
+        expᵢ, expitdata = expit
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = fmv.real_vars[i] ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= fmv.real_vars[i] ^ expᵢ
+            end
+        end
+        i += 1
+        expit = iterate(exps, expitdata)
+    end
+    i = 1
+    while !isnothing(expit)
+        i > length(fmv.complex_vars) && break
+        expᵢ, expitdata = expit
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = fmv.complex_vars[i] ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= fmv.complex_vars[i] ^ expᵢ
+            end
+        end
+        expᵢ, expitdata = iterate(exps, expitdata)::Tuple
+        if !iszero(expᵢ)
+            if !havemon
+                @inbounds mon = conj(fmv.complex_vars[i]) ^ expᵢ
+                havemon = true
+            else
+                @inbounds mon *= conj(fmv.complex_vars[i]) ^ expᵢ
+            end
+        end
+        i += 1
+        expit = iterate(exps, expitdata)
+    end
+    @assert(isnothing(expit))
+    return mon
+end
+
+"""
+    change_backend(mv::SimpleMonomialVector, variable::AbstractVector{<:AbstractVariable})
+
+Changes a `SimpleMonomialVector` into a different implementation of `MultivariatePolynomials`, where the variables are taken
+from the given vector in the order as they appear (but keeping real and complex variables distinct).
+
+This conversion is not particularly efficient, as it works with generic implementations.
+"""
+function change_backend(mv::SimpleMonomialVector{Nr,Nc}, variables::AbstractVector{V}) where {Nr,Nc,V<:AbstractVariable}
+    real_vars = similar(variables, 0)
+    complex_vars = similar(real_vars)
+    for v in variables
+        if isreal(v)
+            push!(real_vars, v)
+        elseif isconj(v)
+            vo = conj(v)
+            vo ∈ complex_vars || push!(complex_vars, vo)
+        else
+            push!(complex_vars, v)
+        end
+    end
+    (length(real_vars) == Nr && length(complex_vars) == Nc) || throw(ArgumentError("Incompatible variables"))
+    return monomial_vector(FakeMonomialVector(mv, real_vars, complex_vars))
 end

@@ -287,15 +287,26 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
             print(io, "\nFree block sizes:\n  ", sort!(collect(bs), rev=true))
         end
     end
+    return
 end
 
 Base.show(io::IO, m::MIME"text/plain", x::AbstractRelaxation) = _show(io, m, x)
 
 # make working with the relaxation as simple as working with the problem itself
-Base.getproperty(relaxation::AbstractRelaxation, f::Symbol) =
-    hasfield(typeof(relaxation), f) ? getfield(relaxation, f) : getproperty(getfield(relaxation, :problem), f)
-Base.propertynames(relaxation::AbstractRelaxation{P}) where {P<:Problem} =
-    (fieldnames(typeof(relaxation))..., fieldnames(P)...)
+Base.getproperty(relaxation::R, f::Symbol) where {R<:AbstractRelaxation} =
+    if hasfield(R, f)
+        getfield(relaxation, f)
+    elseif hasfield(R, :parent)
+        getproperty(getfield(relaxation, :parent), f)
+    else
+        getproperty(getfield(relaxation, :problem), f)
+    end
+Base.propertynames(relaxation::R) where {P<:Problem,R<:AbstractRelaxation{P}} =
+    if hasfield(R, :parent)
+        (fieldnames(R)..., propertynames(fieldtype(R, :parent))...)
+    else
+        (fieldnames(R)..., fieldnames(P)...)
+    end
 MultivariatePolynomials.variables(relaxation::AbstractRelaxation) = variables(relaxation.problem)
 MultivariatePolynomials.nvariables(relaxation::AbstractRelaxation) = nvariables(relaxation.problem)
 """
