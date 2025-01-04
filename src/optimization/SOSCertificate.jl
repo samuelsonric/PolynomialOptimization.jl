@@ -104,10 +104,9 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Val{:
     end
 end
 
-function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type, position, rawdata) where
-    {Type<:Union{Val{:psd},Val{:psd_complex},Val{:dd},Val{:dd_complex},Val{:sdd},Val{:sdd_complex}}}
+function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type, position, rawdata) where {Type<:Solver.VAL_MATRIX}
     data = Solver.extract_sos(relaxation, state, type, position, rawdata)
-    complex = type ∈ (Val(:psd_complex), Val(:dd_complex), Val(:sdd_complex))
+    complex = type isa Solver.VAL_COMPLEX
     complex_to_real = false
     if data isa AbstractVector
         itype = @inline Solver.psd_indextype(state)
@@ -182,9 +181,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
     end
 end
 
-function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int,
-                    ::Union{Val{:dd_lnorm_real_diag},Val{:dd_lnorm_real},Val{:dd_nonneg_diag},Val{:dd_nonneg},
-                            Val{:sdd_quad_real_diag},Val{:sdd_quad_real}},
+function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, ::Solver.VAL_NOMATRIX_REAL,
                     (position, _)::Tuple{AbstractUnitRange,Any}, rawdata)
     data = Solver.extract_sos(relaxation, state, Val(:fix), position, rawdata)
     if Solver.trisize(2dim) == length(position)
@@ -209,9 +206,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int,
     end
 end
 
-function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int,
-                    ::Union{Val{:dd_lnorm_complex_diag},Val{:dd_lnorm_complex},Val{:dd_quad_diag},Val{:dd_quad},
-                            Val{:sdd_quad_complex_diag},Val{:sdd_quad_complex}},
+function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, ::Solver.VAL_NOMATRIX_COMPLEX,
                     pos::Tuple{AbstractUnitRange,Vararg}, rawdata)
     position = pos[1]
     data = Solver.extract_sos(relaxation, state, Val(:fix), position, rawdata)

@@ -85,7 +85,7 @@ end
 
 struct RepresentationChangedError <: Exception end
 
-struct Rerepresent{C<:SOSCertificate,F}
+struct Rerepresent{C,F}
     info::Vector{Vector{Symbol}}
     cert::C
     fn::F
@@ -95,25 +95,25 @@ end
 Rerepresent(r::Rerepresent, fix_structure::Bool) = Rerepresent(r.info, r.cert, r.fn, fix_structure)
 
 function (r::Rerepresent)((type, index, grouping), dim)
-    idx = id_to_index(r.cert.relaxation, (type, index, grouping))
+    idx = PolynomialOptimization.id_to_index(r.cert.relaxation, (type, index, grouping))
     oldtype = r.info[idx][grouping]
-    if oldtype in Solver.INFO_PSD
+    if oldtype in INFO_PSD
         oldrep = RepresentationPSD
     else
-        complex = oldtype in Solver.INFO_COMPLEX
-        if oldtype in Solver.INFO_DIAG
+        complex = oldtype in INFO_COMPLEX
+        if oldtype in INFO_DIAG
             oldmat = Union{<:UniformScaling,<:Diagonal}
-        elseif oldtype in Solver.INFO_TRIU
+        elseif oldtype in INFO_TRIU
             oldmat = UpperOrUnitUpperTriangular
-        elseif oldtype in Solver.INFO_TRIL
+        elseif oldtype in INFO_TRIL
             oldmat = LowerOrUnitLowerTriangular
         else
             oldmat = Matrix
         end
-        if oldtype in Solver.INFO_SDD
+        if oldtype in INFO_SDD
             oldrep = RepresentationSDD{<:oldmat,complex}
         else
-            @assert(oldtype in Solver.INFO_DD)
+            @assert(oldtype in INFO_DD)
             oldrep = RepresentationDD{<:oldmat,complex}
         end
     end

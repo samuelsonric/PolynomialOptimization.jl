@@ -4,8 +4,7 @@ using ..SimplePolynomials, ..PolynomialOptimization, MultivariatePolynomials, Li
 using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
 @reexport using ..FastVector
 using ..FastVector: overallocation
-using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!,
-    id_to_index
+using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!
 import ..PolynomialOptimization: MomentVector
 using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings

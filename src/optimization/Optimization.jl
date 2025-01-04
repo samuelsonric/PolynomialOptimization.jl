@@ -3,9 +3,9 @@ export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationD
 
 include("./Result.jl")
 include("./MomentMatrix.jl")
-include("./SOSCertificate.jl")
 include("./OptimalityCertificate.jl")
 include("./solver/Solver.jl")
+include("./SOSCertificate.jl")
 using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDD,
     RepresentationSDD, RepresentationIAs
 import .Solver: poly_optimize
