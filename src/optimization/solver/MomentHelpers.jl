@@ -620,12 +620,9 @@ end
 
 # If the ℓ_∞ cone is not available, we can instead use the nonnegative cone if we are not complex. The most efficient way to
 # do this is in fact to directly rewrite the ℓ_∞ cone formulation in terms of two nonnegative constraints for all but the
-# diagonal entry.
-# If we are complex, then in the SOS formulation, we have to split the complex ℓ₁-norm cone. For this, we use quadratic cones
-# to obtain an upper bound on the absolute value from the real and imaginary parts. The diagonal entries are then the sum of
-# all absolute values plus a nonnegative variable. As a consequence, we no longer need to maintain the other triangle, it is
-# now implicit. Translated into the moment domain, we get a dim-dimensional nonnegative cone and trisize(dim -1) norm cones.
-# The first entry in the norm cone is the sum of the nonnegative variables corresponding to the current row and column.
+# diagonal entry. In turn, if we are complex, the most efficient way is to split the ℓ_∞ cone formulation in terms of quadratic
+# cones with the diagonal as the first entry and the corresponding off-diagonals in real and imaginary part as the second and
+# third entry.
 
 # If we don't have a full matrix u, but also not diagonal, we'll specialize two other cases: the triangular ones (and the upper
 # triangular is the important one for our default Cholesky update strategy). This is not as sophisticated as in the diagonal
@@ -845,23 +842,23 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         sbelow = upperslack + (complex ? 2j - 2 : j -1)
         for i in j+1:dim
             @twice impart complex begin
-                beforeidx = length(indices)
+                startind = length(indices)
                 slack = 1
                 for col in 1:dim
                     if !dddual_transform_inrange(u, j, col)
                         slack += 1 + (complex ? 2 : 1) * (dim - col)
                         continue
                     end
-                    if dddual_transform_inrange(Val(:offdiag), u, j, col)
+                    if dddual_transform_inrange(Val(:offdiag), u, i, col)
                         uval = 2u[i, col] * conj(u[j, col])
                         unsafe_push!(indices, slacks[slack])
                         unsafe_push!(values, impart ? imag(uval) : real(uval))
                     end
                     slack += 1
                     for row in col+1:dim
-                        if dddual_transform_inrange(Val(:offdiag), u, j, row)
+                        if dddual_transform_inrange(Val(:offdiag), u, i, row)
                             uval = u[i, row] * conj(u[j, col])
-                            @twice imdata complex begin
+                            @twice imdata complex let uval=uval
                                 if imdata
                                     uval -= u[i, col] * conj(u[j, row])
                                     thisuval = impart ? real(uval) : -imag(uval)
@@ -878,7 +875,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
                 end
                 unsafe_push!(indices, slacks[sbelow])
                 unsafe_push!(values, impart ? one(V) : -one(V))
-                unsafe_push!(lens, length(indices) - beforeidx)
+                unsafe_push!(lens, length(indices) - startind)
                 if complex
                     sbelow += impart ? 2i -3 : 1
                 else
@@ -933,11 +930,8 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         upperslack += j -1
         sbelow = upperslack + j -1
         for i in j+1:dim
-            if u isa Diagonal
-                uval = u[i, i] * u[j, j]
-            else
-                uval = one(V)
-            end
+            uval = u isa Diagonal ? u[i, i] * u[j, j] : one(V)
+
             unsafe_push!(indices, slacks[diagslack], slacks[lowerslack], slacks[sbelow], slacks[diagslack], slacks[lowerslack],
                 slacks[sbelow])
             unsafe_push!(values, udiagval, uval, -one(V), udiagval, -uval, one(V))
@@ -994,21 +988,21 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
                     lowerslack += 1
                 end
             end
+            diagindices = @view(indices[:])
             diagvalues = @view(values[:])
-            diagslacks = @view(slacks[1:length(indices)])
             unsafe_push!(indices, slacks[upperslack])
             unsafe_push!(values, one(V))
             unsafe_append!(lens, Iterators.repeated(length(indices), 2 * (j -1)))
-            unsafe_append!(indices, diagslacks)
+            unsafe_append!(indices, diagindices)
             unsafe_append!(values, diagvalues)
             unsafe_push!(indices, slacks[upperslack])
             unsafe_push!(values, -one(V))
             for i in 1:j-2
-                unsafe_append!(indices, diagslacks)
+                unsafe_append!(indices, diagindices)
                 unsafe_append!(values, diagvalues)
                 unsafe_push!(indices, slacks[upperslack+i])
                 unsafe_push!(values, one(V))
-                unsafe_append!(indices, diagslacks)
+                unsafe_append!(indices, diagindices)
                 unsafe_append!(values, diagvalues)
                 unsafe_push!(indices, slacks[upperslack+i])
                 unsafe_push!(values, -one(V))
@@ -1016,18 +1010,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         end
         #endregion
         #region Below diagonal
-        # Here we now have to be careful. If j = 1, then we already have the coefficients for the slacks due to the diagonal
-        # part written into values. This is wrong, we need to update them and add the part for the (2, 1) entry. However, it is
-        # better if we actually start to insert the starting from (3, 1), then at the end re-visit the (2, 1) part and update
-        # it only now; in this way, we can use our knowledge of the diagonal part, saving some small re-computation.
         upperslack += j -1
         sbelow = upperslack + j -1
-        if isone(j)
-            sbelow += j
-        end
         for i in j+1:dim
             @twice negative true begin
                 slack = 1
+                startind = length(indices)
                 for col in 1:dim
                     if !dddual_transform_inrange(u, j, col)
                         slack += dim - col +1
@@ -1051,7 +1039,7 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
                 end
                 unsafe_push!(indices, slacks[sbelow])
                 unsafe_push!(values, negative ? one(V) : -one(V))
-                unsafe_push!(lens, slack)
+                unsafe_push!(lens, length(indices) - startind)
             end
             sbelow += i -1
         end
@@ -1070,122 +1058,117 @@ end
 # We don't have the lnorm cone available (but the quadratic cone), the problem is complex-valued, and the transform is diagonal
 function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}, dim::Int, data::IndvalsIterator{T,V},
     u::DiagonalTransform, counters::Counters) where {T,V}
-    ts = trisize(dim)
     dsq = dim^2
+    dd = dsq - dim
     # Here we use the quadratic cone to mimick the ℓ_∞ norm cone: x₁ ≥ ∑ᵢ (Re² xᵢ + Im² xᵢ). So we need to submit lots of
     # cones, but all of them pretty small.
-    indices = FastVec{T}(buffer=max(6, 3dsq))
-    slacks = add_var_slack!(state, dsq)
+    indices = FastVec{T}(buffer=7)
+    slacks = add_var_slack!(state, dsq + dd)
     values = similar(indices, V)
+    lens = [1, 3, 3] # let's not make it a StackVec to not compile yet another method
 
     valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
-    rowdiagslack = 1
+    upperslack = dsq +1
     lowerslack = 1
     @inbounds for j in 1:dim
-        #region Diagonal (naturally is the first item in the L order, and we must put it separately in the nonneg cone)
-        unsafe_push!(indices, slacks[lowerslack])
-        unsafe_push!(values, u isa Diagonal ? abs2(u[j, j]) : one(V))
-        add_constr_nonnegative!(state, Indvals(indices, values))
+        resize!(indices, 3)
+        resize!(values, 3)
+        #region Diagonal
+        indices[1] = slacks[lowerslack]
+        values[1] = u isa Diagonal ? abs2(u[j, j]) : one(V)
         lowerslack += 1
         #endregion
+        #region Above diagonal (slacks)
+        values[2] = one(V)
+        values[3] = one(V)
+        for _ in 1:j-1
+            indices[2] = slacks[upperslack]
+            indices[3] = slacks[upperslack+1]
+            upperslack += 2
+            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, 1))
+        end
+        #endregion
+        resize!(indices, 7)
+        resize!(values, 7)
+        values[4] = -(values[7] = one(V))
         #region Below diagonal
-        # We keep the variable from the column diagonal, but we also need the variable from the row diagonal
-        resize!(indices, 6)
-        resize!(values, 6)
-        rowdiagslack += 2(dim - j) +1
-        srowdiag = rowdiagslack
+        sbelow = upperslack + 2j -2
         for i in j+1:dim
             uval = u isa Diagonal ? u[i, i] * conj(u[j, j]) : one(V)
 
-            indices[2] = slacks[srowdiag]
-            values[2] = u isa Diagonal ? abs2(u[i, i]) : one(V)
-            indices[5] = indices[3] = slacks[lowerslack]
-            indices[6] = indices[4] = slacks[lowerslack+1]
-            values[3] = real(uval)
-            values[4] = -imag(uval)
-            values[5] = imag(uval)
-            values[6] = real(uval)
-            srowdiag += 2(dim - i) +1
+            indices[2] = slacks[lowerslack];   values[2] = real(uval)
+            indices[3] = slacks[lowerslack+1]; values[3] = -imag(uval)
+            indices[4] = slacks[sbelow]
+            indices[5] = slacks[lowerslack];   values[5] = imag(uval)
+            indices[6] = slacks[lowerslack+1]; values[6] = real(uval)
+            indices[7] = slacks[sbelow+1]
+
+            sbelow += 2i -2
             lowerslack += 2
-            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, 2))
+            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
         end
         #endregion
-        empty!(indices)
-        empty!(values)
     end
 
-    return :dd_quad_diag, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
-                           addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
+    return :dd_quad_diag, (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
 end
 
 # We don't have the lnorm cone available, the problem is complex-valued, and the transform is not diagonal
 function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}, dim::Int, data::IndvalsIterator{T,V}, u,
     counters::Counters) where {T,V}
-    ts = trisize(dim)
     dsq = dim^2
+    dd = dsq - dim
     # Here we use the quadratic cone to mimick the ℓ_∞ norm cone: x₁ ≥ ∑ᵢ (Re² xᵢ + Im² xᵢ). So we need to submit lots of
     # cones, but all of them pretty small.
-    indices = FastVec{T}(buffer=max(6, 3dsq))
-    slacks = add_var_slack!(state, dsq)
+    indices = FastVec{T}(buffer=3dim * (dim +1) +2)
+    slacks = add_var_slack!(state, dsq + dd)
     values = similar(indices, V)
     lens = Vector{Int}(undef, 3)
 
     valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
 
+    upperslack = dsq +1
     @inbounds for j in 1:dim
-        #region Diagonal (naturally is the first item in the L order, and we must put it separately in the nonneg cone)
-        slack = 1
-        @inbounds for col in 1:dim
+        #region Diagonal
+        lowerslack = 1
+        for col in 1:dim
             if !dddual_transform_inrange(u, j, col)
-                slack += 1 + 2(dim - col)
+                lowerslack += 1 + 2(dim - col)
                 continue
             end
             if dddual_transform_inrange(Val(:diag), u, j, col)
-                unsafe_push!(indices, slacks[slack])
+                unsafe_push!(indices, slacks[lowerslack])
                 unsafe_push!(values, abs2(u[j, col]))
             end
-            slack += 1
+            lowerslack += 1
             for row in col+1:dim
                 if dddual_transform_inrange(Val(:diag), u, j, row)
                     uval = u[j, col] * conj(u[j, row])
-                    unsafe_push!(indices, slacks[slack], slacks[slack+1])
+                    unsafe_push!(indices, slacks[lowerslack], slacks[lowerslack+1])
                     unsafe_push!(values, real(uval), imag(uval))
                 end
-                slack += 2
+                lowerslack += 2
             end
         end
-        add_constr_nonnegative!(state, Indvals(indices, values))
-        empty!(indices)
-        empty!(values)
+        lens[1] = length(indices)
+        #endregion
+        #region Above diagonal (slacks)
+        unsafe_push!(values, one(V), one(V))
+        lens[3] = lens[2] = 1
+        for _ in 1:j-1
+            unsafe_push!(indices, slacks[upperslack], slacks[upperslack+1])
+            upperslack += 2
+            @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
+            Base._deleteend!(indices, 2)
+        end
+        Base._deleteend!(values, 2)
         #endregion
         #region Below diagonal
+        sbelow = upperslack + 2j - 2
         for i in j+1:dim
-            # first the diagonal, which is our col diagonal plus the row diagonal that we must recompute.
-            slack = 1
-            for col in 1:dim
-                if !dddual_transform_inrange(u, j, col)
-                    slack += 1 + 2(dim - col)
-                    continue
-                end
-                if dddual_transform_inrange(Val(:diag), u, j, col)
-                    unsafe_push!(indices, slacks[slack])
-                    unsafe_push!(values, abs2(u[j, col]) + abs2(u[i, col]))
-                end
-                slack += 1
-                for row in col+1:dim
-                    if dddual_transform_inrange(Val(:diag), u, j, row)
-                        uval = u[j, col] * conj(u[j, row]) + u[i, col] * conj(u[i, row])
-                        unsafe_push!(indices, slacks[slack], slacks[slack+1])
-                        unsafe_push!(values, real(uval), imag(uval))
-                    end
-                    slack += 2
-                end
-            end
-            startind = length(indices)
-            lens[1] = startind
-            # then every off-diagonal
             @twice impart true begin
+                startind = length(indices)
                 slack = 1
                 for col in 1:dim
                     if !dddual_transform_inrange(u, j, col)
@@ -1200,8 +1183,8 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
                     slack += 1
                     for row in col+1:dim
                         if dddual_transform_inrange(Val(:offdiag), u, i, row)
-                            @twice imdata true begin
-                                uval = u[i, row] * conj(u[j, col])
+                            uval = u[i, row] * conj(u[j, col])
+                            @twice imdata true let uval=uval
                                 if imdata
                                     uval -= u[i, col] * conj(u[j, row])
                                     thisuval = impart ? real(uval) : -imag(uval)
@@ -1216,18 +1199,21 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
                         slack += 2
                     end
                 end
+                unsafe_push!(indices, slacks[sbelow])
+                unsafe_push!(values, impart ? one(V) : -one(V))
                 lens[2+impart] = length(indices) - startind
-                startind = length(indices)
+                sbelow += impart ? 2i -3 : 1
             end
             @inline add_constr_quadratic!(state, IndvalsIterator(unsafe, indices, values, lens))
-            empty!(indices)
-            empty!(values)
+            resize!(indices, lens[1])
+            resize!(values, lens[1])
         end
         #endregion
+        empty!(indices)
+        empty!(values)
     end
 
-    return :dd_quad, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 1),
-                      addtocounter!(state, counters, Val(:quadratic), trisize(dim -1), 3))
+    return :dd_quad, (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
 end
 
 function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
@@ -1456,8 +1442,8 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
                     slack += 1
                     for row in col+1:dim
                         if dddual_transform_inrange(Val(:offdiag), u, i, row)
-                            @twice imdata complex begin
-                                uval = u[i, row] * conj(u[j, col])
+                            uval = u[i, row] * conj(u[j, col])
+                            @twice imdata complex let uval=uval
                                 if imdata
                                     uval -= u[i, col] * conj(u[j, row])
                                     thisuval = impart ? real(uval) : -imag(uval)
