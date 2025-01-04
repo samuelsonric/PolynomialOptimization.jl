@@ -4,7 +4,8 @@ module SpecBM
 
 using LinearAlgebra, Printf, StandardPacked
 using StandardPacked: packed_format
-using ...PolynomialOptimization: @assert, @inbounds, @verbose_info, EfficientCholmod
+using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
+using ..Solvers: EfficientCholmod
 
 export specbm_primal
 

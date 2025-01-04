@@ -1,8 +1,8 @@
 # while this is not a weak dependency as the solver is shipped with PO, we follow the naming convention
 module PolynomialOptimizationSpecBM
 
-using ..SpecBM, MultivariatePolynomials, LinearAlgebra, SparseArrays, ...Solver
-using ...PolynomialOptimization: @assert, @inbounds
+using ..Solvers.SpecBM, MultivariatePolynomials, LinearAlgebra, SparseArrays, ..Solver
+using ..PolynomialOptimization: @assert, @inbounds
 
 include("./SpecBMSOS.jl")
 

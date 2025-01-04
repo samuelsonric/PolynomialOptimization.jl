@@ -2,25 +2,31 @@ mutable struct StateSOS{K<:Integer,V<:Real} <: AbstractSparseMatrixSolver{Int,K,
     const Aᵀcoo::SparseMatrixCOO{Int,K,V,1}
     const c::Tuple{FastVec{Int},FastVec{V}}
     num_frees::Int
+    slack::K
     const psds::FastVec{Int}
     b::Tuple{Vector{K},Vector{V}}
+    info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
 
     StateSOS{K,V}() where {K<:Integer,V<:Real} = new{K,V}(
         SparseMatrixCOO{Int,K,V,1}(),
         (FastVec{Int}(), FastVec{V}()),
-        0, FastVec{Int}()
+        0, K <: Signed ? -one(K) : typemax(K), FastVec{Int}()
     )
 end
 
+Solver.issuccess(::Val{:SpecBMSOS}, status::Symbol) = status === :Optimal
+
 Solver.psd_indextype(::StateSOS) = PSDIndextypeVector(:L)
 
-function Solver.add_var_nonnegative!(state::StateSOS{K,V}, indvals::AbstractIndvals{K,V}) where {K<:Integer,V<:Real}
+@counter_alias(StateSOS, :nonnegative, :psd)
+
+function Solver.add_var_nonnegative!(state::StateSOS{K,V}, indvals::IndvalsIterator{K,V}) where {K<:Integer,V<:Real}
     append!(state.Aᵀcoo, indvals)
-    push!(state.psds, 1)
+    append!(state.psds, Iterators.repeated(1, length(indvals)))
     return
 end
 
-function Solver.add_var_psd!(state::StateSOS{K,V}, dim::Int, data::PSDVector{K,V}) where {K<:Integer,V<:Real}
+function Solver.add_var_psd!(state::StateSOS{K,V}, dim::Int, data::IndvalsIterator{K,V}) where {K<:Integer,V<:Real}
     append!(state.Aᵀcoo, data)
     push!(state.psds, dim)
     return
@@ -33,7 +39,7 @@ function Solver.add_var_free_prepare!(state::StateSOS, num::Int)
     return
 end
 
-function Solver.add_var_free!(state::StateSOS{K,V}, ::Nothing, indvals::AbstractIndvals{K,V}, obj::V) where {K<:Integer,V<:Real}
+function Solver.add_var_free!(state::StateSOS{K,V}, ::Nothing, indvals::Indvals{K,V}, obj::V) where {K<:Integer,V<:Real}
     v = append!(state.Aᵀcoo, indvals)
     if !iszero(obj)
         push!(state.c[1], v)
@@ -43,19 +49,19 @@ function Solver.add_var_free!(state::StateSOS{K,V}, ::Nothing, indvals::Abstract
     return
 end
 
-function Solver.fix_constraints!(state::StateSOS{K,V}, indvals::AbstractIndvals{K,V}) where {K<:Integer,V<:Real}
+function Solver.fix_constraints!(state::StateSOS{K,V}, indvals::Indvals{K,V}) where {K<:Integer,V<:Real}
     state.b = (indvals.indices, indvals.values)
     return
 end
 
 function Solver.poly_optimize(::Val{:SpecBMSOS}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    verbose::Bool=false, customize::Base.Callable=(state) -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=_ -> nothing, parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))
         state = StateSOS{K,V}()
 
-        sos_setup!(state, relaxation, groupings)
+        state.info = sos_setup!(state, relaxation, groupings; representation)
         customize(state)
 
         # Now we have all the transposed data in COO form. The reason for this choice is that we were able to assign arbitrary
@@ -80,5 +86,14 @@ function Solver.poly_optimize(::Val{:SpecBMSOS}, relaxation::AbstractRelaxation,
     value = -result.objective
     @verbose_info("Optimization complete, retrieving moments")
 
-    return status, value, MomentVector(relaxation, rmul!(result.y, -one(V)), state.Aᵀcoo)
+    rmul!(result.y, -one(V))
+    return (state, result), status, value
 end
+
+Solver.extract_moments(relaxation::AbstractRelaxation, (state, result)::Tuple{StateSOS,Any}) =
+    MomentVector(relaxation, result.y, state.Aᵀcoo)
+
+Solver.extract_sos(relaxation::AbstractRelaxation, (state, result)::Tuple{StateSOS,Any}, type::Val,
+    index::AbstractUnitRange, ::Nothing) = @view(result.x[index])
+
+Solver.psd_indextype(::Tuple{StateSOS,Any}) = PSDIndextypeVector(:L)
