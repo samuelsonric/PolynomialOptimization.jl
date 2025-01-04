@@ -96,29 +96,25 @@ function (r::Rerepresent)((type, index, grouping), dim)
     oldtype = r.info[idx][grouping]
     if oldtype in Solver.INFO_PSD
         oldrep = RepresentationPSD
-        complex = false # just to make it compatible with the checks below
-        diagonal = true
     else
         complex = oldtype in Solver.INFO_COMPLEX
-        diagonal = oldtype in Solver.INFO_DIAG
+        if oldtype in Solver.INFO_DIAG
+            oldmat = Union{<:UniformScaling,<:Diagonal}
+        elseif oldtype in Solver.INFO_TRIU
+            oldmat = UpperOrUnitUpperTriangular
+        elseif oldtype in Solver.INFO_TRIL
+            oldmat = LowerOrUnitLowerTriangular
+        else
+            oldmat = Matrix
+        end
         if oldtype in Solver.INFO_SDD
-            oldrep = diagonal ? RepresentationSDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
-                                RepresentationSDD{<:Matrix,complex}
+            oldrep = RepresentationSDD{<:oldmat,complex}
         else
             @assert(oldtype in Solver.INFO_DD)
-            oldrep = diagonal ? RepresentationDD{<:Union{<:UniformScaling,<:Diagonal},complex} :
-                                RepresentationDD{<:Matrix,complex}
+            oldrep = RepresentationDD{<:oldmat,complex}
         end
     end
     newrep = r.fn((type, index, grouping), dim, oldrep, r.cert.data[idx][grouping])::RepresentationMethod
-    if r.fix_structure
-        ((oldtype in Solver.INFO_PSD && !(newtype isa RepresentationPSD)) ||
-         (oldtype in Solver.INFO_SDD && !(newrep isa RepresentationSDD)) ||
-         (oldtype in Solver.INFO_DD && !(newrep isa RepresentationDD)) ||
-         (complex && newrep isa RepresentationMethod{<:Any,false}))
-        throw(RepresentationChangedError())
-    end
-    newdiag = newrep isa RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}}
-    !r.fix_structure || diagonal == newdiag || throw(RepresentationChangedError())
+    r.fix_structure && !(newrep isa oldrep) && throw(RepresentationChangedError())
     return newrep
 end

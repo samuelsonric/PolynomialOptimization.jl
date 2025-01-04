@@ -93,21 +93,24 @@ function poly_optimize(args...; kwargs...)
 end
 
 struct IterateRepresentation
-    keep_diagonal::Bool
+    keep_structure::Bool
 
     @doc """
-        IterateRepresentation(; keep_diagonal=false)
+        IterateRepresentation(; keep_structure=false)
 
     Default iteration method for DD and SDD representations. This is will perform a Cholesky decomposition of the old SOS
     matrix and use it as the new rotation, ensuring that results never get worse (at least in theory; since a positive definite
     SOS matrix is only guaranteed up to a certain tolerance, bad things could still happen).
 
-    Note that this breaks existing diagonal structures; by setting `keep_diagonal` to `true`, only the diagonal of the Cholesky
-    factor will be taken (with no theoretical guarantees, not even about convergence).
+    Note that the resulting rotation matrix will be upper triangular, which may break a previous structure. By setting
+    `keep_structure` to `true`, the structure will be preserved (if it was diagonal, this would mean keeping only the diagonal
+    of the Cholesky factor, with no theoretical guarantees, not even about convergence; if it was lower triangular the adjoint
+    will be taken, which will _not_ give any convergence guarantees, as the rotated DD/SDD cone is implemented with respect to
+    the upper triangular factorization).
 
     See also [`poly_optimize`](@ref poly_optimize(::Result))
     """
-    IterateRepresentation(; keep_diagonal::Bool=false) = new(keep_diagonal)
+    IterateRepresentation(; keep_structure::Bool=false) = new(keep_structure)
 end
 
 function (i::IterateRepresentation)((type, index, grouping), _, oldrep::Type{<:RepresentationMethod}, oldsos)
@@ -137,12 +140,14 @@ function (i::IterateRepresentation)((type, index, grouping), _, oldrep::Type{<:R
         inplace = true
     end
     newrot = (inplace ? cholesky! : cholesky)(PositiveFactorizations.Positive, fullm).U
-    if i.keep_diagonal && oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} &&
-        !(newrot isa Union{<:UniformScaling,<:Diagonal})
-        return oldrep(Diagonal(newrot)) # well, maybe we should care...
-    else
-        return oldrep(newrot)
+    (!i.keep_structure || oldrep <: RepresentationMethod{<:UpperOrUnitUpperTriangular}) && return oldrep(newrot)
+    oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} && return oldrep(Diagonal(newrot)) # bad
+    oldrep <: RepresentationMethod{<:LowerOrUnitLowerTriangular} && return oldrep(newrot') # also bad!
+    dense = parent(newrot)
+    @inbounds for j in axes(dense, 2)
+        fill!(@view(dense[j+1:size(dense, 1)]), zero(eltype(dense)))
     end
+    return oldrep(dense)
 end
 
 """
@@ -153,8 +158,8 @@ find globally optimal solutions. However, this method allows to change the repre
 objective). If `representation` is a callable, it will now receive as a third parameter the type of the
 [`RepresentationMethod`](@ref) used before for this constraint[^2], and as a fourth parameter the associated SOS matrix from
 the previous optimization. For efficiency reasons, this should only be used for changes that preserve the structure of the
-representation (i.e., whether it was PSD/DD/SDD and if its rotation was diagonal or not). If a structure non-preserving change
-is made, the problem needs to be constructed from scratch. For non-diagonal rotations, consider using
+representation (i.e., whether it was PSD/DD/SDD and if its rotation was diagonal, triangular, or dense). If a
+structure non-preserving change is made, the problem needs to be constructed from scratch. For non-diagonal rotations, consider
 [`RepresentationNondiagI`](@ref) in the first optimization.
 
 !!! warning
@@ -166,13 +171,15 @@ is made, the problem needs to be constructed from scratch. For non-diagonal rota
 
 See also [`IterateRepresentation`](@ref).
 
-[^2]: Roughly, as the exact type is not known. For sure, it will be possible to distinguish between [`RepresentationDD`](@ref)
-      and [`RepresentationSDD`](@ref) (the callback will not be invoked for [`RepresentationPSD`](@ref), as nothing can be
-      changed there). The matrix type will not be concrete, but either `Union{<:UniformScaling,<:Diagonal}` if a diagonal
-      representation was used before, or `Matrix` else. The complex identification will be `true` if a complex-valued cone was
-      used and `false` else (where during specification, it could also have been `true` for real-valued data, which would
-      simply be ignored). Despite not being concrete, these two possible union types can be used as constructors accepting the
-      new rotation matrix as parameter.
+[^2]: Roughly, as the exact type is not known. For sure, it will be possible to distinguish between
+      [`RepresentationPSD`](@ref), [`RepresentationDD`](@ref), and [`RepresentationSDD`](@ref). The matrix type will not be
+      concrete, but either `Union{<:UniformScaling,<:Diagonal}` if a diagonal representation was used before,
+      `UpperOrUnitUpperTriangular`, `LowerOrUnitLowerTriangular`, or `Matrix` else. The complex identification will be `true`
+      if a complex-valued cone was used and `false` else (where during specification, it could also have been `true` for
+      real-valued data, which would simply be ignored). In any case, the third parameter can be used as a constructor accepting
+      (unless it is for [`RepresentationPSD`](@ref)) the new rotation matrix as parameter. This is recommended, as in this way
+      the `complex` value cannot change back to `true` for real-valued data, which would be interpreted as a change in
+      structure, even if it is not.
 """
 function poly_optimize(result::Result; representation=IterateRepresentation(), verbose::Bool=false, kwargs...)
     ismissing(result.state) && throw(ArgumentError("The given result does not contain any data."))

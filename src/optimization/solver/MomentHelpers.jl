@@ -46,13 +46,23 @@ function to_soc!(indices, values, lens, supports_rotated)
 end
 
 const INFO_PSD = (:psd, :psd_complex, :rotated_quadratic, :quadratic, :nonnegative)
-const INFO_SDD = (:sdd, :sdd_complex, :sdd_quad_real_diag, :sdd_quad_real, :sdd_quad_complex_diag, :sdd_quad_complex)
-const INFO_DD = (:dd, :dd_complex, :dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_lnorm_real, :dd_lnorm_complex,
-    :dd_nonneg_diag, :dd_nonneg, :dd_quad_diag, :dd_quad)
-const INFO_COMPLEX = (:psd_complex, :sdd_complex, :dd_complex, :dd_lnorm_complex_diag, :dd_lnorm_complex,
-    :sdd_quad_complex_diag, :sdd_quad_complex)
-const INFO_DIAG = (:dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_nonneg_diag, :dd_quad_diag, :sdd_quad_real_diag,
-    :sdd_quad_complex_diag)
+const INFO_SDD = (:sdd, :sdd_complex,
+    :sdd_quad_real_diag,    :sdd_quad_real_triu,    :sdd_quad_real_tril,    :sdd_quad_real,
+    :sdd_quad_complex_diag, :sdd_quad_complex_triu, :sdd_quad_complex_tril, :sdd_quad_complex)
+const INFO_DD = (:dd, :dd_complex,
+    :dd_lnorm_real_diag,    :dd_lnorm_real_triu,    :dd_lnorm_real_tril,    :dd_lnorm_real,
+    :dd_lnorm_complex_diag, :dd_lnorm_complex_triu, :dd_lnorm_complex_tril, :dd_lnorm_complex,
+    :dd_nonneg_diag,        :dd_nonneg_triu,        :dd_nonneg_tril,        :dd_nonneg,
+    :dd_quad_diag,          :dd_quad_triu,          :dd_quad_tril,          :dd_quad)
+const INFO_COMPLEX = (:psd_complex, :sdd_complex, :dd_complex,
+    :dd_lnorm_complex_diag, :dd_lnorm_complex_triu, :dd_lnorm_complex_tril, :dd_lnorm_complex,
+    :sdd_quad_complex_diag, :sdd_quad_complex_triu, :sdd_quad_complex_tril, :sdd_quad_complex)
+const INFO_DIAG = (:dd_lnorm_real_diag, :dd_lnorm_complex_diag, :dd_nonneg_diag, :dd_quad_diag,
+    :sdd_quad_real_diag, :sdd_quad_complex_diag)
+const INFO_TRIU = (:dd_lnorm_real_triu, :dd_lnorm_complex_triu, :dd_nonneg_triu, :dd_quad_triu,
+    :sdd_quad_real_triu, :sdd_quad_complex_triu)
+const INFO_TRIL = (:dd_lnorm_real_tril, :dd_lnorm_complex_tril, :dd_nonneg_tril, :dd_quad_tril,
+    :sdd_quad_real_tril, :sdd_quad_complex_tril)
 
 # generic moment matrix constraint with
 # - only real-valued monomials involved in the grouping, and only real-valued polynomials involved in the constraint (so if it
@@ -892,9 +902,12 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
-    return complex ? (:dd_lnorm_complex, (valat,
-                                          addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
-                     (:dd_lnorm_real, (valat, addtocounter!(state, counters, Val(:lnorm), dim, complex ? 2dim -1 : dim)))
+    return complex ? ((u isa UpperOrUnitUpperTriangular ? :dd_lnorm_complex_triu :
+                       (u isa LowerOrUnitLowerTriangular ? :dd_lnorm_complex_tril : :dd_lnorm_complex)),
+                      (valat, addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
+                     ((u isa UpperOrUnitUpperTriangular ? :dd_lnorm_real_triu :
+                       (u isa LowerOrUnitLowerTriangular ? :dd_lnorm_real_tril : :dd_lnorm_real)),
+                      (valat, addtocounter!(state, counters, Val(:lnorm), dim, complex ? 2dim -1 : dim)))
 end
 
 # We don't have the lnorm cone available, the problem is real-valued, and the transform is diagonal
@@ -1052,7 +1065,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
-    return :dd_nonneg, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
+    return (u isa UpperOrUnitUpperTriangular ? :dd_nonneg_triu :
+            (u isa LowerOrUnitLowerTriangular ? :dd_nonneg_tril : :dd_nonneg)),
+           (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
 end
 
 # We don't have the lnorm cone available (but the quadratic cone), the problem is complex-valued, and the transform is diagonal
@@ -1213,7 +1228,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         empty!(values)
     end
 
-    return :dd_quad, (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
+    return (u isa UpperOrUnitUpperTriangular ? :dd_quad_triu :
+            (u isa LowerOrUnitLowerTriangular ? :dd_quad_tril : :dd_quad)),
+           (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
 end
 
 function moment_add_dddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
@@ -1335,7 +1352,7 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
             )
         end
     end
-    return (complex ? :sdd_quad_complex_complex : :sdd_quad_real_diag),
+    return (complex ? :sdd_quad_complex_diag : :sdd_quad_real_diag),
            (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic),
                                  complex ? 4 : 3, trisize(dim)))
 end
@@ -1486,7 +1503,10 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
         empty!(first_indices)
         empty!(first_values)
     end
-    return (complex ? :sdd_quad_complex : :sdd_quad_real),
+    return (complex ? (u isa UpperOrUnitUpperTriangular ? :sdd_quad_complex_triu :
+                       (u isa LowerOrUnitLowerTriangular ? :sdd_quad_complex_tril : :sdd_quad_complex)) :
+                      (u isa UpperOrUnitUpperTriangular ? :sdd_quad_real_triu :
+                       (u isa LowerOrUnitLowerTriangular ? :sdd_quad_real_tril : :sdd_quad_real))),
            (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic), total, trisize(dim)))
 end
 
