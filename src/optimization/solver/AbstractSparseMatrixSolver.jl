@@ -23,6 +23,9 @@ function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, n
     return (state.slack + one(K)):stop
 end
 
+# necessary as SOS helper, as the state could also be a SOS state
+Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer}, num::Int) = add_var_slack!(state, num)
+
 """
     SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
 
