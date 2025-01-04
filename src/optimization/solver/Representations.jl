@@ -62,23 +62,26 @@ are supported:
 - [`RepresentationSDD`](@ref)
 - [`RepresentationDD`](@ref)
 
-See also [`RepresentationNondiagI`](@ref).
+See also [`RepresentationIAs`](@ref).
 """
 const RepresentationMethod{M,Complex} = Union{RepresentationPSD,RepresentationSDD{M,Complex},RepresentationDD{M,Complex}}
 
 """
-    RepresentationNondiagI(r::Type{RepresentationDD,RepresentationSDD}; complex=true)
+    RepresentationIAs(r::Type{RepresentationDD,RepresentationSDD},
+        m::Type{<:AbstractMatrix}=UpperTriangular; complex=true)
 
 Default callable that will instantiate a correctly-sized representation of type `r` with an identity rotation that is, however,
-not recognized as a diagonal rotation. Use this type in the first call to [`poly_optimize`](@ref) if you want to re-optimize
-the problem afterwards using arbitrary rotations.
+not recognized as a diagonal rotation but as type `m` instead. Use this type in the first call to [`poly_optimize`](@ref) if
+you want to re-optimize the problem afterwards with rotations of type `m`. The default for `m`, `UpperTriangular`, is suitable
+for the automatic Cholesky-based reoptimization.
 """
-struct RepresentationNondiagI{R<:Union{RepresentationDD,RepresentationSDD},Complex}
-    RepresentationNondiagI(r::R; complex::Bool=true) where {R<:Type{<:Union{RepresentationDD,RepresentationSDD}}} =
-        new{r,complex}()
+struct RepresentationIAs{R<:Union{RepresentationDD,RepresentationSDD},M,Complex}
+    RepresentationIAs(r::Type{<:Union{RepresentationDD,RepresentationSDD}}, m::Type{<:AbstractMatrix}; complex::Bool=true) =
+        new{r,m,complex}()
 end
 
-(::RepresentationNondiagI{R,complex})(_, dim) where {R,complex} = R(Matrix(I, dim, dim); complex)
+(::RepresentationIAs{R,M,complex})(_, dim) where {R,M<:Matrix,complex} = R(Matrix(I, dim, dim); complex)
+(::RepresentationIAs{R,M,complex})(_, dim) where {R,M,complex} = R(M(Diagonal(I, dim)); complex)
 
 struct RepresentationChangedError <: Exception end
 

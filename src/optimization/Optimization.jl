@@ -1,4 +1,4 @@
-export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDD, RepresentationSDD, RepresentationNondiagI,
+export poly_optimize, optimality_certificate, RepresentationPSD, RepresentationDD, RepresentationSDD, RepresentationIAs,
     IterateRepresentation
 
 include("./Result.jl")
@@ -7,10 +7,11 @@ include("./SOSCertificate.jl")
 include("./OptimalityCertificate.jl")
 include("./solver/Solver.jl")
 using .Solver: default_solver_method, monomial_count, RepresentationMethod, RepresentationPSD, RepresentationDD,
-    RepresentationSDD, RepresentationNondiagI
+    RepresentationSDD, RepresentationIAs
 import .Solver: poly_optimize
 using StandardPacked: SPMatrix, SPMatrixUpper, SPMatrixLower
 import PositiveFactorizations
+import LinearAlgebra: UpperOrUnitUpperTriangular, LowerOrUnitLowerTriangular
 
 _val_of(::Val{S}) where {S} = S
 
@@ -38,7 +39,7 @@ For a list of supported methods, see [the solver reference](@ref solvers_poly_op
 solver is used. Note that this depends on the loaded solver packages, and possibly also their loading order if no preferred
 solver has been loaded.
 
-See also [`RepresentationNondiagI`](@ref).
+See also [`RepresentationIAs`](@ref).
 
 [^1]: This identifier will be a tuple, where the first element is a symbol - either `:objective`, `:nonneg`, or `:psd` - to
       indicate the general reason why the variable is there. The second element is an `Int` denoting the index of the
@@ -160,7 +161,7 @@ objective). If `representation` is a callable, it will now receive as a third pa
 the previous optimization. For efficiency reasons, this should only be used for changes that preserve the structure of the
 representation (i.e., whether it was PSD/DD/SDD and if its rotation was diagonal, triangular, or dense). If a
 structure non-preserving change is made, the problem needs to be constructed from scratch. For non-diagonal rotations, consider
-[`RepresentationNondiagI`](@ref) in the first optimization.
+using [`RepresentationIAs`](@ref) in the first optimization.
 
 !!! warning
     The internal state of the previous solver run will be re-used whenever possible. Therefore, no further data may be queried
@@ -200,7 +201,7 @@ function poly_optimize(result::Result; representation=IterateRepresentation(), v
         if e isa Solver.RepresentationChangedError && representation isa Solver.Rerepresent
             @warn("The representation of at least one grouping changed, either in type or diagonally. The problem has to be \
                    set-up from the beginning. If this is due to a change in diagonality, consider using \
-                   RepresentationNondiagI as initial value.")
+                   RepresentationIAs as initial value.")
             representation = Solver.Rerepresent(representation, false)
             otime = @elapsed begin
                 new_result = Solver._Copied(poly_optimize(Val(result.method), relaxation, Relaxation.groupings(relaxation),

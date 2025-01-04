@@ -465,8 +465,8 @@ the previous iteration as a new rotation basis.
     changed, the old problem can be re-used, reducing the setup time. This is irrelevant if a solver is used whose interface
     in `PolynomialOptimization` does not support this faster reoptimization.
     Note that by default, the default rotations used for the DD and SDD representation are identities of the type
-    `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationNondiagI`](@ref) to "fake" a
-    fully dense identity at the beginning.
+    `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationIAs`](@ref) to "fake" an
+    upper triangular identity at the beginning.
 
 ```jldoctest walkthrough
 julia> res_dd_rotated = poly_optimize(res_dd)

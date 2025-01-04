@@ -65,7 +65,7 @@ Solver.RepresentationMethod
 RepresentationPSD
 RepresentationSDD
 RepresentationDD
-RepresentationNondiagI
+RepresentationIAs
 Result
 issuccess(::Result)
 poly_problem(::Result)
