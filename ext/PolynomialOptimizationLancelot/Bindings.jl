@@ -1,5 +1,3 @@
-export LANCELOT_simple
-
 include("./FortranSpecials.jl")
 
 _desc(::Nothing) = C_NULL
