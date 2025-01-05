@@ -45,12 +45,15 @@ Base.sizehint!(::FastVec, ::Integer)
 Base.resize!(::FastVec, ::Integer)
 Base.empty!(::FastVec)
 prepare_push!
-Base.push!(::FastVec{V}, el) where {V}
+Base.push!(::FastVec{V}, ::Any) where {V}
 unsafe_push!
-Base.append!(::FastVec{V}, ::AbstractVector) where {V}
+Base.insert!(::FastVec{V}, ::Integer, ::Any) where {V}
+unsafe_insert!
+Base.append!(::FastVec, ::Any)
 unsafe_append!
-Base.prepend!(::FastVec{V}, ::AbstractVector) where {V}
+Base.prepend!(::FastVec, ::Any)
 unsafe_prepend!
+Base.splice!(::FastVec, ::Integer, ::Any)
 Base.similar(::FastVec{V}) where {V}
 Base.copyto!(::FastVec, ::Integer, ::FastVec, ::Integer, ::Integer)
 Base.deleteat!(::FastVec, ::Integer)
