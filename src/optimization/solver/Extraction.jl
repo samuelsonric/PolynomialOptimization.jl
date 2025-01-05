@@ -58,23 +58,23 @@ relations should hold:
 | `:nonnegative`       | vector                   |
 | `:quadratic`         | vector                   |
 | `:rotated_quadratic` | vector                   |
-| `:psd`               | vector[^4] or matrix     |
-| `:psd_complex`       | vector[^4][^5] or matrix |
-| `:dd`                | vector[^4] or matrix     |
-| `:dd_complex`        | vector[^4][^5] or matrix |
+| `:psd`               | vector[^1] or matrix     |
+| `:psd_complex`       | vector[^1][^2] or matrix |
+| `:dd`                | vector[^1] or matrix     |
+| `:dd_complex`        | vector[^1][^2] or matrix |
 | `:lnorm`             | vector                   |
-| `:lnorm_complex`     | vector[^5]               |
+| `:lnorm_complex`     | vector[^2]               |
 | `:sdd`               | vector                   |
-| `:sdd_complex`       | vector[^5]               |
+| `:sdd_complex`       | vector[^2]               |
 
 !!! info
     It is guaranteed that the range that is queries using `index` always corresponds to data that was added contiguously, with
     no other cones interspersed.
 
-[^4]: If the return type is a vector, [`psd_indextype`](@ref) should be defined on `state`, and it must return a
+[^1]: If the return type is a vector, [`psd_indextype`](@ref) should be defined on `state`, and it must return a
       [`PSDIndextypeVector`](@ref). However, the scaling operation on the off-diagonals is now inverted: To go from the vector
       of the triangle to the full matrix, off-diagonals must be scaled by ``\\frac{1}{\\sqrt2}``.
-[^5]: Complex values can be treated either by returning a vector of `Complex` element type, or by returning a real-valued
+[^2]: Complex values can be treated either by returning a vector of `Complex` element type, or by returning a real-valued
       vector where the diagonals (PSD/DD/SDD)/first elements (``\\ell``-norm) have a single entry and off-diagonals two.
 """
 function extract_sos end

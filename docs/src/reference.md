@@ -51,6 +51,7 @@ SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
 CliqueMerged
+iterate!(::SparsityTerm)
 ```
 
 ## Optimization and problem solutions
@@ -86,12 +87,4 @@ Note that using these functions is usually not necessary; construct a [`Newton`]
 ```@docs
 Newton.halfpolytope
 Newton.halfpolytope_from_file
-```
-
-## Lancelot
-`PolynomialOptimization` provides an interface to LANCELOT. This is only temporary, as the GALAHAD developers are developing
-Julia interfaces themselves (in fact, this is already there - but LANCELOT is the only part that not even has a C interface).
-To use this interface, make sure [`GALAHAD.jl`](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) is loaded.
-```@docs
-LANCELOT_simple
 ```
