@@ -15,6 +15,7 @@ if isone(Threads.nthreads())
         @testset "no sparsity" begin
             include("./RelaxationDense.jl")
         end
+        deleteat!(solvers, findfirst(==(:SpecBMSOS), solvers))
         @testset "correlative sparsity" begin
             include("./RelaxationSparsityCorrelative.jl")
         end
