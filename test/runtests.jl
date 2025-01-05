@@ -6,6 +6,9 @@ if isone(Threads.nthreads())
         @testset "Documentation" begin
             doctest(PolynomialOptimization)
         end
+        @testset "FastVector" begin
+            include("./FastVector.jl")
+        end
         @testset "SimplePolynomials" begin
             include("./SimplePolynomials.jl")
         end
@@ -16,6 +19,9 @@ if isone(Threads.nthreads())
             include("./RelaxationDense.jl")
         end
         deleteat!(solvers, findfirst(==(:SpecBMSOS), solvers))
+        @testset "SOSCertificate" begin
+            include("./SOSCertificate.jl")
+        end
         @testset "correlative sparsity" begin
             include("./RelaxationSparsityCorrelative.jl")
         end
