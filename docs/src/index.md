@@ -14,6 +14,8 @@ The following solvers are supported:
 - [Hypatia](https://github.com/jump-dev/Hypatia.jl)
 - [Mosek](https://www.mosek.com/)
 - [SCS](https://github.com/cvxgrp/scs)
+It also features a pure Julia implementation of the large-scale
+[primal SpectralBundle method](https://doi.org/10.48550/arXiv.2307.07651) by Liao et al.
 
 ## Overview
 ```@contents
