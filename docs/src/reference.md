@@ -51,6 +51,7 @@ SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
 CliqueMerged
+iterate!(::SparsityTerm)
 ```
 
 ## Optimization and problem solutions

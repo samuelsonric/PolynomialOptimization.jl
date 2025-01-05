@@ -40,6 +40,9 @@ if isone(Threads.nthreads())
         @testset "multiplication by prefactor using Mai et al.'s method" begin
             include("./Noncompact.jl")
         end
+        @testset "Lancelot" begin
+            include("./Lancelot.jl")
+        end
     end
 else
     @testset "PolynomialOptimization (multi-threaded)" begin
@@ -49,5 +52,8 @@ else
                 include("./Newton.jl")
             end
         end
+    end
+    @testset "Lancelot" begin
+        include("./Lancelot.jl")
     end
 end

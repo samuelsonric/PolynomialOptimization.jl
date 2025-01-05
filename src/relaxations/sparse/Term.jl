@@ -481,8 +481,8 @@ function _jointmethods(problem::Problem, objective::Union{Bool,TermMode}, zero::
 end
 
 """
-    iterate!(relaxation::Union{SparsityTerm,SparsityCorrelativeTerm}; [method,] objective=true, zero=true, nonneg=true,
-        psd=true, varclique_methods=missing)
+    iterate!(relaxation::Union{SparsityTerm,SparsityCorrelativeTerm}; [method,]
+        objective=true, zero=true, nonneg=true, psd=true, varclique_methods=missing)
 
 [`SparsityTerm`](@ref) implementations allow to customize the iteration procedure by the keyword arguments. The arguments
 `objective`, `zero`, `nonneg`, and `psd` can be boolean values (`false` means that these elements will not contribute to the
