@@ -23,6 +23,9 @@ function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, n
     return (state.slack + one(K)):stop
 end
 
+# necessary as SOS helper, as the state could also be a SOS state
+Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer}, num::Int) = add_var_slack!(state, num)
+
 """
     SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
 
@@ -241,7 +244,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
             solution = SparseVector(max_mons, mon_pos, iszero(slack) ? _moments : collect(moments))
         else
             solution = fill(NaN, max_mons)
-            copy!(@view(solution[mon_pos]), moments)
+            copyto!(@view(solution[mon_pos]), moments)
         end
     end
     return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)

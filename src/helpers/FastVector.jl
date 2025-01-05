@@ -65,7 +65,7 @@ end
 
 Base.IndexStyle(::FastVec) = IndexLinear()
 
-Base.@propagate_inbounds function Base.setindex!(v::FastVec{V}, el, i::Int) where {V}
+Base.@inline function Base.setindex!(v::FastVec{V}, el, i::Int) where {V}
     @boundscheck checkbounds(v, i)
     @inbounds return v.data[i] = convert(V, el)
 end

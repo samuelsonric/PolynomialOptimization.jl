@@ -1,14 +1,14 @@
-function merge_cliques!(cliques::AbstractVector{<:AbstractSet{T}}) where {T}
+function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     # directly drop cliques of length 1 and 2. They are so efficient (linear vs. quadratic constraints) that we don't even
     # consider them in the merge process
-    smallcliques = @view cliques[length.(cliques).≤2]
-    cliques = @view cliques[length.(cliques).≥3]
+    smallcliques = @view _cliques[length.(_cliques).≤2]
+    cliques = @view _cliques[length.(_cliques).≥3]
     # first form the clique graph; this time, we work with the adjacency matrix
     n = length(cliques)
     n ≤ 1 && return [smallcliques; cliques]
     @inbounds adjmOwn = collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
                                                  length(cliques[i] ∪ cliques[j])^3 : 0
-                                         for i in 1:n, j in 1:n))
+                                         for i in 1:n, j in 1:n))::Matrix{Int} # capture n?
     idxOwn = fill(true, n)
     GC.@preserve adjmOwn idxOwn begin
         adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)

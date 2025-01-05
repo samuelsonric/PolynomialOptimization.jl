@@ -73,7 +73,9 @@ point ``x`` such that the objective evaluated at ``x`` gives our bound, then thi
 difficulty now lies in finding the point. `PolynomialOptimization` implements a state of the art
 [solution extraction algorithm](https://doi.org/10.1016/j.laa.2017.04.015), which can relatively quickly (the cost is
 essentially that of performing an SVD on the moment matrix) obtain solutions. This will only be guaranteed to work if the
-problem was indeed optimal and there were finitely many solutions in the first place.
+problem was indeed optimal, there were finitely many solutions in the first place, and a "good" moment matrix is obtained
+(i.e., a dense matrix and no low-rank solver was employed) - but there is an alternative which might work well in case these
+conditions are not satisfied (apart from optimality, obviously), more on this below.
 The function [`poly_solutions`](@ref) gives an iterator that delivers all the (potential) solutions one at a time in an
 arbitrary order.
 Alternatively, [`poly_all_solutions`](@ref) directly calculates all the solutions and grades them according to how much they
@@ -237,8 +239,8 @@ PSD block sizes:
   [5 => 1, 2 => 1, 1 => 3]
 ```
 We get a basis of size `5`, one of size `2`, and three bases of size `1` (here, by _basis_ we mean a set of monomials that
-indexes the moment/SOS matrices). `PolynomialOptimization` will model these by a `5x5` semidefinite matrix, a rotated
-second-order cone, as well as three linear constraints. This is much cheaper than a `10x10` semidefinite matrix.
+indexes the moment/SOS matrices). `PolynomialOptimization` will model these by a `5 × 5` semidefinite matrix, a rotated
+second-order cone, as well as three linear constraints. This is much cheaper than a `10 × 10` semidefinite matrix.
 Let's optimize the sparse problem:
 ```jldoctest walkthrough
 julia> poly_optimize(:Clarabel, tbs)
