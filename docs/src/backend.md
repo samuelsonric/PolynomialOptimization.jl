@@ -145,6 +145,8 @@ PSDIndextypeVector
 psd_indextype
 negate_fix
 negate_free
+prepend_fix
+prepend_free
 ```
 
 #### Working with data from the interface

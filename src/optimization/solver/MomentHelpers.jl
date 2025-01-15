@@ -790,7 +790,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
 
     upperslack = (complex ? dsq : trisize(dim)) +1
     lowerslack = 1
@@ -836,6 +838,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
+
     return complex ? (:dd_lnorm_complex_diag,
                       (valat, addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
                      (:dd_lnorm_real_diag,
@@ -857,7 +863,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
     slacks = add_var_slack!(state, complex ? dsq + 2trisize(dim -1) : dsq)
     values = similar(indices, V)
 
-    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
 
     upperslack = (complex ? dsq : ts) +1
     @inbounds for j in 1:dim
@@ -947,6 +955,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{true}, ::Val{comple
         empty!(lens)
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
+
     return complex ? ((u isa UpperOrUnitUpperTriangular ? :dd_lnorm_complex_triu :
                        (u isa LowerOrUnitLowerTriangular ? :dd_lnorm_complex_tril : :dd_lnorm_complex)),
                       (valat, addtocounter!(state, counters, Val(:lnorm_complex), dim, complex ? 2dim -1 : dim))) :
@@ -967,7 +979,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     slacks = add_var_slack!(state, dsq)
     values = similar(indices, V)
 
-    valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    end
 
     upperslack = ts +1
     lowerslack = 1
@@ -1006,6 +1020,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    end
+
     return :dd_nonneg_diag, (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2dim -2))
 end
 
@@ -1021,7 +1039,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
     values = similar(indices, V)
     lens = FastVec{Int}(buffer=2 * (dim -1))
 
-    valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    end
 
     upperslack = ts +1
     @inbounds for j in 1:dim
@@ -1110,6 +1130,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{false
         empty!(lens)
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(false), dim, data, slacks, counters)
+    end
+
     return (u isa UpperOrUnitUpperTriangular ? :dd_nonneg_triu :
             (u isa LowerOrUnitLowerTriangular ? :dd_nonneg_tril : :dd_nonneg)),
            (valat, addtocounter!(state, counters, Val(:nonnegative), dim, 2 * (ts +1)))
@@ -1127,7 +1151,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     values = similar(indices, V)
     lens = [1, 3, 3] # let's not make it a StackVec to not compile yet another method
 
-    valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    end
 
     upperslack = dsq +1
     lowerslack = 1
@@ -1171,6 +1197,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         #endregion
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    end
+
     return :dd_quad_diag, (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
 end
 
@@ -1186,7 +1216,9 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
     values = similar(indices, V)
     lens = Vector{Int}(undef, 3)
 
-    valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    end
 
     upperslack = dsq +1
     @inbounds for j in 1:dim
@@ -1273,6 +1305,10 @@ function dddual_transform_cone!(state::AnySolver{T,V}, ::Val{false}, ::Val{true}
         empty!(values)
     end
 
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(true), dim, data, slacks, counters)
+    end
+
     return (u isa UpperOrUnitUpperTriangular ? :dd_quad_triu :
             (u isa LowerOrUnitLowerTriangular ? :dd_quad_tril : :dd_quad)),
            (valat, addtocounter!(state, counters, Val(:quadratic), dd, 3))
@@ -1344,7 +1380,9 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
     slacks = add_var_slack!(state, complex ? dim^2 : trisize(dim))
     values = similar(indices, V)
 
-    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
 
     rowdiagslack = 1
     offstart = (have_rot ? 3 : 5)
@@ -1397,6 +1435,11 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
             )
         end
     end
+
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
+
     return (complex ? :sdd_quad_complex_diag : :sdd_quad_real_diag),
            (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic),
                                  complex ? 4 : 3, trisize(dim)))
@@ -1413,7 +1456,9 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
     values = similar(indices, V)
     lens = Vector{Int}(undef, complex ? 4 : 3)
 
-    valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    if prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
 
     if !have_rot
         first_values = FastVec{V}(buffer=total)
@@ -1548,6 +1593,11 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
         empty!(first_indices)
         empty!(first_values)
     end
+
+    if !prepend_fix(state)
+        valat = dddual_transform_equalities!(state, Val(complex), dim, data, slacks, counters)
+    end
+
     return (complex ? (u isa UpperOrUnitUpperTriangular ? :sdd_quad_complex_triu :
                        (u isa LowerOrUnitLowerTriangular ? :sdd_quad_complex_tril : :sdd_quad_complex)) :
                       (u isa UpperOrUnitUpperTriangular ? :sdd_quad_real_triu :
@@ -1821,6 +1871,69 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
     return addtocounter!(state, counters, Val(:fix), totalsize)
 end
 
+function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::RelaxationGroupings, counters::Counters,
+    info::Vector, infoᵢ::Int) where {T,V,P}
+    # fixed items
+    negate = @inline negate_fix(state)
+    # fix constant term to 1
+    if isone(problem.prefactor)
+        @inline add_constr_fix_finalize!(
+            state,
+            add_constr_fix!(
+                state,
+                add_constr_fix_prepare!(state, 1),
+                Indvals(StackVec(mindex(state, constant_monomial(P))), StackVec(negate ? -one(V) : one(V))),
+                negate ? -one(V) : one(V)
+            )
+        )
+    else
+        let buffer=length(problem.prefactor), indices=FastVec{T}(; buffer), values=FastVec{V}(; buffer)
+            for t in problem.prefactor
+                # We know that if imaginary parts pop up somewhere, they will cancel out in the end, as the conjugates also
+                # appear. So use the same strategy as always and only add canonical ones, but doubled.
+                mon = monomial(t)
+                coeff = coefficient(t)
+                recoeff = real(coeff)
+                imcoeff = imag(coeff)
+                if negate
+                    recoeff = -recoeff
+                    imcoeff = -imcoeff
+                end
+                repart, impart, canonical = getreim(state, mon)
+                if repart == impart
+                    @assert(iszero(imcoeff)) # else the objective would not be real-valued
+                    unsafe_push!(indices, repart)
+                    unsafe_push!(values, recoeff)
+                elseif canonical
+                    if !iszero(recoeff)
+                        unsafe_push!(indices, repart)
+                        unsafe_push!(values, recoeff + recoeff)
+                    end
+                    if !iszero(imcoeff)
+                        unsafe_push!(indices, impart)
+                        unsafe_push!(values, -(imcoeff + imcoeff))
+                    end
+                end
+            end
+            @inline add_constr_fix_finalize!(
+                state,
+                add_constr_fix!(state, add_constr_fix_prepare!(state, 1), Indvals(indices, values), negate ? -one(V) : one(V))
+            )
+        end
+    end
+    addtocounter!(state, counters, Val(:fix), 1) # we don't store this info
+
+    for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
+        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
+        for (j, grouping) in enumerate(groupingsᵢ)
+            this_info[j] = (:fix, moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters))
+        end
+        infoᵢ += 1
+    end
+
+    return infoᵢ
+end
+
 """
     moment_setup!(state::AbstractSolver, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
 
@@ -1884,65 +1997,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     counters = Counters()
     info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_zero) + length(problem.constr_nonneg) +
                                                       length(problem.constr_psd))
-    infoᵢ = 2
-
-    # fixed items
-    negate = @inline negate_fix(state)
-    # fix constant term to 1
-    if isone(problem.prefactor)
-        @inline add_constr_fix_finalize!(
-            state,
-            add_constr_fix!(
-                state,
-                add_constr_fix_prepare!(state, 1),
-                Indvals(StackVec(mindex(state, constant_monomial(P))), StackVec(negate ? -one(V) : one(V))),
-                negate ? -one(V) : one(V)
-            )
-        )
-    else
-        let buffer=length(problem.prefactor), indices=FastVec{T}(; buffer), values=FastVec{V}(; buffer)
-            for t in problem.prefactor
-                # We know that if imaginary parts pop up somewhere, they will cancel out in the end, as the conjugates also
-                # appear. So use the same strategy as always and only add canonical ones, but doubled.
-                mon = monomial(t)
-                coeff = coefficient(t)
-                recoeff = real(coeff)
-                imcoeff = imag(coeff)
-                if negate
-                    recoeff = -recoeff
-                    imcoeff = -imcoeff
-                end
-                repart, impart, canonical = getreim(state, mon)
-                if repart == impart
-                    @assert(iszero(imcoeff)) # else the objective would not be real-valued
-                    unsafe_push!(indices, repart)
-                    unsafe_push!(values, recoeff)
-                elseif canonical
-                    if !iszero(recoeff)
-                        unsafe_push!(indices, repart)
-                        unsafe_push!(values, recoeff + recoeff)
-                    end
-                    if !iszero(imcoeff)
-                        unsafe_push!(indices, impart)
-                        unsafe_push!(values, -(imcoeff + imcoeff))
-                    end
-                end
-            end
-            @inline add_constr_fix_finalize!(
-                state,
-                add_constr_fix!(state, add_constr_fix_prepare!(state, 1), Indvals(indices, values), negate ? -one(V) : one(V))
-            )
-        end
-    end
-    addtocounter!(state, counters, Val(:fix), 1) # we don't store this info
-
-    for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
-        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
-        for (j, grouping) in enumerate(groupingsᵢ)
-            this_info[j] = (:fix, moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters))
-        end
-        infoᵢ += 1
-    end
+    infoᵢ = prepend_fix(state) ? _fix_setup!(state, problem, groupings, counters, info, 2) : 2
 
     # SOS term for objective
     constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
@@ -1974,6 +2029,8 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         end
         infoᵢ += 1
     end
+
+    prepend_fix(state) || _fix_setup!(state, problem, groupings, counters, info, infoᵢ)
 
     # Riesz functional in the objective
     let buffer=length(problem.objective), indices=FastVec{T}(; buffer), values=FastVec{V}(; buffer)

@@ -279,6 +279,18 @@ decomposition, may yield wrong values; then define this function to return `true
 negate_free(::AbstractSolver) = false
 
 """
+    prepend_free(::AbstractSolver)
+
+If this method yields `true` (default), free variables will be created before all others. If it is `false`, PSD (or
+nonnegative) variables will be created first.
+
+!!! info
+    Note that this does not imply a global order; if DD or SDD cones are used, free variables may still appear at an arbitrary
+    position. However, this method guarantees the order with respect to cones that will use the same monomial indices.
+"""
+prepend_free(::AbstractSolver) = true
+
+"""
     fix_constraints!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where {T,V}
 
 Ensures that all constraints in the optimization problem are fixed to the values according to `indvals`.
