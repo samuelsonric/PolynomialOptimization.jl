@@ -160,15 +160,32 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                     scaling = sqrt(V(2))
                 end
             elseif scaleoffdiags
-                scaling = sqrt(V(2))
+                scaling = indextype.scaling
+                if scaling isa Bool
+                    # If no scaling is desired, set it to true, which allows us to completely eliminate the multiplication -
+                    # because the value false does not make any sense, so this path is statically determined.
+                    @assert(scaling === true)
+                    scaleoffdiags = false
+                end
             end
         else
             rquad = quad = false
-            scaleoffdiags = true
-            scaling = (representation isa RepresentationDD && ((complex && supports_dd_complex(state)) ||
-                                                               (!complex && supports_dd(state)))) ||
-                      (representation isa RepresentationSDD && ((complex && supports_sdd_complex(state)) ||
-                                                                (!complex && supports_sdd(state)))) ? sqrt(V(2)) : V(2)
+            if (representation isa RepresentationDD && ((complex && supports_dd_complex(state)) ||
+                                                        (!complex && supports_dd(state)))) ||
+               (representation isa RepresentationSDD && ((complex && supports_sdd_complex(state)) ||
+                                                         (!complex && supports_sdd(state))))
+                scaleoffdiags = tri !== :F
+                if scaleoffdiags
+                    scaling = indextype.scaling
+                    if scaling isa Bool
+                        @assert(scaling === true)
+                        scaleoffdiags = false
+                    end
+                end
+            else
+                scaleoffdiags = true
+                scaling = V(2)
+            end
         end
     end
     @inbounds for (exp2, g₂) in enumerate(grouping)
@@ -384,14 +401,19 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         scaleoffdiags = false
     else
         tri = Tri
-        if representation isa RepresentationPSD
+        if representation isa RepresentationPSD ||
+            (representation isa RepresentationDD ? supports_dd(state) : supports_sdd(state))
             scaleoffdiags = tri !== :F
             if scaleoffdiags
-                scaling = sqrt(V(2))
+                scaling = indextype.scaling
+                if scaling isa Bool
+                    @assert(scaling === true)
+                    scaleoffdiags = false
+                end
             end
         else
             scaleoffdiags = true
-            scaling = (representation isa RepresentationDD ? supports_dd(state) : supports_sdd(state)) ? sqrt(V(2)) : V(2)
+            scaling = V(2)
         end
     end
     maxlen = maximum(length, constraint, init=0)
@@ -1579,13 +1601,13 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 
 See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
-function moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where {M<:SimpleMonomial},
+function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD(),
-    counters::Counters=Counters()) where {P<:SimplePolynomial}
+    counters::Counters=Counters()) where {P<:SimplePolynomial,V<:Real}
     dim = length(grouping) * (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
     if (dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))))
         if representation isa RepresentationPSD
-            indextype = PSDIndextypeVector(:U)
+            indextype = PSDIndextypeVector(:U, zero(V)) # we don't care about the scaling if everything is rewritten
         else
             return moment_add_matrix!(state, grouping, constraint, RepresentationPSD(), counters)
         end
@@ -1622,7 +1644,7 @@ function moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where 
     end
     if (representation isa RepresentationDD && !(complex_cone ? supports_dd_complex(state) : supports_dd(state))) ||
         (representation isa RepresentationSDD && !(complex_cone ? supports_sdd_complex(state) : supports_sdd(state)))
-        indextype = PSDIndextypeVector(:L)
+        indextype = PSDIndextypeVector(:L, zero(V))
     end
 
     return moment_add_matrix_helper!(

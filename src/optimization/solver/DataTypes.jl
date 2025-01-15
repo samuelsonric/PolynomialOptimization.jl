@@ -182,25 +182,37 @@ end
 _get_offset(::PSDIndextypeMatrixCartesian{<:Any,Offset}) where {Offset} = Offset
 
 """
-    PSDIndextypeVector(triangle) <: PSDIndextype
+    PSDIndextypeVector(triangle[, scaling]) <: PSDIndextype
 
 The solver implements PSD matrix constraints by demanding that the matrixization of a vector of decision variables be PSD.
 
-If `triangle === :F`, the vector is formed by stacking all the columns of the matrix.
+If `triangle === :F`, the vector is formed by stacking all the columns of the matrix. `scaling` should be omitted.
 
 If `triangle === :L`, the columns of the lower triangle are assumed to be stacked _and scaled_, i.e., off-diagonal variables
-that enter the cone are implicitly multiplied by ``1 / \\sqrt2`` in the matrix; so the coefficients will already be
-premultiplied by ``\\sqrt2`` (for the [`add_constr_psd!`](@ref) case) or by ``1 / \\sqrt2`` (for the [`add_var_psd!`](@ref)
-case).
+that enter the cone are implicitly multiplied by `1 / scaling` in the matrix; so the coefficients will already be premultiplied
+by `scaling` (for the [`add_constr_psd!`](@ref) case) or by `1 / scaling` (for the [`add_var_psd!`](@ref) case). The default
+value for `scaling` is ``sqrt2``; however, the parameter has to be specified explictly in order to make sure the scaling has
+the correct type.
+Note: if no scaling is desired, the preferred value is `true`, which is equivalent to a multiplicative identity; however, the
+multiplication can be completely removed during compilation. This is because the value `false`, which would mean that alll
+off-diagonal entries are set to zero, is explicitly forbidden.
 
 If `triangle === :U`, the columns of the upper triangle are assumed to be stacked and scaled.
 
 See also [`IndvalsIterator`](@ref).
 """
-struct PSDIndextypeVector{Tri}
+struct PSDIndextypeVector{Tri,V<:Real}
+    scaling::V
+
     function PSDIndextypeVector(triangle::Symbol)
-        triangle ∈ (:L, :U, :F) || throw(MethodError(PSDIndextypeVector, (triangle,)))
-        new{triangle}()
+        triangle === :F || throw(MethodError(PSDIndextypeVector, (triangle,)))
+        new{triangle,Bool}(false)
+    end
+
+    function PSDIndextypeVector(triangle::Symbol, scaling::Real)
+        triangle ∈ (:L, :U) || throw(MethodError(PSDIndextypeVector, (triangle, scaling)))
+        scaling === false && ArgumentError("The scaling `false` is not allowed.")
+        new{triangle,typeof(scaling)}(scaling)
     end
 end
 
