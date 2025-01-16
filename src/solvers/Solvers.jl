@@ -12,3 +12,4 @@ include("Loraine/Loraine.jl")
 end
 
 include("SpecBM/PolynomialOptimizationSpecBM.jl")
+include("Loraine/PolynomialOptimizationLoraine.jl")
