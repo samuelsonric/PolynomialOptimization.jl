@@ -6,17 +6,19 @@ function (t::AOperator{T})(Ax::Vector{T}, x::Vector{T}) where {T<:Real}
     # Ax = ∑ᵢ Aᵢ * (Wᵢ * mat(x * Aᵢ) * Wᵢ) + A_lin * ((X_lin .* S_lin_inv) .* (x * A_lin))
     init = true
     @inbounds for i in 1:t.solver.model.nlmi
-        Aᵢ, Wᵢ, dimᵢ = t.solver.model.A[i], t.solver.W[i], t.solver.model.coneDims[i]
-        tmp₁ = similar(Wᵢ)
-        tmp₂ = similar(tmp₁)
-        mul!(vec(tmp₁), Aᵢ', x)
+        Aᵢ, Wᵢ, dimᵢ, tmp₁, tmp₂ = t.solver.model.A[i], t.solver.W[i], t.solver.model.coneDims[i], t.solver.delX[i],
+            t.solver.delS[i]
+        tmp₁v = Base.ReshapedArray(tmp₁, (length(tmp₁),), ()) # faster than vec, which allocates a new Vector (although it
+                                                              # aliases, but the struct itself is allocated)
+        mul!(tmp₁v, Aᵢ', x)
         mul!(tmp₂, Wᵢ, tmp₁)
         mul!(tmp₁, tmp₂, Wᵢ)
-        mul!(Ax, Aᵢ, vec(tmp₁), true, !init)
+        mul!(Ax, Aᵢ, tmp₁v, true, !init)
         init = false
     end
     if t.solver.model.nlin > 0
-        tmp = t.solver.model.A_lin' * x
+        tmp = t.solver.delX_lin
+        mul!(tmp, t.solver.model.A_lin', x)
         tmp .*= t.solver.X_lin .* t.solver.S_lin_inv
         mul!(Ax, t.solver.model.A_lin, tmp, true, true)
     end
@@ -44,7 +46,11 @@ function predictor!(solver::Solver{T,I}, @nospecialize(preconditioner::Precondit
 
     h = copyto!(solver.rhs, solver.Rp)  # RHS for the Hessian equation: r = rₚ + Aᵀ vec[ W (R_d + S) W ]
     @inbounds for i in 1:solver.model.nlmi
-        mul!(h, solver.model.A[i], vec(solver.W[i] * (solver.Rd[i] + solver.S[i]) * solver.W[i]), one(T), one(T))
+        tmp₁, tmp₂ = solver.delX[i], solver.delS[i]
+        tmp₁ .= solver.Rd[i] .+ solver.S[i]
+        mul!(tmp₂, tmp₁, solver.W[i])
+        mul!(tmp₁, solver.W[i], tmp₂)
+        mul!(h, solver.model.A[i], Base.ReshapedArray(tmp₁, (length(tmp₁),), ()), one(T), one(T))
     end
     if solver.model.nlin > 0
         mul!(h, solver.model.A_lin, solver.X_lin .* solver.Si_lin .* solver.Rd_lin .+ solver.X_lin, one(T), one(T))
@@ -69,8 +75,8 @@ function corrector!(solver::Solver{T,I}, @nospecialize(preconditioner::Precondit
     h = copyto!(solver.rhs, solver.Rp) # RHS for the linear system
     σμ = solver.sigma * solver.mu
     @inbounds for i in 1:solver.model.nlmi
-        tmp = solver.Rd[i] * solver.G[i]
-        tmp2 = solver.G[i]' * tmp
+        tmp = mul!(solver.delX[i], solver.Rd[i], solver.G[i])
+        tmp2 = mul!(solver.delS[i], solver.G[i]', tmp)
         Dᵢ = solver.D[i]
         @simd for j in 1:length(Dᵢ)
             tmp2[j, j] += Dᵢ[j] - σμ / Dᵢ[j]
@@ -102,20 +108,24 @@ function find_step!(solver::Solver{T}, predict::Bool) where {T}
         delSᵢ, delXᵢ, Wᵢ, Xᵢ, Gᵢ, DDsiᵢ = solver.delS[i], solver.delX[i], solver.W[i], solver.X[i], solver.G[i], solver.DDsi[i]
         copyto!(delSᵢ, solver.Rd[i])
         mul!(vec(delSᵢ), solver.model.A[i]', solver.dely, -one(T), true)
-        tmp = delSᵢ * Wᵢ'
+        # temporaries:
+        # - predict: Xn and RNT are overwritten later on anyway, so we can use them as temporaries
+        # - correct: Si and RNT are only required once in this block, then they can be used.
         if predict
+            tmp = mul!(solver.Xn[i], delSᵢ, Wᵢ')
             copyto!(delXᵢ, Xᵢ)
             mul!(delXᵢ, Wᵢ, tmp, -one(T), -one(T))
         else
-            mul!(delXᵢ, Wᵢ, tmp)
+            delXᵢ .= (solver.sigma * solver.mu) .* solver.Si[i] .- Xᵢ
+            tmp = mul!(solver.Si[i], delSᵢ, Wᵢ')
+            mul!(delXᵢ, Wᵢ, tmp, -one(T), true)
             mul!(tmp, solver.RNT[i], solver.G[i]')
-            mul!(delXᵢ, Gᵢ, tmp, true, -one(T))
-            delXᵢ .+= (solver.sigma * solver.mu) .* solver.Si[i] .- Xᵢ
+            mul!(delXᵢ, Gᵢ, tmp, true, true)
         end
 
         # determining steplength to stay feasible
         mul!(tmp, delXᵢ, solver.Gi[i]')
-        XXX = solver.Gi[i] * tmp
+        XXX = mul!(solver.RNT[i], solver.Gi[i], tmp)
         XXX .= DDsiᵢ' .* XXX .* DDsiᵢ
         mimiX = eigvals!(Symmetric(XXX, :U), 1:1)[1]
         solver.alpha[i] = mimiX .> T(-1//1_000_000) ? T(99//100) : min(one(T), -solver.tau / mimiX)
@@ -141,7 +151,7 @@ function find_step!(solver::Solver{T}, predict::Bool) where {T}
             solver.Sn[i] .= solver.S[i] .+ solver.beta[i] .* solver.delS[i]
             RNTᵢ, Dᵢ = solver.RNT[i], solver.D[i]
             mul!(RNTᵢ, solver.delS[i], solver.G[i])
-            tmp = solver.delX[i] * RNTᵢ
+            tmp = mul!(solver.delS[i], solver.delX[i], RNTᵢ)
             mul!(RNTᵢ, solver.Gi[i], tmp)
             for j in 1:size(RNTᵢ, 2), k in 1:j
                 RNTᵢ[j, k] = RNTᵢ[k, j] = -(RNTᵢ[k, j] + RNTᵢ[j, k]) / (Dᵢ[j] + Dᵢ[k])
