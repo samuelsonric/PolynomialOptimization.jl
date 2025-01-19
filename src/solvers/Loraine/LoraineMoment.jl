@@ -28,9 +28,21 @@ Solver.prepend_fix(::StateMoment) = false
 
 Solver.add_var_slack!(state::StateMoment, num::Int) = error("Not implemented")
 
-@inline function addconstr!(state::StateMoment{K,V}, indval::Indvals{K,V}, num_con::Int) where {K,V}
+@inline function addconstr!(state::StateMoment{K,V}, indval::Indvals{K,V}, num_con::Int, ::Val{checkfree}=Val(false)) where {K,V,checkfree}
     @inbounds for (k, v) in indval
-        refₘ, refᵢ, refⱼ = state.mon_eq[FastKey(k)]
+        if checkfree && !haskey(state.mon_eq, FastKey(k))
+            # We did not see this monomial before in a PSD/nonnegative constraint, but now we need it in a fixed constraint.
+            # This can happen due to basis reduction and still lead to a solvable problem if there are multiple well-balanced
+            # fixed constraints. We would need to create free variables, which we don't have in Loraine; so create two
+            # nonnegatives instead.
+            refₘ = -length(state.nonnegs[1]) -1
+            refᵢ = 1
+            refⱼ = 0 # just to have it
+            state.mon_eq[FastKey(k)] = (refₘ, 1, 0)
+            push!(state.nonnegs[1], length(state.nonnegs[2]) +1, length(state.nonnegs[2]) +1)
+        else
+            refₘ, refᵢ, refⱼ = state.mon_eq[FastKey(k)]
+        end
         if refₘ > 0 # likely
             dimₘ = state.psd_dim[refₘ]
             cooₘᵢ, cooₘⱼ, cooₘᵥ = state.psds[refₘ]
@@ -43,11 +55,21 @@ Solver.add_var_slack!(state::StateMoment, num::Int) = error("Not implemented")
                 push!(cooₘⱼ, (refⱼ -1) * dimₘ + refᵢ, (refᵢ -1) * dimₘ + refⱼ)
                 push!(cooₘᵥ, .5v, .5v)
             end
-        else # so unlikely (would require size-1 moment matrix) that we do inefficient insertions
+        else # quite unlikely (would require size-1 moment matrix or the case above), so that we do inefficient insertions
             insertpos = state.nonnegs[1][-refₘ+1]
-            state.nonnegs[1][-refₘ+1:end] .+= 1
-            insert!(state.nonnegs[2], insertpos, num_con)
-            insert!(state.nonnegs[3], insertpos, v)
+            if checkfree && refᵢ == 1
+                # put one at the end, the other at the beginning; doesn't matter
+                state.nonnegs[1][-refₘ+1] += 1
+                state.nonnegs[1][-refₘ+2:end] .+= 2
+                Base._growat!(state.nonnegs[2], insertpos, 2)
+                Base._growat!(state.nonnegs[3], insertpos, 2)
+                state.nonnegs[2][insertpos+1] = state.nonnegs[2][insertpos] = num_con
+                state.nonnegs[3][insertpos+1] = -(state.nonnegs[3][insertpos] = v)
+            else
+                state.nonnegs[1][-refₘ+1:end] .+= 1
+                insert!(state.nonnegs[2], insertpos, num_con)
+                insert!(state.nonnegs[3], insertpos, v)
+            end
         end
     end
     return
@@ -139,7 +161,7 @@ end
 
 function Solver.add_constr_fix!(state::StateMoment{K,V}, ::Nothing, indvals::Indvals{K,V}, rhs::V) where {K,V}
     num_con = (state.num_con += 1)
-    addconstr!(state, indvals, num_con)
+    addconstr!(state, indvals, num_con, Val(true))
     @inbounds if !iszero(rhs)
         push!(state.b[1], state.num_con)
         push!(state.b[2], rhs)
@@ -167,29 +189,42 @@ function Solver.poly_optimize(::Val{:LoraineMoment}, relaxation::AbstractRelaxat
         # Note that Loraine has abstract types in the vector specifications, which we need to match unfortunately.
         C = Vector{SparseMatrixCSC{V,Int}}(undef, length(state.psds))
         c_lin_data = (FastVec{Int}(), FastVec{V}())
-        for (k, v) in state.c
-            refₘ, refᵢ, refⱼ = state.mon_eq[FastKey(k)]
-            if refₘ > 0
-                if !isassigned(C, refₘ)
-                    C[refₘ] = spzeros(V, Int, state.psd_dim[refₘ], state.psd_dim[refₘ])
-                end
-                spₘ = C[refₘ]
-                # we came from the lower triangle, so row ≥ col. Insert the smaller one first.
-                insert!(spₘ.rowval, spₘ.colptr[refⱼ+1], refᵢ)
-                if refᵢ == refⱼ
-                    insert!(spₘ.nzval, spₘ.colptr[refⱼ+1], v)
-                    spₘ.colptr[refⱼ+1:end] .+= 1
+        try
+            for (k, v) in state.c
+                refₘ, refᵢ, refⱼ = state.mon_eq[FastKey(k)]
+                if refₘ > 0
+                    if !isassigned(C, refₘ)
+                        C[refₘ] = spzeros(V, Int, state.psd_dim[refₘ], state.psd_dim[refₘ])
+                    end
+                    spₘ = C[refₘ]
+                    # we came from the lower triangle, so row ≥ col. Insert the smaller one first.
+                    insert!(spₘ.rowval, spₘ.colptr[refⱼ+1], refᵢ)
+                    if refᵢ == refⱼ
+                        insert!(spₘ.nzval, spₘ.colptr[refⱼ+1], v)
+                        spₘ.colptr[refⱼ+1:end] .+= 1
+                    else
+                        @assert(refᵢ > refⱼ)
+                        insert!(spₘ.nzval, spₘ.colptr[refⱼ+1], v / 2)
+                        spₘ.colptr[refⱼ+1:refᵢ] .+= 1
+                        insert!(spₘ.rowval, spₘ.colptr[refᵢ+1] +1, refⱼ)
+                        insert!(spₘ.nzval, spₘ.colptr[refᵢ+1] +1, v / 2)
+                        spₘ.colptr[refᵢ+1:end] .+= 2
+                    end
                 else
-                    @assert(refᵢ > refⱼ)
-                    insert!(spₘ.nzval, spₘ.colptr[refⱼ+1], v / 2)
-                    spₘ.colptr[refⱼ+1:refᵢ] .+= 1
-                    insert!(spₘ.rowval, spₘ.colptr[refᵢ+1] +1, refⱼ)
-                    insert!(spₘ.nzval, spₘ.colptr[refᵢ+1] +1, v / 2)
-                    spₘ.colptr[refᵢ+1:end] .+= 2
+                    push!(c_lin_data[1], -refₘ)
+                    push!(c_lin_data[2], v)
                 end
+            end
+        catch e
+            if e isa KeyError
+                # This can happen if the objective contains monomials that were not present before due to a smaller basis. In
+                # principle, we should add a free variable for each of those monomials; however, these variables will never
+                # occur anywhere else. Therefore, the problem is naturally unbounded (unless it is infeasible, which we simply
+                # disregard here) and we don't need to solve it.
+                @verbose_info("Detected unbounded objective during problem construction; skipping solver")
+                return missing, Loraine.STATUS_INFEASIBLE_OR_UNBOUNDED, typemin(V)
             else
-                push!(c_lin_data[1], -refₘ)
-                push!(c_lin_data[2], v)
+                rethrow(e)
             end
         end
         # It may very well happen that the objective is just from a single variable
