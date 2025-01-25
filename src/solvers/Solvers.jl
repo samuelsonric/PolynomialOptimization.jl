@@ -12,3 +12,4 @@ include("LoRADS/LoRADS.jl")
 end
 
 include("SpecBM/PolynomialOptimizationSpecBM.jl")
+include("LoRADS/PolynomialOptimizationLoRADS.jl")
