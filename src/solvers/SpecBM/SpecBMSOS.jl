@@ -17,7 +17,7 @@ end
 
 Solver.issuccess(::Val{:SpecBMSOS}, status::Symbol) = status === :Optimal
 
-Solver.psd_indextype(::StateSOS) = PSDIndextypeVector(:L)
+Solver.psd_indextype(::StateSOS{<:Integer,V}) where {V} = PSDIndextypeVector(:L, sqrt(V(2)))
 
 @counter_alias(StateSOS, :nonnegative, :psd)
 
@@ -114,4 +114,4 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, result)::Tuple{St
 Solver.extract_sos(relaxation::AbstractRelaxation, (state, result)::Tuple{StateSOS,Any}, type::Val,
     index::AbstractUnitRange, ::Nothing) = @view(result.x[index])
 
-Solver.psd_indextype(::Tuple{StateSOS,Any}) = PSDIndextypeVector(:L)
+Solver.psd_indextype(::Tuple{StateSOS{<:Integer,V},Any}) where {V} = PSDIndextypeVector(:L, sqrt(V(2)))
