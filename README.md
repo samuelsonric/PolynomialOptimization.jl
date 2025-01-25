@@ -11,4 +11,7 @@ to extract solutions even for sparse problems.
 It _directly_ interfaces the solvers [Clarabel](https://github.com/oxfordcontrol/Clarabel.jl),
 [COPT](https://www.shanshu.ai/copt), [Hypatia](https://github.com/jump-dev/Hypatia.jl), [Mosek](https://www.mosek.com/), and
 [SCS](https://github.com/cvxgrp/scs) without using `JuMP`, avoiding this bottleneck so that indeed almost all the time is spent
-in the solver, not in the problem formulation.
+in the solver, not in the problem formulation. It also new research-level solvers: an own implementation of the
+[primal spectral bundling](https://arxiv.org/abs/2307.07651v1) method; an efficiency-oriented refactoring of the low-rank
+solver [Loraine](https://github.com/kocvara/Loraine.jl), and an interface to the experimental
+[LoRADS](https://github.com/COPT-Public/LoRADS) solver.
