@@ -1697,6 +1697,9 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
         indextype = PSDIndextypeVector(:L, zero(V))
     end
 
+    indextype isa PSDIndextypeMatrixCartesian{:F} &&
+        error("The Cartesian full matrix indextype is currently supported only for the primal moment optimization.")
+
     return moment_add_matrix_helper!(
         state,
         grouping,
@@ -1935,7 +1938,8 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
 end
 
 """
-    moment_setup!(state::AbstractSolver, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
+    moment_setup!(state::AbstractSolver, relaxation::AbstractRelaxation,
+        groupings::RelaxationGroupings[; representation])
 
 Sets up all the necessary moment matrices, variables, constraints, and objective of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the
