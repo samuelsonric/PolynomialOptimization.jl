@@ -22,8 +22,3 @@ It also features a pure Julia implementation of the large-scale
 ```@contents
 Depth=3
 ```
-
-## Index
-```@index
-Modules=[PolynomialOptimization]
-```
