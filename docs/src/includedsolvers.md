@@ -43,6 +43,36 @@ During the development of this package, several interesting solvers were propose
 are documented on this page. They can be accessed from the `PolynomialOptimization.Solvers` submodule.
 
 ```@meta
+CurrentModule = PolynomialOptimization.Solvers.LoRADS
+```
+## LoRADS
+The experimental LoRADS solver is suitable for large-scale low-rank semidefinite programming. Note that it is currently in a
+very early stage of development and not yet very customizable. In particular, at the time of writing, it is not possible to
+configure the tolerance of the termination criterion, which is always set to ``10^{-5}``. There is also no interface defined to
+extract the solution data; `PolynomialOptimization` relies on the internal representation of the state to access this
+information. Note that this is likely to change in a new version; the supported solver version is a patched version of `1.0.0`.
+You will also see a lot of solver output, regardless of the `verbose` flag, as this cannot be turned off.
+LoRADS has to be compiled from the source into a shared library; its path must then be provided to the package using
+[`set_solverlib`](@ref). This setting will take effect after the Julia session is restarted.
+```@docs
+set_solverlib
+ASDP
+ConeType
+Strategy
+init_solver
+set_dual_objective
+conedata_to_userdata
+set_cone
+set_lp_cone
+init_cone_data
+preprocess
+load_sdpa
+solve
+get_X
+get_Xlin
+```
+
+```@meta
 CurrentModule = PolynomialOptimization.Solvers.SpecBM
 ```
 ## SpecBM

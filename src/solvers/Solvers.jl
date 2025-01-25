@@ -7,6 +7,7 @@ include("helpers/Helpers.jl")
 
 include("SpecBM/SpecBM.jl")
 include("Lancelot/Lancelot.jl")
+include("LoRADS/LoRADS.jl")
 
 end
 
