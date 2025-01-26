@@ -1442,7 +1442,7 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
 
     return (complex ? :sdd_quad_complex_diag : :sdd_quad_real_diag),
            (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic),
-                                 complex ? 4 : 3, trisize(dim)))
+                                 complex ? 4 : 3, trisize(dim -1)))
 end
 
 # The transform is not diagonal
@@ -1602,7 +1602,7 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
                        (u isa LowerOrUnitLowerTriangular ? :sdd_quad_complex_tril : :sdd_quad_complex)) :
                       (u isa UpperOrUnitUpperTriangular ? :sdd_quad_real_triu :
                        (u isa LowerOrUnitLowerTriangular ? :sdd_quad_real_tril : :sdd_quad_real))),
-           (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic), total, trisize(dim)))
+           (valat, addtocounter!(state, counters, Val(have_rot ? :rotated_quadratic : :quadratic), total, trisize(dim -1)))
 end
 
 function moment_add_sdddual_transform!(state::AnySolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u, complex,
