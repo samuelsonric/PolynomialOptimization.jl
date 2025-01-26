@@ -101,7 +101,7 @@ function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxati
                 timeLimit)
             bm_ret == LoRADS.RETCODE_RANK || break
             if !LoRADS.check_all_rank_max(solver, rankFactor)
-                if (is_rank_max = LoRADS.aug_rank(solver, state.psd_dim, rankFactor))
+                if (is_rank_max = LoRADS.aug_rank(solver, psd_dim, rankFactor))
                     @verbose_info("Restarting BM with maximum rank")
                 else
                     timesLogRank *= rankFactor
