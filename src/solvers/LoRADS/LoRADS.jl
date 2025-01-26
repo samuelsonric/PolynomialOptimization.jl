@@ -11,16 +11,19 @@ using LinearAlgebra.BLAS: axpy!, syrk!
 
 const solverlib = @load_preference("lorads-solver", "")
 
-!isempty(solverlib) && let dl=Libc.dlopen(solverlib, throw_error=false)
-    if isnothing(dl)
-        @warn("The LoRADS library is configured to $solverlib, but it could not be opened. Call \
-               `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to change the configuration; set it to an empty value to\
-               disable the solver.")
-    else
-        isnothing(Libc.dlsym(dl, :ASDPSetLpCone, throw_error=false)) &&
-            @warn("The unpatched version of the LoRADS library is used. Expect segfaults.")
-        Libc.dlclose(dl)
+function __init__()
+    !isempty(solverlib) && let dl=Libc.dlopen(solverlib, throw_error=false)
+        if isnothing(dl)
+            @warn("The LoRADS library is configured to $solverlib, but it could not be opened. Call \
+                   `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to change the configuration; set it to an empty \
+                   value to disable the solver.")
+        else
+            isnothing(Libc.dlsym(dl, :ASDPSetLpCone, throw_error=false)) &&
+                @warn("The unpatched version of the LoRADS library is used. Expect segfaults.")
+            Libc.dlclose(dl)
+        end
     end
+    return
 end
 
 """
