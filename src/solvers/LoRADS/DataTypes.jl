@@ -204,3 +204,9 @@ Base.getproperty(solver::ASDP, f::Symbol) =
         fieldoffset(_ASDPSolverInternal, Base.fieldindex(_ASDPSolverInternal, f)),
     )
 Base.propertynames(solver::ASDP) = fieldnames(_ASDPSolverInternal)
+Base.setproperty!(solver::ASDP, f::Symbol, v) =
+    unsafe_store!(
+        Ptr{fieldtype(_ASDPSolverInternal, f)}(getfield(solver, :ptr)) +
+        fieldoffset(_ASDPSolverInternal, Base.fieldindex(_ASDPSolverInternal, f)),
+        v
+    )

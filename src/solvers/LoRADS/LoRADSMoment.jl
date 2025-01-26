@@ -4,6 +4,7 @@ mutable struct StateMoment{K<:Integer} <: AbstractSparseMatrixSolver{Cint,K,Cdou
     A_lin::Tuple{Vector{Cint},Vector{Cint},Vector{Cdouble}}
     b::Vector{Cdouble}
     info::Vector{<:Vector{<:Tuple{Symbol,Any}}}
+    methods::UInt8
     data
 
     StateMoment{K}() where {K<:Integer} = new{K}(
@@ -50,11 +51,12 @@ function Solver.fix_constraints!(state::StateMoment, m::Int, indvals::Indvals{Ci
 end
 
 function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=(state) -> nothing,
-    timesLogRank::Real=2., phase1Tol::Real=1e-3, timeLimit::Real=10_000.,
+    representation, verbose::Bool=false, customize=(state) -> nothing, use_bm::Bool=true, use_admm::Bool=true,
+    timesLogRank::Real=2., phase1Tol::Real=use_admm ? 1e-3 : 1e-5, timeLimit::Real=10_000.,
     rhoMax::Real=5000., rhoFreq::Integer=5, rhoFactor::Real=1.2, rho::Real=0., maxIter::Integer=10_000,
     strategy::LoRADS.Strategy=LoRADS.STRATEGY_DEFAULT, admmStrategy::LoRADS.Strategy=LoRADS.STRATEGY_MIN_BISECTION,
     tau::Real=0., gamma::Real=0., heuristicFactor::Real=1., rankFactor::Real=1.5)
+    use_bm || use_admm || error("All solution methods were disabled. `use_bm` or `use_admm` must be enabled.")
     setup_time = @elapsed @inbounds begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
@@ -63,6 +65,7 @@ function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxati
         ismissing(primal_data) && return missing, LoRADS.ASDP_INFEAS_OR_UNBOUNDED, -Inf
         isempty(primal_data[2].psd_dim) && error("LoRADS requires at least one semidefinite variable")
         state.info, state.data = primal_data
+        state.methods = (use_bm << 1) | use_admm
         customize(state)
 
         @verbose_info("Initializing solver")
@@ -81,6 +84,7 @@ function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxati
         empty!(state.A) # the data was transferred to an internal buffer in preprocess
         LoRADS.determine_rank(solver, psd_dim, timesLogRank, 0)
         LoRADS.detect_sparsity_sdp_coeff(solver)
+        # We must initialize all variables, regardless of the use_... flags - they have multiple uses.
         LoRADS.init_bm_vars(solver, psd_dim, num_nonneg)
         LoRADS.init_admm_vars(solver, psd_dim, num_nonneg)
         LoRADS.scale(solver)
@@ -91,8 +95,8 @@ function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxati
     solver_time = @elapsed begin
         time = LoRADS.get_timestamp()
         is_rank_max = 1e-10 > timesLogRank
-        local bm_ret
-        while true
+        bm_ret = LoRADS.RETCODE_OK
+        use_bm && while true
             bm_ret = LoRADS.bm_optimize(solver, phase1Tol, -.001, 1e-16, 1e-10, time, is_rank_max, pre_mainiter, pre_miniter,
                 timeLimit)
             bm_ret == LoRADS.RETCODE_RANK || break
@@ -105,10 +109,18 @@ function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxati
                 end
             end
         end
-        if bm_ret != LoRADS.RETCODE_EXIT
-            bta_time = @elapsed LoRADS.bm_to_admm(solver, rhoMax)
-            @verbose_info("Converted BM to ADMM in ", bta_time, " seconds")
+        if use_admm && bm_ret != LoRADS.RETCODE_EXIT
+            if use_bm
+                bta_time = @elapsed LoRADS.bm_to_admm(solver, rhoMax)
+                @verbose_info("Converted BM to ADMM in ", bta_time, " seconds")
+            else
+                solver.rho *= rhoMax
+            end
             LoRADS.optimize(solver, rhoFreq, rhoFactor, admmStrategy, tau, gamma, 0., time, timeLimit)
+        elseif pre_mainiter[] == solver.maxBMOutIter # LoRADS isn't made for skipping ADMM, so let's set some flags by ourselves
+            solver.AStatus = LoRADS.ASDP_MAXITER
+        elseif LoRADS.get_timestamp() - time > timeLimit
+            solver.AStatus = LoRADS.ASDP_TIMELIMIT
         end
         LoRADS.end_program(solver) # this will print a lot of stuff, but it will also be responsible for calculating the errors
                                    # properly, so we do this even if verbose is not set
@@ -123,8 +135,9 @@ struct GetX
     solver::LoRADS.ASDP
     mm::Vector{Matrix{Cdouble}}
     trinumbers::Vector{Vector{Int}}
+    admm::Bool
 
-    function GetX(solver::LoRADS.ASDP, dims::AbstractVector{I}) where {I<:Integer}
+    function GetX(solver::LoRADS.ASDP, dims::AbstractVector{I}, admm::Bool) where {I<:Integer}
         mm = Vector{Matrix{Cdouble}}(undef, length(dims))
         trinumbers = similar(mm, Vector{Int})
         trinumbers_lookup = Dict{I,Vector{Int}}()
@@ -140,14 +153,14 @@ struct GetX
                 tn
             end
         end
-        new(solver, mm, trinumbers)
+        new(solver, mm, trinumbers, admm)
     end
 end
 
 @inline function Base.getindex(x::GetX, i::Integer)
     @inbounds begin
         if !isassigned(x.mm, i)
-            x.mm[i] = LoRADS.get_X(x.solver, i)
+            x.mm[i] = LoRADS.get_X(x.solver, i; x.admm)
         end
         return GetXI(x.solver, x.mm[i], x.trinumbers[i])
     end
@@ -174,7 +187,8 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{St
     # from the matrix, perhaps because it represents a moment sub-matrix where a lot of entries have already been obtained by
     # other matrices? Let's do the first: We assume that this solver is used for large moment matrices, and we assume that
     # there won't be too much overlap between sparse groupings.
-    MomentVector(relaxation, state.data, GetX(solver, state.data.psd_dim), LoRADS.get_Xlin(solver))
+    MomentVector(relaxation, state.data, GetX(solver, state.data.psd_dim, !iszero(state.methods & 0x1)),
+        LoRADS.get_Xlin(solver, admm=!iszero(state.methods & 0x1)))
 
 # While the information is there, it can be very bad. Always look at the reported dual infeasibility - if it too large, the
 # SOS decomposition will be useless. Note that this is not part of the termination criteria.

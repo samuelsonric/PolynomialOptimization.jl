@@ -451,45 +451,53 @@ function solve(solver::ASDP, coneDims::AbstractVector{Cint}, nLpCols::Integer; t
 end
 
 """
-    get_X(solver, i)
+    get_X(solver, i, admm::Bool=true)
 
 Returns the `i`th PSD solution matrix ``X_i``. The result will be a freshly allocated symmetric view of a dense matrix.
+Indicate with `admm` whether the ADMM split optimization has run or if only the BM optimization finished.
 
 !!! warning
     This method may only be called once per `i`. All further calls with the same `i` will give wrong output, as the internal
     solver data is modified.
 """
-function get_X(solver::ASDP, i::Integer)
-    # The solver doesn't contain the primal matrix in full form, but in a low-rank factorization. However, even then it is not
-    # just U Uᵀ, since the ADMM approach uses a U Vᵀ, V = U rewrite with additional constraints. So the recommended
-    # reconstruction is Û = (U + V)/2, X = Û Ûᵀ.
-    U = unsafe_load(unsafe_load(solver.U, i))
+function get_X(solver::ASDP, i::Integer; admm::Bool=true)
+    # The solver doesn't contain the primal matrix in full form, but in a low-rank factorization.
     V = unsafe_load(unsafe_load(solver.V, i))
-    @assert U.nRows == V.nRows && U.rank == V.rank
-    axpy!(U.nRows * U.rank, one(Cdouble), V.matElem, 1, U.matElem, 1)
-    result = Matrix{Cdouble}(undef, U.nRows, U.nRows)
-    Uwrap = unsafe_wrap(Array, U.matElem, (U.nRows, U.rank))
-    syrk!('L', 'N', .25, Uwrap, false, result)
+    if admm
+        # Since the ADMM approach uses a U Vᵀ, V = U rewrite with additional constraints, even then it is not just U Uᵀ. So the
+        # recommended reconstruction is Û = (U + V)/2, X = Û Ûᵀ.
+        U = unsafe_load(unsafe_load(solver.U, i))
+        @assert U.nRows == V.nRows && U.rank == V.rank
+        axpy!(V.nRows * V.rank, one(Cdouble), U.matElem, 1, V.matElem, 1)
+    end
+    result = Matrix{Cdouble}(undef, V.nRows, V.nRows)
+    Vwrap = unsafe_wrap(Array, V.matElem, (V.nRows, V.rank))
+    syrk!('L', 'N', admm ? .25 : 1., Vwrap, false, result)
     return Symmetric(result, :L)
 end
 
 """
-    get_Xlin(solver)
+    get_Xlin(solver, admm::Bool=true)
 
 Returns the linear solution vector ``x``. The result will be a vector backed by internal solver data and will be invalidated if
 the solver is destroyed. Copy it if desired.
+Indicate with `admm` whether the ADMM split optimization has run or if only the BM optimization finished.
 
 !!! warning
     This method may only be called once. All further calls will give wrong output, as the internal solver data is modified.
 """
-function get_Xlin(solver::ASDP)
-    u = unsafe_load(solver.uLp)
+function get_Xlin(solver::ASDP; admm::Bool=true)
     v = unsafe_load(solver.vLp)
-    @assert u.nLPCols == v.nLPCols
-    uWrap = unsafe_wrap(Array, u.matElem, u.nLPCols)
     vWrap = unsafe_wrap(Array, v.matElem, v.nLPCols)
-    uWrap .= .25 .* (uWrap .+ vWrap) .^ 2
-    return uWrap
+    if admm
+        u = unsafe_load(solver.uLp)
+        @assert u.nLPCols == v.nLPCols
+        uWrap = unsafe_wrap(Array, u.matElem, u.nLPCols)
+        vWrap .= .25 .* (uWrap .+ vWrap) .^ 2
+    else
+        vWrap .^= 2
+    end
+    return vWrap
 end
 
 """
