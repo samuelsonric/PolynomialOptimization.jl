@@ -40,6 +40,36 @@ struct ASDPCone
     nConstr::Cint
 end
 
+struct ASDPConeLp
+    nRow::Cint
+    nCol::Cint
+    objMatElem::Ptr{Cdouble}
+    rowMatBeg::Ptr{Cint}
+    rowMatIdx::Ptr{Cint}
+    rowMatElem::Ptr{Cdouble}
+    lpCol::Ptr{Ptr{Cvoid}}
+    nrm2Square::Ptr{Cdouble}
+end
+
+struct ASDPLpCone
+    coneData::Ptr{ASDPConeLp}
+    nCol::Cint
+    coneCreate::Ptr{Cvoid}
+    coneProcData::Ptr{Cvoid}
+    conePresolveData::Ptr{Cvoid}
+    coneDestroyData::Ptr{Cvoid}
+    coneView::Ptr{Cvoid}
+    coneAUV::Ptr{Cvoid}
+    coneAUV2::Ptr{Cvoid}
+    objAUV::Ptr{Cvoid}
+    coneObjNrm1::Ptr{Cvoid}
+    coneObjNrm2Square::Ptr{Cvoid}
+    coneObjNrmInf::Ptr{Cvoid}
+    lpDataWSum::Ptr{Cvoid}
+    objCoeffSum::Ptr{Cvoid}
+    scaleData::Ptr{Cvoid}
+end
+
 struct _ASDPSolverInternal
     # User data
     nRows::Cint # constraint number
@@ -76,7 +106,7 @@ struct _ASDPSolverInternal
     vlagLp::Ptr{ASDPRkMatLp}
     lagLp::Ptr{ASDPRkMatLp}
     gradLp::Ptr{ASDPRkMatLp}
-    lpCone::Ptr{ASDPRkMatLp}
+    lpCone::Ptr{ASDPLpCone}
     nLpCols::Cint
     constrValLP::Ptr{Ptr{ConstrValStruct}}
 

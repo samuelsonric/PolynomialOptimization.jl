@@ -492,8 +492,6 @@ function get_Xlin(solver::ASDP)
     return uWrap
 end
 
-#=
-# The slack variables are rather useless
 """
     get_S(solver, i)
 
@@ -507,6 +505,24 @@ function get_S(solver::ASDP, i::Integer)
     @ccall solverlib.reconstructSymmetricMatrix(cone.sdp_slack_var::Ptr{Cvoid}, S::Ptr{Cdouble}, dim::Cint)::Cvoid
     return Symmetric(S, :L)
 end
-=#
+
+"""
+    get_Slin(solver[, i::AbstractUnitRange])
+
+Returns the slack variables to the nonnegative variables of index `i` (by default, all). The result will be a freshly allocated
+vector.
+"""
+function get_Slin(solver::ASDP, i::AbstractUnitRange=1:solver.nLpCols)
+    cone = unsafe_load(solver.lpCone)
+    # There's no dual data available, we have to construct it ourselves
+    s = Vector{Cdouble}(undef, length(i))
+    unsafe_copyto!(pointer(s), unsafe_load(cone.coneData).objMatElem + (first(i) -1) * sizeof(Cdouble), length(s))
+    # ^ so that we don't have to call objCoeffSum in a loop
+    negLambd = solver.negLambd
+    for idx in i
+        ccall(cone.lpDataWSum, Cvoid, (Ptr{Cvoid}, Ptr{Cdouble}, Ptr{Cdouble}, Cint), cone.coneData, negLambd, s, idx -1)
+    end
+    return s
+end
 
 end

@@ -176,27 +176,10 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{St
     # there won't be too much overlap between sparse groupings.
     MomentVector(relaxation, state.data, GetX(solver, state.data.psd_dim), LoRADS.get_Xlin(solver))
 
-Solver.extract_sos(::AbstractRelaxation, ::Tuple{StateMoment,LoRADS.ASDP}, ::Val, ::Any, ::Nothing) =
-    error("LoRADS does not provide useful information about the dual variables; no SOS data can be extracted.")
+# While the information is there, it can be very bad. Always look at the reported dual infeasibility - if it too large, the
+# SOS decomposition will be useless. Note that this is not part of the termination criteria.
+Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.ASDP}, ::Val,
+    index::AbstractUnitRange, ::Nothing) = LoRADS.get_Slin(solver, index)
 
-# While the fields are there, they are not populated by LoRADS (and how could they be?). And the slack variable calculation,
-# which is also used for the dual infeasibility calculation, is just way off.
-#=
-function Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.ASDP}, ::Val,
-    index::AbstractUnitRange, ::Nothing)
-    vlagLp = unsafe_load(solver.vlagLp)
-    x = Vector{Cdouble}(undef, length(index))
-    unsafe_copyto!(pointer(x), vlagLp.matElem + (first(index) -1) * sizeof(Cdouble), length(index) * sizeof(Cdouble))
-    x .^= 2
-    return x
-end
-
-function Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.ASDP}, ::Val{:psd}, index::Integer,
-    ::Nothing)
-    return LoRADS.get_S(solver, index)
-    # vlag = unsafe_load(unsafe_load(solver.Vlag, index))
-    # s = Matrix{Cdouble}(undef, vlag.nRows, vlag.nRows)
-    # BLAS.syrk!('L', 'N', true, unsafe_wrap(Array, vlag.matElem, (vlag.nRows, vlag.rank)), false, s)
-    # return Symmetric(s, :L)
-end
-=#
+Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.ASDP}, ::Val{:psd}, index::Integer,
+    ::Nothing) = LoRADS.get_S(solver, index)
