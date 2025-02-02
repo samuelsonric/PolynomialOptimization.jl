@@ -4,7 +4,7 @@
 # solver.
 module SketchyCGAL
 
-using IterativeSolvers, LinearAlgebra, PositiveFactorizations, Printf, Random
+using IterativeSolvers, LinearAlgebra, LinearMaps, PositiveFactorizations, Printf, Random
 using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
 
 export Status, sketchy_cgal
@@ -318,8 +318,21 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     return status, p * obj_rescale, Eigen.(Λ, U)
 end
 
-function sketchy_cgal(; A::AbstractMatrix{<:AbstractMatrix{R}}, b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}},
-    verbose::Bool=false, kwargs...) where {R<:Real}
+struct OpNorm{V}
+    v::V
+end
+
+function (o::OpNorm)(y, x)
+    # m = ∑ᵢ o.v[i] o.v[i]ᵀ
+    # → m*x = ∑ᵢ dot(o.v[i], x) o.v[i]
+    firstel, rest = Iterators.peel(o.v)
+    y .= dot(firstel, x) .* firstel
+    for vᵢ in rest
+        axpy!(dot(vᵢ, x), vᵢ, y)
+    end
+    return y
+end
+
     n = LinearAlgebra.checksquare.(C)
     N = length(n)
     (size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1) ||
@@ -347,11 +360,12 @@ function sketchy_cgal(; A::AbstractMatrix{<:AbstractMatrix{R}}, b::AbstractVecto
         @verbose_info("Determining operator norm of A")
         A_normsquare = zero(R)
         @inbounds for j in 1:N
-            A_mat = zeros(R, n[j]^2, n[j]^2)
-            for i in 1:d
-                BLAS.syr!('U', one(R), vec(A[i, j]), A_mat)
-            end
-            A_normsquare += maximum(eigvals!(Symmetric(A_mat, :U)))
+            A_normsquare += real(
+                powm(LinearMap{R}(
+                    OpNorm(map(vec, @view(A[:, j]))),
+                    n[j]^2, issymmetric=true, isposdef=true, ismutating=true)
+                )[1]
+            )
         end
         @verbose_info("Found operator norm: ", sqrt(A_normsquare))
         # And after we got the norm, we have to rescale everything once again.
