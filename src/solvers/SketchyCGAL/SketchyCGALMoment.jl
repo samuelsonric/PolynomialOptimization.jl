@@ -61,7 +61,7 @@ function Solver.poly_optimize(::Val{:SketchyCGALMoment}, relaxation::AbstractRel
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solver_time = @elapsed begin
-        status, value, Xs = SketchyCGAL.sketchy_cgal(; state.A, state.C, state.b, verbose, α, parameters...)
+        status, value, Xs = SketchyCGAL.sketchy_cgal(finish!(state.A), state.b, finish!(state.C); verbose, α, parameters...)
     end
 
     @verbose_info("Optimization complete in ", solver_time, " seconds")

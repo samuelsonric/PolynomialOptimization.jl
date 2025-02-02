@@ -35,7 +35,7 @@ mutable struct Status{R}
 end
 
 @doc raw"""
-    sketchy_cgal(; A, b, C, α=(0, 1), rank, ϵ=1e-4, max_iter=0, time_limit=0, verbose=false, β₀=1, K=∞, method=:auto,
+    sketchy_cgal(A, b, C; α=(0, 1), rank, ϵ=1e-4, max_iter=0, time_limit=0, verbose=false, β₀=1, K=∞, method=:auto,
         callback=(_) -> ()[, A_norm][, A_normsquare])
 
 Enhanced implementation of the [SketchyCGAL algorithm](https://doi.org/10.1137/19M1305045). This solves the following problem:
@@ -131,7 +131,7 @@ criteria (such that `ϵ` then corresponds to the original problem and not the re
 verbose output, and the final values of primal objective and optimal ``X``.
 """
 function sketchy_cgal(primitive1!, primitive2!, primitive3!,
-    @nospecialize(n::Union{Integer,Tuple{Integer},AbstractVector{<:Integer}}), b, α::Tuple{R,R};
+    @nospecialize(n::Union{Integer,Tuple{Integer},AbstractVector{<:Integer}}), b::AbstractVector{R}; α::Tuple{R,R},
     @nospecialize(rank::Union{Integer,Tuple{Integer},AbstractVector{<:Integer}}), primitive3_norm::R=zero(R),
     primitive3_normsquare::R=zero(R), ϵ::R=1e-4, max_iter::Integer=10_000, time_limit::Integer=0, rescale_C::R=one(R),
     rescale_A::Vector{R}=fill(one(R), length(b)), rescale_X::R=one(R), β₀::R=one(R), K::R=R(Inf), verbose::Bool=false,
@@ -154,24 +154,23 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
             throw(ArgumentError("Each semidefinite variable must have a rank at least 1."))
     end
     if method isa Symbol
-        method = fill(method, N)
+        methods = fill(method, N)
     else
         length(method) == N || throw(ArgumentError("Each semidefinite variable must have a method."))
-        if method isa Tuple
-            method = [method...]
-        end
+        methods = method isa Tuple ? [method...] :
+                                     (method isa Vector{Symbol} ? method : collect(method)::Vector{Symbol})
     end
-    @inbounds for i in eachindex(method)
-        if method[i] === :auto
+    @inbounds for i in eachindex(methods)
+        if methods[i] === :auto
             if n[i] < 10
-                method[i] = :lobpcg_accurate
+                methods[i] = :lobpcg_accurate
             elseif n[i] < 11_500
-                method[i] = :lanczos_time
+                methods[i] = :lanczos_time
             else
-                method[i] = :lanczos_space
+                methods[i] = :lanczos_space
             end
         else
-            method[i] ∈ (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) ||
+            methods[i] ∈ (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) ||
                 throw(ArgumentError("Method $i had an invalid value. Possible methods are `:lanczos_space`, `:lanczos_time`, \
                                      `:lobpcg_fast`, `: lobpcg_accurate`."))
         end
@@ -182,7 +181,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     if !iszero(time_limit)
         time_limit = starting_time + 1_000_000_000 * time_limit
     end
-    @verbose_info("SketchyCGAL solver, implemented by PolynomialOptimization, using eigensolver method(s) ", union(method),
+    @verbose_info("SketchyCGAL solver, implemented by PolynomialOptimization, using eigensolver method(s) ", union(methods),
         "\n", "Iteration | Primal objective | Suboptimality | Infeasibility | rel. subopt. | rel. infeas. | Time")
 
     d = length(b)
@@ -191,7 +190,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     # Scale problem data (or better: problem data is scaled, but adjust termination criteria appropriately)
     obj_rescale = 1 / (rescale_C * rescale_X)
     infeas_rescale = (1 / rescale_X) ./ rescale_A
-    infeas_rel_factor = 1 / max(sqrt(sum(x -> prod(x, init=one(R))^2, zip(b, infeas_rescale), init=zero(R))), 1)
+    infeas_rel_factor = 1 / max(sqrt(sum(x -> prod(x, init=one(R)::R)^2, zip(b, infeas_rescale), init=zero(R))::R), one(R))
     if primitive3_norm > 0
         primitive3_normsquare = primitive3_norm^2
     end
@@ -207,7 +206,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     tmpv = let data = Vector{R}(undef, maximum(n))
         @inbounds [@view(data[1:nᵢ]) for nᵢ in n]
     end
-    eig_tmp = setup_approx_min_evec.(Val.(method), n, ϵ, (tmpd,), primitive1!, primitive2!)
+    eig_tmp = setup_approx_min_evec.(Val.(methods), n, ϵ, (tmpd,), primitive1!, primitive2!)
     ξ = Vector{R}(undef, N)
     v = Vector{Vector{R}}(undef, N)
     p = zero(R)
@@ -221,7 +220,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
         # [ξ, v] ← ApproxMinEvec(C + A*(y + β(z - b)); q) with q = t^(1/4) log n
         tmpd .= y .+ β .* ∑zminusb
         for i in 1:N
-            ξ[i], v[i] = approx_min_evec(t, i, eig_tmp[i])
+            ξ[i], v[i] = approx_min_evec(t, i, eig_tmp[i])::Tuple{R,Vector{R}}
         end
         # we are now interested in the smallest eigenvalue of all
         imin = argmin(ξ)
@@ -234,7 +233,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
         finish = false
         if !iszero(ϵ) || detail_calc
             # the infeasibility is just z - b
-            info.infeasibility = sqrt(sum(x -> prod(x, init=one(R))^2, zip(∑zminusb, infeas_rescale), init=zero(R)))
+            info.infeasibility = sqrt(sum(x -> prod(x, init=one(R))^2, zip(∑zminusb, infeas_rescale), init=zero(R))::R)
             info.infeasibility_rel = info.infeasibility * infeas_rel_factor
             stop_feasible = info.infeasibility_rel ≤ ϵ
             if stop_feasible || detail_calc
@@ -310,7 +309,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     # Here, we do not use α as the trace reference, since α might actually define an interval. Instead, we kept track of what
     # the trace was supposed to be (assuming an ideal storage). We then compute the actual trace based on the sketch
     # reconstruction and perform the correction step based on this.
-    trace_correction = (trace - sum(sum, Λ, init=zero(R))) / sum(rank, init=zero(R))
+    trace_correction = (trace - sum(sum, Λ, init=zero(R))::R) / sum(rank, init=zero(R))::R
     # ^ This way of correction corresponds to the correction that would be done if all of the matrices had been assembled in a
     # large block matrix.
     for Λᵢ in Λ # rank == length(Λᵢ)
@@ -335,8 +334,8 @@ function (o::OpNorm)(y, x)
     return y
 end
 
-function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractVector{<:AbstractMatrix{R}}},
-    b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}}, verbose::Bool=false, kwargs...) where {R<:Real}
+function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractVector{<:AbstractMatrix{R}}},
+    b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}}; verbose::Bool=false, kwargs...) where {R<:Real}
     n = LinearAlgebra.checksquare.(C)
     N = length(n)
     if A isa AbstractMatrix
@@ -361,17 +360,17 @@ function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:Abstrac
     rescale_A = Vector{R}(undef, d)
     @inbounds rescale_A[1] = one(R)
     if A isa AbstractMatrix
-        let target=sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R)))
+        let target=sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R))::R)
             for (j, Arow) in Iterators.drop(enumerate(eachrow(A)), 1)
-                @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R)))
+                @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R))::R)
             end
         end
     else
         # TODO: if we have SparseMatrixCSC, this can be optimized by traveling all rowvals and incrementing rescale_A for this
         # row, then in the end inverting.
-        let target=sqrt(sum(∘(LinearAlgebra.norm_sqr, first, eachrow), A, init=zero(R)))
+        let target=sqrt(sum(∘(LinearAlgebra.norm_sqr, first, eachrow), A, init=zero(R))::R)
             for j in 2:d
-                @inbounds rescale_A[j] = target / sqrt(sum(x -> LinearAlgebra.norm_sqr(@view(x[j, :])), A, init=zero(R)))
+                @inbounds rescale_A[j] = target / sqrt(sum(x -> LinearAlgebra.norm_sqr(@view(x[j, :])), A, init=zero(R))::R)
             end
         end
     end
@@ -380,11 +379,15 @@ function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:Abstrac
     if !haskey(kwargs, :A_normsquare) && !haskey(kwargs, :A_norm)
         @verbose_info("Determining operator norm of A")
         A_normsquare = zero(R)
+        powϵ = convert(R, get(kwargs, :ϵ, zero(R)))::R
+        if iszero(powϵ)
+            powϵ = R(1//1000)
+        end
         @inbounds for j in 1:N
             A_normsquare += real(
                 powm(LinearMap{R}(
                     OpNorm(A isa AbstractMatrix ? map(vec, @view(A[:, j])) : eachrow(A[j])),
-                    n[j]^2, issymmetric=true, isposdef=true, ismutating=true)
+                    n[j]^2, issymmetric=true, isposdef=true, ismutating=true), tol=powϵ, maxiter=500, verbose=verbose
                 )[1]
             )
         end
@@ -392,9 +395,9 @@ function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:Abstrac
         # And after we got the norm, we have to rescale everything once again.
         rescale_A ./= sqrt(A_normsquare)
     elseif haskey(kwargs, :A_normsquare)
-        A_normsquare = convert(R, pop!(kwargs, :A_normsquare))
+        A_normsquare = convert(R, pop!(kwargs, :A_normsquare))::R
     else
-        A_normsquare = convert(R, pop!(kwargs, :A_norm))^2
+        A_normsquare = (convert(R, pop!(kwargs, :A_norm))::R)^2
     end
     @verbose_info("Rescale C by $rescale_C, A by $rescale_A.")
 
@@ -442,7 +445,7 @@ function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:Abstrac
                 end
             end
         end,
-        n, b .* rescale_A .* rescale_X, alpha .* rescale_X;
+        n, b .* rescale_A .* rescale_X; α=alpha .* rescale_X,
         verbose, rescale_C, rescale_A, rescale_X, primitive3_normsquare=one(R),
         kwargs...
     )
@@ -501,7 +504,7 @@ function approx_min_evec(t, idx, tmp::LanczosTimeTmp{R}) where {R}
         mul!(v, vmat[:, 1:i], Z[:, 1])
     end
     nrm = norm(v)
-    return ξ * nrm, lmul!(1/nrm, v)
+    return ξ * nrm, lmul!(inv(nrm), v)
 end
 
 struct LanczosSpaceTmp{R,P1,P2}
@@ -577,7 +580,7 @@ function approx_min_evec(t, idx, tmp::LanczosSpaceTmp{R}) where {R}
         end
     end
     nrm = norm(v)
-    return ξ * nrm, lmul!(1/nrm, v)
+    return ξ * nrm, lmul!(inv(nrm), v)
 end
 
 struct MatrixFreeOperator{T,P1}
@@ -682,22 +685,22 @@ rank_one_update!(sketch::NystromSketch{T}, v::AbstractVector{T}, i::Integer, η:
     mul!(sketch.S[i], v, transpose(mul!(sketch.tmp[i], transpose(sketch.Ω[i]), conj(v))), η, 1 - η)
     # TODO: benchmark whether scaling + rank-1 update is better than level 3 function.
 
-maxcolnorm(M::AbstractMatrix{T}) where {T} = maximum(norm, eachcol(M); init=zero(T))
+maxcolnorm(M::AbstractMatrix{T}) where {T} = maximum(norm, eachcol(M); init=zero(T))::T
 
 function reconstruct(sketch::NystromSketch{T}) where {T}
     n = size.(sketch.Ω, 1)
     # σ ← √n eps(norm(S))
-    σ = sqrt.(n) .* eps(T) .* maxcolnorm.(sketch.S)
+    σ = (sqrt.(n) .* eps(T) .* maxcolnorm.(sketch.S))::Vector{T}
     # Sσ ← S + σ Ω
-    Sₛ = sketch.S .+ σ .* sketch.Ω
+    Sₛ = (sketch.S .+ σ .* sketch.Ω)::Vector{Matrix{T}}
     # L ← chol(Ω* Sσ).
-    L = cholesky!.(Positive, adjoint.(sketch.Ω) .* Sₛ)
+    L = cholesky!.(Positive, adjoint.(sketch.Ω) .* Sₛ)::Vector{Cholesky{T,Matrix{T}}}
     # [U, Σ, ~] ≤ svd(Sσ / L)
-    svds = svd!.(rdiv!.(Sₛ, getproperty.(L, :U)))
+    svds = svd!.(rdiv!.(Sₛ, getproperty.(L, :U)))::Vector{SVD{T,T,Matrix{T},Vector{T}}}
     # Λ ← max{0, Σ² - σ I}
-    Λ = [max.(zero(T), svdᵢ.S .^ 2 .- σᵢ) for (svdᵢ, σᵢ) in zip(svds, σ)]
+    Λ = [max.(zero(T), svdᵢ.S .^ 2 .- σᵢ)::Vector{T} for (svdᵢ, σᵢ) in zip(svds, σ)]
 
-    return getproperty.(svds, :U), Λ
+    return getproperty.(svds, :U)::Vector{Matrix{T}}, Λ
 end
 
 end
