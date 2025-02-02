@@ -47,7 +47,7 @@ Enhanced implementation of the [SketchyCGAL algorithm](https://doi.org/10.1137/1
             X_i \succeq 0 \ \forall i
     \bigr\}
 ```
-The function returns the optimization status, objective value, and the optimal matrix ``X`` (in the form of an SVD
+The function returns the optimization status, objective value, and the optimal matrix ``X`` (in the form of an `Eigen`
 factorization object).
 
 ## Parameters
@@ -315,7 +315,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
         Λᵢ .= (Λᵢ .+ trace_correction) ./ rescale_X
     end
     # X = U Λ U*. Instead of returning the full matrix that arises in this way, we give back an appropriate factorization.
-    return status, p * obj_rescale, SVD.(U, Λ, adjoint.(U))
+    return status, p * obj_rescale, Eigen.(Λ, U)
 end
 
 function sketchy_cgal(; A::AbstractMatrix{<:AbstractMatrix{R}}, b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}},
