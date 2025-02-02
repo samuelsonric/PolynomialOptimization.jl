@@ -9,8 +9,7 @@ include("SpecBM/SpecBM.jl")
 include("Lancelot/Lancelot.jl")
 include("Loraine/Loraine.jl")
 include("LoRADS/LoRADS.jl")
-#include("SketchyCGAL/SketchyCGAL.jl") << this is the single-matrix variant that directly follows the paper
-include("SketchyCGAL/SketchyCGALBlock.jl")
+include("SketchyCGAL/SketchyCGAL.jl")
 
 end
 
