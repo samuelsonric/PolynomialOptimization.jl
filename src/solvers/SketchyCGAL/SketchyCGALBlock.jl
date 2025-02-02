@@ -4,17 +4,17 @@
 # In particular, we extend  the algorithm to work with multiple semidefinite matrices of varying size. This cannot simply be
 # reproduced by using block-diagonals and the usual algorithm, since the block-diagonal constraints actually increase the rank
 # of the full matrix, which defeats the purpose of a low-rank solver.
-export SketchyCGALStatus, sketchy_cgal
+export Status, sketchy_cgal
 
 """
-    SketchyCGALStatus{R}
+    Status{R}
 
 This struct contains the current information for the Sketchy CGAL solver. Per-iteration callbacks will receive this structure
 to gather current information.
 
 See also [`sketchy_cgal`](@ref).
 """
-mutable struct SketchyCGALStatus{R}
+mutable struct Status{R}
     # static information
     max_iter::UInt
     time_limit::UInt
@@ -28,7 +28,7 @@ mutable struct SketchyCGALStatus{R}
     suboptimality::R
     suboptimality_rel::R
 
-    SketchyCGALStatus(max_iter::Integer, time_limit::Integer, ϵ::R) where {R} = new{R}(UInt(max_iter), UInt(time_limit), ϵ)
+    Status(max_iter::Integer, time_limit::Integer, ϵ::R) where {R} = new{R}(UInt(max_iter), UInt(time_limit), ϵ)
 end
 
 @doc raw"""
@@ -57,7 +57,7 @@ factorization object).
 - The solution accuracy can be controlled by the parameter `ϵ`; however, no more than `max_iter` iterations are carried out,
   and no more iterations will be performed if `time_limit` was exceeded (in seconds), regardless of `ϵ`. Set any of those three
   parameters to zero to disable the check.
-- The `callback` may be called after each iteration and will receive a [`SketchyCGALStatus`](@ref) as parameter. If the
+- The `callback` may be called after each iteration and will receive a [`Status`](@ref) as parameter. If the
   callback returns `false`, the iteration will be the last one.
 - The parameters `β₀` and `K` allow to tune the optimization. `β₀` is a smoothing, `K` limits the dual vector to a generalized
   sphere of radius `K` around the origin.
@@ -84,7 +84,7 @@ factorization object).
 - `:canceled`: the callback returned `false`
 - `:unknown`: an internal error has happened
 
-See also [`SketchyCGALStatus`](@ref).
+See also [`Status`](@ref).
 
 
 
@@ -167,7 +167,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
         end
     end
     starting_time = time_ns()
-    info = SketchyCGALStatus(max_iter, time_limit, ϵ)
+    info = Status(max_iter, time_limit, ϵ)
     detail_calc = verbose || !isnothing(callback)
     if !iszero(time_limit)
         time_limit = starting_time + 1_000_000_000 * time_limit
