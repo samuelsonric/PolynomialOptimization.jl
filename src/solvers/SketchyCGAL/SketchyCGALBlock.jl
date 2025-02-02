@@ -1,9 +1,12 @@
-# We implement not only the translation of the polynomial problem to the SketchCGAL solver, but also this solver directly.
-# While there already is a Julia implementation, we need to change a few things.
-# The algorithm comes from "Scalable Semidefinite Programming" by Yurtsever et. al, https://doi.org/10.1137/19M1305045
-# In particular, we extend  the algorithm to work with multiple semidefinite matrices of varying size. This cannot simply be
-# reproduced by using block-diagonals and the usual algorithm, since the block-diagonal constraints actually increase the rank
-# of the full matrix, which defeats the purpose of a low-rank solver.
+# This is an implementation of the SketchyCGAL solver, https://doi.org/10.1137/19M1305045, extended to work with multiple
+# semidefinite matrices of varying size. This cannot simply be reproduced by using block-diagonals and the usual algorithm,
+# since the block-diagonal constraints actually increase the rank of the full matrix, which defeats the purpose of a low-rank
+# solver.
+module SketchyCGAL
+
+using IterativeSolvers, LinearAlgebra, PositiveFactorizations, Printf, Random
+using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
+
 export Status, sketchy_cgal
 
 """
@@ -57,8 +60,8 @@ factorization object).
 - The solution accuracy can be controlled by the parameter `ϵ`; however, no more than `max_iter` iterations are carried out,
   and no more iterations will be performed if `time_limit` was exceeded (in seconds), regardless of `ϵ`. Set any of those three
   parameters to zero to disable the check.
-- The `callback` may be called after each iteration and will receive a [`Status`](@ref) as parameter. If the
-  callback returns `false`, the iteration will be the last one.
+- The `callback` may be called after each iteration and will receive a [`Status`](@ref) as parameter. If the callback returns
+  `false`, the iteration will be the last one.
 - The parameters `β₀` and `K` allow to tune the optimization. `β₀` is a smoothing, `K` limits the dual vector to a generalized
   sphere of radius `K` around the origin.
 - The `method` determines the way in which the smallest eigenvalue and its eigenvector are calculated during each iteration.
@@ -71,7 +74,7 @@ factorization object).
     package, bounding the number of iterations with the same heuristic as for the Lanczos methods)
   - `:lobpcg_accurate` (bounds the error instead to `ϵ/100`)
   - `:auto` chooses `:lobpcg_accurate` for problem sizes smaller than 10, `:lanczos_time` for problem sizes less than 11500
-    (where roughly 1 GiB is required for the speedup), and `lanczos_space` for all larger problems.
+    (where roughly 1 GiB is required for the speedup), and `:lanczos_space` for all larger problems.
 - `A_normsquare` (or `A_norm`) is supposed to hold the sum of the squares of the Frobenius-to-ℓ₂-norms of all the linear
   operators contained in the columns of `A`. If both parameters are omitted, it is calculated automatically; however, this
   requires memory that scales quartically in the largest side dimension of the `A` (and may not be supported for all
@@ -102,9 +105,9 @@ primitives effectively calculate
 `A[:, i](X)` is the linear map `[⟨X, A[1, i]⟩, ..., ⟨X, A[d, i]⟩]` and `adjoint(A[:, i])(z) = sum(z[j] * A[j, i])`. All of them
 must also return their outputs (which is `v`).
 
-If you are able to calculate these oracles faster or more memory-efficient than the straightforward implementation (which is
+If you are able to calculate these oracles faster or more memory-efficiently than the straightforward implementation (which is
 based on `mul!`), use the blackbox method.
-It is recommended to obey the following normalization conditions:*
+It is recommended to obey the following normalization conditions:
 ```math
     \sum_i lVert C_i\rVert_{\mathrm F}^2 = 1;
     \quad
@@ -132,23 +135,26 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     rescale_A::Vector{R}=fill(one(R), length(b)), rescale_X::R=one(R), β₀::R=one(R), K::R=R(Inf), verbose::Bool=false,
     callback::Union{Nothing,Function}=nothing,
     @nospecialize(method::Union{Symbol,Tuple{Symbol},AbstractVector{<:Symbol}}=:auto)) where {R<:Real}
-    @assert(ϵ ≥ zero(R) && max_iter ≥ 0 && time_limit ≥ 0 && (primitive3_norm > zero(R) || primitive3_normsquare > zero(R)) &&
-            α[1] ≥ zero(R) && α[2] ≥ α[1] && α[2] > zero(R))
-    @assert(ϵ > zero(R) || max_iter > 0 || time_limit > 0)
+    (ϵ ≥ zero(R) && max_iter ≥ 0 && time_limit ≥ 0 && (primitive3_norm > zero(R) || primitive3_normsquare > zero(R)) &&
+        α[1] ≥ zero(R) && α[2] ≥ α[1] && α[2] > zero(R)) ||
+        throw(ArgumentError("Tolerances and limits must be nonnegative and well-ordered."))
+    (ϵ > zero(R) || max_iter > 0 || time_limit > 0) ||
+        throw(ArgumentError("At least one of the following must be strictly positive: tolerance, iteration limit, time limit."))
     if n isa Integer
         n = [n]
     end
     N = length(n)
     if rank isa Integer
-        @assert(rank ≥ 1)
+        rank ≥ 1 || throw(ArgumentError("The rank must exceed 1."))
         rank = fill(rank, N)
     else
-        @assert(length(rank) == N && all(rank .≥ 1))
+        (length(rank) == N && all(rank .≥ 1)) ||
+            throw(ArgumentError("Each semidefinite variable must have a rank at least 1."))
     end
     if method isa Symbol
         method = fill(method, N)
     else
-        @assert(length(method) == N)
+        length(method) == N || throw(ArgumentError("Each semidefinite variable must have a method."))
         if method isa Tuple
             method = [method...]
         end
@@ -163,7 +169,9 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
                 method[i] = :lanczos_space
             end
         else
-            @assert(method[i] ∈ (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate))
+            method[i] ∈ (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) ||
+                throw(ArgumentError("Method $i had an invalid value. Possible methods are `:lanczos_space`, `:lanczos_time`, \
+                                     `:lobpcg_fast`, `: lobpcg_accurate`."))
         end
     end
     starting_time = time_ns()
@@ -181,7 +189,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     # Scale problem data (or better: problem data is scaled, but adjust termination criteria appropriately)
     obj_rescale = 1 / (rescale_C * rescale_X)
     infeas_rescale = (1 / rescale_X) ./ rescale_A
-    infeas_rel_factor = 1 / max(sqrt(sum(x -> prod(x)^2, zip(b, infeas_rescale))), 1)
+    infeas_rel_factor = 1 / max(sqrt(sum(x -> prod(x, init=one(R))^2, zip(b, infeas_rescale), init=zero(R))), 1)
     if primitive3_norm > 0
         primitive3_normsquare = primitive3_norm^2
     end
@@ -224,7 +232,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
         finish = false
         if !iszero(ϵ) || detail_calc
             # the infeasibility is just z - b
-            info.infeasibility = sqrt(sum(x -> prod(x)^2, zip(∑zminusb, infeas_rescale), init=zero(R)))
+            info.infeasibility = sqrt(sum(x -> prod(x, init=one(R))^2, zip(∑zminusb, infeas_rescale), init=zero(R)))
             info.infeasibility_rel = info.infeasibility * infeas_rel_factor
             stop_feasible = info.infeasibility_rel ≤ ϵ
             if stop_feasible || detail_calc
@@ -232,7 +240,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
                 # g - ⟨y, z - b⟩ - 1/2 β ‖ z - b ‖^2
                 # where g = p + ⟨y + β (z - b), z⟩ - λₘᵢₙ(D)
                 # and λₘᵢₙ(D) ≈ ξ
-                info.suboptimality = (p + sum(dot(tmpd, zᵢ) for zᵢ in eachcol(z)) - ξmin - dot(y, ∑zminusb) -
+                info.suboptimality = (p + sum(dot(tmpd, zᵢ) for zᵢ in eachcol(z), init=zero(R)) - ξmin - dot(y, ∑zminusb) -
                     β * norm(∑zminusb)^2/2) * obj_rescale
                 info.suboptimality_rel = info.suboptimality / max(abs(p * obj_rescale), 1)
                 finish = stop_feasible && info.suboptimality_rel ≤ ϵ
@@ -300,7 +308,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     # Here, we do not use α as the trace reference, since α might actually define an interval. Instead, we kept track of what
     # the trace was supposed to be (assuming an ideal storage). We then compute the actual trace based on the sketch
     # reconstruction and perform the correction step based on this.
-    trace_correction = (trace - sum(sum, Λ; init=zero(R))) / sum(rank)
+    trace_correction = (trace - sum(sum, Λ; init=zero(R))) / sum(rank, init=zero(R))
     # ^ This way of correction corresponds to the correction that would be done if all of the matrices had been assembled in a
     # large block matrix.
     for Λᵢ in Λ # rank == length(Λᵢ)
@@ -314,22 +322,23 @@ function sketchy_cgal(; A::AbstractMatrix{<:AbstractMatrix{R}}, b::AbstractVecto
     verbose::Bool=false, kwargs...) where {R<:Real}
     n = LinearAlgebra.checksquare.(C)
     N = length(n)
-    @assert(size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1)
+    (size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1) ||
+        throw(ArgumentError("Invalid matrix dimensions."))
     for (nᵢ, Acol) in zip(n, eachcol(A))
-        @assert(all(LinearAlgebra.checksquare.(Acol) .== nᵢ))
+        all(x -> LinearAlgebra.checksquare(x[1]) == nᵢ, Acol) || throw(ArgumentError("Invalid matrix dimensions."))
     end
     kwargs = Dict(kwargs) # kwargs are immutable
 
     d = length(b)
     @verbose_info("Calculating the rescaling parameters")
-    rescale_C = 1 / sqrt(sum(norm.(C) .^2))
+    rescale_C = 1 / sqrt(sum(LinearAlgebra.norm_sqr, C, init=zero(R)))
     # now we rescale the A such that their Frobenius norms are all the same. Note that here, we need to combine the As of one
     # column together
     rescale_A = Vector{R}(undef, d)
     @inbounds rescale_A[1] = one(R)
-    let target = sqrt(sum(norm.(first(eachrow(A))) .^ 2))
+    let target = sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R)))
         for (j, Arow) in Iterators.drop(enumerate(eachrow(A)), 1)
-            @inbounds rescale_A[j] = target / sqrt(sum(norm.(Arow) .^ 2))
+            @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R)))
         end
     end
     # However, we must also take care of the operator norms of all the A, which must be one. The norm calculation is a bit
@@ -378,20 +387,20 @@ function sketchy_cgal(; A::AbstractMatrix{<:AbstractMatrix{R}}, b::AbstractVecto
     return status, obj, X
 end
 
-struct LanczosTimeTmp{R}
-    n
-    logn
+struct LanczosTimeTmp{R,P1,P2}
+    n::Int
+    logn::R
     vmat::Matrix{R}
     ρ::Vector{R}
     ω::Vector{R}
     v::Vector{R}
     tmpd::Vector{R}
-    primitive1!
-    primitive2!
+    primitive1!::P1
+    primitive2!::P2
 end
 
-function setup_approx_min_evec(::Val{:lanczos_time}, n, ϵ, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
-    return LanczosTimeTmp{R}(n, log(n), Matrix{R}(undef, n, n), Vector{R}(undef, n -1), Vector{R}(undef, n -1),
+function setup_approx_min_evec(::Val{:lanczos_time}, n::Integer, ϵ::R, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
+    return LanczosTimeTmp(Int(n), R(log(n)), Matrix{R}(undef, n, n), Vector{R}(undef, n -1), Vector{R}(undef, n -1),
         Vector{R}(undef, n), tmpd, primitive1!, primitive2!)
 end
 
@@ -433,9 +442,9 @@ function approx_min_evec(t, idx, tmp::LanczosTimeTmp{R}) where {R}
     return ξ * nrm, lmul!(1/nrm, v)
 end
 
-struct LanczosSpaceTmp{R}
-    n
-    logn
+struct LanczosSpaceTmp{R,P1,P2}
+    n::Int
+    logn::R
     v₁::Vector{R}
     v₂::Vector{R}
     v₃::Vector{R}
@@ -443,13 +452,13 @@ struct LanczosSpaceTmp{R}
     ω::Vector{R}
     v::Vector{R}
     tmpd::Vector{R}
-    primitive1!
-    primitive2!
+    primitive1!::P1
+    primitive2!::P2
 end
 
-function setup_approx_min_evec(::Val{:lanczos_space}, n, ϵ, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
-    return LanczosSpaceTmp{R}(n, log(n), Vector{R}(undef, n), Vector{R}(undef, n), Vector{R}(undef, n), Vector{R}(undef, n -1),
-        Vector{R}(undef, n -1), Vector{R}(undef, n), tmpd, primitive1!, primitive2!)
+function setup_approx_min_evec(::Val{:lanczos_space}, n::Integer, ϵ::R, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
+    return LanczosSpaceTmp(Int(n), R(log(n)), Vector{R}(undef, n), Vector{R}(undef, n), Vector{R}(undef, n),
+        Vector{R}(undef, n -1), Vector{R}(undef, n -1), Vector{R}(undef, n), tmpd, primitive1!, primitive2!)
 end
 
 function approx_min_evec(t, idx, tmp::LanczosSpaceTmp{R}) where {R}
@@ -509,34 +518,37 @@ function approx_min_evec(t, idx, tmp::LanczosSpaceTmp{R}) where {R}
     return ξ * nrm, lmul!(1/nrm, v)
 end
 
-struct MatrixFreeOperator{T}
+struct MatrixFreeOperator{T,P1}
     size::Tuple{Int,Int}
-    primitive!
+    primitive!::P1
 end
+
+MatrixFreeOperator{R}(size::Tuple{Int,Int}, primitive!::P1) where {R,P1} = MatrixFreeOperator{R,P1}(size, primitive!)
 
 Base.@propagate_inbounds LinearAlgebra.mul!(C, AorB::MatrixFreeOperator, X, α, β) = AorB.primitive!(C, X, α, β)
 Base.size(A::MatrixFreeOperator, i::Int) = A.size[i]
 Base.eltype(::MatrixFreeOperator{T}) where {T} = T
 
-struct LOBPCGFastTmp{R}
-    n
-    logn
-    iterator
-    idx
+struct LOBPCGFastTmp{R,I}
+    n::Int
+    logn::R
+    iterator::I
+    idx::Base.RefValue{Int}
     v::Vector{R}
     tmpd::Vector{R}
 end
 
-function setup_approx_min_evec(::Val{:lobpcg_fast}, n, ϵ, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
+function setup_approx_min_evec(::Val{:lobpcg_fast}, n::Integer, ϵ::R, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
     v = Vector{R}(undef, n)
     idx = Ref{Int}()
-    return LOBPCGFastTmp{R}(
-        n,
-        log(n),
+    return LOBPCGFastTmp(
+        Int(n),
+        R(log(n)),
         IterativeSolvers.LOBPCGIterator(
             MatrixFreeOperator{R}((n, n), (out, in, alpha, beta) -> begin
                 primitive1!(out, in, idx[], alpha, beta)
                 primitive2!(out, in, tmpd, idx[], alpha, true)
+                nothing
             end), false, reshape(v, :, 1)
         ),
         idx,
@@ -552,23 +564,24 @@ function approx_min_evec(t, idx, tmp::LOBPCGFastTmp{R}) where {R}
     return ξ, tmp.v
 end
 
-struct LOBPCGAccurateTmp{R}
+struct LOBPCGAccurateTmp{R,I}
     ϵ::R
-    iterator
-    idx
+    iterator::I
+    idx::Base.RefValue{Int}
     v::Vector{R}
     tmpd::Vector{R}
 end
 
-function setup_approx_min_evec(::Val{:lobpcg_accurate}, n, ϵ, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
+function setup_approx_min_evec(::Val{:lobpcg_accurate}, n::Integer, ϵ, tmpd::Vector{R}, primitive1!, primitive2!) where {R}
     v = Vector{R}(undef, n)
     idx = Ref{Int}()
-    return LOBPCGAccurateTmp{R}(
+    return LOBPCGAccurateTmp(
         iszero(ϵ) ? IterativeSolvers.default_tolerance(R) : ϵ/100,
         IterativeSolvers.LOBPCGIterator(
             MatrixFreeOperator{R}((n, n), (out, in, alpha, beta) -> begin
                 primitive1!(out, in, idx[], alpha, beta)
                 primitive2!(out, in, tmpd, idx[], alpha, true)
+                nothing
             end), false, reshape(v, :, 1)
         ),
         idx,
@@ -615,12 +628,14 @@ function reconstruct(sketch::NystromSketch{T}) where {T}
     σ = sqrt.(n) .* eps(T) .* maxcolnorm.(sketch.S)
     # Sσ ← S + σ Ω
     Sₛ = sketch.S .+ σ .* sketch.Ω
-    # L ← chol(Ω* Sσ). We add another small identity to make sure cholesky is satisfied...
-    L = cholesky!.(Hermitian.(adjoint.(sketch.Ω) .* Sₛ .+ (1e-5I,)))
+    # L ← chol(Ω* Sσ).
+    L = cholesky!.(Positive, adjoint.(sketch.Ω) .* Sₛ)
     # [U, Σ, ~] ≤ svd(Sσ / L)
-    U, Σ, _ = zip(svd!.(Sₛ ./ getproperty.(L, :U))...)
+    svds = svd!.(rdiv!.(Sₛ, getproperty.(L, :U)))
     # Λ ← max{0, Σ² - σ I}
-    Λ = [max.(0, Σᵢ .^ 2 .- σᵢ .- 1e-5) for (Σᵢ, σᵢ) in zip(Σ, σ)]
+    Λ = [max.(zero(T), svdᵢ.S .^ 2 .- σᵢ) for (svdᵢ, σᵢ) in zip(svds, σ)]
 
-    return U, Λ
+    return getproperty.(svds, :U), Λ
+end
+
 end

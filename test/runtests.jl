@@ -50,6 +50,9 @@ if isone(Threads.nthreads())
         @testset "Lancelot" begin
             include("./Lancelot.jl")
         end
+        @testset "SketchyCGAL solver based" begin
+            include("./SketchyCGAL.jl")
+        end
     end
 else
     @testset "PolynomialOptimization (multi-threaded)" begin
@@ -62,8 +65,5 @@ else
     end
     @testset "Lancelot" begin
         include("./Lancelot.jl")
-    end
-    @testset "SketchCGAL solver based" begin
-        include("./SketchyCGAL.jl")
     end
 end

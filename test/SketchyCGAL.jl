@@ -1,5 +1,5 @@
 using Test
-using PolynomialOptimization
+using PolynomialOptimization.Solvers.SketchyCGAL
 using LinearAlgebra
 using SparseArrays
 using MAT
@@ -79,39 +79,24 @@ for (mat, optval) in optvals
         C = -.25 .* C
         scale_x = 1/n
         scale_c = 1/norm(C)
-        if false
-            # non-block version
-            opt = sketchy_cgal(
-                (v, u, α, β) -> mul!(v, C, u, α * scale_c, β),
-                (v, u, z, α, β) -> v .= α .* u .* z .+ β .* v,
-                (v, u) -> v .= u .^ 2,
-                n,
-                fill(scale_x, n),
-                (1., 1.),
-                rank=10,
-                rescale_C=scale_c,
-                rescale_X=scale_x,
-                verbose=true,
-                ϵ=0.01
-            )[2]
-        else
-            # block version
+        for method in (mat == "G01.mat" ? (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) : (:auto,))
             opt = sketchy_cgal(
                 (v, u, idx, α, β) -> mul!(v, C, u, α * scale_c, β),
                 (v, u, z, idx, α, β) -> v .= α .* u .* z .+ β .* v,
                 (v, u, i, α, β) -> v .= α .* u .^ 2 .+ β .* v,
                 n,
                 fill(scale_x, n),
-                (1., 1.),
+                (1., 1.);
                 rank=10,
                 rescale_C=scale_c,
                 rescale_X=scale_x,
                 #
                 primitive3_normsquare=1.,
                 verbose=true,
-                ϵ=0.01
+                ϵ=0.01,
+                method
             )[2]
+            @test opt ≈ optval rtol=1e-2
         end
-        @test opt ≈ optval rtol=1e-2
     end
 end
