@@ -16,3 +16,4 @@ end
 include("SpecBM/PolynomialOptimizationSpecBM.jl")
 include("Loraine/PolynomialOptimizationLoraine.jl")
 include("LoRADS/PolynomialOptimizationLoRADS.jl")
+include("SketchyCGAL/PolynomialOptimizationSketchyCGAL.jl")
