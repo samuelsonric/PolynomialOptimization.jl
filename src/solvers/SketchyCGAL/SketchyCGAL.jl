@@ -51,7 +51,9 @@ The function returns the optimization status, objective value, and the optimal m
 factorization object).
 
 ## Parameters
-- `A` is an `AbstractMatrix` whose entries are of type `AbstractMatrix` themselves
+- `A` is an `AbstractMatrix` whose entries are of type `AbstractMatrix` themselves. Alternatively, `A` can also be an
+  `AbstractVector` of `AbstractMatrices`; in this case, ``A_{j, i}`` is given by taking the matrix `A[i]` and reshaping its
+  columns into a square matrix.
 - `b` is an `AbstractVector` of real numbers
 - `C` is an `AbstractVector` whose entries are of type `AbstractMatrix` themselves
 - `α` is a 2-tuples of nonnegative numbers, where the numbers defines the bounds on the sum of all traces
@@ -308,7 +310,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
     # Here, we do not use α as the trace reference, since α might actually define an interval. Instead, we kept track of what
     # the trace was supposed to be (assuming an ideal storage). We then compute the actual trace based on the sketch
     # reconstruction and perform the correction step based on this.
-    trace_correction = (trace - sum(sum, Λ; init=zero(R))) / sum(rank, init=zero(R))
+    trace_correction = (trace - sum(sum, Λ, init=zero(R))) / sum(rank, init=zero(R))
     # ^ This way of correction corresponds to the correction that would be done if all of the matrices had been assembled in a
     # large block matrix.
     for Λᵢ in Λ # rank == length(Λᵢ)
@@ -333,12 +335,21 @@ function (o::OpNorm)(y, x)
     return y
 end
 
+function sketchy_cgal(; A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractVector{<:AbstractMatrix{R}}},
+    b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}}, verbose::Bool=false, kwargs...) where {R<:Real}
     n = LinearAlgebra.checksquare.(C)
     N = length(n)
-    (size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1) ||
-        throw(ArgumentError("Invalid matrix dimensions."))
-    for (nᵢ, Acol) in zip(n, eachcol(A))
-        all(x -> LinearAlgebra.checksquare(x[1]) == nᵢ, Acol) || throw(ArgumentError("Invalid matrix dimensions."))
+    if A isa AbstractMatrix
+        (size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1) ||
+            throw(ArgumentError("Invalid matrix dimensions."))
+        for (nᵢ, Acol) in zip(n, eachcol(A))
+            all(x -> LinearAlgebra.checksquare(x[1]) == nᵢ, Acol) || throw(ArgumentError("Invalid matrix dimensions."))
+        end
+    else
+        length(A) == length(C) == N || throw(ArgumentError("Invalid matrix dimensions."))
+        for (nᵢ, Aᵢ) in zip(n, A)
+            size(Aᵢ) == (length(b), nᵢ^2) || throw(ArgumentError("Invalid matrix dimensions."))
+        end
     end
     kwargs = Dict(kwargs) # kwargs are immutable
 
@@ -349,9 +360,19 @@ end
     # column together
     rescale_A = Vector{R}(undef, d)
     @inbounds rescale_A[1] = one(R)
-    let target = sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R)))
-        for (j, Arow) in Iterators.drop(enumerate(eachrow(A)), 1)
-            @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R)))
+    if A isa AbstractMatrix
+        let target=sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R)))
+            for (j, Arow) in Iterators.drop(enumerate(eachrow(A)), 1)
+                @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R)))
+            end
+        end
+    else
+        # TODO: if we have SparseMatrixCSC, this can be optimized by traveling all rowvals and incrementing rescale_A for this
+        # row, then in the end inverting.
+        let target=sqrt(sum(∘(LinearAlgebra.norm_sqr, first, eachrow), A, init=zero(R)))
+            for j in 2:d
+                @inbounds rescale_A[j] = target / sqrt(sum(x -> LinearAlgebra.norm_sqr(@view(x[j, :])), A, init=zero(R)))
+            end
         end
     end
     # However, we must also take care of the operator norms of all the A, which must be one. The norm calculation is a bit
@@ -362,7 +383,7 @@ end
         @inbounds for j in 1:N
             A_normsquare += real(
                 powm(LinearMap{R}(
-                    OpNorm(map(vec, @view(A[:, j]))),
+                    OpNorm(A isa AbstractMatrix ? map(vec, @view(A[:, j])) : eachrow(A[j])),
                     n[j]^2, issymmetric=true, isposdef=true, ismutating=true)
                 )[1]
             )
@@ -381,18 +402,45 @@ end
     @inbounds rescale_X = 1 / alpha[2]
     status, obj, X = @inbounds sketchy_cgal(
         (v, u, i, α, β) -> mul!(v, C[i], u, α * rescale_C, β),
-        (v, u, z, i, α, β) -> begin
-            mul!(v, A[1, i], u, α * z[1] * rescale_A[1], β)
-            for j in 2:d
-                mul!(v, A[j, i], u, α * z[j] * rescale_A[j], one(R))
+        if A isa AbstractMatrix
+            (v, u, z, i, α, β) -> begin
+                mul!(v, A[1, i], u, α * z[1] * rescale_A[1], β)
+                for j in 2:d
+                    mul!(v, A[j, i], u, α * z[j] * rescale_A[j], one(R))
+                end
+                v
             end
-            v
+        else
+            let tmp=[Matrix{R}(undef, nᵢ, nᵢ) for nᵢ in n]
+                (v, u, z, i, α, β) -> begin
+                    if isone(i)
+                        z .*= rescale_A
+                    end
+                    mul!(vec(tmp[i]), transpose(A[i]), z)
+                    mul!(v, tmp[i], u, α, β)
+                    if i == N
+                        z ./= rescale_A
+                    end
+                    v
+                end
+            end
         end,
-        (v, u, i, α, β) -> begin
-            for j in 1:d
-                v[j] = α * rescale_A[j] * dot(u, A[j, i], u) + β * v[j]
+        if A isa AbstractMatrix
+            (v, u, i, α, β) -> begin
+                for j in 1:d
+                    v[j] = α * rescale_A[j] * dot(u, A[j, i], u) + β * v[j]
+                end
+                v
             end
-            v
+        else
+            let tmp=[reshape(Aᵢ, size(Aᵢ, 1), nᵢ, nᵢ) for (Aᵢ, nᵢ) in zip(A, n)]
+                (v, u, i, α, β) -> begin
+                    for (j, tmpⱼ) in enumerate(eachslice(tmp[i], dims=1))
+                        v[j] = α * rescale_A[j] * dot(u, tmpⱼ, u) + β * v[j]
+                    end
+                    v
+                end
+            end
         end,
         n, b .* rescale_A .* rescale_X, alpha .* rescale_X;
         verbose, rescale_C, rescale_A, rescale_X, primitive3_normsquare=one(R),
