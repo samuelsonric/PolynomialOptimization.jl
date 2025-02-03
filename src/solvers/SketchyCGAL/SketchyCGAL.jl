@@ -4,7 +4,7 @@
 # solver.
 module SketchyCGAL
 
-using IterativeSolvers, LinearAlgebra, LinearMaps, PositiveFactorizations, Printf, Random
+using IterativeSolvers, LinearAlgebra, LinearMaps, PositiveFactorizations, Printf, Random, SparseArrays
 using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
 
 export Status, sketchy_cgal
@@ -241,7 +241,7 @@ function sketchy_cgal(primitive1!, primitive2!, primitive3!,
                 # g - ⟨y, z - b⟩ - 1/2 β ‖ z - b ‖^2
                 # where g = p + ⟨y + β (z - b), z⟩ - λₘᵢₙ(D)
                 # and λₘᵢₙ(D) ≈ ξ
-                info.suboptimality = (p + sum(dot(tmpd, zᵢ) for zᵢ in eachcol(z), init=zero(R)) - ξmin - dot(y, ∑zminusb) -
+                info.suboptimality = (p + sum(dot(tmpd, zᵢ) for zᵢ in _eachcol(z), init=zero(R)) - ξmin - dot(y, ∑zminusb) -
                     β * norm(∑zminusb)^2/2) * obj_rescale
                 info.suboptimality_rel = info.suboptimality / max(abs(p * obj_rescale), 1)
                 finish = stop_feasible && info.suboptimality_rel ≤ ϵ
@@ -334,6 +334,45 @@ function (o::OpNorm)(y, x)
     return y
 end
 
+_eachrow(x) = eachrow(x)
+_eachrow(x::Transpose) = _eachcol(parent(x))
+_eachcol(x) = eachcol(x)
+_eachcol(x::Transpose) = _eachrow(parent(x))
+Base.@propagate_inbounds _view(x, a, b) = view(x, a, b)
+Base.@propagate_inbounds _view(x::Transpose, a, b) = view(parent(x), b, a)
+
+@inline function _pseudodot(A::AbstractVector{T}, y::AbstractVector{T}) where {T<:Real}
+    # calculates dot(y, reshape(A)[:, :], y) where the single dimension of the matrix A is split in two
+    @boundscheck (length(A) == length(y)^2) || throw(DimensionMismatch())
+    s = zero(T)
+    y₁ = firstindex(y)
+    ia = firstindex(A)
+    @inbounds for y₁ in y
+        @simd for y₂ in eachindex(y)
+            s += A[ia+y₂-firstindex(y₂)] * y₁ * y[y₂]
+        end
+        ia += length(y)
+    end
+    return s
+end
+
+@inline function _pseudodot(A::SparseArrays.SparseVectorUnion{T}, y::AbstractVector{T}) where {T<:Real}
+    @boundscheck (length(A) == length(y)^2) || throw(DimensionMismatch())
+    s = zero(T)
+    dim = length(y)
+    y₁ = firstindex(y)
+    lastincol = dim
+    for (i, v) in zip(rowvals(A), nonzeros(A))
+        while i > lastincol # avoid division, assuming the values are not too widely spaced
+            y₁ += 1
+            lastincol += dim
+        end
+        y₂ = i - (lastincol - dim +1) + 1 + firstindex(y) - firstindex(axes(A, 1))
+        s += v * y[y₁] * y[y₂]
+    end
+    return s
+end
+
 function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractVector{<:AbstractMatrix{R}}},
     b::AbstractVector{R}, C::AbstractVector{<:AbstractMatrix{R}}; verbose::Bool=false, kwargs...) where {R<:Real}
     n = LinearAlgebra.checksquare.(C)
@@ -341,7 +380,7 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
     if A isa AbstractMatrix
         (size(A, 1) == length(b) && size(A, 2) == length(C) == N && size(A, 1) ≥ 1) ||
             throw(ArgumentError("Invalid matrix dimensions."))
-        for (nᵢ, Acol) in zip(n, eachcol(A))
+        for (nᵢ, Acol) in zip(n, _eachcol(A))
             all(x -> LinearAlgebra.checksquare(x[1]) == nᵢ, Acol) || throw(ArgumentError("Invalid matrix dimensions."))
         end
     else
@@ -360,17 +399,17 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
     rescale_A = Vector{R}(undef, d)
     @inbounds rescale_A[1] = one(R)
     if A isa AbstractMatrix
-        let target=sqrt(sum(LinearAlgebra.norm_sqr, first(eachrow(A)), init=zero(R))::R)
-            for (j, Arow) in Iterators.drop(enumerate(eachrow(A)), 1)
+        let target=sqrt(sum(LinearAlgebra.norm_sqr, first(_eachrow(A)), init=zero(R))::R)
+            for (j, Arow) in Iterators.drop(enumerate(_eachrow(A)), 1)
                 @inbounds rescale_A[j] = target / sqrt(sum(LinearAlgebra.norm_sqr, Arow, init=zero(R))::R)
             end
         end
     else
         # TODO: if we have SparseMatrixCSC, this can be optimized by traveling all rowvals and incrementing rescale_A for this
         # row, then in the end inverting.
-        let target=sqrt(sum(∘(LinearAlgebra.norm_sqr, first, eachrow), A, init=zero(R))::R)
+        let target=sqrt(sum(∘(LinearAlgebra.norm_sqr, first, _eachrow), A, init=zero(R))::R)
             for j in 2:d
-                @inbounds rescale_A[j] = target / sqrt(sum(x -> LinearAlgebra.norm_sqr(@view(x[j, :])), A, init=zero(R))::R)
+                @inbounds rescale_A[j] = target / sqrt(sum(x -> LinearAlgebra.norm_sqr(_view(x, j, :)), A, init=zero(R))::R)
             end
         end
     end
@@ -386,8 +425,8 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
         @inbounds for j in 1:N
             A_normsquare += real(
                 powm(LinearMap{R}(
-                    OpNorm(A isa AbstractMatrix ? map(vec, @view(A[:, j])) : eachrow(A[j])),
-                    n[j]^2, issymmetric=true, isposdef=true, ismutating=true), tol=powϵ, maxiter=500, verbose=verbose
+                    OpNorm(A isa AbstractMatrix ? map(vec, _view(A, :, j)) : _eachrow(A[j])),
+                    n[j]^2, issymmetric=true, isposdef=true, ismutating=true), tol=powϵ, verbose=n[j] > 500 && verbose
                 )[1]
             )
         end
@@ -399,7 +438,7 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
     else
         A_normsquare = (convert(R, pop!(kwargs, :A_norm))::R)^2
     end
-    @verbose_info("Rescale C by $rescale_C, A by $rescale_A.")
+    #@verbose_info("Rescale C by $rescale_C, A by $rescale_A.") # may be pretty long
 
     alpha = pop!(kwargs, :α, (zero(R), one(R)))::Tuple{R,R}
     @inbounds rescale_X = 1 / alpha[2]
@@ -414,13 +453,13 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
                 v
             end
         else
-            let tmp=[Matrix{R}(undef, nᵢ, nᵢ) for nᵢ in n]
+            let tmp=[let q=Matrix{R}(undef, nᵢ, nᵢ); (q, vec(q)) end for nᵢ in n]
                 (v, u, z, i, α, β) -> begin
                     if isone(i)
                         z .*= rescale_A
                     end
-                    mul!(vec(tmp[i]), transpose(A[i]), z)
-                    mul!(v, tmp[i], u, α, β)
+                    mul!(tmp[i][2], transpose(A[i]), z)
+                    mul!(v, tmp[i][1], u, α, β)
                     if i == N
                         z ./= rescale_A
                     end
@@ -436,13 +475,11 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
                 v
             end
         else
-            let tmp=[reshape(Aᵢ, size(Aᵢ, 1), nᵢ, nᵢ) for (Aᵢ, nᵢ) in zip(A, n)]
-                (v, u, i, α, β) -> begin
-                    for (j, tmpⱼ) in enumerate(eachslice(tmp[i], dims=1))
-                        v[j] = α * rescale_A[j] * dot(u, tmpⱼ, u) + β * v[j]
-                    end
-                    v
+            (v, u, i, α, β) -> begin
+                for (j, Aⱼ) in enumerate(_eachrow(A[i]))
+                    v[j] = α * rescale_A[j] * _pseudodot(Aⱼ, u) + β * v[j]
                 end
+                v
             end
         end,
         n, b .* rescale_A .* rescale_X; α=alpha .* rescale_X,
@@ -685,7 +722,7 @@ rank_one_update!(sketch::NystromSketch{T}, v::AbstractVector{T}, i::Integer, η:
     mul!(sketch.S[i], v, transpose(mul!(sketch.tmp[i], transpose(sketch.Ω[i]), conj(v))), η, 1 - η)
     # TODO: benchmark whether scaling + rank-1 update is better than level 3 function.
 
-maxcolnorm(M::AbstractMatrix{T}) where {T} = maximum(norm, eachcol(M); init=zero(T))::T
+maxcolnorm(M::AbstractMatrix{T}) where {T} = maximum(norm, _eachcol(M); init=zero(T))::T
 
 function reconstruct(sketch::NystromSketch{T}) where {T}
     n = size.(sketch.Ω, 1)
