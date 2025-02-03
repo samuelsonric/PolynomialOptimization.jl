@@ -85,8 +85,8 @@ for (mat, optval) in optvals
                 (v, u, z, idx, α, β) -> v .= α .* u .* z .+ β .* v,
                 (v, u, i, α, β) -> v .= α .* u .^ 2 .+ β .* v,
                 n,
-                fill(scale_x, n),
-                (1., 1.);
+                fill(scale_x, n);
+                α=(1., 1.),
                 rank=10,
                 rescale_C=scale_c,
                 rescale_X=scale_x,
