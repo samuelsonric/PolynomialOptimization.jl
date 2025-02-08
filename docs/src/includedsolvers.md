@@ -23,6 +23,7 @@ number up or down by 100 or more. All solvers may expose options that can influe
 | LoRADS      | [LoRADS](https://github.com/COPT-Public/LoRADS)[^4]         | MIT        | moment      | 👍👍👍  | 👍      | 👍👍👍 | very large             |
 | Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍 | 👍👍    | ~300 - 500             |
 | SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment      | 👍       | 👍      | 👍👍👍 |                        |
+| SketchyCGAL | ∅                                                           |            | moment      | 👎       | 👍      | 👍👍👍 |                        |
 | SpecBM      | ∅[^6]                                                       |            | SOS         | n.a.     | n.a.     | 👍👍👍 |                        |
 
 [^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
