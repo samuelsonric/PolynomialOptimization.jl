@@ -13,17 +13,18 @@ The given performance indicators are merely based on experience and may not be a
 particular the maximally recommended basis size depends heavily on the structure of the final problem, which can easily put the
 number up or down by 100 or more. All solvers may expose options that can influence the runtime behavior.
 
-|  Solver     |                            Package                          |   License  | Methods     | Speed    | Accuracy | Memory  | max. recomm. basis size |
-| ------:     | :---------------------------------------------------------: | :--------: | :---------: | :-----:  | :------: | :-----: | :---------------------- |
-| Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment      | 👍👍👍  | 👍👍👍 | 👍👍    | ~200                   |
-| COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment      | 👍👍👍  | 👍👍👍 | 👍👍👍 | ~700                   |
-| Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment      | 👍👍    | 👍👍    | 👍      | ~100                   |
-| LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear | n.a.    | n.a.     | 👍👍👍 | n.a.                   |
-| Loraine     | ∅[^3]                                                       | MIT        | moment      | 👍👍👍  | 👍👍    | 👍👍👍 | very large             |
-| LoRADS      | [LoRADS](https://github.com/COPT-Public/LoRADS)[^4]         | MIT        | moment      | 👍👍👍  | 👍      | 👍👍👍 | very large             |
-| Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍 | 👍👍    | ~300 - 500             |
-| SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment      | 👍       | 👍      | 👍👍👍 |                        |
-| SpecBM      | ∅[^6]                                                       |            | SOS         | n.a.     | n.a.     | 👍👍👍 |                        |
+|  Solver     |                            Package                          |   License  | Methods       | Speed    | Accuracy | Memory  | max. recomm. basis size |
+| ------:     | :---------------------------------------------------------: | :--------: | :---------:   | :-----:  | :------: | :-----: | :---------------------- |
+| Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment        | 👍👍👍 | 👍👍👍 | 👍👍    | ~200                    |
+| COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment        | 👍👍👍 | 👍👍👍 | 👍👍👍 | ~700                    |
+| Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment        | 👍👍    | 👍👍   | 👍      | ~100                    |
+| LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear  | n.a.     | n.a.    | 👍👍👍 | n.a.                    |
+| Loraine     | ∅[^3]                                                       | MIT        | primal moment | 👍👍👍 | 👍👍   | 👍👍👍 | moderately large         |
+| LoRADS      | [LoRADS](https://github.com/COPT-Public/LoRADS)[^4]         | MIT        | primal moment | 👍👍👍 | 👍      | 👍👍👍 | very large              |
+| Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment   | 👍👍👍 | 👍👍👍 | 👍👍    | ~300 - 500             |
+| ProxSDP     | [ProxSDP.jl](https://github.com/mariohsouto/ProxSDP.jl)     | MIT        | primal moment | 👍👍👍 | 👍👍    | 👍👍👍 | very large             |
+| SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment        | 👍      | 👍      | 👍👍👍 |                         |
+| SpecBM      | ∅[^6]                                                       |            | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
 
 [^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
       one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
