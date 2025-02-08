@@ -121,7 +121,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
             if itype isa Solver.PSDIndextypeVector{:U}
                 if isone(itype.scaling)
                     data = SPMatrix(dim, data, :U)
-                elseif itype.scaling^2 == 2
+                elseif itype.scaling^2 ≈ 2
                     data = SPMatrix(ddim, data, :US)
                 else
                     error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
@@ -129,7 +129,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
             elseif itype isa Solver.PSDIndextypeVector{:L}
                 if isone(itype.scaling)
                     data = SPMatrix(dim, data, :L)
-                elseif itype.scaling^2 == 2
+                elseif itype.scaling^2 ≈ 2
                     data = SPMatrix(ddim, data, :LS)
                 else
                     error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
@@ -157,7 +157,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
                     end
                     if isone(itype.scaling)
                         return SPMatrix(dim, newdata, :L)
-                    elseif itype.scaling^2 == 2
+                    elseif itype.scaling^2 ≈ 2
                         return SPMatrix(dim, newdata, :LS)
                     else
                         error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
@@ -177,7 +177,7 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
                     end
                     if itype isa Solver.PSDIndextypeVector{:F} || isone(itype.scaling)
                         return SPMatrix(dim, newdata, :U)
-                    elseif itype.scaling^2 == 2
+                    elseif itype.scaling^2 ≈ 2
                         return SPMatrix(dim, newdata, :US)
                     else
                         error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted")
