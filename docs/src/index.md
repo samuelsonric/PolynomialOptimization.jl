@@ -18,6 +18,7 @@ The following solvers are supported:
 - [Mosek](https://www.mosek.com/)
 - [ProxSDP](https://github.com/mariohsouto/ProxSDP.jl)
 - [SCS](https://github.com/cvxgrp/scs)
+- [Sketchy CGAL](https://doi.org/10.1137/19M1305045) (own implementation)
 - [SpecBM Primal](https://doi.org/10.48550/arXiv.2307.07651) (own implementation)
 
 ## Overview

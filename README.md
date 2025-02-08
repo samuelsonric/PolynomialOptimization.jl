@@ -16,6 +16,6 @@ It _directly_ interfaces the solvers
 [ProxSDP](https://github.com/mariohsouto/ProxSDP.jl), and
 [SCS](https://github.com/cvxgrp/scs) without using `JuMP`, avoiding this bottleneck so that indeed almost all the time is spent
 in the solver, not in the problem formulation. It also features new research-level solvers: an own implementation of the
-[primal spectral bundling](https://arxiv.org/abs/2307.07651v1) method;
-an efficiency-oriented refactoring of the low-rank solver [Loraine](https://github.com/kocvara/Loraine.jl),
+[primal spectral bundling](https://arxiv.org/abs/2307.07651v1) method and the [SketchyCGAL](https://doi.org/10.1137/19M1305045)
+algorithm; an efficiency-oriented refactoring of the low-rank solver [Loraine](https://github.com/kocvara/Loraine.jl),
 and an interface to the experimental [LoRADS](https://github.com/projekter/LoRADS) solver.

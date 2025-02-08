@@ -24,6 +24,7 @@ number up or down by 100 or more. All solvers may expose options that can influe
 | Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment   | 👍👍👍 | 👍👍👍 | 👍👍    | ~300 - 500             |
 | ProxSDP     | [ProxSDP.jl](https://github.com/mariohsouto/ProxSDP.jl)     | MIT        | primal moment | 👍👍👍 | 👍👍    | 👍👍👍 | very large             |
 | SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment        | 👍      | 👍      | 👍👍👍 |                         |
+| SketchyCGAL | ∅                                                           |            | primal moment | 👎      | 👍      | 👍👍👍 |                        |
 | SpecBM      | ∅[^6]                                                       |            | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
 
 [^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
@@ -99,6 +100,20 @@ load_sdpa
 solve
 get_X
 get_Xlin
+```
+
+```@meta
+CurrentModule = PolynomialOptimization.Solvers.SketchyCGAL
+```
+## SketchyCGAL
+While the solver was implemented for the purpose of being used within `PolynomialOptimization`, it also works as a standalone
+routine (and could in principle be a separate package). [SketchyCGAL](https://doi.org/10.1137/19M1305045) is a solver that
+scales very well for large problem sizes by maintaining a sketch of the semidefinite matrices based on the assumption that the
+optimal solution has low rank; indeed, in polynomial optimizations, if there is an optimal point for the problem that can be
+encoded in the chosen basis, then this automatically gives rise to a rank-one semidefinite encoding of this point.
+```@docs
+sketchy_cgal
+Status
 ```
 
 ```@meta
