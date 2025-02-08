@@ -76,7 +76,7 @@ function Solver.fix_constraints!(state::StateMoment, m::Int, indvals::Indvals{In
 end
 
 function Solver.poly_optimize(::Val{:ProxSDPMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, tol_gap::Float64=1e-8, customize=(state) -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=(state) -> nothing, parameters...)
     setup_time = @elapsed @inbounds begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
