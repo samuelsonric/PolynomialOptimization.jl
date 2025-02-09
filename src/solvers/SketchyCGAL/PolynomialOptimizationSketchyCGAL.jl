@@ -1,7 +1,6 @@
 module PolynomialOptimizationSketchyCGAL
 
-using MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
-    PolynomialOptimization.SimplePolynomials, PolynomialOptimization.SimplePolynomials.MultivariateExponents
+using MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver
 import ..Solvers.SketchyCGAL
 using PolynomialOptimization: @assert, @inbounds
 

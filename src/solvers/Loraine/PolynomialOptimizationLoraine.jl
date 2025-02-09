@@ -1,7 +1,6 @@
 module PolynomialOptimizationLoraine
 
-using MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
-    PolynomialOptimization.SimplePolynomials, PolynomialOptimization.SimplePolynomials.MultivariateExponents
+using MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver
 import ..Solvers.Loraine
 using PolynomialOptimization: @assert, @inbounds
 

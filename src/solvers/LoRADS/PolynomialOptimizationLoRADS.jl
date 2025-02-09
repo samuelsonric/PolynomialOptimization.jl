@@ -1,8 +1,7 @@
 # while this is not a weak dependecy as the solver interface is shipped with PO, we follow the naming convention
 module PolynomialOptimizationLoRADS
 
-using ..Solvers.LoRADS, MultivariatePolynomials, LinearAlgebra, SparseArrays, ..Solver, ..SimplePolynomials,
-    ..SimplePolynomials.MultivariateExponents
+using ..Solvers.LoRADS, MultivariatePolynomials, LinearAlgebra, SparseArrays, ..Solver
 using ..PolynomialOptimization: @assert, @inbounds
 
 include("./LoRADSMoment.jl")
