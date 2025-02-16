@@ -303,11 +303,10 @@ end
 end
 #endregion
 
-@inline function _primal_add_constr!(state::PrimalMomentSolver{I,K,V,C,B}, indval::Indvals{K,V}, max_con::I,
-    ::Val{checkfree}=Val(false)) where {I,K,V,checkfree,C,B}
+@inline function _primal_add_constr!(state::PrimalMomentSolver{I,K,V,C,B}, indval::Indvals{K,V}, max_con::I) where {I,K,V,C,B}
     it = psd_indextype(state.parent)
     @inbounds for (k, v) in indval
-        if checkfree && !haskey(state.mon_eq, FastKey(k))
+        if !haskey(state.mon_eq, FastKey(k))
             # We did not see this monomial before in a PSD/nonnegative constraint, but now we need it in a fixed constraint.
             # This can happen due to basis reduction and still lead to a solvable problem if there are multiple well-balanced
             # fixed constraints. We would need to create free variables, which we solvers in this form usually don't support;
@@ -322,7 +321,7 @@ end
         if refₘ > 0 # likely
             _primal_push_psd!(state.psds[refₘ], it, max_con, refᵢ, refⱼ, v)
         else # quite unlikely (would require size-1 moment matrix or the case above)
-            if checkfree && refₘ == -2 # -1 for nonnegative variables, -2 for difference of two nonnegative variables
+            if refₘ == -2 # -1 for nonnegative variables, -2 for difference of two nonnegative variables
                 push!(state.nonnegs[1], max_con, max_con)
                 push!(state.nonnegs[2], refᵢ - one(I), refᵢ)
                 push!(state.nonnegs[3], v, -v)
@@ -443,7 +442,7 @@ end
 
 function add_constr_fix!(state::PrimalMomentSolver{I,K,V}, ::Nothing, indvals::Indvals{K,V}, rhs::V) where {I,K,V}
     max_con = (state.max_con += one(I))
-    _primal_add_constr!(state, indvals, max_con, Val(true))
+    _primal_add_constr!(state, indvals, max_con)
     @inbounds if !iszero(rhs)
         push!(state.b[1], max_con)
         push!(state.b[2], rhs)
