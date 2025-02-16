@@ -100,6 +100,8 @@ load_sdpa
 solve
 get_X
 get_Xlin
+get_S
+get_Slin
 ```
 
 ```@meta
