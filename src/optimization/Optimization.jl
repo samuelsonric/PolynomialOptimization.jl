@@ -126,22 +126,13 @@ function (i::IterateRepresentation)((type, index, grouping), _, oldrep::Type{<:R
     # using an eigendecomposition, then Choleskying, very expensive...) would give this guarantee, so why not.
     # To have it actually efficient, we unwrap the symmetric structure, although it would work on any AbstractMatrix.
     if oldsos isa (Symmetric{T,Matrix{T}} where {T<:Real}) || oldsos isa (Hermitian{T,Matrix{T}} where {T})
-        fullm = LinearAlgebra.copytri!(parent(oldsos), oldsos.uplo, true)
-        inplace = false
+        fullm = parent(copy(oldsos))
     elseif oldsos isa Matrix
-        fullm = oldsos
-        inplace = false
-    elseif oldsos isa SPMatrixUpper
-        fullm = LinearAlgebra.copytri!(convert(Matrix{eltype(oldsos)}, oldsos), 'U', true)
-        inplace = true
-    elseif oldsos isa SPMatrixLower
-        fullm = LinearAlgebra.copytri!(convert(Matrix{eltype(oldsos)}, oldsos), 'L', true)
-        inplace = true
+        fullm = copy(oldsos)
     else
-        fullm = Matrix(oldsos)::Matrix{eltype(oldsos)}
-        inplace = true
+        fullm = convert(Matrix{eltype(oldsos)}, oldsos)::Matrix{eltype(oldsos)}
     end
-    newrot = (inplace ? cholesky! : cholesky)(PositiveFactorizations.Positive, fullm).U
+    newrot = cholesky!(PositiveFactorizations.Positive, fullm).U
     (!i.keep_structure || oldrep <: RepresentationMethod{<:UpperOrUnitUpperTriangular}) && return oldrep(newrot)
     oldrep <: RepresentationMethod{<:Union{<:UniformScaling,<:Diagonal}} && return oldrep(Diagonal(newrot)) # bad
     oldrep <: RepresentationMethod{<:LowerOrUnitLowerTriangular} && return oldrep(newrot') # also bad!
