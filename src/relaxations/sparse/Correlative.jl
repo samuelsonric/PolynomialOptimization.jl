@@ -35,7 +35,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
-            (!ismissing(high_order_psd) && !ismissing(lower_order_psd))) &&
+            (!ismissing(high_order_psd) && !ismissing(low_order_psd))) &&
             error("high_order_... and low_order_... specifications cannot be used at the same time")
         problem = poly_problem(relaxation)
         ((ismissing(high_order_zero) || high_order_zero ⊆ 1:length(problem.constr_zero)) &&
@@ -96,8 +96,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     # we must make sure that the grouping only contains the constant, else mixing will occur
                     md[i] = 0
                     # then we can go back to considering only variables in terms instead of all variables
-                    for term in constr
-                        mon = monomial(term)
+                    for mon in monomials(constr)
                         for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
                             var1i = variable_index(var1)
                             for (var2, _) in Iterators.take(mon, i -1)
