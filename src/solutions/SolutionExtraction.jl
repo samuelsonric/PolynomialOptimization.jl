@@ -41,7 +41,7 @@ See also [`poly_optimize`](@ref), [`poly_all_solutions`](@ref).
 function poly_solutions end
 
 poly_solutions(result::Result, args...; kwargs...) =
-    poly_solutions(Relaxation.default_solution_method(result), args...; kwargs...)
+    poly_solutions(Relaxation.default_solution_method(result), result, args...; kwargs...)
 
 poly_solutions(method::Symbol, rest...; kwrest...) = poly_solutions(Val(method), rest...; kwrest...)
 
