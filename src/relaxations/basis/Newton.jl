@@ -35,7 +35,7 @@ struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationBasis{
         problem = poly_problem(relaxation)
         parent = groupings(relaxation)
         basis = PolynomialOptimization.Newton.halfpolytope(method, problem.objective; zero=problem.constr_zero,
-            nonneg=problem.constr_nonneg, psd=problem.constr_psd, groupings=parent, parameters...)
+            nonneg=problem.constr_nonneg, psd=problem.constr_psd, prefactor=problem.prefactor, groupings=parent, parameters...)
         basis isa SimpleMonomialVector ||
             error("Newton polytope calculation did not give results. Were the results written to a file?")
         gr = groupings(problem, basis, maxdegree(basis), parent)

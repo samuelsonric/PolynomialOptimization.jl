@@ -103,9 +103,9 @@ halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     halfpolytope(default_newton_method(), objective; kwargs...)
 
 function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepath::Union{<:AbstractString,Nothing}=nothing,
-    zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}},
+    zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}}, prefactor::P=one(P),
     groupings::RelaxationGroupings, kwargs...) where {Nr,I<:Integer,P<:SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}}
-    parameters, vertexmons = preproc(V, objective; verbose, zero, nonneg, psd, groupings, kwargs...)
+    parameters, vertexmons = preproc(V, objective; verbose, zero, nonneg, psd, prefactor, groupings, kwargs...)
     newton_time = @elapsed begin
         e = ExponentsMultideg{Nr,I}(analyze(vertexmons)...)
         innermons = SimpleMonomialVector{Nr,0}(e)
@@ -126,7 +126,7 @@ function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepa
 end
 
 function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false, zero::AbstractVector{P}=P[],
-    nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[],
+    nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[], prefactor::P=one(P),
     degree::Int=maxhalfdegree(objective)) where {Nc,P<:SimplePolynomial{<:Any,0,Nc}}
     # For complex-valued polynomials, the SDP looks like dot(basis, M, basis); due to the conjugation of the first element,
     # this is a 1:1 mapping between elements in M and monomials - contrary to the non-unique real case. Given that the
@@ -136,7 +136,7 @@ function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false,
     # nor has a distributed version.
     newton_time = @elapsed begin
         @verbose_info("Complex-valued Newton polytope: merging constraints")
-        result = merge_constraints(degree, objective, zero, nonneg, psd, verbose)
+        result = merge_constraints(degree, objective, zero, nonneg, psd, prefactor, verbose)
     end
     @verbose_info("Found ", length(result), " elements in the complex-valued \"Newton halfpolytope\" in ", newton_time,
         " seconds")

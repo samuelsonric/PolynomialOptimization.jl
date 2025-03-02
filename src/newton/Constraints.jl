@@ -3,25 +3,29 @@
 # And converting polynomials from the MP interface will yield ExponentsAll anyway.
 function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::AbstractVector{<:SimplePolynomial{<:Any,Nr,Nc}},
     nonneg::AbstractVector{<:SimplePolynomial{<:Any,Nr,Nc}},
-    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc}}}, groupings::RelaxationGroupings{Nr,Nc},
-    verbose::Bool, need_copy::Bool) where {Nr,Nc}
+    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc}}}, prefactor::SimplePolynomial{<:Any,Nr,Nc},
+    groupings::RelaxationGroupings{Nr,Nc}, verbose::Bool, need_copy::Bool) where {Nr,Nc}
     @verbose_info("Incorporating constraints into set of exponents")
     # Note that in the complex-valued case there's no mixing - i.e., no real variables. And every monomial appears once in its
-    # original form, once in its conjugate. We are only interested in the "original" (whichever it is), so we discard the conjugate part to avoid even generating duplicates.
+    # original form, once in its conjugate. We are only interested in the "original" (whichever it is), so we discard the
+    # conjugate part to avoid even generating duplicates.
     e = ExponentsAll{Nr+2Nc,UInt}()
 
     if isempty(zero) && isempty(nonneg) && isempty(psd)
-        # short path: just directly add the stuff from the objective. While we can get duplicates (due to the elimination of
-        # conjugates), we have a clear and manageable upper bound to the size, so no need to determine duplicates on-the-fly.
-        @verbose_info("No constraints found, adding all objective monomials")
+        # short path: just directly add the stuff from the objective and prefactor. While we can get duplicates (due to the
+        # elimination of conjugates), we have a clear and manageable upper bound to the size, so no need to determine
+        # duplicates on-the-fly.
+        @verbose_info("No constraints found, adding all objective and prefactor monomials")
         mons = monomials(objective)
+        pmons = monomials(prefactor)
         if iszero(Nc)
-            if monomials(objective).e == e
+            if mons.e == e && pmons.e == e &&
+                issubset(pmons, mons)
                 @verbose_info("Aliasing monomial indices")
                 return need_copy ? copy(mons) : mons
             else
-                @verbose_info("Converting monomial indices")
-                return SimpleMonomialVector{Nr,0}(e, monomial_index.((e,), mons))
+                @verbose_info("Merging monomial indices")
+                return merge_monomial_vectors(Val(Nr), Val(Nc), e, [pmons, mons])
             end
         else
             @verbose_info("Converting monomial indices")
@@ -29,14 +33,24 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
             for mon in mons
                 @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates{Nr}(exponents(mon))))
             end
+            for mon in pmons
+                @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates{Nr}(exponents(mon))))
+            end
             @verbose_info("Sorting and removing duplicates")
             return SimpleMonomialVector{Nr,Nc}(e, Base._groupedunique(sort!(finish!(candidates))))
         end
     end
 
-    mons_idx_set = sizehint!(Set{FastKey{UInt}}(), length(objective))
+    mons_idx_set = sizehint!(Set{FastKey{UInt}}(), length(objective) + length(prefactor))
     @verbose_info("├ objective")
     for mon in monomials(objective)
+        push!(mons_idx_set, FastKey(iszero(Nc) ? monomial_index(e, mon) :
+                                    exponents_to_index(e, KillConjugates{Nr}(exponents(mon)))))
+    end
+    # The prefactor is already multiplied into the objective. We only need it explicitly because of the lower bound which
+    # ensures that we always have the constant (or, more precisely, the prefactor) as a part of the polynomial.
+    @verbose_info("├ prefactor")
+    for mon in monomials(prefactor)
         push!(mons_idx_set, FastKey(iszero(Nc) ? monomial_index(e, mon) :
                                     exponents_to_index(e, KillConjugates{Nr}(exponents(mon)))))
     end

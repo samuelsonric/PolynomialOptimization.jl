@@ -131,15 +131,16 @@ end
 
 function preproc(V, objective::SimplePolynomial{<:Any,Nr,0}; verbose::Bool=false,
     zero::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}}, nonneg::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}},
-    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,0}}}, groupings::RelaxationGroupings{Nr,0},
-    preprocess::Union{Nothing,Bool}=nothing, preprocess_quick::Bool=true, preprocess_randomized::Bool=false,
-    preprocess_fine::Bool=false, warn_disable_randomization::Bool=true, parameters...) where {Nr}
+    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,0}}}, prefactor::SimplePolynomial{<:Any,Nr,0},
+    groupings::RelaxationGroupings{Nr,0}, preprocess::Union{Nothing,Bool}=nothing, preprocess_quick::Bool=true,
+    preprocess_randomized::Bool=false, preprocess_fine::Bool=false, warn_disable_randomization::Bool=true,
+    parameters...) where {Nr}
     if !isnothing(preprocess)
         preprocess_quick = preprocess_randomized = preprocess_fine = preprocess
     end
     @verbose_info("Determining Newton polytope (quick preprocessing: ", preprocess_quick, ", randomized preprocessing: ",
         preprocess_randomized, ", fine preprocessing: ", preprocess_fine, ")")
-    mons = merge_constraints(objective, zero, nonneg, psd, groupings, verbose,
+    mons = merge_constraints(objective, zero, nonneg, psd, prefactor, groupings, verbose,
         preprocess_quick | preprocess_randomized | preprocess_fine)
     if preprocess_quick
         @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", length(mons), " initial candidates")
