@@ -51,6 +51,47 @@ MultivariatePolynomials.constant_monomial(m::SimplePolynomial) = constant_monomi
 
 MultivariatePolynomials.constant_monomial(P::Type{<:SimplePolynomial}) = constant_monomial(eltype(P))
 
+Base.zero(::Type{<:SimplePolynomial{C,Nr,Nc,M}}) where {C,Nr,Nc,I<:Integer,E,M<:SimpleMonomialVector{Nr,Nc,I,E}} =
+    SimplePolynomial(
+        C[],
+        SimpleMonomialVector{Nr,Nc}(
+            unsafe,
+            ExponentsAll{Nr+2Nc,I}(),
+            E <: Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}} ? (one(I):zero(I)) : I[]
+        )
+    )
+
+Base.zero(p::SimplePolynomial{C,Nr,Nc,M}) where {C,Nr,Nc,I<:Integer,E,M<:SimpleMonomialVector{Nr,Nc,I,E}} =
+    SimplePolynomial(
+        C[],
+        SimpleMonomialVector{Nr,Nc}(
+            unsafe,
+            p.monomials.e,
+            E <: Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}} ? (one(I):zero(I)) : I[]
+        )
+    )
+
+Base.one(::Type{<:SimplePolynomial{C,Nr,Nc,M}}) where {C,Nr,Nc,I<:Integer,E,M<:SimpleMonomialVector{Nr,Nc,I,E}} =
+    SimplePolynomial(
+        [one(C)],
+        SimpleMonomialVector{Nr,Nc}(
+            ExponentsAll{Nr+2Nc,I}(),
+            E <: Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}} ? (one(I):one(I)) : [one(I)]
+        )
+    )
+
+function Base.one(p::SimplePolynomial{C,Nr,Nc,M}) where {C,Nr,Nc,I<:Integer,E,M<:SimpleMonomialVector{Nr,Nc,I,E}}
+    eind = convert_index(p.monomials.e, ExponentsAll{Nr+2Nc,I}(), one(I))
+    return SimplePolynomial(
+        [one(C)],
+        SimpleMonomialVector{Nr,Nc}(
+            unsafe,
+            p.monomials.e,
+            E <: Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}} ? (eind:eind) : [eind]
+        )
+    )
+end
+
 MultivariatePolynomials.map_coefficients(f::Function, p::SimplePolynomial) = SimplePolynomial(map(f, p.coeffs), p.monomials)
 
 function MultivariatePolynomials.map_coefficients!(f::Function, p::SimplePolynomial)
