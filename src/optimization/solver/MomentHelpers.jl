@@ -2004,7 +2004,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     infoᵢ = prepend_fix(state) ? _fix_setup!(state, problem, groupings, counters, info, 2) : 2
 
     # SOS term for objective
-    constantP = SimplePolynomial(constant_monomial(P), coefficient_type(problem.objective))
+    constantP = one(P)
     @inbounds info[1] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupings.obj))
     for (i, grouping) in enumerate(groupings.obj)
         g = collect_grouping(grouping)

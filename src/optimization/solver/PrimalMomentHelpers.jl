@@ -503,7 +503,7 @@ function primal_moment_setup!(state::AbstractSolver{K,V}, relaxation::AbstractRe
         info = moment_setup!(pstate, relaxation, groupings; representation=RepresentationPSD())
 
         # Now we must call our solver with the data; but we also need the objective for this. So lets first convert it.
-        C = Vector{Union{Nothing,Tuple{obj_vect ? FastVec{I} : Tuple{FastVec{I},FastVec{I}},FastVec{V}}}}(
+        C = Vector{Tuple{obj_vect ? FastVec{I} : Tuple{FastVec{I},FastVec{I}},FastVec{V}}}(
             undef, length(pstate.psds)
         )
         c_lin_data = (FastVec{I}(), FastVec{V}())
@@ -646,7 +646,7 @@ function coo_to_csc!(nCols::Integer, s::SparseMatrixCOO{I,I,V,offset}) where {I,
             curcol += one(curcol)
         end
     end
-    @assert(false)
+    throw(AssertionError("This should not be reached")) # for return type inference
 end
 
 """

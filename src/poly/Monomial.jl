@@ -392,14 +392,14 @@ Base.@assume_effects :consistent function Base.isreal(m::SimpleMonomial{Nr,Nc}) 
     exps = exponents(m)
     iter = iterate(exps)
     for _ in 1:Nr
-        isnothing(iter) && return true # should not happen, but let's help the compiler to figure out type stability
-        iszero(iter[2][1]) && return true # short-circuit if no nonzero exponents follow
-        iter = iterate(exps, iter[2])
+        iter_ = iter::Tuple # just to help disambiguate - both for the compiler and static analysis
+        iszero(iter_[2][1]) && return true # short-circuit if no nonzero exponents follow
+        iter = iterate(exps, iter_[2])
     end
     for _ in 1:Nc
-        isnothing(iter) && return true
-        complexdeg = iter[1]
-        iter = iterate(exps, iter[2])::Tuple
+        iter_ = iter::Tuple
+        complexdeg = iter_[1]
+        iter = iterate(exps, iter_[2])::Tuple
         iter[1] == complexdeg || return false
         iszero(iter[2][1]) && return true # short-circuit if the remaining degree is zero
         isodd(iter[2][1]) && return false # short-circuit if an odd number of complex variables remain, they can never be
