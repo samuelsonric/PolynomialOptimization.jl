@@ -2,7 +2,7 @@ module PolynomialOptimizationSketchyCGAL
 
 using MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver
 import ..Solvers.SketchyCGAL
-using PolynomialOptimization: @assert, @inbounds
+using ..PolynomialOptimization: @assert, @inbounds
 
 include("./SketchyCGALMoment.jl")
 
