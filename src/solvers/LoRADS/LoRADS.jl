@@ -2,14 +2,16 @@
 # tightly integrated with the PolynomialOptimization framework
 module LoRADS
 
-export set_solverlib, init_solver, set_dual_objective, conedata_to_userdata, set_cone, set_lp_cone, init_cone_data, preprocess,
-    load_sdpa, solver, get_X, get_Xlin
-
-using LinearAlgebra: chkstride1, Transpose, Symmetric
-using SparseArrays, Preferences
+using LinearAlgebra: chkstride1, Transpose, Symmetric, rmul!
+using SparseArrays, Preferences, Printf
 using LinearAlgebra.BLAS: axpy!, syrk!
+using StandardPacked: tpttr!
+using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
 
 const solverlib = @load_preference("lorads-solver", "")
+const LoRADSInt = @load_preference("lorads-int", Int64)
+
+havefree::Bool = false
 
 function __init__()
     !isempty(solverlib) && let dl=Libc.dlopen(solverlib, throw_error=false)
@@ -18,8 +20,9 @@ function __init__()
                    `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to change the configuration; set it to an empty \
                    value to disable the solver.")
         else
-            isnothing(Libc.dlsym(dl, :ASDPSetLpCone, throw_error=false)) &&
-                @warn("The unpatched version of the LoRADS library is used. Expect segfaults.")
+            global havefree
+            havefree = !isnothing(Libc.dlsym(dl, :FREE, throw_error=false))
+            havefree || @warn("The unpatched version of the LoRADS library is used. This is not recommended.")
             Libc.dlclose(dl)
         end
     end
@@ -44,64 +47,75 @@ end
 include("./Enums.jl")
 include("./DataTypes.jl")
 
-check(r::Retcode) = r === RETCODE_OK || error("ASDP error: $r")
-
 """
-    init_solver(solver, nConstrRows, coneDims::AbstractVector{Cint}, nLpCols;
-        rho=1.5, rhoMax=5000., maxIter=10_000, strategy=STRATEGY_DEFAULT)
+    init_solver(solver, nConstrRows, coneDims::AbstractVector{LoRADSInt}, nLpCols)
 
-Initializes a fresh `ASDP` object with `nConstrRows` constraints, positive semidefinite variables of side dimension `coneDims`
-(a vector of `Cint`), `nLpCols` scalar nonnegative variables, penalty parameter `rho` (zero will set it to ``\frac{1}{n}``,
-where `n` is the sum of all side dimensions plus the number of linear variables) which can be dynamically increased up to at
-most `rhoMax`, total number of iterations `maxIter`, and strategy to adapt `rho`.
+Initializes a fresh `Solver` object with `nConstrRows` constraints, positive semidefinite variables of side dimension
+`coneDims` (a vector of integers), and `nLpCols` scalar nonnegative variables.
 """
-function init_solver(solver::ASDP, nConstrRows::Integer, coneDims::AbstractVector{Cint}, nLpCols::Integer; rho::Real=1.5,
-    rhoMax::Real=5000., maxIter::Integer=10_000, strategy::Strategy=STRATEGY_DEFAULT)
-    getfield(solver, :init_called) && error("Double initialization")
+function init_solver(solver::Solver, nConstrRows::LoRADSInt, coneDims::AbstractVector{LoRADSInt},
+    nLpCols::LoRADSInt)
     chkstride1(coneDims)
-    setfield!(solver, :init_called, true)
-    check(@ccall solverlib.ASDPInitSolver(solver::Ptr{Cvoid}, nConstrRows::Cint, length(coneDims)::Cint, coneDims::Ptr{Cint},
-        nLpCols::Cint, rho::Cdouble, rhoMax::Cdouble, maxIter::Cint, strategy::Cint)::Retcode)
-    setfield!(solver, :init_success, true)
+    @ccall solverlib.LORADSInitSolver(solver::Ptr{Cvoid}, nConstrRows::LoRADSInt, length(coneDims)::LoRADSInt,
+        coneDims::Ptr{LoRADSInt}, nLpCols::LoRADSInt)::Cvoid
+    solver.timeSolveStart = get_timestamp()
     return solver
 end
 
-function cleanup(solver::ASDP)
-    getfield(solver, :init_success) || return solver
-    @ccall solverlib.ASDPDestroyADMMVars(solver::Ptr{Cvoid})::Cvoid
-    @ccall solverlib.ASDPDestroyBMVars(solver::Ptr{Cvoid})::Cvoid
-    @ccall solverlib.freeDetectSparsitySDPCoeff(solver::Ptr{Cvoid})::Cvoid
-    @ccall solverlib.ASDPDestroyRankElem(solver::Ptr{Cvoid})::Cvoid
+function cleanup(solver::Solver)
+    @ccall solverlib.LORADSDestroyADMMVars(solver::Ptr{Cvoid})::Cvoid
+    @ccall solverlib.LORADSDestroyALMVars(solver::Ptr{Cvoid})::Cvoid
+    global havefree
+    solver.hisRecT = 0
+    if solver.sparsitySDPCoeff != C_NULL
+        if havefree
+            @ccall solverlib.FREE(solver.sparsitySDPCoeff::Ptr{Cvoid})::Cvoid
+        else
+            @ccall solverlib.REALLOC(
+                (pointer_from_objref(solver) + fieldoffset(Solver, Base.fieldindex(Solver, :sparsitySDPCoeff)))::Ptr{Ptr{Cvoid}},
+                zero(LoRADSInt)::LoRADSInt,
+                zero(LoRADSInt)::LoRADSInt
+            )::Cvoid
+        end
+        solver.sparsitySDPCoeff = C_NULL # since zero-length calloc is implementation-defined
+    end
+    if solver.var.rankElem != C_NULL
+        if havefree
+            @ccall solverlib.FREE(solver.var.rankElem::Ptr{Cvoid})::Cvoid
+        else
+            @ccall solverlib.REALLOC(
+                (pointer_from_objref(solver.var) + fieldoffset(Variable, Base.fieldindex(Variable, :rankElem)))::Ptr{Ptr{LoRADSInt}},
+                zero(LoRADSInt)::LoRADSInt,
+                zero(LoRADSInt)::LoRADSInt
+            )::Cvoid
+        end
+        solver.var.rankElem = C_NULL
+    end
     @ccall solverlib.destroyPreprocess(solver::Ptr{Cvoid})::Cvoid
-    @ccall solverlib.ASDPDestroyConeData(solver::Ptr{Cvoid})::Cvoid
-    setfield!(solver, :init_success, false)
-    return solver
-end
-
-function destroy_solver(solver::ASDP)
-    getfield(solver, :init_success) && cleanup(x)
-    @ccall solverlib.ASDPDestroySolver(solver::Ptr{Cvoid})::Cvoid
-    setfield!(solver, :init_called, false)
+    @ccall solverlib.LORADSDestroyConeData(solver::Ptr{Cvoid})::Cvoid
+    @ccall solverlib.LORADSDestroySolver(solver::Ptr{Cvoid})::Cvoid
+    solver.nCones = 0
+    solver.nLpCols = 0
     return solver
 end
 
 """
     set_dual_objective(solver, dObj::AbstractVector{Cdouble})
 
-Sets the dual objective, i.e., the right-hand side of the constraints, in an initialized `ASDP` object.
+Sets the dual objective, i.e., the right-hand side of the constraints, in an initialized `Solver` object.
 """
-function set_dual_objective(solver::ASDP, dObj::AbstractVector{Cdouble})
+function set_dual_objective(solver::Solver, dObj::AbstractVector{Cdouble})
     chkstride1(dObj)
-    @ccall solverlib.ASDPSetDualObjective(solver::Ptr{Cvoid}, dObj::Ptr{Cdouble})::Cvoid
+    @ccall solverlib.LORADSSetDualObjective(solver::Ptr{Cvoid}, dObj::Ptr{Cdouble})::Cvoid
     return solver
 end
 
 """
-    conedata_to_userdata(cone::ConeType, nConstrRows, dim, coneMatBeg::AbstractVector{Cint},
-        coneMatIdx::AbstractVector{Cint}, coneMatElem::AbstractVector{Cdouble})
+    conedata_to_userdata(cone::ConeType, nConstrRows, dim, coneMatBeg::AbstractVector{LoRADSInt},
+        coneMatIdx::AbstractVector{LoRADSInt}, coneMatElem::AbstractVector{Cdouble})
 
-Allocates a new user data objects and sets its conic data. This consists of a cone type (only `ASDP_CONETYPE_DENSE_SDP` and
-`ASDP_CONETYPE_SPARSE_SDP` are supported), the number of rows (which is the same as the number of constraints in the solver)
+Allocates a new user data objects and sets its conic data. This consists of a cone type (only `CONETYPE_DENSE_SDP` and
+`CONETYPE_SPARSE_SDP` are supported), the number of rows (which is the same as the number of constraints in the solver)
 and the side dimension of the semidefinite variable, followed by the constraint matrices in zero-indexed CSR format. Every row
 corresponds to the vectorized lower triangle of the column of a constraint matrix. The zeroth row is the coefficient matrix for
 the objective.
@@ -113,8 +127,8 @@ freed.
 
 See also [`set_cone`](@ref), [`init_cone_data`](@ref).
 """
-function conedata_to_userdata(cone::ConeType, nConstrRows::Integer, dim::Integer, coneMatBeg::AbstractVector{Cint},
-    coneMatIdx::AbstractVector{Cint}, coneMatElem::AbstractVector{Cdouble})
+function conedata_to_userdata(cone::ConeType, nConstrRows::Integer, dim::Integer, coneMatBeg::AbstractVector{LoRADSInt},
+    coneMatIdx::AbstractVector{LoRADSInt}, coneMatElem::AbstractVector{Cdouble})
     chkstride1(coneMatBeg)
     chkstride1(coneMatIdx)
     chkstride1(coneMatElem)
@@ -123,9 +137,9 @@ function conedata_to_userdata(cone::ConeType, nConstrRows::Integer, dim::Integer
     (length(coneMatIdx) == length(coneMatElem) && iszero(coneMatBeg[begin]) && coneMatBeg[end] == length(coneMatIdx) &&
         issorted(coneMatBeg)) || throw(ArgumentError("Error in the CSR format"))
     result = Ref{Ptr{Cvoid}}()
-    check(@ccall solverlib.AUserDataCreate(result::Ref{Ptr{Cvoid}})::Retcode)
-    @ccall solverlib.AUserDataSetConeData(result[]::Ptr{Cvoid}, cone::Cint, nConstrRows::Cint, dim::Cint,
-        coneMatBeg::Ptr{Cint}, coneMatIdx::Ptr{Cint}, coneMatElem::Ptr{Cdouble})::Cvoid
+    @ccall solverlib.LUserDataCreate(result::Ref{Ptr{Cvoid}})::Cvoid
+    @ccall solverlib.LUserDataSetConeData(result[]::Ptr{Cvoid}, cone::Cint, nConstrRows::LoRADSInt, dim::LoRADSInt,
+        coneMatBeg::Ptr{LoRADSInt}, coneMatIdx::Ptr{LoRADSInt}, coneMatElem::Ptr{Cdouble})::Cvoid
     return result[]
 end
 
@@ -136,14 +150,14 @@ Sets the `iCone`th cone to the data previously defined using [`conedata_to_userd
 
 See also [`init_cone_data`](@ref).
 """
-function set_cone(solver::ASDP, iCone::Integer, userCone::Ptr{Cvoid})
-    check(@ccall solverlib.ASDPSetCone(solver::Ptr{Cvoid}, iCone::Cint, userCone::Ptr{Cvoid})::Retcode)
+function set_cone(solver::Solver, iCone::Integer, userCone::Ptr{Cvoid})
+    @ccall solverlib.LORADSSetCone(solver::Ptr{Cvoid}, iCone::LoRADSInt, userCone::Ptr{Cvoid})::Cvoid
     return solver
 end
 
 """
-    set_lp_cone(solver, nConstrRows, nLpCols, lpMatBeg::AbstractVector{Cint},
-        lpMatIdx::AbstractVector{Cint}, lpMatElem::AbstractVector{Cdouble})
+    set_lp_cone(solver, nConstrRows, nLpCols, lpMatBeg::AbstractVector{LoRADSInt},
+        lpMatIdx::AbstractVector{LoRADSInt}, lpMatElem::AbstractVector{Cdouble})
 
 Set the data of the constraint matrix for the linear variables according to the CSR data specified in the parameters.
 
@@ -151,8 +165,8 @@ Set the data of the constraint matrix for the linear variables according to the 
     This function is not exported on the original code release and can therefore not be used. However, only the patched version
     should be used, as it fixes heap corruption errors that can arise during the optimization.
 """
-function set_lp_cone(solver::ASDP, nConstrRows::Integer, nLpCols::Integer, lpMatBeg::AbstractVector{Cint},
-    lpMatIdx::AbstractVector{Cint}, lpMatElem::AbstractVector{Cdouble})
+function set_lp_cone(solver::Solver, nConstrRows::Integer, nLpCols::Integer, lpMatBeg::AbstractVector{LoRADSInt},
+    lpMatIdx::AbstractVector{LoRADSInt}, lpMatElem::AbstractVector{Cdouble})
     chkstride1(lpMatBeg)
     chkstride1(lpMatIdx)
     chkstride1(lpMatElem)
@@ -160,8 +174,8 @@ function set_lp_cone(solver::ASDP, nConstrRows::Integer, nLpCols::Integer, lpMat
         throw(ArgumentError("The number of constraint rows is not compatible with the given matrix."))
     (length(lpMatIdx) == length(lpMatElem) && iszero(lpMatBeg[begin]) && lpMatBeg[end] == length(lpMatIdx) &&
         issorted(lpMatBeg)) || throw(ArgumentError("Error in the CSR format"))
-    check(@ccall solverlib.ASDPSetLpCone(solver.lpCone::Ptr{Cvoid}, nConstrRows::Cint, nLpCols::Cint, lpMatBeg::Ptr{Cint},
-        lpMatIdx::Ptr{Cint}, lpMatElem::Ptr{Cdouble})::Retcode)
+    @ccall solverlib.LORADSSetLpCone(solver.lpCone::Ptr{Cvoid}, nConstrRows::LoRADSInt, nLpCols::LoRADSInt, lpMatBeg::Ptr{LoRADSInt},
+        lpMatIdx::Ptr{LoRADSInt}, lpMatElem::Ptr{Cdouble})::Cvoid
     return solver
 end
 
@@ -180,14 +194,14 @@ with the following representation in the variables:
 - `1 ≤ j ≤ length(coneDims) = length(coneMat)`
 - `coneMat` is a vector of matrices, `lpMat` is a matrix. They should be in CSR storage, where the row index (starting at 0 for
   the objective, then `k` for the `k`th constraint) is the constraint. Since CSR is not natively supported by Julia, the
-  transpose of a `SparseMatrixCSC{Cdouble,Cint}` is expected.
+  transpose of a `SparseMatrixCSC{Cdouble,LoRADSInt}` is expected.
 - `mat` makes the unscaled lower triangle into a full matrix
 
 This is a convenience function that does the job of [`conedata_to_userdata`](@ref), [`set_cone`](@ref), and
 [`preprocess`](@ref) in one step. However, note that it is more efficient to call these functions individually.
 """
-function init_cone_data(solver::ASDP, coneMat::AbstractVector{Transpose{Cdouble,SparseMatrixCSC{Cdouble,Cint}}},
-    coneDims::AbstractVector{Cint}, lpMat::Union{Nothing,Transpose{Cdouble,SparseMatrixCSC{Cdouble,Cint}}})
+function init_cone_data(solver::Solver, coneMat::AbstractVector{Transpose{Cdouble,SparseMatrixCSC{Cdouble,LoRADSInt}}},
+    coneDims::AbstractVector{LoRADSInt}, lpMat::Union{Nothing,Transpose{Cdouble,SparseMatrixCSC{Cdouble,LoRADSInt}}})
     chkstride1(coneDims)
     if isempty(coneMat)
         isnothing(lpMat) && throw(ArgumentError("No data"))
@@ -197,17 +211,17 @@ function init_cone_data(solver::ASDP, coneMat::AbstractVector{Transpose{Cdouble,
     end
     length(coneDims) == length(coneMat) || throw(ArgumentError("Lengths of cones are inconsistent"))
     coneMatElem = Vector{Ptr{Cdouble}}(undef, length(coneMat))
-    coneMatBeg = similar(coneMatElem, Ptr{Cint})
-    coneMatIdx = similar(coneMatElem, Ptr{Cint})
+    coneMatBeg = similar(coneMatElem, Ptr{LoRADSInt})
+    coneMatIdx = similar(coneMatElem, Ptr{LoRADSInt})
     @inbounds for (i, cm) in enumerate(coneMat)
         size(cm, 1) == nConstrs || throw(ArgumentError("Number of constraints inconsistent"))
         # cm is the transpose of CSC, i.e., CSR. Each row in cm is a constraint, each column an entry in the lower triangle
         coneDims[i] * (coneDims[i] +1) ÷ 2 == size(cm, 2) ||
             throw(ArgumentError(lazy"Length of cone $i is wrong (is $(coneDims[i])), should be $((isqrt(1 + 8size(cm, 2)) -1) ÷ 2)"))
         colptr = SparseArrays.getcolptr(parent(cm))
-        colptr .-= one(Cint)
+        colptr .-= one(LoRADSInt)
         rowval = SparseArrays.getrowval(parent(cm))
-        rowval .-= one(Cint)
+        rowval .-= one(LoRADSInt)
         coneMatBeg[i] = pointer(colptr)
         coneMatIdx[i] = pointer(rowval)
         coneMatElem[i] = pointer(SparseArrays.getnzval(parent(cm)))
@@ -218,8 +232,8 @@ function init_cone_data(solver::ASDP, coneMat::AbstractVector{Transpose{Cdouble,
         LpMatBeg = SparseArray.getcolptr(lpMat)
         LpMatIdx = SparseArray.getrowval(lpMat)
         LpMatElem = SparseArray.getnzval(lpMat)
-        LpMatBeg .-= one(Cint)
-        LpMatIdx .-= one(Cint)
+        LpMatBeg .-= one(LoRADSInt)
+        LpMatIdx .-= one(LoRADSInt)
     else
         nLpCols = 0
         LpMatBeg = C_NULL
@@ -227,279 +241,444 @@ function init_cone_data(solver::ASDP, coneMat::AbstractVector{Transpose{Cdouble,
         LpMatElem = C_NULL
     end
     sdpDatas = similar(coneMatElem, Ptr{Cvoid})
-    check(@ccall solverlib.ASDPInitConeData(
+    @ccall solverlib.LORADSInitConeData(
         solver::Ptr{Cvoid},
         sdpDatas::Ptr{Ptr{Cvoid}},
         coneMatElem::Ptr{Ptr{Cdouble}},
-        coneMatBeg::Ptr{Ptr{Cint}},
-        coneMatIdx::Ptr{Ptr{Cint}},
-        coneDims::Ptr{Cint},
-        nConstrs::Cint,
-        length(coneMat)::Cint,
-        nLpCols::Cint,
-        LpMatBeg::Ptr{Cint},
-        LpMatIdx::Ptr{Cint},
+        coneMatBeg::Ptr{Ptr{LoRADSInt}},
+        coneMatIdx::Ptr{Ptr{LoRADSInt}},
+        coneDims::Ptr{LoRADSInt},
+        nConstrs::LoRADSInt,
+        length(coneMat)::LoRADSInt,
+        nLpCols::LoRADSInt,
+        LpMatBeg::Ptr{LoRADSInt},
+        LpMatIdx::Ptr{LoRADSInt},
         LpMatElem::Ptr{Cdouble}
-    )::Retcode)
+    )::Cvoid
     # sdpDatas is filled. Every cone in solver has a field usrData that contains the same pointer. And when the cones are
     # destroyed when finalizing solver, this userdata is also freed (just the struct that holds the references, not the arrays
     # themselves). So we can just forget about our sdpDatas.
     preprocess(solver, coneDims)
     # Now all the data was converted to internal data. We don't need any of them any more.
     @inbounds for (i, cm) in enumerate(coneMat)
-        SparseArrays.getcolptr(parent(cm)) .+= one(Cint)
-        SparseArrays.getrowval(parent(cm)) .+= one(Cint)
+        SparseArrays.getcolptr(parent(cm)) .+= one(LoRADSInt)
+        SparseArrays.getrowval(parent(cm)) .+= one(LoRADSInt)
     end
     if !isnothing(lpMat)
-        LpMatBeg .+= one(Cint)
-        LpMatIdx .+= one(Cint)
+        LpMatBeg .+= one(LoRADSInt)
+        LpMatIdx .+= one(LoRADSInt)
     end
     return solver
 end
 
 """
-    preprocess(solver, coneDims::AbstractVector{Cint})
+    preprocess(solver, coneDims::AbstractVector{LoRADSInt})
 
 Invokes the preprocessor. This should be called after all cones were set up, after which their original data may be reused or
 destroyed.
 
 See also [`conedata_to_userdata`](@ref), [`set_cone`](@ref).
 """
-function preprocess(solver::ASDP, coneDims::AbstractVector{Cint})
+function preprocess(solver::Solver, coneDims::AbstractVector{LoRADSInt})
     chkstride1(coneDims)
-    check(@ccall solverlib.ASDPPreprocess(solver::Ptr{Cvoid}, coneDims::Ptr{Cint})::Retcode)
+    @ccall solverlib.LORADSPreprocess(solver::Ptr{Cvoid}, coneDims::Ptr{LoRADSInt})::Cvoid
     return solver
 end
 
-function determine_rank(solver::ASDP, coneDims::AbstractVector{Cint}, timesRank::Real, rankSpecify::Integer)
+function determine_rank(solver::Solver, coneDims::AbstractVector{LoRADSInt}, timesRank::Real)
     chkstride1(coneDims)
-    check(@ccall solverlib.ASDPDetermineRank(solver::Ptr{Cvoid}, coneDims::Ptr{Cint}, timesRank::Cdouble,
-        rankSpecify::Cint)::Retcode)
+    @ccall solverlib.LORADSDetermineRank(solver::Ptr{Cvoid}, coneDims::Ptr{LoRADSInt}, timesRank::Cdouble)::Cvoid
     return solver
 end
 
-function detect_max_cut_prob(solver::ASDP, coneDims::AbstractVector{Cint})
+function detect_max_cut_prob(solver::Solver, coneDims::AbstractVector{LoRADSInt})
     chkstride1(coneDims)
-    maxCut = Ref{Cint}()
-    @ccall solverlib.detectMaxCutProb(solver::Ptr{Cvoid}, coneDims::Ptr{Cint}, maxCut::Ref{Cint})::Cvoid
+    maxCut = Ref{LoRADSInt}()
+    @ccall solverlib.detectMaxCutProb(solver::Ptr{Cvoid}, coneDims::Ptr{LoRADSInt}, maxCut::Ref{LoRADSInt})::Cvoid
     return maxCut[]
 end
 
-function detect_sparsity_sdp_coeff(solver::ASDP)
+function detect_sparsity_sdp_coeff(solver::Solver)
     @ccall solverlib.detectSparsitySDPCoeff(solver::Ptr{Cvoid})::Cvoid
     return solver
 end
 
-function init_bm_vars(solver::ASDP, coneDims::AbstractVector{Cint}, nLpCols::Integer)
+function init_alm_vars(solver::Solver, coneDims::AbstractVector{LoRADSInt}, nLpCols::Integer, lbfgsHis::Integer)
     chkstride1(coneDims)
-    check(@ccall solverlib.ASDPInitBMVars(solver::Ptr{Cvoid}, coneDims::Ptr{Cint}, length(coneDims)::Cint,
-        nLpCols::Cint)::Retcode)
+    @ccall solverlib.LORADSInitALMVars(
+        solver::Ptr{Cvoid},
+        solver.var.rankElem::Ptr{LoRADSInt},
+        coneDims::Ptr{LoRADSInt},
+        length(coneDims)::LoRADSInt,
+        nLpCols::LoRADSInt,
+        lbfgsHis::LoRADSInt
+    )::Cvoid
+    solver.hisRecT = lbfgsHis
     return solver
 end
 
-function init_admm_vars(solver::ASDP, coneDims::AbstractVector{Cint}, nLpCols::Integer)
+function init_admm_vars(solver::Solver, coneDims::AbstractVector{LoRADSInt}, nLpCols::Integer)
     chkstride1(coneDims)
-    check(@ccall solverlib.ASDPInitADMMVars(solver::Ptr{Cvoid}, coneDims::Ptr{Cint}, length(coneDims)::Cint,
-        nLpCols::Cint)::Retcode)
+    @ccall solverlib.LORADSInitADMMVars(
+        solver::Ptr{Cvoid},
+        solver.var.rankElem::Ptr{LoRADSInt},
+        coneDims::Ptr{LoRADSInt},
+        length(coneDims)::LoRADSInt,
+        nLpCols::LoRADSInt
+    )::Cvoid
     return solver
 end
 
-function scale(solver::ASDP)
-    @ccall solverlib.ASDP_SCALE(solver::Ptr{Cvoid})::Cvoid
+function initial_solver_state(params::Params, solver::Solver)
+    alm_state = ALMState()
+    admm_state = ADMMState()
+    sdpConst = SDPConst()
+    @ccall solverlib.initial_solver_state(
+        params::Ptr{Cvoid},
+        solver::Ptr{Cvoid},
+        alm_state::Ptr{Cvoid},
+        admm_state::Ptr{Cvoid},
+        sdpConst::Ptr{Cvoid}
+    )::Cvoid
+    return alm_state, admm_state, sdpConst
+end
+
+alm_optimize(params::Params, solver::Solver, alm_iter_state::ALMState, rho_update_factor::Real, timeSolveStart::Real) =
+    @ccall solverlib.LORADS_ALMOptimize(params::Ptr{Cvoid}, solver::Ptr{Cvoid}, alm_iter_state::Ptr{Cvoid},
+        rho_update_factor::Cdouble, timeSolveStart::Cdouble)::Retcode
+
+function alm_to_admm(solver::Solver, params::Params, alm_state::ALMState, admm_state::ADMMState)
+    @ccall solverlib.LORADS_ALMtoADMM(solver::Ptr{Cvoid}, params::Ptr{Cvoid}, alm_state::Ptr{Cvoid},
+        admm_state::Ptr{Cvoid})::Cvoid
     return solver
 end
 
-bm_optimize(solver::ASDP, endBMTol::Real, endBMTol_pd::Real, endTauTol::Real, endBMALSub::Real, ori_start::Real,
-    is_rank_max::Bool, pre_mainiter::Ref{Cint}, pre_miniter::Ref{Cint}, timeLimit::Real) =
-    @ccall solverlib.ASDP_BMOptimize(solver::Ptr{Cvoid}, endBMTol::Cdouble, endBMTol_pd::Cdouble, endTauTol::Cdouble,
-        endBMALSub::Cdouble, ori_start::Cdouble, is_rank_max::Cint, pre_mainiter::Ref{Cint}, pre_miniter::Ref{Cint},
-        timeLimit::Cdouble)::Retcode
+admm_optimize(params::Params, solver::Solver, admm_iter_sate::ADMMState, iter_celling::Integer, timeSolveStart::Real) =
+    @ccall solverlib.LORADSADMMOptimize(params::Ptr{Cvoid}, solver::Ptr{Cvoid}, admm_iter_sate::Ptr{Cvoid},
+        iter_celling::LoRADSInt, timeSolveStart::Cdouble)::Retcode
 
-check_all_rank_max(solver::ASDP, aug_factor::Real) =
-    !iszero(@ccall solverlib.CheckAllRankMax(solver::Ptr{Cvoid}, aug_factor::Cdouble)::Cint)
-
-function aug_rank(solver::ASDP, coneDims::AbstractVector{Cint}, aug_factor::Real)
-    chkstride1(coneDims)
-    return !iszero(@ccall solverlib.AUG_RANK(solver::Ptr{Cvoid}, coneDims::Ptr{Cint}, length(coneDims)::Cint,
-        aug_factor::Cdouble)::Cint)
-end
-
-function bm_to_admm(solver::ASDP, heuristic::Real)
-    @ccall solverlib.ASDP_BMtoADMM(solver::Ptr{Cvoid}, heuristic::Cdouble)::Cvoid
+function calculate_dual_infeasibility(solver::Solver)
+    @ccall solverlib.calculate_dual_infeasibility_solver(solver::Ptr{Cvoid})::Cvoid
     return solver
 end
 
-optimize(solver::ASDP, rhoFreq::Integer, rhoFactor::Real, rhoStrategy::Strategy, tau::Real, gamma::Real, rhoMin::Real,
-    orig_start::Real, timeLimit::Real) =
-    @ccall solverlib.ASDPOptimize(solver::Ptr{Cvoid}, rhoFreq::Cint, rhoFactor::Cdouble, rhoStrategy::Cint, tau::Cdouble,
-        gamma::Cdouble, rhoMin::Cdouble, orig_start::Cdouble, timeLimit::Cdouble)::Retcode
+function reopt(params::Params, solver::Solver, alm_state::ALMState, admm_state::ADMMState, reopt_param::Real,
+    alm_iter::Integer, admm_iter::Integer, timeSolveStart::Real, admm_bad_iter_flag::Integer, reopt_level::Integer)
+    bad_iter_flag = Ref{Cint}(admm_bad_iter_flag)
+    @ccall solverlib.reopt(params::Ptr{Cvoid}, solver::Ptr{Cvoid}, alm_state::Ptr{Cvoid}, admm_state::Ptr{Cvoid},
+        reopt_param::Ref{Cdouble}, alm_iter::Ref{LoRADSInt}, admm_iter::Ref{LoRADSInt}, timeSolveStart::Cdouble,
+        bad_iter_flag::Ref{Cint}, reopt_level::Cint)::Cdouble # returns @elapsed, not interesting
+    return bad_iter_flag[]
+end
 
-function end_program(solver::ASDP)
-    @ccall solverlib.ASDPEndProgram(solver::Ptr{Cvoid})::Cvoid
+function averageUV(solver::Solver)
+    solver.nLpCols > 0 &&
+        @ccall solverlib.averageUVLP(
+            solver.var.uLp::Ptr{LpDense},
+            solver.var.vLp::Ptr{LpDense},
+            solver.var.rLp::Ptr{LpDense}
+        )::Cvoid
+    for iCone in one(LoRADSInt):solver.nCones
+        @ccall solverlib.averageUV(
+            unsafe_load(solver.var.U, iCone)::Ptr{SDPDense},
+            unsafe_load(solver.var.V, iCone)::Ptr{SDPDense},
+            unsafe_load(solver.var.R, iCone)::Ptr{SDPDense}
+        )::Cvoid
+    end
     return solver
 end
 
-get_timestamp() = @ccall solverlib.AUtilGetTimeStamp()::Cdouble
+function copyRToV(solver::Solver)
+    if solver.nLpCols > 0
+        @ccall solverlib.copyRtoVLP(
+            solver.var.rLp::Ptr{LpDense},
+            solver.var.vLp::Ptr{LpDense},
+            solver.var.R::Ptr{Ptr{LpDense}},
+            solver.var.V::Ptr{Ptr{LpDense}},
+            solver.nCones::LoRADSInt
+        )::Cvoid
+    else
+        @ccall solverlib.copyRtoV(
+            solver.var.rLp::Ptr{LpDense},
+            solver.var.vLp::Ptr{LpDense},
+            solver.var.R::Ptr{Ptr{LpDense}},
+            solver.var.V::Ptr{Ptr{LpDense}},
+            solver.nCones::LoRADSInt
+        )::Cvoid
+    end
+    return solver
+end
+
+function end_program(solver::Solver)
+    @ccall solverlib.LORADSEndProgram(solver::Ptr{Cvoid})::Cvoid
+    return solver
+end
+
+get_timestamp() = @ccall solverlib.LUtilGetTimeStamp()::Cdouble
+
+clear_usr_data(coneMatBeg::Ptr{Ptr{LoRADSInt}}, coneMatIdx::Ptr{Ptr{LoRADSInt}}, coneMatElem::Ptr{Ptr{Cdouble}},
+    nBlks::Integer, blkDims::Ptr{LoRADSInt}, rowRHS::Ptr{Cdouble}, lpMatBeg::Ptr{LoRADSInt}, lpMatIdx::Ptr{LoRADSInt},
+    lpMatElem::Ptr{Cdouble}, SDPDatas::Ptr{Ptr{Cvoid}}) =
+    @ccall solverlib.LORADSClearUsrData(
+        coneMatBeg::Ptr{Ptr{LoRADSInt}}, coneMatIdx::Ptr{Ptr{LoRADSInt}}, coneMatElem::Ptr{Ptr{Cdouble}},
+        nBlks::LoRADSInt, blkDims::Ptr{LoRADSInt},
+        rowRHS::Ptr{Cdouble}, lpMatBeg::Ptr{LoRADSInt}, lpMatIdx::Ptr{LoRADSInt}, lpMatElem::Ptr{Cdouble},
+        SDPDatas::Ptr{Ptr{Cvoid}}
+    )::Cvoid
 
 """
-    load_sdpa(fn; maxIter=10_000, rho=0., rhoMax=5000., strategy=STRATEGY_DEFAULT)
+    load_sdpa(fn)
 
-Loads a problem from a file `fn` in SDPA format and returns a preprocessed `ASDP` instance, a vector containing the cone
+Loads a problem from a file `fn` in SDPA format and returns a preprocessed `Solver` instance, a vector containing the cone
 dimensions, and the number of nonnegative scalar variables.
 
 !!! warning
     This function will produce memory leaks. The data that is allocated by the LoRADS library cannot be freed by Julia, as no
     corresponding functions are exported. Only use it for quick tests, not in production.
 """
-function load_sdpa(fn::AbstractString; maxIter::Integer=10_000, rho::Real=0., rhoMax::Real=5000.,
-    strategy::Strategy=STRATEGY_DEFAULT)
+function load_sdpa(fn::AbstractString)
     isempty(solverlib) &&
         error("LoRADS is not configured. Call `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to specify the location \
                of the solver library")
     fn_str = Vector{UInt8}(fn)
     fn_str[end] == 0x00 || push!(fn_str, 0x00)
-    pnConstrs = Ref{Cint}()
-    pnBlks = Ref{Cint}()
-    pblkDims = Ref{Ptr{Cint}}()
+    pnConstrs = Ref{LoRADSInt}()
+    pnBlks = Ref{LoRADSInt}()
+    pblkDims = Ref{Ptr{LoRADSInt}}()
     prowRHS = Ref{Ptr{Cdouble}}()
-    pconeMatBeg = Ref{Ptr{Ptr{Cint}}}()
-    pconeMatIdx = Ref{Ptr{Ptr{Cint}}}()
+    pconeMatBeg = Ref{Ptr{Ptr{LoRADSInt}}}()
+    pconeMatIdx = Ref{Ptr{Ptr{LoRADSInt}}}()
     pconeMatElem = Ref{Ptr{Ptr{Cdouble}}}()
-    pnLpCols = Ref{Cint}()
-    pLpMatBeg = Ref{Ptr{Cint}}()
-    pLpMatIdx = Ref{Ptr{Cint}}()
+    pnLpCols = Ref{LoRADSInt}()
+    pLpMatBeg = Ref{Ptr{LoRADSInt}}()
+    pLpMatIdx = Ref{Ptr{LoRADSInt}}()
     pLpMatElem = Ref{Ptr{Cdouble}}()
 
-    check(@ccall solverlib.AReadSDPA(fn_str::Ptr{Cvoid}, pnConstrs::Ptr{Cvoid}, pnBlks::Ptr{Cvoid}, pblkDims::Ptr{Cvoid},
+    ret = @ccall solverlib.AReadSDPA(fn_str::Ptr{Cvoid}, pnConstrs::Ptr{Cvoid}, pnBlks::Ptr{Cvoid}, pblkDims::Ptr{Cvoid},
         prowRHS::Ptr{Cvoid}, pconeMatBeg::Ptr{Cvoid}, pconeMatIdx::Ptr{Cvoid}, pconeMatElem::Ptr{Cvoid},
-        Ref{Cint}()::Ptr{Cvoid}, pnLpCols::Ptr{Cvoid}, pLpMatBeg::Ptr{Cvoid}, pLpMatIdx::Ptr{Cvoid},
-        pLpMatElem::Ptr{Cvoid}, Ref{Cint}()::Ptr{Cvoid})::Retcode)
+        Ref{LoRADSInt}()::Ptr{Cvoid}, pnLpCols::Ptr{Cvoid}, pLpMatBeg::Ptr{Cvoid}, pLpMatIdx::Ptr{Cvoid},
+        pLpMatElem::Ptr{Cvoid}, Ref{LoRADSInt}()::Ptr{Cvoid})::Retcode
+    if ret != RETCODE_OK
+        clear_usr_data(pconeMatBeg[], pconeMatIdx[], pconeMatElem[], pnBlks[], pblkDims[], prowRHS[], pLpMatBeg[],
+            pLpMatIdx[], pLpMatElem[], C_VOID)
+        error("Reading SDPA data failed with retcode $ret")
+    end
 
-    coneDims = unsafe_wrap(Vector{Cint}, pblkDims[], pnBlks[], own=false)
+    coneDims = unsafe_wrap(Vector{LoRADSInt}, pblkDims[], pnBlks[], own=false)
     rowRHS = unsafe_wrap(Vector{Cdouble}, prowRHS[], pnConstrs[], own=false)
 
-    solver = ASDP()
-    init_solver(solver, pnConstrs[], coneDims, pnLpCols[]; rho, rhoMax, maxIter, strategy)
+    solver = Solver()
+    init_solver(solver, pnConstrs[], coneDims, pnLpCols[])
     set_dual_objective(solver, rowRHS)
     sdpDatas = Vector{Ptr{Cvoid}}(undef, pnBlks[])
-    check(@ccall solverlib.ASDPInitConeData(
+    @ccall solverlib.LORADSInitConeData(
         solver::Ptr{Cvoid},
         sdpDatas::Ptr{Ptr{Cvoid}},
         pconeMatElem[]::Ptr{Ptr{Cdouble}},
-        pconeMatBeg[]::Ptr{Ptr{Cint}},
-        pconeMatIdx[]::Ptr{Ptr{Cint}},
-        coneDims::Ptr{Cint},
-        pnConstrs[]::Cint,
-        pnBlks[]::Cint,
-        pnLpCols[]::Cint,
-        pLpMatBeg[]::Ptr{Cint},
-        pLpMatIdx[]::Ptr{Cint},
+        pconeMatBeg[]::Ptr{Ptr{LoRADSInt}},
+        pconeMatIdx[]::Ptr{Ptr{LoRADSInt}},
+        pblkDims[]::Ptr{LoRADSInt},
+        pnConstrs[]::LoRADSInt,
+        pnBlks[]::LoRADSInt,
+        pnLpCols[]::LoRADSInt,
+        pLpMatBeg[]::Ptr{LoRADSInt},
+        pLpMatIdx[]::Ptr{LoRADSInt},
         pLpMatElem[]::Ptr{Cdouble}
-    )::Retcode)
+    )::Cvoid
     preprocess(solver, coneDims)
-    return solver, coneDims, pnLpCols[]
+    GC.@preserve sdpDatas begin
+        clear_usr_data(pconeMatBeg[], pconeMatIdx[], pconeMatElem[], pnBlks[], pblkDims[], prowRHS[], pLpMatBeg[],
+            pLpMatIdx[], pLpMatElem[], pointer(sdpDatas))
+    end
+    return solver, coneDims
 end
 
 """
-    solve(solver, coneDims, nLpCols; timesLogRank=2., phase1Tol=1e-3, time_limit=10_000.,
-        rhoFreq=5, rhoFactor=1.2, admmStrategy=STRATEGY_MIN_BISECTION, tau=0., gamma=0.,
-        rankFactor=1.5)
+    solve(solver, params, coneDims)
 
-Solves a preprocessed `ASDP` instance.
+Solves a preprocessed `Solver` instance.
 """
-function solve(solver::ASDP, coneDims::AbstractVector{Cint}, nLpCols::Integer; timesLogRank::Real=2., phase1Tol::Real=1e-3,
-    time_limit::Real=10_000., rhoFreq::Integer=5, rhoFactor::Real=1.2, admmStrategy::Strategy=STRATEGY_MIN_BISECTION,
-    tau::Real=0., gamma::Real=0., rankFactor::Real=1.5)
+function solve(solver::Solver, params::Params, coneDims::AbstractVector{LoRADSInt}; verbose::Bool=false)
     isempty(solverlib) &&
         error("LoRADS is not configured. Call `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to specify the location of the solver library")
     chkstride1(coneDims)
-    determine_rank(solver, coneDims, timesLogRank, 0)
-    if detect_max_cut_prob(solver, coneDims) != -1
-        println("**Detected MaxCut problem: set phase1Tol -> 1e-2 and heuristicFactor -> 10")
-        phase1Tol = 1e-2
-        heuristic = 10.
-    else
-        heuristic = 1.
+
+    prep = @elapsed begin
+        determine_rank(solver, coneDims, params.timesLogRank)
+        # detect_sparsity_sdp_coeff(solver)
+        init_alm_vars(solver, coneDims, solver.nLpCols, params.lbfgsListLength)
+        init_admm_vars(solver, coneDims, solver.nLpCols)
+
+        alm_state, admm_state, sdpConst = initial_solver_state(params, solver)
     end
-    detect_sparsity_sdp_coeff(solver)
-    init_bm_vars(solver, coneDims, nLpCols)
-    init_admm_vars(solver, coneDims, nLpCols)
-    scale(solver)
-    println("**First using BM method as warm start")
-    pre_mainiter = Ref(zero(Cint))
-    pre_miniter = Ref(zero(Cint))
-    time = get_timestamp()
-    is_rank_max = 1e-10 > timesLogRank
-    local bm_ret
-    while true
-        bm_ret = bm_optimize(solver, phase1Tol, -.001, 1e-16, 1e-10, time, is_rank_max, pre_mainiter, pre_miniter,
-            time_limit)
-        bm_ret == RETCODE_RANK || break
-        if !check_all_rank_max(solver, rankFactor)
-            if (is_rank_max = aug_rank(solver, coneDims, rankFactor))
-                println("Restarting BM with maximum rank")
-            else
-                timesLogRank *= rankFactor
-                println("Restarting BM with updated rank (now ", timesLogRank, " logm)")
-            end
+    @verbose_info("Solver prepared in ", prep, " seconds")
+
+    function dual_inf end
+    let solver=solver, admm_state=admm_state
+        function dual_inf()
+            dual_inf_time = @elapsed calculate_dual_infeasibility(solver)
+            @verbose_info("Calculate dual infeasibility in ", dual_inf_time, " seconds")
+
+            local dfℓ₁ = solver.dimacError.dualfeasible_l1
+            local dfℓ₁cObj = dfℓ₁ * (1 + solver.cObjNrm1)
+            local cvℓ₁ = solver.dimacError.constrvio_l1
+            local cvℓ₁bRHS = cvℓ₁ * (1 + solver.bRHSNrm1)
+
+            admm_state.l_1_dual_infeasibility = dfℓ₁
+            admm_state.l_inf_dual_infeasibility = dfℓ₁cObj / (1 + solver.cObjNrmInf)
+            admm_state.l_2_dual_infeasibility = dfℓ₁cObj/ (1 + solver.cObjNrm2)
+            admm_state.primal_dual_gap = solver.dimacError.pdgap
+            admm_state.l_1_primal_infeasibility = cvℓ₁
+            admm_state.l_inf_primal_infeasibility = cvℓ₁bRHS / (1 + solver.bRHSNrmInf)
+            admm_state.l_2_primal_infeasibility = cvℓ₁bRHS / (1 + solver.bRHSNrm2)
+
+            @verbose_info("Dual infeasibility: ℓ₁ = ", dfℓ₁, ", ℓ_∞ = ", admm_state.l_inf_dual_infeasibility, ", ℓ₂ = ",
+                admm_state.l_2_dual_infeasibility)
+
+            return
         end
     end
-    if bm_ret != RETCODE_EXIT
-        bm_to_admm(solver, heuristic)
-        optimize(solver, rhoFreq, rhoFactor, admmStrategy, tau, gamma, 0., time, time_limit)
+
+    reopt_param::Cdouble = 5
+    reopt_alm_iter::LoRADSInt = 3
+    reopt_admm_iter::LoRADSInt = params.highAccMode ? 1000 : 50
+    alm_reopt_min_iter::LoRADSInt = 3
+    admm_reopt_min_iter::LoRADSInt = 50
+    admm_bad_iter_flag::Cint = 0
+
+    alm_optimize(params, solver, alm_state, params.maxALMIter, solver.timeSolveStart)
+    if get_timestamp() - solver.timeSolveStart > params.timeSecLimit
+        solver.AStatus = STATUS_TIME_LIMIT
+        @goto END_SOLVING
     end
-    end_program(solver)
+
+    a2a_time = @elapsed alm_to_admm(solver, params, alm_state, admm_state)
+    @verbose_info("Converted ALM to ADMM in ", a2a_time, " seconds")
+
+    admm_bad_iter_flag = admm_optimize(params, solver, admm_state, params.maxADMMIter, solver.timeSolveStart) == RETCODE_BAD_ITER
+    # if admm_state.primal_dual_gap ≥ params.phase1Tol
+    #     params.phase1Tol = max(.1params.phase1Tol, params.phase2Tol)
+    # end
+    if verbose
+        dual_inf()
+        if get_timestamp() - solver.timeSolveStart > params.timeSecLimit
+            solver.AStatus = STATUS_TIME_LIMIT
+            @goto END_SOLVING
+        end
+        println("After initial solver results:")
+        @sprintf("Objective function
+                 ==================
+                 1. Primal Objective: %10.6e
+                 2. Dual Objective:   %10.6e
+                 Dimacs Errors:
+                 ==============
+                 1. Constraint Violation (ℓ₁): %10.6e
+                 2. Dual Infeasibility (ℓ₁):   %10.6e
+                 3. Primal-Dual Gap:           %10.6e
+                 4. Constraint Violation (∞):  %10.6e
+                 5. Dual Infeasibility (∞):    %10.6e",
+            solver.pObjVal, solver.dObjVal,
+            solver.dimacError.constrvio_l1, solver.dimacError.dualfeasible_l1, solver.dimacError.pdgap,
+            solver.dimacError.constrvio_l1 * (1 + solver.bRHSNrm1) / (1 + solver.bRHSNrmInf),
+            solver.dimacError.dualfeasible_l1 * (1 + solver.cObjNrm1) / (1 + solver.cObjNrmInf))
+    end
+    if params.reoptLevel ≥ 1 &&
+        (alm_state.primal_dual_gap > params.phase2Tol || alm_state.l_1_primal_infeasibility > params.phase2Tol) &&
+        (admm_state.primal_dual_gap > params.phase2Tol || admm_state.l_1_primal_infeasibility > params.phase2Tol)
+        @verbose_info("Reoptimization parameter: ", reopt_param)
+        reopt_time = @elapsed begin
+            admm_bad_iter_flag = reopt(params, solver, alm_state, admm_state, reopt_param, alm_reopt_min_iter,
+                admm_reopt_min_iter, solver.timeSolveStart, admm_bad_iter_flag, 1)
+        end
+        @verbose_info("Reoptimization in ", reopt_time, " seconds")
+        if get_timestamp() - solver.timeSolveStart > params.timeSecLimit
+            solver.AStatus = STATUS_TIME_LIMIT
+            @goto END_SOLVING
+        end
+    end
+
+    dual_inf()
+
+    params.reoptLevel ≥ 2 &&
+        for dual_cnt in 0:1
+            admm_state.l_1_dual_infeasibility > params.phase2Tol || admm_state.primal_dual_gap > params.phase2Tol ||
+                admm_state.l_1_primal_infeasibility > params.phase2Tol || break
+            # if admm_state.primal_dual_gap ≥ 10params.phase2Tol
+            #     params.phase1Tol = max(.1params.phase1Tol, params.phase2Tol)
+            # end
+            params.highAccMode || admm_state.l_1_dual_infeasibility > 5params.phase2Tol ||
+                admm_state.primal_dual_gap > 5params.phase2Tol || admm_state.l_1_primal_infeasibility > params.phase2Tol ||
+                break
+            @verbose_info("Reoptimization parameter: ", reopt_param)
+            reopt_time = @elapsed begin
+                admm_bad_iter_flag = reopt(params, solver, alm_state, admm_state, reopt_param, reopt_alm_iter,
+                    reopt_admm_iter, solver.timeSolveStart, admm_bad_iter_flag, 2)
+                copyRToV(averageUV(solver))
+            end
+            @verbose_info("Reoptimization in ", reopt_time, " seconds")
+
+            dual_inf()
+
+            if get_timestamp() - solver.timeSolveStart > params.timeSecLimit
+                solver.AStatus = STATUS_TIME_LIMIT
+                @goto END_SOLVING
+            end
+        end
+
+    if admm_state.primal_dual_gap ≤ 5params.phase2Tol && admm_state.l_1_primal_infeasibility ≤ params.phase2Tol
+        solver.AStatus = admm_state.l_1_dual_infeasibility ≤ 5params.phase2Tol ?
+                            STATUS_PRIMAL_DUAL_OPTIMAL : STATUS_PRIMAL_OPTIMAL
+    else
+        solver.AStatus = STATUS_MAXITER
+    end
+
+    @label END_SOLVING
+
+    verbose && end_program(solver)
 
     return solver
 end
 
 """
-    get_X(solver, i, admm::Bool=true)
+    get_X(solver, i)
 
 Returns the `i`th PSD solution matrix ``X_i``. The result will be a freshly allocated symmetric view of a dense matrix.
-Indicate with `admm` whether the ADMM split optimization has run or if only the BM optimization finished.
 
 !!! warning
     This method may only be called once per `i`. All further calls with the same `i` will give wrong output, as the internal
     solver data is modified.
 """
-function get_X(solver::ASDP, i::Integer; admm::Bool=true)
+function get_X(solver::Solver, i::Integer)
     # The solver doesn't contain the primal matrix in full form, but in a low-rank factorization.
-    V = unsafe_load(unsafe_load(solver.V, i))
-    if admm
-        # Since the ADMM approach uses a U Vᵀ, V = U rewrite with additional constraints, even then it is not just U Uᵀ. So the
-        # recommended reconstruction is Û = (U + V)/2, X = Û Ûᵀ.
-        U = unsafe_load(unsafe_load(solver.U, i))
-        @assert U.nRows == V.nRows && U.rank == V.rank
-        axpy!(V.nRows * V.rank, one(Cdouble), U.matElem, 1, V.matElem, 1)
-    end
+    V = unsafe_load(unsafe_load(solver.var.V, i))
+    # Since the ADMM approach uses a U Vᵀ, V = U rewrite with additional constraints, even then it is not just U Uᵀ. So the
+    # recommended reconstruction is Û = (U + V)/2, X = Û Ûᵀ.
+    U = unsafe_load(unsafe_load(solver.var.U, i))
+    @assert U.nRows == V.nRows && U.rank == V.rank
+    axpy!(V.nRows * V.rank, one(Cdouble), U.matElem, 1, V.matElem, 1)
+
     result = Matrix{Cdouble}(undef, V.nRows, V.nRows)
-    Vwrap = unsafe_wrap(Array, V.matElem, (V.nRows, V.rank))
-    syrk!('L', 'N', admm ? .25 : 1., Vwrap, false, result)
+    Vwrap = unsafe_wrap(Array, V.matElem, (V.nRows, V.rank), own=false)
+    syrk!('L', 'N', .25, Vwrap, false, result)
     return Symmetric(result, :L)
 end
 
 """
-    get_Xlin(solver, admm::Bool=true)
+    get_Xlin(solver)
 
 Returns the linear solution vector ``x``. The result will be a vector backed by internal solver data and will be invalidated if
 the solver is destroyed. Copy it if desired.
-Indicate with `admm` whether the ADMM split optimization has run or if only the BM optimization finished.
 
 !!! warning
     This method may only be called once. All further calls will give wrong output, as the internal solver data is modified.
 """
-function get_Xlin(solver::ASDP; admm::Bool=true)
-    v = unsafe_load(solver.vLp)
-    vWrap = unsafe_wrap(Array, v.matElem, v.nLPCols)
-    if admm
-        u = unsafe_load(solver.uLp)
-        @assert u.nLPCols == v.nLPCols
-        uWrap = unsafe_wrap(Array, u.matElem, u.nLPCols)
-        vWrap .= .25 .* (uWrap .+ vWrap) .^ 2
-    else
-        vWrap .^= 2
-    end
+function get_Xlin(solver::Solver)
+    v = unsafe_load(solver.var.vLp)
+    vWrap = unsafe_wrap(Array, v.matElem, v.nLpCols, own=false)
+    u = unsafe_load(solver.var.uLp)
+    @assert u.nLpCols == v.nLpCols
+    uWrap = unsafe_wrap(Array, u.matElem, u.nLpCols, own=false)
+    vWrap .= .25 .* (uWrap .+ vWrap) .^ 2
     return vWrap
 end
 
@@ -509,11 +688,26 @@ end
 Returns the `i`th slack variable for the PSD solution matrix ``S_i``. The result will be a freshly allocated symmetric view of
 a dense matrix.
 """
-function get_S(solver::ASDP, i::Integer)
-    cone = unsafe_load(unsafe_load(solver.ACones, i))
-    dim = unsafe_load(Ptr{Cint}(cone.sdp_slack_var)) # first field is nSDPCol
+function get_S(solver::Solver, i::Integer)
+    slack_var = unsafe_load(unsafe_load(unsafe_load(solver.SDPCones, i)).sdp_slack_var)
+    dim = slack_var.nSDPCol
+    slack_var.dataType == SDP_COEFF_ZERO && return zeros(dim, dim)
     S = Matrix{Cdouble}(undef, dim, dim)
-    @ccall solverlib.reconstructSymmetricMatrix(cone.sdp_slack_var::Ptr{Cvoid}, S::Ptr{Cdouble}, dim::Cint)::Cvoid
+    unscale = inv(solver.scaleObjHis)
+    if slack_var.dataType == SDP_COEFF_DENSE
+        dense = unsafe_load(Ptr{SDPCoeffDense}(slack_var.dataMat))
+        tpttr!('L', dim, dense.dsMatElem, S, dim)
+        rmul!(S, unscale)
+    else
+        sparse = unsafe_load(Ptr{SDPCoeffSparse}(slack_var.dataMat))
+        col = unsafe_wrap(Array, sparse.triMatCol, sparse.nTriMatElem, own=false)
+        row = unsafe_wrap(Array, sparse.triMatRow, sparse.nTriMatElem, own=false)
+        elem = unsafe_wrap(Array, sparse.triMatElem, sparse.nTriMatElem, own=false)
+        fill!(S, zero(Cdouble))
+        @inbounds for (col, row, elem) in zip(col, row, elem)
+            S[row, col] = elem * unscale
+        end
+    end
     return Symmetric(S, :L)
 end
 
@@ -523,17 +717,19 @@ end
 Returns the slack variables to the nonnegative variables of index `i` (by default, all). The result will be a freshly allocated
 vector.
 """
-function get_Slin(solver::ASDP, i::AbstractUnitRange=1:solver.nLpCols)
+function get_Slin(solver::Solver, i::AbstractUnitRange=1:solver.nLpCols)
     cone = unsafe_load(solver.lpCone)
     # There's no dual data available, we have to construct it ourselves
     s = Vector{Cdouble}(undef, length(i))
     unsafe_copyto!(pointer(s), unsafe_load(cone.coneData).objMatElem + (first(i) -1) * sizeof(Cdouble), length(s))
     # ^ so that we don't have to call objCoeffSum in a loop
-    negLambd = solver.negLambd
+    negLambd = unsafe_wrap(Array, solver.var.dualVar, solver.nRows, own=false)
+    rmul!(negLambd, -1)
     for idx in i
-        ccall(cone.lpDataWSum, Cvoid, (Ptr{Cvoid}, Ptr{Cdouble}, Ptr{Cdouble}, Cint), cone.coneData, negLambd, s, idx -1)
+        ccall(cone.lpDataWSum, Cvoid, (Ptr{Cvoid}, Ptr{Cdouble}, Ptr{Cdouble}, LoRADSInt), cone.coneData, negLambd, s, idx -1)
     end
-    return s
+    rmul!(negLambd, -1)
+    return rmul!(s, inv(solver.scaleObjHis))
 end
 
 end
