@@ -205,7 +205,7 @@ mutable struct Result{Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
     const time::Float64
     state
     const status
-    const objective::V
+    const objective::R
     moments
 
     Result(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,<:Any,Nc}}}, method::Symbol, time::Float64,
@@ -241,7 +241,7 @@ function Base.show(io::IO, ::MIME"text/plain", x::Result)
     )
 end
 
-Base.eltype(::Type{<:(Result{<:AbstractRelaxation,V})}) where {V} = V
+Base.eltype(::Type{<:(Result{<:AbstractRelaxation,<:Real,V})}) where {V} = V
 
 """
     issuccess(r::Result)

@@ -15,7 +15,7 @@ This function returns an iterator.
 
 See also [`poly_optimize`](@ref).
 """
-poly_solutions(::Val{:mvhankel}, result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000);
+poly_solutions(::Val{:mvhankel}, result::Result{Rx,R,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000);
     verbose::Bool=false) where {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}  =
     poly_solutions(Val(:mvhankel), result.relaxation, result.moments, ϵ, δ, verbose)
 
