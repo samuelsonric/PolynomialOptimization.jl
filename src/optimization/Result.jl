@@ -230,7 +230,11 @@ function Base.show(io::IO, ::MIME"text/plain", x::Result)
     println(io, "Relaxation method: ", typeof(x.relaxation).name.name)
     println(io, "Used optimization method: ", x.method)
     println(io, "Status of the solver: ", x.status)
-    println(io, "Lower bound to optimum (in case of good status): ", x.objective)
+    if !iszero(poly_problem(x).prefactor)
+        println(io, "Lower bound to optimum (in case of good status): ", x.objective)
+    else
+        println(io, "Membership in the SOS cone was ", issuccess(x) ? "" : "not ", "certified")
+    end
     println(io, "Time required for optimization: ",
         iszero(x.time) ? "less than one second" :
         (isone(x.time) ? "one second" : "$(x.time) seconds")

@@ -1889,6 +1889,16 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
                 negate ? -one(V) : one(V)
             )
         )
+    elseif iszero(problem.prefactor)
+        @inline add_constr_fix_finalize!(
+            state,
+            add_constr_fix!(
+                state,
+                add_constr_fix_prepare!(state, 1),
+                Indvals(StackVec(mindex(state, constant_monomial(P))), StackVec(negate ? -zero(V) : zero(V))),
+                negate ? -zero(V) : zero(V)
+            )
+        )
     else
         let buffer=length(problem.prefactor), indices=FastVec{T}(; buffer), values=FastVec{V}(; buffer)
             for t in problem.prefactor
