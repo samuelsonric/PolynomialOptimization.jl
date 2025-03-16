@@ -1083,7 +1083,7 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
                                                                                   (e, eᵢ, no_indexing, no_indexingᵢ)
                 if e_other isa ExponentsDegree
                     # are the exponents identical? - we can drop indexing if at least one doesn't need any
-                    if e_deg.mindeg == e_other.mindeg && e_deg.maxdeg == e_other.maxdeg
+                    if isequal(e_deg, e_other)
                         if _extract_I(e) !== I
                             e = _to_I(I, eᵢ)
                         end
@@ -1091,21 +1091,20 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
                         continue
                     end
                     # do the other exponents cover the degree ones fully? - the other ones remain
-                    if e_deg.mindeg ≥ e_other.mindeg && e_deg.maxdeg ≤ e_other.maxdeg
+                    if e_deg ⊆ e_other
                         e, no_indexing = _to_I(I, e_other), noind_other
                         continue
                     end
                 else
-                    @assert(e_other isa ExponentsMultideg)
+                    e_other::ExponentsMultideg
                     # do the other exponents cover the degree ones fully? - the other ones remain
-                    if e_deg.mindeg ≥ e_other.mindeg && e_deg.maxdeg ≤ e_other.maxdeg && all(iszero, e_other.minmultideg) &&
-                        all(≥(e_deg.maxdeg), e_other.maxmultideg)
+                    if e_deg ⊆ e_other
                         e, no_indexing = _to_I(I, e_other), noind_other
                         continue
                     end
                 end
                 # do the degree ones cover the other ones fully? - the degree ones remain
-                if e_other.mindeg ≥ e_deg.mindeg && e_other.maxdeg ≤ e_deg.maxdeg
+                if e_other ⊆ e_deg
                     e, no_indexing = _to_I(I, e_deg), noind_deg
                 else
                     if e_other isa ExponentsMultideg && e_other.maxdeg > e_deg.maxdeg && e_other.mindeg ≤ e_deg.maxdeg +1 &&
@@ -1126,10 +1125,10 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
                     e = ExponentsDegree{Nr+2Nc,I}(min(e_deg.mindeg, e_other.mindeg), max(e_deg.maxdeg, e_other.maxdeg))
                 end
             else
-                @assert(eᵢ isa ExponentsMultideg && e isa ExponentsMultideg)
+                eᵢ::ExponentsMultideg
+                e::ExponentsMultideg
                 # are the indices identical?
-                if eᵢ.mindeg == e.mindeg && eᵢ.maxdeg == e.maxdeg && eᵢ.minmultideg == e.minmultideg &&
-                    eᵢ.maxmultideg == e.maxmultideg
+                if isequal(eᵢ, e)
                     if _extract_I(e) !== I
                         e = _to_I(I, eᵢ)
                     end
@@ -1137,14 +1136,12 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
                     continue
                 end
                 # do the existing exponents cover the new ones fully?
-                if eᵢ.mindeg ≥ e.mindeg && eᵢ.maxdeg ≤ e.maxdeg && all(splat(≥), zip(eᵢ.minmultideg, e.minmultideg)) &&
-                    all(splat(≤), zip(eᵢ.maxmultideg, e.maxmultideg))
+                if eᵢ ⊆ e
                     e = _to_I(I, e)
                     continue
                 end
                 # do the new ones cover the existing ones fully?
-                if e.mindeg ≥ eᵢ.mindeg && e.maxdeg ≤ eᵢ.maxdeg && all(splat(≥), zip(e.minmultideg, eᵢ.minmultideg)) &&
-                    all(splat(≤), zip(e.maxmultideg, eᵢ.maxmultideg))
+                if e ⊆ eᵢ
                     e, no_indexing = _to_I(I, eᵢ), no_indexingᵢ
                     continue
                 else

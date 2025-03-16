@@ -41,8 +41,14 @@ end
 ExponentsMultideg{N,I}(range::AbstractUnitRange, minmultideg::Vmin, maxmultideg::Vmax) where {N,I<:Integer,Vmin<:AbstractVector{<:Integer},Vmax<:AbstractVector{<:Integer}} =
     ExponentsMultideg{N,I}(first(range), last(range), minmultideg, maxmultideg)
 
-Base.:(==)(e1::ExponentsMultideg{N,I}, e2::ExponentsMultideg{N,I}) where {N,I<:Integer} =
-    e1.mindeg == e2.mindeg && e1.maxdeg == e2.maxdeg && e1.minmultideg == e2.minmultideg && e1.maxmultideg == e2.maxmultideg
+Base.isequal(e₁::ExponentsMultideg{N}, e₂::ExponentsMultideg{N}) where {N} =
+    e₁.mindeg == e₂.mindeg && e₁.maxdeg == e₂.maxdeg && e₁.minmultideg == e₂.minmultideg && e₁.maxmultideg == e₂.maxmultideg
+Base.issubset(e₁::ExponentsDegree{N}, e₂::ExponentsMultideg{N}) where {N} =
+    e₁.mindeg ≥ e₂.mindeg && e₁.maxdeg ≤ e₂.maxdeg && all(iszero, e₂.minmultideg) && all(≥(e₁.maxdeg), e₂.maxmultideg)
+Base.issubset(e₁::ExponentsMultideg{N}, e₂::ExponentsDegree{N}) where {N} = e₁.mindeg ≥ e₂.mindeg && e₁.maxdeg ≤ e₂.maxdeg
+Base.issubset(e₁::ExponentsMultideg{N}, e₂::ExponentsMultideg{N}) where {N} =
+    e₁.mindeg ≥ e₂.mindeg && e₁.maxdeg ≤ e₂.maxdeg &&
+    all(splat(≥), zip(e₁.minmultideg, e₂.minmultideg)) && all(splat(≤), zip(e₁.maxmultideg, e₂.maxmultideg))
 
 function _calc_index_counts!(e::ExponentsMultideg{N,I}) where {N,I<:Integer}
     maxdeg = e.maxdeg

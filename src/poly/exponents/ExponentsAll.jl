@@ -7,6 +7,11 @@ Represents an index range for a fixed number of variables `N` without any degree
 """
 struct ExponentsAll{N,I<:Integer} <: AbstractExponentsUnbounded{N,I} end
 
+Base.isequal(::ExponentsAll{N}, ::ExponentsAll{N}) where {N} = true
+Base.issubset(::AbstractExponents{N}, ::ExponentsAll{N}) where {N} = true
+Base.issubset(::ExponentsAll{N}, ::AbstractExponents{N}) where {N} = false
+Base.issubset(::ExponentsAll{N}, ::ExponentsAll{N}) where {N} = true
+
 # Use a trick. ExponentsAll should be a singleton, but we also need it to contain the cache of the exponents, and it must
 # be fast - the address of the cache should be inlined. We cannot make it a field, for then it would no longer be a singleton.
 # So instead, we have one generated function that, per singleton, creates the cache upon compile-time as a Ref and always

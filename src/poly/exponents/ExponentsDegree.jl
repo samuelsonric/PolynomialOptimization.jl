@@ -19,7 +19,8 @@ end
 
 ExponentsDegree{N,I}(range::AbstractUnitRange) where {N,I<:Integer} = ExponentsDegree{N,I}(first(range), last(range))
 
-Base.:(==)(e1::E, e2::E) where {E<:ExponentsDegree} = e1.mindeg == e2.mindeg && e1.maxdeg == e2.maxdeg
+Base.isequal(e₁::E, e₂::E) where {E<:ExponentsDegree} = e₁.mindeg == e₂.mindeg && e₁.maxdeg == e₂.maxdeg
+Base.issubset(e₁::ExponentsDegree{N}, e₂::ExponentsDegree{N}) where {N} = e₁.mindeg ≥ e₂.mindeg && e₁.maxdeg ≤ e₂.maxdeg
 
 function _calc_index_counts!(E::ExponentsDegree{N,I}) where {N,I<:Integer}
     # This is not exactly correct if we think about the very last column (corresponding to zero variables), which should be

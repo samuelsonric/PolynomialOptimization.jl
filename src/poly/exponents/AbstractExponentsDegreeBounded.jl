@@ -36,9 +36,6 @@ end
 
 Base.lastindex(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer} = I(length(e))
 
-Base.:(==)(e1::AbstractExponentsDegreeBounded{N,I}, e2::AbstractExponentsDegreeBounded{N,I}) where {N,I<:Integer} =
-    index_counts(e1, e1.maxdeg) == index_counts(e2, e2.maxdeg)
-
 function Base.iterate(e::AbstractExponentsDegreeBounded{<:Any,I}) where {I<:Integer}
     counts, success = index_counts(e, e.mindeg) # ExponentIndices requires the cache to be set up
     iszero(e.mindeg) && return ExponentIndices(e, one(I), e.mindeg), (one(I), e.mindeg, one(I))

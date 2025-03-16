@@ -18,6 +18,34 @@ Base.IteratorEltype(::Type{<:AbstractExponents}) = Base.HasEltype()
 Base.eltype(::Type{E}) where {I<:Integer,E<:AbstractExponents{<:Any,I}} = ExponentIndices{I,E}
 
 """
+    a == b
+
+Compares whether two exponents with the same variable number are equal. Exponents with different index types are not considered
+equal.
+
+See [`isequal`](@ref).
+"""
+Base.:(==)(e₁::AbstractExponents{N,I1}, e₂::AbstractExponents{N,I2}) where {N,I1<:Integer,I2<:Integer} =
+    I1 == I2 && isequal(e₁, e₂)
+
+"""
+    isequal(a, b)
+
+Compares whether two exponents with the same variable number are equal. Different index types are disregarded.
+
+See [`==`](@ref).
+"""
+Base.isequal(::AbstractExponents{N}, ::AbstractExponents{N}) where {N} = false
+# default implementation if the types are different
+
+"""
+    issubset(a, b)
+
+Checks whether the exponent set `a` is fully contained in `b`. Different index types are disregarded.
+"""
+Base.issubset(::AbstractExponents{N}, ::AbstractExponents{N}) where {N}
+
+"""
     indextype(e)
 
 Returns the index type of an instance or subtype of [`AbstractExponents`](@ref). This function is not exported.
