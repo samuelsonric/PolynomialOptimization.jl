@@ -139,8 +139,9 @@ function ip_step!(solver::Solver{T,I}, @nospecialize(preconditioner::Preconditio
 end
 
 function find_mu!(solver::Solver{T}) where {T<:Real}
-    mu = sum(t -> dot(Symmetric(t[1], :U), Symmetric(t[2], :U)), zip(solver.X, solver.S), init=zero(T)) +
-         dot(solver.X_lin, solver.S_lin)
+    # this should never become negative, but tiny negative eigenvalues might happen
+    mu = sum(t -> max(zero(T), dot(Symmetric(t[1], :U), Symmetric(t[2], :U))), zip(solver.X, solver.S), init=zero(T)) +
+         max(zero(T), dot(solver.X_lin, solver.S_lin))
     solver.mu = mu / (sum(solver.model.coneDims, init=0) + solver.model.nlin)
     return solver.mu
 end
