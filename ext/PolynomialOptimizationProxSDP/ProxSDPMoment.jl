@@ -80,11 +80,20 @@ function Solver.poly_optimize(::Val{:ProxSDPMoment}, relaxation::AbstractRelaxat
     setup_time = @elapsed @inbounds begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
-        if haskey(parameters, :log_verbose)
-            options = ProxSDP.Options(; parameters...)
-        else
-            options = ProxSDP.Options(; log_verbose=verbose, parameters...)
+        kws = Dict{Symbol,Any}(parameters)
+        get!(kws, :log_verbose, verbose)
+        if haskey(kws, :precision)
+            prec = kws[:precision]
+            delete!(kws, :precision)
+            kws[:tol_gap] = prec
+            kws[:tol_feasibility] = prec
+            kws[:tol_feasibility_dual] = prec
+            kws[:tol_primal] = prec
+            kws[:tol_dual] = prec
+            kws[:tol_psd] = prec
+            kws[:tol_soc] = prec
         end
+        options = ProxSDP.Options(; kws...)
         state = StateMoment{K}()
         primal_data = primal_moment_setup!(state, relaxation, groupings; verbose)
         ismissing(primal_data) && return missing, 4, typemin(V)

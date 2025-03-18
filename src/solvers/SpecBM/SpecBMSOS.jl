@@ -55,7 +55,7 @@ function Solver.fix_constraints!(state::StateSOS{K,V}, indvals::Indvals{K,V}) wh
 end
 
 function Solver.poly_optimize(::Val{:SpecBMSOS}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=_ -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=_ -> nothing, precision::Real=1//100_000, parameters...)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))
@@ -95,7 +95,7 @@ function Solver.poly_optimize(::Val{:SpecBMSOS}, relaxation::AbstractRelaxation,
         # Figure out some proper default arguments. Let us rely on the adaptive strategies in the solver to do this instead of
         # some sophisticated analysis that might give us better values provided the problem features certain constraints.
         args = merge!(Dict{Symbol,Any}(:ρ => V(10), :adaptiveρ => !haskey(parameters, :ρ), :r_past => 0, :r_current => 3,
-            :ϵ => V(1//100_000)), parameters)
+            :ϵ => V(precision)), parameters)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
 

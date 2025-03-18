@@ -69,7 +69,7 @@ end
 
 function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
     representation, verbose::Bool=false, customize=_ -> nothing, linear_solver::Type{<:LinearSolver}=SCS.DirectSolver,
-    parameters...)
+    precision::Union{Nothing,<:Real}=nothing, parameters...)
     setup_time = @elapsed begin
         I = scsint_t(linear_solver)
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
@@ -135,6 +135,11 @@ function Solver.poly_optimize(::Val{:SCSMoment}, relaxation::AbstractRelaxation,
             m, moncount, pointer_from_objref(scs_A), C_NULL, pointer(b), pointer(c)
         )
         scs_settings = ScsSettings(linear_solver)
+        if !isnothing(precision)
+            scs_settings.eps_abs = precision
+            scs_settings.eps_rel = precision
+            scs_settings.eps_infeas = precision
+        end
         for (k, v) in parameters
             setproperty!(scs_settings, k, v)
         end

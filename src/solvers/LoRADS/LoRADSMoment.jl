@@ -52,8 +52,12 @@ function Solver.fix_constraints!(state::StateMoment, m::Int, indvals::Indvals{Lo
 end
 
 function Solver.poly_optimize(::Val{:LoRADSMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=(state) -> nothing, parameters...)
-    params = LoRADS.Params(; parameters...)
+    representation, verbose::Bool=false, customize=(state) -> nothing, precision::Union{Nothing,<:Real}=nothing, parameters...)
+    if isnothing(precision)
+        params = LoRADS.Params(; parameters...)
+    else
+        params = LoRADS.Params(; phase2Tol=precision, phase1Tol=.01precision, parameters...)
+    end
     setup_time = @elapsed @inbounds begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 

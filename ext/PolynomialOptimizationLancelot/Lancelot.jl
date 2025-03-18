@@ -1,5 +1,5 @@
-function lancelot_solve(problem::PolynomialOptimization.RealProblem; feastol::Number=1e-5, gradtol::Number=1e-5,
-    maxit::Integer=1000, verbose=false)
+function lancelot_solve(problem::PolynomialOptimization.RealProblem; precision::Real=1e-5, feastol::Number=precision,
+    gradtol::Number=precision, maxit::Integer=1000, verbose=false)
     @verbose_info("Compiling polynomials for fast evaluation")
     setup_static = @elapsed begin
         nvars = nvariables(problem)

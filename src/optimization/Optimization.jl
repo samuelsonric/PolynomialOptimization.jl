@@ -17,7 +17,7 @@ _val_of(::Val{S}) where {S} = S
 
 """
     poly_optimize([method, ]relaxation::AbstractRelaxation; verbose=false,
-        representation=RepresentationPSD(), kwargs...)
+        representation=RepresentationPSD(), [precision::Real], kwargs...)
 
 Optimize a relaxed polynomial optimization problem that was construced via [`poly_problem`](@ref) and then wrapped into an
 [`AbstractRelaxation`](@ref). Returns a [`Result`](@ref) object.
@@ -38,6 +38,14 @@ Any additional keyword argument is passed on to the solver.
 For a list of supported methods, see [the solver reference](@ref solvers_poly_optimize). If `method` is omitted, the default
 solver is used. Note that this depends on the loaded solver packages, and possibly also their loading order if no preferred
 solver has been loaded.
+
+The keyword arguments are different for every solver; in general, if the solver permits access to its configuration options via
+a name, each option can be passed as a keyword argument. If the solver requires the use of integer constants (that are defined
+in some solver package), the options must be passed in the `parameters` keyword argument, which must be an iterable of
+pair-like elements. As the parameters for each solver are quite different, the optional `precision` argument will set some
+characteristic options related to the precision of the result (feasibility measures, duality gap) all to this value unless they
+are overwritten explicitly. However, be aware that each solver defines its own set of termination criteria, so the meaning of
+`precision` is not very strict.
 
 See also [`RepresentationIAs`](@ref).
 

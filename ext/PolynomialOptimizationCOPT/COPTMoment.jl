@@ -139,12 +139,19 @@ function Solver.fix_objective!(state::StateMoment, indvals::Indvals{Cint,Float64
 end
 
 function Solver.poly_optimize(::Val{:COPTMoment}, relaxation::AbstractRelaxation{<:Problem{P}}, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize::Function=_ -> nothing, parameters=()) where {P}
+    representation, verbose::Bool=false, customize::Function=_ -> nothing, precision::Union{Nothing,<:Real}=nothing,
+    parameters=()) where {P}
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
         task = COPTProb(copt_env)
         _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_LOGTOCONSOLE, Cint(verbose)))
+        if !isnothing(precision)
+            _check_ret(copt_env, COPT_SetDblParam(task, COPT_DBLPARAM_FEASTOL, Cdouble(precision)))
+            _check_ret(copt_env, COPT_SetDblParam(task, COPT_DBLPARAM_DUALTOL, Cdouble(precision)))
+            _check_ret(copt_env, COPT_SetDblParam(task, COPT_DBLPARAM_RELGAP, Cdouble(precision)))
+            _check_ret(copt_env, COPT_SetDblParam(task, COPT_DBLPARAM_ABSGAP, Cdouble(precision)))
+        end
         for (k, v) in parameters
             if v isa Integer
                 _check_ret(copt_env, COPT_SetIntParam(task, k, Cint(v)))

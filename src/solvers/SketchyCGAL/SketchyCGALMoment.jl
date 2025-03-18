@@ -45,7 +45,8 @@ function Solver.fix_constraints!(state::StateMoment{I,<:Integer,V}, m::Int, indv
 end
 
 function Solver.poly_optimize(::Val{:SketchyCGALMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=(state) -> nothing, α::Union{Tuple{Real,Real},Real}, parameters...)
+    representation, verbose::Bool=false, customize=(state) -> nothing, α::Union{Tuple{Real,Real},Real},
+    precision::Union{Nothing,<:Real}=nothing, parameters...)
     if α isa Real
         α = (zero(α), α)
     end
@@ -61,7 +62,9 @@ function Solver.poly_optimize(::Val{:SketchyCGALMoment}, relaxation::AbstractRel
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solver_time = @elapsed begin
-        status, value, Xs = SketchyCGAL.sketchy_cgal(finish!(state.A), state.b, finish!(state.C); verbose, α, parameters...)
+        status, value, Xs = isnothing(precision) ?
+            SketchyCGAL.sketchy_cgal(finish!(state.A), state.b, finish!(state.C); verbose, α, parameters...)  :
+            SketchyCGAL.sketchy_cgal(finish!(state.A), state.b, finish!(state.C); verbose, α, ϵ=precision, parameters...)
     end
 
     @verbose_info("Optimization complete in ", solver_time, " seconds")

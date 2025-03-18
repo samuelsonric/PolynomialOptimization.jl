@@ -82,13 +82,26 @@ function Solver.poly_optimize(::Val{:ClarabelMoment}, relaxation::AbstractRelaxa
 
         moncount, (Acolptr, Arowind, Anzval), q = coo_to_csc!(state.Acoo, Qcoo)
         solver = Clarabel.Solver()
+        if haskey(parameters, :precision)
+            kws = Dict{Symbol,Any}(parameters)
+            prec = kws[:precision]
+            delete!(kws, :precision)
+            get!(kws, :tol_gap_abs, prec)
+            get!(kws, :tol_gap_rel, prec)
+            get!(kws, :tol_feas, prec)
+            get!(kws, :tol_infeas_abs, prec)
+            get!(kws, :tol_infeas_rel, prec)
+            settings = Clarabel.Settings(; verbose, kws...)
+        else
+            settings = Clarabel.Settings(; verbose, parameters...)
+        end
         Clarabel.setup!(solver,
             spzeros(V, moncount, moncount), # P
             q,
             SparseMatrixCSC{V,Int}(length(b), moncount, Acolptr, Arowind, rmul!(Anzval, -one(V))), # A
             b, # b
             finish!(state.cones), # cones
-            Clarabel.Settings(; verbose, parameters...)
+            settings
         )
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")

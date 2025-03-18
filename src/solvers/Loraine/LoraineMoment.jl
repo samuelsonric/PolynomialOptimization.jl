@@ -13,7 +13,7 @@ mutable struct StateMoment{I<:Integer,K<:Integer,V<:Real} <: AbstractSparseMatri
     )
 end
 
-Solver.issuccess(::Val{:LoraineMoment}, status::Int) = status == 1
+Solver.issuccess(::Val{:LoraineMoment}, status::Loraine.Status) = status === Loraine.STATUS_OPTIMAL
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeCOOVectorized(:F, 1)
 
@@ -49,7 +49,7 @@ function Solver.fix_constraints!(state::StateMoment{I,<:Integer,V}, m::Int, indv
 end
 
 function Solver.poly_optimize(::Val{:LoraineMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=(state) -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=(state) -> nothing, precision::Union{Nothing,<:Real}=nothing, parameters...)
     setup_time = @elapsed @inbounds begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
         V = real(coefficient_type(poly_problem(relaxation).objective))
@@ -66,6 +66,10 @@ function Solver.poly_optimize(::Val{:LoraineMoment}, relaxation::AbstractRelaxat
             c_lin=isdefined(state, :c_lin) ? state.c_lin : nothing,
             coneDims=finish!(primal_data[2].psd_dim), check=false);
             verb=verbose ? Loraine.VERBOSITY_FULL : Loraine.VERBOSITY_NONE, parameters...)
+        if !isnothing(precision) && !haskey(parameters, :tol_cg)
+            solver.tol_cg = precision
+            solver.tol_cg_min = min(solver.tol_cg_min, solver.tol_cg)
+        end
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
     solver_time = @elapsed Loraine.solve!(solver)

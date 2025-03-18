@@ -389,7 +389,7 @@ function sketchy_cgal(A::Union{<:AbstractMatrix{<:AbstractMatrix{R}},<:AbstractV
             size(Aᵢ) == (length(b), nᵢ^2) || throw(ArgumentError("Invalid matrix dimensions."))
         end
     end
-    kwargs = Dict(kwargs) # kwargs are immutable
+    kwargs = Dict{Symbol,Any}(kwargs) # kwargs are immutable
 
     d = length(b)
     @verbose_info("Calculating the rescaling parameters")

@@ -124,14 +124,24 @@ function Solver.poly_optimize(::Val{:HypatiaMoment}, relaxation::AbstractRelaxat
             h, # h
             finish!(state.cones) # cones
         )
+        kws = Dict{Symbol,Any}(parameters)
         if !dense
             # for lots of smaller constraints, a sparse solver is much better. However, all non-QRCholDenseSystemSolver
             # types also require to turn off reduction (else, we just get completely wrong results), and performing a dense
             # preprocessing also defeats the purpose of a sparse solver.
-            parameters = (syssolver=get(() -> Solvers.SymIndefSparseSystemSolver{Float64}(), parameters, :syssolver),
-                preprocess=get(parameters, :preprocess, false), reduce=get(parameters, :reduce, false), parameters...)
+            get!(() -> Solvers.SymIndefSparseSystemSolver{Float64}(), kws, :syssolver)
+            get!(kws, :preprocess, false)
+            get!(kws, :reduce, false)
         end
-        solver = Solvers.Solver{V}(; verbose, parameters...)
+        if haskey(kws, :precision)
+            prec = kws[:precision]
+            delete!(kws, :precision)
+            get!(kws, :tol_rel_opt, prec)
+            get!(kws, :tol_abs_opt, prec)
+            get!(kws, :tol_feas, prec)
+            get!(kws, :tol_infeas, prec)
+        end
+        solver = Solvers.Solver{V}(; verbose, kws...)
         Solvers.load(solver, model)
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")

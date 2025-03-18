@@ -144,13 +144,26 @@ function Solver.fix_objective!(state::StateMoment, indvals::Indvals{Int32,Float6
 end
 
 function Solver.poly_optimize(::Val{:MosekMoment}, relaxation::AbstractRelaxation, groupings::RelaxationGroupings;
-    representation, verbose::Bool=false, customize=_ -> nothing, parameters...)
+    representation, verbose::Bool=false, customize=_ -> nothing, precision::Union{Nothing,<:Real}=nothing, parameters...)
     task = Mosek.Task(msk_global_env::Env)
     setup_time = @elapsed begin
         K = _get_I(eltype(monomials(poly_problem(relaxation).objective)))
 
         taskptr = task.task
         verbose && putstreamfunc(task, MSK_STREAM_LOG, printstream)
+        if !isnothing(precision)
+            putdouparam(task, MSK_DPAR_INTPNT_CO_TOL_DFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_CO_TOL_INFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_CO_TOL_MU_RED, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_CO_TOL_PFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_CO_TOL_REL_GAP, precision)
+            # maybe the problem isn't conic due to the DD representation?
+            putdouparam(task, MSK_DPAR_INTPNT_TOL_DFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_TOL_INFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_TOL_MU_RED, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_TOL_PFEAS, precision)
+            putdouparam(task, MSK_DPAR_INTPNT_TOL_REL_GAP, precision)
+        end
         for (k, v) in parameters
             putparam(task, string(k), string(v))
         end
