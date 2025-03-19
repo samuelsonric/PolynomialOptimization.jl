@@ -166,10 +166,10 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             end
             # If no scaling is desired, set it to true, which allows us to completely eliminate the multiplication - because
             # the value false does not make any sense, so this path is statically determined.
-                if scaling isa Bool
-                    @assert(scaling === true)
-                    scaleoffdiags = false
-                end
+            if scaling isa Bool
+                @assert(scaling === true)
+                scaleoffdiags = false
+            end
         else
             rquad = quad = false
             if (representation isa RepresentationDD && ((complex && supports_dd_complex(state)) ||
@@ -1877,7 +1877,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
 end
 
 function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::RelaxationGroupings, counters::Counters,
-    info::Vector, infoᵢ::Int) where {T,V,P}
+    info::Vector) where {T,V,P}
     # fixed items
     negate = @inline negate_fix(state)
     # fix constant term to 1
@@ -1938,6 +1938,7 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
     end
     addtocounter!(state, counters, Val(:fix), 1) # we don't store this info
 
+    infoᵢ = 2
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
         for (j, grouping) in enumerate(groupingsᵢ)
@@ -1946,7 +1947,7 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
         infoᵢ += 1
     end
 
-    return infoᵢ
+    return
 end
 
 """
@@ -2013,7 +2014,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     counters = Counters()
     info = Vector{Vector{<:Tuple{Symbol,Any}}}(undef, 1 + length(problem.constr_zero) + length(problem.constr_nonneg) +
                                                       length(problem.constr_psd))
-    infoᵢ = prepend_fix(state) ? _fix_setup!(state, problem, groupings, counters, info, 2) : 2
+    prepend_fix(state) && _fix_setup!(state, problem, groupings, counters, info)
 
     # SOS term for objective
     constantP = one(P)
@@ -2024,6 +2025,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
             representation isa RepresentationMethod ? representation : representation((:objective, 0, i), length(g)), counters)
     end
 
+    infoᵢ = 2 + length(problem.constr_zero)
     # localizing matrices
     @inbounds for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
@@ -2046,7 +2048,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         infoᵢ += 1
     end
 
-    prepend_fix(state) || _fix_setup!(state, problem, groupings, counters, info, infoᵢ)
+    prepend_fix(state) || _fix_setup!(state, problem, groupings, counters, info)
 
     # Riesz functional in the objective
     let buffer=length(problem.objective), indices=FastVec{T}(; buffer), values=FastVec{V}(; buffer)
