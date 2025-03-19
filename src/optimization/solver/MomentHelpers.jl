@@ -151,23 +151,25 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                 rquad = supports_rotated_quadratic(state)
                 quad = supports_quadratic(state)
                 if scaleoffdiags
-                    if !rquad && quad
+                    if rquad
+                        scaling = sqrt(V(2))
+                    elseif quad
                         scaling = V(2)
                     else
-                        scaling = sqrt(V(2))
+                        scaling = indextype.scaling
                     end
                 else
-                    scaling = sqrt(V(2))
+                    scaling = indextype.scaling
                 end
             elseif scaleoffdiags
                 scaling = indextype.scaling
+            end
+            # If no scaling is desired, set it to true, which allows us to completely eliminate the multiplication - because
+            # the value false does not make any sense, so this path is statically determined.
                 if scaling isa Bool
-                    # If no scaling is desired, set it to true, which allows us to completely eliminate the multiplication -
-                    # because the value false does not make any sense, so this path is statically determined.
                     @assert(scaling === true)
                     scaleoffdiags = false
                 end
-            end
         else
             rquad = quad = false
             if (representation isa RepresentationDD && ((complex && supports_dd_complex(state)) ||
