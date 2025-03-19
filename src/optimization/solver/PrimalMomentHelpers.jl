@@ -15,6 +15,7 @@ mutable struct PrimalMomentSolver{I<:Integer,K<:Integer,V<:Real,C,B,P<:AbstractS
                                                   #          if vectorized and full: index of transpose
                                                   #          if idx1 < 0: unused
                                                   #          else - col (with offset)
+                                                  #          if idx3 < 0: value is -1 instead of 1 (can happen for complex)
                                                   # index (or row/col) will always refer to the entry in the lower triangle
                                                   # (if the lower or full was requested) or to the upper (if the upper was
                                                   # requested)
@@ -61,6 +62,10 @@ add_var_slack!(::PrimalMomentSolver, ::Int) = error("Slack variables are not sup
 
 @inline function _primal_push_psd!((cooᵢ, cooⱼ, cooᵥ)::Tuple{FastVec{I},FastVec{I},FastVec{V}},
     it::PSDIndextypeCOOVectorized{:F}, max_con::I, idx::I, idxᵀ::I, v::V) where {I,V}
+    if idxᵀ < 0
+        idxᵀ = -idxᵀ
+        v = -v
+    end
     if idx == idxᵀ
         push!(cooᵢ, max_con)
         push!(cooⱼ, idx)
@@ -84,6 +89,10 @@ end
 
 @inline function _primal_push_psd!((cooᵢ, cooₘₙ, cooᵥ)::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
     it::PSDIndextypeMatrixCartesian{:F}, max_con::I, i::I, j::I, v::V) where {I,V}
+    if j < 0
+        j = -j
+        v = -v
+    end
     if i == j
         push!(cooᵢ, max_con)
         push!(cooₘₙ[1], i)
@@ -101,6 +110,10 @@ end
 
 @inline function _primal_push_psd!((cooᵢ, cooₘₙ, cooᵥ)::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
     it::PSDIndextypeMatrixCartesian, max_con::I, i::I, j::I, v::V) where {I,V}
+    if j < 0
+        j = -j
+        v = -v
+    end
     # the order is already correct
     push!(cooᵢ, max_con)
     push!(cooₘₙ[1], i)
@@ -424,8 +437,8 @@ function add_constr_psd!(state::PrimalMomentSolver{I,K,V,C}, dim::Int, data::Ind
         if isone(length(indval))
             k, v = first(indval)
             if !haskey(mon_eq, FastKey(k))
-                @assert(isone(v))
-                state.mon_eq[FastKey(k)] = (psd_index, _i, _j)
+                @assert(isone(v) || isone(-v))
+                state.mon_eq[FastKey(k)] = (psd_index, _i, v ≥ 0 ? _j : -_j)
                 continue
             end
         end
@@ -580,7 +593,8 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
     if it isa PSDIndextypeMatrixCartesian
         @inbounds for (j, (psdᵢ, row, col)) in enumerate(values(mon_eq))
             if psdᵢ > 0
-                y[j] = mm[psdᵢ][row, col]
+                y[j] = mm[psdᵢ][row, abs(col)]
+                col < 0 && (y[j] = -y[j])
             elseif psdᵢ == -1
                 y[i] = mm_lin[row]
             else
