@@ -19,6 +19,7 @@ mutable struct PrimalMomentSolver{I<:Integer,K<:Integer,V<:Real,C,B,P<:AbstractS
                                                   # index (or row/col) will always refer to the entry in the lower triangle
                                                   # (if the lower or full was requested) or to the upper (if the upper was
                                                   # requested)
+    incfix::Int
     c::Indvals{K,V}
 
     function PrimalMomentSolver{I,K,V}(parent::P) where {I<:Integer,K<:Integer,V<:Real,P<:AbstractSolver{K,V}}
@@ -35,6 +36,7 @@ mutable struct PrimalMomentSolver{I<:Integer,K<:Integer,V<:Real,C,B,P<:AbstractS
             (FastVec{I}(), FastVec{I}(), FastVec{V}()),
             (FastVec{I}(), FastVec{V}()),
             Dict{FastKey{K},Tuple{Int,I,B}}(),
+            0
         )
     end
 end
@@ -52,8 +54,15 @@ psd_indextype(state::PrimalMomentSolver) = PSDIndextypeVector(psd_indextype(stat
 
 prepend_fix(::PrimalMomentSolver) = false
 
-addtocounter!(state::PrimalMomentSolver, counters::Counters, type::Val, dim::Integer) =
+negate_fix(state::PrimalMomentSolver) = negate_fix(state.parent)
+
+function addtocounter!(state::PrimalMomentSolver, counters::Counters, type::Val, dim::Integer)
+    if !iszero(state.incfix)
+        addtocounter!(state.parent, counters, Val(:fix), state.incfix)
+        state.incfix = 0
+    end
     addtocounter!(state.parent, counters, type, dim)
+end
 
 addtocounter!(state::PrimalMomentSolver, counters::Counters, type::Val, num::Integer, dim::Integer) =
     addtocounter!(state.parent, counters, type, num, dim)
@@ -381,6 +390,7 @@ function add_constr_nonnegative!(state::PrimalMomentSolver{I,K,V,<:Any,B}, indva
         prepare_push!(cooⱼ, req_elems)
         prepare_push!(cooᵥ, req_elems)
     end
+    state.incfix += max_con - state.max_con
     state.max_con = max_con
     state.max_nonneg = max_nonneg
     return
@@ -449,6 +459,7 @@ function add_constr_psd!(state::PrimalMomentSolver{I,K,V,C}, dim::Int, data::Ind
         # then the others
         _primal_add_constr!(state, indval, max_con)
     end
+    state.incfix += max_con - state.max_con
     state.max_con = max_con
     return
 end
@@ -514,6 +525,7 @@ function primal_moment_setup!(state::AbstractSolver{K,V}, relaxation::AbstractRe
     conversion_time = @elapsed begin
         pstate = PrimalMomentSolver{I,K,V}(state)
         info = moment_setup!(pstate, relaxation, groupings; representation=RepresentationPSD())
+        @assert(iszero(pstate.incfix))
 
         # Now we must call our solver with the data; but we also need the objective for this. So lets first convert it.
         C = Vector{Tuple{obj_vect ? FastVec{I} : Tuple{FastVec{I},FastVec{I}},FastVec{V}}}(

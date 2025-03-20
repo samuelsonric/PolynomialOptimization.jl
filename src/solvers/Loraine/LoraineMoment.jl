@@ -85,5 +85,8 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{St
 Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,Loraine.Solver}, ::Val{:nonnegative},
     index::AbstractUnitRange, ::Nothing) = @view(solver.S_lin[index])
 
+Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,Loraine.Solver}, ::Val{:fix},
+    index::AbstractUnitRange, ::Nothing) = @view(solver.y[index])
+
 Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,Loraine.Solver}, ::Val{:psd},
     index::Integer, ::Nothing) = solver.S[index]

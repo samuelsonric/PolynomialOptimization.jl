@@ -17,6 +17,8 @@ Solver.issuccess(::Val{:ProxSDPMoment}, status::Int) = status == 1
 
 Solver.psd_indextype(::StateMoment) = PSDIndextypeCOOVectorized(:U, true, 1)
 
+Solver.negate_fix(::StateMoment) = true
+
 @counter_atomic(StateMoment, :psd)
 
 function Solver.add_var_nonnegative!(state::StateMoment, m::Int, n::Int, data::SparseMatrixCOO{Int64,Int64,Float64,one(Int64)},
@@ -137,6 +139,9 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solution)::Tuple{
 
 Solver.extract_sos(::AbstractRelaxation, (_, solution)::Tuple{StateMoment,ProxSDP.Result}, ::Val{:nonnegative},
     index::AbstractUnitRange, ::Nothing) = @view(solution.dual_in[index])
+
+Solver.extract_sos(::AbstractRelaxation, (_, solution)::Tuple{StateMoment,ProxSDP.Result}, ::Val{:fix},
+    index::AbstractUnitRange, ::Nothing) = @view(solution.dual_eq[index])
 
 Solver.extract_sos(::AbstractRelaxation, (state, solution)::Tuple{StateMoment,ProxSDP.Result}, ::Val{:psd},
     index::Integer, ::Nothing) = SPMatrix(state.cones[index].sq_side,

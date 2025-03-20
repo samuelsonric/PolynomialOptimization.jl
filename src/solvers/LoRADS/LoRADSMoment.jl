@@ -153,8 +153,11 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solver)::Tuple{St
 
 # While the information is there, it can be very bad. Always look at the reported dual infeasibility - if it too large, the
 # SOS decomposition will be useless. Note that this is not part of the termination criteria.
-Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val,
+Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val{:nonnegative},
     index::AbstractUnitRange, ::Nothing) = LoRADS.get_Slin(solver, index)
+
+Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val{:fix},
+    index::AbstractUnitRange, ::Nothing) = unsafe_wrap(Array, solver.var.dualVar, solver.nRows)[index]
 
 Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val{:psd}, index::Integer,
     ::Nothing) = LoRADS.get_S(solver, index)
