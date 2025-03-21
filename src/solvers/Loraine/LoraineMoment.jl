@@ -69,6 +69,7 @@ function Solver.poly_optimize(::Val{:LoraineMoment}, relaxation::AbstractRelaxat
         if !isnothing(precision) && !haskey(parameters, :tol_cg)
             solver.tol_cg = precision
             solver.tol_cg_min = min(solver.tol_cg_min, solver.tol_cg)
+            solver.eDIMACS = precision
         end
     end
     @verbose_info("Setup complete in ", setup_time, " seconds")
