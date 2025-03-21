@@ -210,7 +210,7 @@ function prepare_prec!(solver::Solver{T}, preconditioner::PreconditionerBeta{T,<
         end
         δ += ttau^2
     end
-    if AT <: UniformScaling
+    if AT <: T
         preconditioner.AATtau = δ
     else
         fill!(preconditioner.AATtau, δ)
