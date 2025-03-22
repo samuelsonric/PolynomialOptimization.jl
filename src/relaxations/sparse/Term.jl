@@ -59,7 +59,7 @@ mutable struct SparsityTerm{
             throw(ArgumentError("The number of clique term modes specified is incompatible with the number of variable cliques"))
         @verbose_info("Generating localizing supports")
         localizing_supports = Vector{MV}(undef, tot)
-        @inbounds localizing_supports[1] = monomials(problem.prefactor)
+        @inbounds localizing_supports[1] = monomials(one(problem.objective))
         i = 2
         for constrs in (problem.constr_zero, problem.constr_nonneg, problem.constr_psd)
             for constr in constrs
