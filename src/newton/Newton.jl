@@ -103,7 +103,7 @@ halfpolytope(objective::P; kwargs...) where {P<:AbstractPolynomialLike} =
     halfpolytope(default_newton_method(), objective; kwargs...)
 
 function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepath::Union{<:AbstractString,Nothing}=nothing,
-    zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}}, prefactor::P=one(P),
+    zero::AbstractVector{P}, nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}}, prefactor::P=Base.zero(P),
     groupings::RelaxationGroupings, kwargs...) where {Nr,I<:Integer,P<:SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}}
     parameters, vertexmons = preproc(V, objective; verbose, zero, nonneg, psd, prefactor, groupings, kwargs...)
     newton_time = @elapsed begin
