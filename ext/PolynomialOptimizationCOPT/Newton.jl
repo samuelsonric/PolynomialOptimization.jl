@@ -22,8 +22,8 @@ let
             lastinfo = time_ns()
             task = COPTProb(copt_env)
             @inbounds begin
-                singlethread && _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_THREADS, one(Cint)))
                 _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_LOGGING, zero(Cint)))
+                singlethread && _check_ret(copt_env, COPT_SetIntParam(task, COPT_INTPARAM_THREADS, one(Cint)))
                 for (k, v) in parameters
                     if v isa Integer
                         _check_ret(copt_env, COPT_SetIntParam(task, k, Cint(v)))
@@ -187,9 +187,10 @@ end
 
 Newton.alloc_global(::Val{:COPT}, nv) = collect(Int32(0):Int32(nv -1))
 Newton.alloc_local(::Val{:COPT}, nv) = Vector{Float64}(undef, nv)
-function Newton.clonetask(t::COPTProb)
+function Newton.clonetask(task::COPTProb)
     secondtask = COPTProb(copt_env)
     _check_ret(copt_env, COPT_CreateCopy(task, secondtask))
+    _check_ret(copt_env, COPT_SetIntParam(secondtask, COPT_INTPARAM_LOGGING, zero(Cint))) # not automatically copied (bug?)
     return secondtask
 end
 
