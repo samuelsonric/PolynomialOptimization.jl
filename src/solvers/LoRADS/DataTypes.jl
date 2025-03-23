@@ -81,7 +81,6 @@ struct SDPCoeffDense
     nSDPCol::LoRADSInt
     dsMatElem::Ptr{Cdouble}
     # rowCol2NnzIdx::Ptr{Ptr{LoRADSInt}}
-    fullMat::Ptr{Cdouble} # UVt full matrix, not dataMat full version
 end
 
 struct SDPCone
@@ -97,6 +96,19 @@ struct SDPCone
 
     sdp_coeff_w_sum_sp_ratio::Cdouble
     nConstr::LoRADSInt
+
+    coneCreate::Ptr{Cvoid}
+    coneProcData::Ptr{Cvoid}
+    conePresolveData::Ptr{Cvoid}
+    coneDestroyData::Ptr{Cvoid}
+    coneAUV::Ptr{Cvoid}
+    objAUV::Ptr{Cvoid}
+    coneObjNrm1::Ptr{Cvoid}
+    coneObjNrm2Square::Ptr{Cvoid}
+    coneObjNrmInf::Ptr{Cvoid}
+    sdpDataWSum::Ptr{Cvoid}
+    addObjCoeff::Ptr{Cvoid}
+    addObjCoeffRand::Ptr{Cvoid}
 end
 
 mutable struct Variable

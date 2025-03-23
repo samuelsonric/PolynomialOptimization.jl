@@ -689,25 +689,21 @@ Returns the `i`th slack variable for the PSD solution matrix ``S_i``. The result
 a dense matrix.
 """
 function get_S(solver::Solver, i::Integer)
-    slack_var = unsafe_load(unsafe_load(unsafe_load(solver.SDPCones, i)).sdp_slack_var)
-    dim = slack_var.nSDPCol
-    slack_var.dataType == SDP_COEFF_ZERO && return zeros(dim, dim)
-    S = Matrix{Cdouble}(undef, dim, dim)
-    unscale = inv(solver.scaleObjHis)
-    if slack_var.dataType == SDP_COEFF_DENSE
-        dense = unsafe_load(Ptr{SDPCoeffDense}(slack_var.dataMat))
-        tpttr!('L', dim, dense.dsMatElem, S, dim)
-        rmul!(S, unscale)
-    else
-        sparse = unsafe_load(Ptr{SDPCoeffSparse}(slack_var.dataMat))
-        col = unsafe_wrap(Array, sparse.triMatCol, sparse.nTriMatElem, own=false)
-        row = unsafe_wrap(Array, sparse.triMatRow, sparse.nTriMatElem, own=false)
-        elem = unsafe_wrap(Array, sparse.triMatElem, sparse.nTriMatElem, own=false)
-        fill!(S, zero(Cdouble))
-        @inbounds for (col, row, elem) in zip(col, row, elem)
-            S[row, col] = elem * unscale
-        end
+    cone = unsafe_load(unsafe_load(solver.SDPCones, i))
+    # There's no dual data available, we have to construct it ourselves
+    dim = unsafe_load(cone.sdp_slack_var).nSDPCol
+    negLambd = unsafe_wrap(Array, solver.var.dualVar, solver.nRows, own=false)
+    rmul!(negLambd, -1)
+    S = zeros(Cdouble, dim, dim)
+    slack_data = Ref(SDPCoeffDense(dim, pointer(S)))
+    slack_var = Ref(SDPCoeff(dim, SDP_COEFF_DENSE, Base.unsafe_convert(Ptr{SDPCoeffDense}, slack_data)))
+    slack_ptr = Base.unsafe_convert(Ptr{SDPCoeff}, slack_var)
+    GC.@preserve slack_data slack_var begin
+        @ccall $(cone.addObjCoeff)(cone.coneData::Ptr{Cvoid}, slack_ptr::Ptr{SDPCoeff})::Cvoid
+        @ccall $(cone.sdpDataWSum)(cone.coneData::Ptr{Cvoid}, negLambd::Ptr{Cdouble}, slack_ptr::Ptr{SDPCoeff})::Cvoid
     end
+    rmul!(negLambd, -1)
+    rmul!(S, inv(solver.scaleObjHis))
     return Symmetric(S, :L)
 end
 

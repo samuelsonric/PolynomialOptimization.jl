@@ -157,7 +157,8 @@ Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.S
     index::AbstractUnitRange, ::Nothing) = LoRADS.get_Slin(solver, index)
 
 Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val{:fix},
-    index::AbstractUnitRange, ::Nothing) = unsafe_wrap(Array, solver.var.dualVar, solver.nRows)[index]
+    index::AbstractUnitRange, ::Nothing) = rmul!(unsafe_wrap(Array, solver.var.dualVar, solver.nRows)[index],
+                                                 inv(solver.scaleObjHis))
 
 Solver.extract_sos(::AbstractRelaxation, (_, solver)::Tuple{StateMoment,LoRADS.Solver}, ::Val{:psd}, index::Integer,
     ::Nothing) = LoRADS.get_S(solver, index)
