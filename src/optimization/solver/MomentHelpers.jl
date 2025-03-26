@@ -166,7 +166,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             end
             # If no scaling is desired, set it to true, which allows us to completely eliminate the multiplication - because
             # the value false does not make any sense, so this path is statically determined.
-            if scaling isa Bool
+            if scaleoffdiags && scaling isa Bool
                 @assert(scaling === true)
                 scaleoffdiags = false
             end
@@ -1376,7 +1376,9 @@ end
 function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Integer, data::IndvalsIterator{T,V},
     u::DiagonalTransform, counters::Counters) where {T,V,complex}
     have_rot = supports_rotated_quadratic(state)
-    scaling = inv(have_rot ? sqrt(V(2)) : V(2))
+    if have_rot
+        scaling = inv(sqrt(V(2)))
+    end
     indices = Vector{T}(undef, complex ? (have_rot ? 6 : 8) : (have_rot ? 3 : 5))
     lens = complex ? (have_rot ? [1, 1, 2, 2] : 2) : (have_rot ? 1 : [2, 2, 1])
     slacks = add_var_slack!(state, complex ? dim^2 : trisize(dim))
@@ -1417,7 +1419,10 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
             srowdiag += (complex ? 2(dim - i) : dim - i) +1
             #endregion
             #region Third and fourth item
-            uval = ucolval * conj(urowval) * scaling
+            uval = ucolval * conj(urowval)
+            if have_rot
+                uval *= scaling
+            end
             if complex
                 indices[offstart+2] = indices[offstart+0] = slacks[lowerslack]
                 indices[offstart+3] = indices[offstart+1] = slacks[lowerslack+1]
@@ -1451,7 +1456,9 @@ end
 function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Integer, data::IndvalsIterator{T,V}, u,
     counters::Counters) where {T,V,complex}
     have_rot = supports_rotated_quadratic(state)
-    scaling = inv(have_rot ? sqrt(V(2)) : V(2))
+    if have_rot
+        scaling = inv(sqrt(V(2)))
+    end
     total = complex ? dim^2 : trisize(dim)
     indices = FastVec{T}(buffer=complex ? 4total : 3total)
     slacks = add_var_slack!(state, total)
@@ -1546,7 +1553,8 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
                     if dddual_transform_inrange(Val(:offdiag), u, i, col)
                         uval = 2u[i, col] * conj(u[j, col])
                         unsafe_push!(indices, slacks[slack])
-                        unsafe_push!(values, (impart ? imag(uval) : real(uval)) * scaling)
+                        unsafe_push!(values, have_rot ? (impart ? imag(uval) : real(uval)) * scaling :
+                                                        (impart ? imag(uval) : real(uval)))
                     end
                     slack += 1
                     for row in col+1:dim
@@ -1561,7 +1569,7 @@ function sdddual_transform_cone!(state::AnySolver{T,V}, ::Val{complex}, dim::Int
                                     thisuval = impart ? imag(uval) : real(uval)
                                 end
                                 unsafe_push!(indices, slacks[slack+imdata])
-                                unsafe_push!(values, thisuval * scaling)
+                                unsafe_push!(values, have_rot ? thisuval * scaling : thisuval)
                             end
                         end
                         slack += complex ? 2 : 1
