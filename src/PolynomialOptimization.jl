@@ -4,6 +4,7 @@ module PolynomialOptimization
 using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
+using Preferences
 using Printf
 import MutableArithmetics
 import StatsBase
@@ -11,7 +12,7 @@ import StatsBase
 export Newton, Relaxation
 
 const haveMPI = Ref{Bool}(false)
-const debugging = false
+const debugging = @load_preference("debugging", false) # only for testing
 
 include("./helpers/Helpers.jl")
 
