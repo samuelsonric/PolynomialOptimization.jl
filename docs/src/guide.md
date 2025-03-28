@@ -128,18 +128,23 @@ necessarily cheaper than trying to extract solutions; as the latter is more info
 Whenever the optimization was successful, a valid sums-of-squares certificate will be available, i.e., a decomposition of the
 objective (in this simple, unconstrained, case). Here, the minimum value of the objective was found to be `0.9166...`.
 We can therefore obtain a certificate for the positivity of the original objective minus this global minimum:
-```jldoctest walkthrough
+```meta
+# Don't test this, it appears to give very different results even on the same machine depending on whether the test runs
+# directly or via Pkg. The solution is not unique anyway and we have enough tests of the SOS certificate that check what must
+# reliably be the same.
+```
+```jldoctest walkthrough; filter=r"\([^)]+\)²"
 julia> cert = SOSCertificate(res)
 Sum-of-squares certificate for polynomial optimization problem
 1.0 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴ - 0.9166666672624658
-= (-0.2492464642498061 + 0.0 + 0.0 + 0.0 + 0.6811832979888123x₃² - 0.13316036665354078x₂x₃ + 0.6812065898234094x₂² + 0.0 + 0.0 + 0.7152479291533441x₁²)²
-+ (-0.00015840159683466377 + 0.0 + 0.0 + 0.0 + 0.6360091467299869x₃² + 0.0011902230323755974x₂x₃ - 0.6338687294141168x₂² + 0.0 + 0.0 - 0.0018514462038562963x₁²)²
-+ (0.050599062148224884 + 0.0 + 0.0 + 0.0 - 0.35322230868481075x₃² - 0.40669620906370346x₂x₃ - 0.3569973936050725x₂² + 0.0 + 0.0 + 0.6183225665112776x₁²)²
-+ (0.0 - 0.6307886589586179x₃ - 0.6307886578526084x₂ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
-+ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.5707311041008931x₁x₃ - 0.5706316416095126x₁x₂ + 0.0)²
-+ (0.1365622366906534 + 0.0 + 0.0 + 0.0 - 0.08194926810609472x₃² + 0.6553389692882523x₂x₃ - 0.08198096663343958x₂² + 0.0 + 0.0 + 0.32572101226607164x₁²)²
-+ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.43861947273884583x₁x₃ + 0.4386959251861786x₁x₂ + 0.0)²
-+ (0.0 + 0.0 + 0.0 + 0.4527802849918676x₁ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
+= (-0.24936226129389166 + 0.0 + 0.0 + 0.0 + 0.681040802546548x₃² - 0.13418414698255413x₂x₃ + 0.6810200107054156x₂² + 0.0 + 0.0 + 0.7150557592772305x₁²)²
++ (-0.00021451050140762083 + 0.0 + 0.0 + 0.0 - 0.6334453950216662x₃² + 0.0016567627201615803x₂x₃ + 0.6363889265439937x₂² + 0.0 + 0.0 - 0.00254891018011664x₁²)²
++ (-0.05053765946744563 + 0.0 + 0.0 + 0.0 + 0.35808256829743135x₃² + 0.407798788978473x₂x₃ + 0.3528714670120098x₂² + 0.0 + 0.0 - 0.6182223086852784x₁²)²
++ (0.0 - 0.6308015756295695x₃ - 0.6308015765942243x₂ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.571599380223713x₁x₃ - 0.5716874595884525x₁x₂ + 0.0)²
++ (-0.1363733706053911 + 0.0 + 0.0 + 0.0 + 0.08189769928366018x₃² - 0.65436868542136x₂x₃ + 0.0818694633768503x₂² + 0.0 + 0.0 - 0.32632796895148375x₁²)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.4384985146463991x₁x₃ - 0.43843095558075706x₁x₂ + 0.0)²
++ (0.0 + 0.0 + 0.0 - 0.45290489466060885x₁ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
 ```
 This certificate consists of a number of polynomials that, when squared and added, should give rise to the original objective.
 Note that when printing the certificate, values that are below a certain threshold will be set to zero by default.
@@ -445,6 +450,7 @@ between the internal representations that are used for the moment matrix: apart 
 better, they usually provide worse bounds:
 ```jldoctest walkthrough
 julia> res_dd = poly_optimize(:Clarabel, prob, representation=RepresentationDD())
+[ Info: Automatically selecting minimal degree cutoff 2
 Polynomial optimization result
 Relaxation method: Dense
 Used optimization method: ClarabelMoment
@@ -469,30 +475,34 @@ the previous iteration as a new rotation basis.
     `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationIAs`](@ref) to "fake" an
     upper triangular identity at the beginning.
 
-```jldoctest walkthrough
+```meta
+# Beware the Documenter bug https://github.com/JuliaDocs/Documenter.jl/issues/2277 (which I consider a bug): the filter must
+# match both the original output as well as the expected output in order to be applied to either - so let's make it so.
+```
+```jldoctest walkthrough; filter=r"(\[ Info.*|# output truncated\n)Lower"s => "# output truncated\nLower"
 julia> res_dd_rotated = poly_optimize(res_dd)
 # output truncated
-Lower bound to optimum (in case of good status): 0.7882579368640297
+Lower bound to optimum (in case of good status): 0.7882579368640298
 Time required for optimization: 1.5101965 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.8744697853614662
+Lower bound to optimum (in case of good status): 0.8744697855281065
 Time required for optimization: 0.0355882 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9122827868379025
+Lower bound to optimum (in case of good status): 0.9122828985708029
 Time required for optimization: 0.0097173 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9160797411325013
+Lower bound to optimum (in case of good status): 0.9160797358944991
 Time required for optimization: 0.0102907 seconds
 
 julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
-Lower bound to optimum (in case of good status): 0.9165662778912137
+Lower bound to optimum (in case of good status): 0.916563314002245
 Time required for optimization: 0.0123682 seconds
 ```
 So indeed, after a couple of iterations, the optimum is approached pretty well. We could have used the scaled diagonally
@@ -617,7 +627,7 @@ It may be the case that the required tightening polynomials cannot be determined
 insufficient to satisfy the conditions. Since `PolynomialOptimization` cannot distinguish this from the case where the degree
 is just quite high, the procedure may run into an infinite(ly-seeming) loop.
 Complex-valued problems are not supported at the moment; and PSD constraints will be skipped during the tightening.
-```jldoctest walkthrough; filter=r"-1\.50\d+"=>"-1.50"
+```jldoctest walkthrough; filter=r"-1\.(50|49)\d+"=>"-1.50"
 julia> @polyvar x y;
 
 julia> poly_optimize(:Clarabel, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1), 5)

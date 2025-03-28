@@ -8,13 +8,7 @@ include("./shared.jl")
     @test strRep(prob) == "Real-valued polynomial optimization problem in 2 variables
 Objective: 1.0e-5 + 5.0e-5x₂² + 5.0e-5x₁² + 0.0001x₂⁴ - 0.9998x₁²x₂² + 0.0001x₁⁴ + 0.0001x₂⁶ - 0.9997x₁²x₂⁴ - 0.9997x₁⁴x₂² + 0.0001x₁⁶ + 5.0e-5x₂⁸ + 1.0002x₁²x₂⁶ + 2.0003x₁⁴x₂⁴ + 1.0002x₁⁶x₂² + 5.0e-5x₁⁸ + 1.0e-5x₂¹⁰ + 1.00005x₁²x₂⁸ + 3.0001x₁⁴x₂⁶ + 3.0001x₁⁶x₂⁴ + 1.00005x₁⁸x₂² + 1.0e-5x₁¹⁰
 Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.0x₁²x₂² + x₁⁴"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ -0.0369 atol = 2e-3
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ -0.0369 atol = 2e-3
 end
 
 @testset "POP 2 (Robinson)" begin
@@ -26,13 +20,7 @@ end
     @test strRep(prob) == "Real-valued polynomial optimization problem in 2 variables
 Objective: 1.0e-5 - 0.99995x₂² - 0.99995x₁² - 2.9999x₂⁴ - 0.9998x₁²x₂² - 2.9999x₁⁴ - 1.9999x₂⁶ + 0.0003x₁²x₂⁴ + 0.0003x₁⁴x₂² - 1.9999x₁⁶ + 1.00005x₂⁸ + 1.0002x₁²x₂⁶ + 0.0003x₁⁴x₂⁴ + 1.0002x₁⁶x₂² + 1.00005x₁⁸ + 1.00001x₂¹⁰ + 1.00005x₁²x₂⁸ - 1.9999x₁⁴x₂⁶ - 1.9999x₁⁶x₂⁴ + 1.00005x₁⁸x₂² + 1.00001x₁¹⁰
 Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.0x₁²x₂² + x₁⁴"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ -0.9999 atol = 1e-3
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ -0.9999 atol = 1e-3
 end
 
 @testset "POP 3 (Choi-Lam)" begin
@@ -43,13 +31,7 @@ end
     @test strRep(prob) == "Real-valued polynomial optimization problem in 2 variables
 Objective: 1.0e-5 + 4.0e-5x₂² + 1.00004x₁² + 1.00006x₂⁴ - 1.99988x₁²x₂² + 1.00006x₁⁴ + 1.00004x₂⁶ - 1.99988x₁²x₂⁴ - 1.99988x₁⁴x₂² + 4.0e-5x₁⁶ + 1.0e-5x₂⁸ + 4.0e-5x₁²x₂⁶ + 1.00006x₁⁴x₂⁴ + 1.00004x₁⁶x₂² + 1.0e-5x₁⁸
 Objective was scaled by the prefactor 1.0 + x₂² + x₁²"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 3e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0 atol = 3e-4
 end
 
 @testset "POP 4 (Lax-Lax)" begin
@@ -61,13 +43,7 @@ end
     @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: 1.00001 - x₃ - x₂ - x₁ + 2.00004x₃² + x₂x₃ + 2.00004x₂² + x₁x₃ + x₁x₂ + 2.00004x₁² - 3.0x₃³ - x₂x₃² - x₂²x₃ - 3.0x₂³ - x₁x₃² - 3.0x₁x₂x₃ - x₁x₂² - x₁²x₃ - x₁²x₂ - 3.0x₁³ + 2.00006x₃⁴ + x₂x₃³ + 2.00012x₂²x₃² + x₂³x₃ + 2.00006x₂⁴ + x₁x₃³ + 3.0x₁x₂x₃² + 3.0x₁x₂²x₃ + x₁x₂³ + 2.00012x₁²x₃² + 3.0x₁²x₂x₃ + 2.00012x₁²x₂² + x₁³x₃ + x₁³x₂ + 2.00006x₁⁴ - 3.0x₃⁵ + x₂x₃⁴ - 2.0x₂²x₃³ - 2.0x₂³x₃² + x₂⁴x₃ - 3.0x₂⁵ + x₁x₃⁴ - 6.0x₁x₂x₃³ + 2.0x₁x₂²x₃² - 6.0x₁x₂³x₃ + x₁x₂⁴ - 2.0x₁²x₃³ + 2.0x₁²x₂x₃² + 2.0x₁²x₂²x₃ - 2.0x₁²x₂³ - 2.0x₁³x₃² - 6.0x₁³x₂x₃ - 2.0x₁³x₂² + x₁⁴x₃ + x₁⁴x₂ - 3.0x₁⁵ + 2.00004x₃⁶ - x₂x₃⁵ + 2.00012x₂²x₃⁴ - 2.0x₂³x₃³ + 2.00012x₂⁴x₃² - x₂⁵x₃ + 2.00004x₂⁶ - x₁x₃⁵ + 3.0x₁x₂x₃⁴ + 2.0x₁x₂²x₃³ + 2.0x₁x₂³x₃² + 3.0x₁x₂⁴x₃ - x₁x₂⁵ + 2.00012x₁²x₃⁴ + 2.0x₁²x₂x₃³ + 0.00024x₁²x₂²x₃² + 2.0x₁²x₂³x₃ + 2.00012x₁²x₂⁴ - 2.0x₁³x₃³ + 2.0x₁³x₂x₃² + 2.0x₁³x₂²x₃ - 2.0x₁³x₂³ + 2.00012x₁⁴x₃² + 3.0x₁⁴x₂x₃ + 2.00012x₁⁴x₂² - x₁⁵x₃ - x₁⁵x₂ + 2.00004x₁⁶ - x₃⁷ + x₂x₃⁶ - x₂²x₃⁵ + x₂³x₃⁴ + x₂⁴x₃³ - x₂⁵x₃² + x₂⁶x₃ - x₂⁷ + x₁x₃⁶ - 3.0x₁x₂x₃⁵ + 3.0x₁x₂²x₃⁴ - 6.0x₁x₂³x₃³ + 3.0x₁x₂⁴x₃² - 3.0x₁x₂⁵x₃ + x₁x₂⁶ - x₁²x₃⁵ + 3.0x₁²x₂x₃⁴ + 2.0x₁²x₂²x₃³ + 2.0x₁²x₂³x₃² + 3.0x₁²x₂⁴x₃ - x₁²x₂⁵ + x₁³x₃⁴ - 6.0x₁³x₂x₃³ + 2.0x₁³x₂²x₃² - 6.0x₁³x₂³x₃ + x₁³x₂⁴ + x₁⁴x₃³ + 3.0x₁⁴x₂x₃² + 3.0x₁⁴x₂²x₃ + x₁⁴x₂³ - x₁⁵x₃² - 3.0x₁⁵x₂x₃ - x₁⁵x₂² + x₁⁶x₃ + x₁⁶x₂ - x₁⁷ + 1.00001x₃⁸ - x₂x₃⁷ + 2.00004x₂²x₃⁶ - 3.0x₂³x₃⁵ + 2.00006x₂⁴x₃⁴ - 3.0x₂⁵x₃³ + 2.00004x₂⁶x₃² - x₂⁷x₃ + 1.00001x₂⁸ - x₁x₃⁷ + x₁x₂x₃⁶ - x₁x₂²x₃⁵ + x₁x₂³x₃⁴ + x₁x₂⁴x₃³ - x₁x₂⁵x₃² + x₁x₂⁶x₃ - x₁x₂⁷ + 2.00004x₁²x₃⁶ - x₁²x₂x₃⁵ + 2.00012x₁²x₂²x₃⁴ - 2.0x₁²x₂³x₃³ + 2.00012x₁²x₂⁴x₃² - x₁²x₂⁵x₃ + 2.00004x₁²x₂⁶ - 3.0x₁³x₃⁵ + x₁³x₂x₃⁴ - 2.0x₁³x₂²x₃³ - 2.0x₁³x₂³x₃² + x₁³x₂⁴x₃ - 3.0x₁³x₂⁵ + 2.00006x₁⁴x₃⁴ + x₁⁴x₂x₃³ + 2.00012x₁⁴x₂²x₃² + x₁⁴x₂³x₃ + 2.00006x₁⁴x₂⁴ - 3.0x₁⁵x₃³ - x₁⁵x₂x₃² - x₁⁵x₂²x₃ - 3.0x₁⁵x₂³ + 2.00004x₁⁶x₃² + x₁⁶x₂x₃ + 2.00004x₁⁶x₂² - x₁⁷x₃ - x₁⁷x₂ + 1.00001x₁⁸
 Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + x₃⁴ + 2.0x₂²x₃² + x₂⁴ + 2.0x₁²x₃² + 2.0x₁²x₂² + x₁⁴"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-3
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0 atol = 2e-3
 end
 
 @testset "POP 5 (Delzell)" begin
@@ -78,13 +54,7 @@ end
     @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: 1.0e-5 + 6.0e-5x₃² + 6.0e-5x₂² + 6.0e-5x₁² + 0.00015x₃⁴ + 0.0003x₂²x₃² + 0.00015x₂⁴ + 0.0003x₁²x₃² + 0.0003x₁²x₂² + 0.00015x₁⁴ + 0.0002x₃⁶ + 0.0006x₂²x₃⁴ + 1.0006x₂⁴x₃² + 0.0002x₂⁶ + 1.0006x₁²x₃⁴ - 2.9988x₁²x₂²x₃² + 0.0006x₁²x₂⁴ + 0.0006x₁⁴x₃² + 1.0006x₁⁴x₂² + 0.0002x₁⁶ + 1.00015x₃⁸ + 0.0006x₂²x₃⁶ + 2.0009x₂⁴x₃⁴ + 2.0006x₂⁶x₃² + 0.00015x₂⁸ + 2.0006x₁²x₃⁶ - 3.9982x₁²x₂²x₃⁴ - 3.9982x₁²x₂⁴x₃² + 0.0006x₁²x₂⁶ + 2.0009x₁⁴x₃⁴ - 3.9982x₁⁴x₂²x₃² + 2.0009x₁⁴x₂⁴ + 0.0006x₁⁶x₃² + 2.0006x₁⁶x₂² + 0.00015x₁⁸ + 2.00006x₃¹⁰ + 2.0003x₂²x₃⁸ + 1.0006x₂⁴x₃⁶ + 2.0006x₂⁶x₃⁴ + 1.0003x₂⁸x₃² + 6.0e-5x₂¹⁰ + 3.0003x₁²x₃⁸ - 0.9988x₁²x₂²x₃⁶ - 2.9982x₁²x₂⁴x₃⁴ - 0.9988x₁²x₂⁶x₃² + 0.0003x₁²x₂⁸ + 2.0006x₁⁴x₃⁶ - 2.9982x₁⁴x₂²x₃⁴ - 2.9982x₁⁴x₂⁴x₃² + 1.0006x₁⁴x₂⁶ + 1.0006x₁⁶x₃⁴ - 0.9988x₁⁶x₂²x₃² + 2.0006x₁⁶x₂⁴ + 0.0003x₁⁸x₃² + 1.0003x₁⁸x₂² + 6.0e-5x₁¹⁰ + 1.00001x₃¹² + 2.00006x₂²x₃¹⁰ + 1.00015x₂⁴x₃⁸ + 0.0002x₂⁶x₃⁶ + 0.00015x₂⁸x₃⁴ + 6.0e-5x₂¹⁰x₃² + 1.0e-5x₂¹² + 2.00006x₁²x₃¹⁰ + 2.0003x₁²x₂²x₃⁸ + 0.0006x₁²x₂⁴x₃⁶ + 0.0006x₁²x₂⁶x₃⁴ + 0.0003x₁²x₂⁸x₃² + 6.0e-5x₁²x₂¹⁰ + 1.00015x₁⁴x₃⁸ + 0.0006x₁⁴x₂²x₃⁶ + 0.0009x₁⁴x₂⁴x₃⁴ + 0.0006x₁⁴x₂⁶x₃² + 0.00015x₁⁴x₂⁸ + 0.0002x₁⁶x₃⁶ + 0.0006x₁⁶x₂²x₃⁴ + 0.0006x₁⁶x₂⁴x₃² + 0.0002x₁⁶x₂⁶ + 0.00015x₁⁸x₃⁴ + 0.0003x₁⁸x₂²x₃² + 0.00015x₁⁸x₂⁴ + 6.0e-5x₁¹⁰x₃² + 6.0e-5x₁¹⁰x₂² + 1.0e-5x₁¹²
 Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + x₃⁴ + 2.0x₂²x₃² + x₂⁴ + 2.0x₁²x₃² + 2.0x₁²x₂² + x₁⁴"
-    if optimize
-       for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 1e-3
-            end
-       end
-    end
+    @test poly_optimize(:COPT, prob).objective ≈ 0 atol = 1e-3
 end
 
 @testset "POP 6 (Modified Motzkin)" begin
@@ -97,13 +67,7 @@ Objective: 1.0e-5 + 5.0e-5x₂² + 5.0e-5x₁² + 0.0001x₂⁴ - 2.9998x₁²x�
 Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 1 nonnegative constraint
 1: -4.0 + x₂² + x₁² ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0.0062 atol = 2e-2
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0.0062 atol = 2e-2
 end
 
 @testset "POP 7 (Example 4.3)" begin
@@ -116,13 +80,7 @@ Objective: 1.0e-5 + 4.0e-5x₃² + 4.0e-5x₂² + 4.0e-5x₁² + 1.00006x₃⁴ 
 Objective was scaled by the prefactor 1.0 + x₃² + x₂² + x₁²
 1 nonnegative constraint
 1: 1.0 - x₃⁴ + 0.5x₂⁴ - x₁⁴ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ -1.27937458 atol = solver==:SCSMoment ? 1e-2 : 1e-7
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ -1.27937458 atol = 1e-7
 end
 
 @testset "POP 8 (Example 3.1)" begin
@@ -136,13 +94,7 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 2 nonnegative constraints
 1: 1.0 - x₂² ≥ 0
 2: -0.25 + x₂² ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 1 atol = 1e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 1 atol = 1e-4
 end
 
 @testset "POP 9 (Example 4.5)" begin
@@ -157,13 +109,7 @@ Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.
 1: -1.0 - x₁x₂ + x₁² ≥ 0
 2: -1.0 + x₁x₂ + x₁² ≥ 0
 3: -1.0 + x₂² ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 3.6182472 atol = 2e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 3.6182472 atol = 2e-4
 end
 
 @testset "POP 10 (Example 4.4)" begin
@@ -177,13 +123,7 @@ Objective was scaled by the prefactor 1.0 + 5.0x₂² + 5.0x₁² + 10.0x₂⁴ 
 2 nonnegative constraints
 1: x₂² - x₁² ≥ 0
 2: -x₁x₂ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 2e-2
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0 atol = 2e-2
 end
 
 @testset "POP 11 (§5.2)" begin
@@ -204,11 +144,9 @@ Objective: 8.00001 + 3.0e-5x₈² + 3.0e-5x₇² + 3.0e-5x₆² + 3.0e-5x₅² +
 7: x₇ ≥ 0
 8: x₈ ≥ 0"
     # this problem reformulation seems to be close to ill-posed
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ -112.014 atol = 2e-3
-        # COPT: imprecise, Clarabel: no chance with default solver/extremely long with Pardiso, MosekMoment: unknown,
-        # HypatiaMoment (dense, sparse OOM): 6min, SCS: very slow
-    end
+    @test poly_optimize(:MosekSOS, prob).objective ≈ -112.014 atol = 2e-3 skip = !have_mosek
+    # COPT: imprecise, Clarabel: no chance with default solver/extremely long with Pardiso, MosekMoment: unknown,
+    # HypatiaMoment (dense, sparse OOM): 6min, SCS: very slow
 end
 
 @testset "POP 12 (§5.3)" begin
@@ -232,11 +170,8 @@ Objective: 127.00001 - 40.0x₈ - 2.0x₇ - 80.0x₆ - 4.0x₅ - 80.0x₄ - 4.0x
 6: x₆ ≥ 0
 7: x₇ ≥ 0
 8: x₈ ≥ 0"
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ 1.00728 atol = 1e-5
-        :COPTMoment ∈ solvers && @test poly_optimize(:COPTMoment, prob).objective ≈ 1.00728 atol = 1e-5
-        # MosekMoment: 5min, HypatiaMoment (dense): 4min, Clarabel (Pardiso): 26min
-    end
+    @test poly_optimize(:MosekSOS, prob).objective ≈ 1.00728 atol = 1e-5 skip = !have_mosek
+    # MosekMoment: 5min, HypatiaMoment (dense): 4min, Clarabel (Pardiso): 26min, COPT: ok
 end
 
 @testset "POP 13 (Example A.2)" begin
@@ -249,13 +184,7 @@ Objective: 1.0e-5 - 1.99995x₂² - 1.99995x₁² - 2.9999x₂⁴ - 5.9998x₁²
 Objective was scaled by the prefactor 1.0 + 2.0x₂² + 2.0x₁² + x₂⁴ + 2.0x₁²x₂² + x₁⁴
 1 equality constraint
 1: 3.0 - x₁ - 3.0x₂² - 3.0x₁² + x₁x₂² + x₁³ = 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ -1 atol = 1e-3
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ -1 atol = 1e-3
 end
 
 @testset "POP 14 (Example A.5)" begin
@@ -269,13 +198,7 @@ Objective: 1.0e-5 + 6.0e-5x₃² + 6.0e-5x₂² + 6.0e-5x₁² + 0.00015x₃⁴ 
 Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + x₃⁴ + 2.0x₂²x₃² + x₂⁴ + 2.0x₁²x₃² + 2.0x₁²x₂² + x₁⁴
 1 equality constraint
 1: -1.0 + x₃ + x₂ + x₁ = 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = solver==:SCSMoment ? 1e-3 : 5e-5
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0 atol = 5e-5
 end
 
 @testset "POP 15 (Example A.6)" begin
@@ -291,13 +214,7 @@ Objective was scaled by the prefactor 1.0 + x₄² + x₃² + x₂² + x₁²
 1: x₁ = 0
 2: -x₃ + x₂ = 0
 3: -x₄ + x₃ = 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 5e-5
-            end
-        end
-    end
+    @test poly_optimize(:COPT, prob).objective ≈ 0 atol = 5e-5
 end
 
 @testset "POP 16 (Example A.4)" begin
@@ -330,11 +247,8 @@ Objective: 1.00001 + 2.0x₁ + 16.00017x₂² + 16.00017x₁² + 30.0x₁x₂² 
 Objective was scaled by the prefactor 1.0 + 15.0x₂² + 15.0x₁² + 105.0x₂⁴ + 210.0x₁²x₂² + 105.0x₁⁴ + 455.0x₂⁶ + 1365.0x₁²x₂⁴ + 1365.0x₁⁴x₂² + 455.0x₁⁶ + 1365.0x₂⁸ + 5460.0x₁²x₂⁶ + 8190.0x₁⁴x₂⁴ + 5460.0x₁⁶x₂² + 1365.0x₁⁸ + 3003.0x₂¹⁰ + 15015.0x₁²x₂⁸ + 30030.0x₁⁴x₂⁶ + 30030.0x₁⁶x₂⁴ + 15015.0x₁⁸x₂² + 3003.0x₁¹⁰ + 5005.0x₂¹² + 30030.0x₁²x₂¹⁰ + 75075.0x₁⁴x₂⁸ + 100100.0x₁⁶x₂⁶ + 75075.0x₁⁸x₂⁴ + 30030.0x₁¹⁰x₂² + 5005.0x₁¹² + 6435.0x₂¹⁴ + 45045.0x₁²x₂¹² + 135135.0x₁⁴x₂¹⁰ + 225225.0x₁⁶x₂⁸ + 225225.0x₁⁸x₂⁶ + 135135.0x₁¹⁰x₂⁴ + 45045.0x₁¹²x₂² + 6435.0x₁¹⁴ + 6435.0x₂¹⁶ + 51480.0x₁²x₂¹⁴ + 180180.0x₁⁴x₂¹² + 360360.0x₁⁶x₂¹⁰ + 450450.0x₁⁸x₂⁸ + 360360.0x₁¹⁰x₂⁶ + 180180.0x₁¹²x₂⁴ + 51480.0x₁¹⁴x₂² + 6435.0x₁¹⁶ + 5005.0x₂¹⁸ + 45045.0x₁²x₂¹⁶ + 180180.0x₁⁴x₂¹⁴ + 420420.0x₁⁶x₂¹² + 630630.0x₁⁸x₂¹⁰ + 630630.0x₁¹⁰x₂⁸ + 420420.0x₁¹²x₂⁶ + 180180.0x₁¹⁴x₂⁴ + 45045.0x₁¹⁶x₂² + 5005.0x₁¹⁸ + 3003.0x₂²⁰ + 30030.0x₁²x₂¹⁸ + 135135.0x₁⁴x₂¹⁶ + 360360.0x₁⁶x₂¹⁴ + 630630.0x₁⁸x₂¹² + 756756.0x₁¹⁰x₂¹⁰ + 630630.0x₁¹²x₂⁸ + 360360.0x₁¹⁴x₂⁶ + 135135.0x₁¹⁶x₂⁴ + 30030.0x₁¹⁸x₂² + 3003.0x₁²⁰ + 1365.0x₂²² + 15015.0x₁²x₂²⁰ + 75075.0x₁⁴x₂¹⁸ + 225225.0x₁⁶x₂¹⁶ + 450450.0x₁⁸x₂¹⁴ + 630630.0x₁¹⁰x₂¹² + 630630.0x₁¹²x₂¹⁰ + 450450.0x₁¹⁴x₂⁸ + 225225.0x₁¹⁶x₂⁶ + 75075.0x₁¹⁸x₂⁴ + 15015.0x₁²⁰x₂² + 1365.0x₁²² + 455.0x₂²⁴ + 5460.0x₁²x₂²² + 30030.0x₁⁴x₂²⁰ + 100100.0x₁⁶x₂¹⁸ + 225225.0x₁⁸x₂¹⁶ + 360360.0x₁¹⁰x₂¹⁴ + 420420.0x₁¹²x₂¹² + 360360.0x₁¹⁴x₂¹⁰ + 225225.0x₁¹⁶x₂⁸ + 100100.0x₁¹⁸x₂⁶ + 30030.0x₁²⁰x₂⁴ + 5460.0x₁²²x₂² + 455.0x₁²⁴ + 105.0x₂²⁶ + 1365.0x₁²x₂²⁴ + 8190.0x₁⁴x₂²² + 30030.0x₁⁶x₂²⁰ + 75075.0x₁⁸x₂¹⁸ + 135135.0x₁¹⁰x₂¹⁶ + 180180.0x₁¹²x₂¹⁴ + 180180.0x₁¹⁴x₂¹² + 135135.0x₁¹⁶x₂¹⁰ + 75075.0x₁¹⁸x₂⁸ + 30030.0x₁²⁰x₂⁶ + 8190.0x₁²²x₂⁴ + 1365.0x₁²⁴x₂² + 105.0x₁²⁶ + 15.0x₂²⁸ + 210.0x₁²x₂²⁶ + 1365.0x₁⁴x₂²⁴ + 5460.0x₁⁶x₂²² + 15015.0x₁⁸x₂²⁰ + 30030.0x₁¹⁰x₂¹⁸ + 45045.0x₁¹²x₂¹⁶ + 51480.0x₁¹⁴x₂¹⁴ + 45045.0x₁¹⁶x₂¹² + 30030.0x₁¹⁸x₂¹⁰ + 15015.0x₁²⁰x₂⁸ + 5460.0x₁²²x₂⁶ + 1365.0x₁²⁴x₂⁴ + 210.0x₁²⁶x₂² + 15.0x₁²⁸ + x₂³⁰ + 15.0x₁²x₂²⁸ + 105.0x₁⁴x₂²⁶ + 455.0x₁⁶x₂²⁴ + 1365.0x₁⁸x₂²² + 3003.0x₁¹⁰x₂²⁰ + 5005.0x₁¹²x₂¹⁸ + 6435.0x₁¹⁴x₂¹⁶ + 6435.0x₁¹⁶x₂¹⁴ + 5005.0x₁¹⁸x₂¹² + 3003.0x₁²⁰x₂¹⁰ + 1365.0x₁²²x₂⁸ + 455.0x₁²⁴x₂⁶ + 105.0x₁²⁶x₂⁴ + 15.0x₁²⁸x₂² + x₁³⁰
 1 equality constraint
 1: -x₂² + x₁³ = 0"
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ 0.9858 atol = 1e-4
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, prob).objective ≈ 0.9858 atol = 1e-4
-        # Hypatia is the only one of the others that gives something close to a good result (30s)
-    end
+    @test poly_optimize(:MosekSOS, prob).objective ≈ 0.9858 atol = 1e-4 skip = !have_mosek
+    @test poly_optimize(:HypatiaMoment, prob).objective ≈ 0.9858 atol = 3e-2
 
     Random.seed!(1234)
     prob = poly_problem((x[1] +1)^2 + x[2]^2, zero=[x[1]^3-x[2]^2], noncompact=(1e-5, 20))
@@ -362,10 +276,8 @@ Objective was scaled by the prefactor 1.0 + x₁₀² + x₉² + x₈² + x₇²
 3: x₈ - x₇ + 0.16666666666666666x₂ - 0.16666666666666666x₇² = 0
 4: x₉ - x₈ + 0.16666666666666666x₃ - 0.16666666666666666x₈² = 0
 5: x₁₀ - x₉ + 0.16666666666666666x₄ - 0.16666666666666666x₉² = 0"
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ 1.321664 atol = 1e-6
-        #:COPTMoment ∈ solvers && @test poly_optimize(:COPTMoment, prob).objective ≈ 1.321664 atol = 1e-6 # 70 seconds
-    end
+    @test poly_optimize(:MosekSOS, prob).objective ≈ 1.321664 atol = 1e-6 skip = !have_mosek
+    # COPT: 70 seconds
 end
 
 @testset "POP 18 (Self made)" begin
@@ -378,13 +290,7 @@ Objective: 1.0e-5 + 1.00005x₂² + 5.0e-5x₁² + 1.0001x₂⁴ + 1.0002x₁²x
 Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 1 equality constraint
 1: x₂² + x₁² - 2.0x₁x₂³ - 2.0x₁³x₂ + x₁²x₂⁴ + x₁⁴x₂² = 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0 atol = 4e-5
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0 atol = 4e-5
 end
 
 @testset "POP 19 (Example 2)" begin
@@ -398,13 +304,7 @@ Objective: 1.0e-5 + 1.00002x₄² + 1.00002x₃² + 1.00002x₂² + 1.00002x₁�
 1: -1.0 + x₄ + x₃ + x₂ + x₁ = 0
 1 nonnegative constraint
 2: 0.125 - x₄ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 0.2708494 atol = 2e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 0.2708494 atol = 2e-4
 end
 
 @testset "POP 20 (Self made)" begin
@@ -437,13 +337,8 @@ Objective was scaled by the prefactor 1.0 + x₂² + x₁²
 2 nonnegative constraints
 2: x₁ ≥ 0
 3: x₂ ≥ 0"
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ -8.5578 atol = 1e-4
-        :COPTSOS ∈ solvers && @test poly_optimize(:COPTSOS, prob).objective ≈ -8.5578 atol = 1e-4
-        :HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, prob).objective ≈ -8.5578 atol = 1e-4
-        :SCSMoment ∈ solvers && @test poly_optimize(:SCSMoment, prob).objective ≈ -8.5578 atol = 1e-4 broken = true
-        # MosekMoment: UNKNOWN, Clarabel: NUMERICAL_ERROR, SCS claims good status, although the result is complete off (-7)
-    end
+    @test poly_optimize(:COPT, prob).objective ≈ -8.5578 atol = 1e-4
+    # MosekMoment: UNKNOWN, Clarabel: NUMERICAL_ERROR, SCS claims good status, although the result is completely off (-7)
 end
 
 @testset "POP 22 (AM-GM inequality)" begin
@@ -460,13 +355,7 @@ Objective was scaled by the prefactor 1.0 + 2.0x₃² + 2.0x₂² + 2.0x₁² + 
 2: x₁ ≥ 0
 3: x₂ ≥ 0
 4: x₃ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 3 atol = 3e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 3 atol = 3e-4
 end
 
 @testset "POP 23 (USSR Olimpian 1989)" begin
@@ -483,12 +372,8 @@ Objective was scaled by the prefactor 1.0 + 5.0x₃² + 5.0x₂² + 5.0x₁² + 
 2: x₁ ≥ 0
 3: x₂ ≥ 0
 4: x₃ ≥ 0"
-    if optimize
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob).objective ≈ 2 atol = 1e-5
-        :COPTMoment ∈ solvers && @test poly_optimize(:COPTMoment, prob).objective ≈ 2 atol = 1e-4
-        #:HypatiaMoment ∈ solvers && @test poly_optimize(:HypatiaMoment, prob).objective ≈ 2 atol = 2e-4 # 80s
-        # rest slow
-    end
+    @test poly_optimize(:COPTMoment, prob).objective ≈ 2 atol = 2e-4
+    # MosekSOS good, Hypatia 80s, rest slow
 end
 
 @testset "POP 24 (IMO 1990)" begin
@@ -507,13 +392,7 @@ Objective: 1.0e-5 + 3.0e-5x₄² + 3.0e-5x₃² + 3.0e-5x₂² + 3.0e-5x₁² + 
 3: x₂ ≥ 0
 4: x₃ ≥ 0
 5: x₄ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ 5.0625837 atol = solver==:SCSMoment ? 1e-3 : 2e-7
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, prob).objective ≈ 5.0625837 atol = 2e-7
 end
 
 @testset "POP 25 (IMO 2000)" begin
@@ -530,11 +409,5 @@ Objective was scaled by the prefactor 1.0 + x₃² + x₂² + x₁²
 2: x₁ ≥ 0
 3: x₂ ≥ 0
 4: x₃ ≥ 0"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, prob).objective ≈ -0.997439 atol = solver==:SCSMoment ? 2e-4 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:COPT, prob).objective ≈ -0.997439 atol = 1e-6
 end

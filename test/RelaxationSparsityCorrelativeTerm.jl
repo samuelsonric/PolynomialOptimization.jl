@@ -10,13 +10,7 @@ include("./shared.jl")
 > Clique #2: x[2], x[3]
   PSD block sizes:
     [3 => 1]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.625 atol = (solver == :SCSMoment ? 1e-5 : 1e-7)
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.625 atol = 1e-8
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[1], x[2]
@@ -25,11 +19,7 @@ include("./shared.jl")
 > Clique #2: x[2], x[3]
   PSD block sizes:
     [3 => 1]"
-    if optimize
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.625 atol = (solver == :SCSMoment ? 1e-4 : 1e-7)
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.625 atol = 1e-7
 
     @test isnothing(iterate!(sp))
 end
@@ -47,11 +37,7 @@ end
 > Clique #2: x[1], x[2], x[3]
   PSD block sizes:
     [4 => 1, 2 => 3]"
-    if optimize
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5042475 atol = (solver == :SCSMoment ? 1e-3 : 1e-6)
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.5042475 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[3], x[4], x[5], x[6]
@@ -60,11 +46,7 @@ end
 > Clique #2: x[1], x[2], x[3]
   PSD block sizes:
     [4 => 1, 2 => 3]"
-    if optimize
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5042475 atol = (solver == :SCSMoment ? 1e-5 : 1e-7)
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.5042475 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[3], x[4], x[5], x[6]
@@ -73,11 +55,7 @@ end
 > Clique #2: x[1], x[2], x[3]
   PSD block sizes:
     [6 => 1, 2 => 2]"
-    if optimize
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5042475 atol = (solver == :SCSMoment ? 1e-6 : 1e-7)
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.5042475 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[3], x[4], x[5], x[6]
@@ -86,11 +64,7 @@ end
 > Clique #2: x[1], x[2], x[3]
   PSD block sizes:
     [6 => 1, 4 => 1]"
-    if optimize
-        for solver in solvers
-            @test poly_optimize(solver, sp).objective ≈ 0.5042475 atol = (solver == :SCSMoment ? 1e-3 : 1e-6)
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.5042475 atol = 1e-7
 
     @test isnothing(iterate!(sp))
 end
@@ -233,25 +207,11 @@ end
   PSD block sizes:
     [85 => 1, 1 => 35]"
 
-    # we test some of the optimziations, but some just take too long
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sps[1]).objective ≈ 0 atol = (solver ∈ (:HypatiaMoment, :SCSMoment) ? 3e-4 : 6e-6)
-            end
-        end
+    @test poly_optimize(:Clarabel, sps[1]).objective ≈ 0 atol = 6e-6
 
-        for solver in solvers
-            @testset let solver=solver
-                @test(poly_optimize(solver, sps[2]).objective ≈ 0, atol = (occursin("Mosek", string(solver)) ? 2e-7 : 1e-4),
-                    skip = (solver ∈ (:ClarabelMoment, :SCSMoment))) # Clarabel: 94 seconds; SCS: 85 seconds
-            end
-        end
+    @test poly_optimize(:Mosek, sps[2]).objective ≈ 0 atol = 2e-7 skip = !have_mosek
 
-        :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, sps[3]).objective ≈ 0 atol = 2e-7
-        :COPTMoment ∈ solvers && @test poly_optimize(:COPTMoment, sps[3]).objective ≈ 0 atol = 2e-7
-        # MosekMoment: 77 seconds; HypatiaMoment, ClarabelMoment, SCSMoment: very slow (tested for Clarabel: 1h)
-    end
+    @test poly_optimize(:Mosek, sps[3]).objective ≈ 0 atol = 2e-7 skip = !have_mosek
 
     @test isnothing(iterate!(sps[1]))
     @test strRep(iterate!(sps[2])) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
@@ -361,13 +321,7 @@ end
   PSD block sizes:
     [3 => 2, 2 => 3]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 38.0494 atol = solver==:SCSMoment ? 2e-1 : 1e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 38.0494 atol = 2e-4
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19], x[20]
@@ -380,13 +334,7 @@ end
   PSD block sizes:
     [4 => 1, 2 => 3]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 38.0514 atol = solver==:SCSMoment ? 1e-2 : 2e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 38.0514 atol = 1e-4
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19], x[20]
@@ -399,15 +347,7 @@ end
   PSD block sizes:
     [4 => 1, 2 => 1]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test(poly_optimize(solver, sp).objective ≈ 38.0514,
-                    atol = (solver==:SCSMoment ? 2e-2 : 2e-4), skip = solver==:COPTMoment)
-            end
-        end
-        # COPT: 170s
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 38.0514 atol = 2e-4
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19], x[20]
@@ -448,13 +388,7 @@ end
   PSD block sizes:
     [10 => 1, 4 => 6, 1 => 1]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.110118 atol = solver==:SCSMoment ? 1e-4 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.110118 atol = 1e-6
 
     @test isnothing(iterate!(sp))
 end
@@ -471,14 +405,7 @@ end
   PSD block sizes:
     [2 => 1, 1 => 1]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test(poly_optimize(solver, sp; (solver == :HypatiaMoment ? Dict(:dense => true) : Dict())...).objective ≈ 0.283871,
-                    atol = solver==:SCSMoment ? 1e-4 : 1e-6)
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.283871 atol = 1e-6
 
     @test isnothing(iterate!(sp))
 end
@@ -492,26 +419,14 @@ end
   PSD block sizes:
     [2 => 2, 1 => 5]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ -2 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: z[1], z[2]
   PSD block sizes:
     [3 => 1, 2 => 2, 1 => 2]"
 
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-7
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ -2 atol = 1e-8
 
     @test isnothing(iterate!(sp))
 end

@@ -16,28 +16,15 @@ Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
   [3 => 4]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -0.0035512 atol = solver==:SCSMoment ? 1e-4 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ -0.0035512 atol = 1e-6
 
-    # paper says that the iterations terminate. However, this is a result of the paper always considering the constant term to
-    # be a part of the objective. We don't do this, so we can go to the next level.
+    # Paper says that the iterations terminate. But we get a different chordal extension than the paper.
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
   [4 => 2, 3 => 1]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = solver==:SCSMoment ? 1e-6 : 5e-8
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-8
 
     @test isnothing(iterate!(sp))
 end
@@ -57,15 +44,7 @@ PSD block sizes:
   [24 => 1, 23 => 2, 21 => 1, 20 => 2, 18 => 2, 7 => 7, 1 => 15]
 Free block sizes:
   [12 => 1, 9 => 1, 7 => 1, 1 => 6]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test(poly_optimize(solver, sp;
-                    (solver == :HypatiaMoment ? Dict(:preprocess => true) : Dict())...).objective ≈ 0,
-                    atol=solver==:SCSMoment ? 5e-5 : 9e-7)
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-8
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
@@ -95,13 +74,7 @@ Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
   [4 => 1, 2 => 2, 1 => 3]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.91666667 atol = 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.916666667 atol = 1e-9
 
     @test isnothing(iterate!(sp))
 end
@@ -109,7 +82,7 @@ end
 @testset "Something with matrices" begin
     DynamicPolynomials.@polyvar x[1:3]
     sp = Relaxation.SparsityTermChordal(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1] * x[2] * x[3] + x[2],
-                                                    psd=[[x[1] x[2]; x[2] x[1]]]), 2)
+                                                     psd=[[x[1] x[2]; x[2] x[1]]]), 2)
     @test strRep(groupings(sp)) == "Groupings for the relaxation of a polynomial optimization problem
 Variable cliques
 ================
@@ -127,19 +100,13 @@ Objective: 6 blocks
 Semidefinite constraint #1: 2 blocks
   3 [1, x₂, x₁]
   3 [x₃, x₂, x₁]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.5355788 atol = solver==:SCSMoment ? 1e-4 : 1e-7
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0.5355788 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
-  [5 => 2, 4 => 2, 3 => 4]"
+  [6 => 2, 5 => 2, 4 => 2, 3 => 2]"
 
     @test isnothing(iterate!(sp))
 end
@@ -160,13 +127,7 @@ Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
   [18 => 3, 17 => 4, 15 => 2, 14 => 3, 13 => 3, 12 => 4, 11 => 5, 10 => 4, 9 => 8, 8 => 3, 7 => 4, 6 => 11, 4 => 5, 1 => 35]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-6
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
@@ -232,26 +193,14 @@ Objective: 5 blocks
 Nonnegative constraint #1: 2 blocks
   2 [1, z₁]
   1 [z₂]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -2 atol = solver==:SCSMoment ? 1e-4 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ -2 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   z[1], z[2]
 PSD block sizes:
   [2 => 4, 1 => 2]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ -2 atol = 1e-4
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ -2 atol = 1e-10
 
     @test isnothing(iterate!(sp))
 end

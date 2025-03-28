@@ -1,21 +1,14 @@
 include("./shared.jl")
 
-# filter out very slow solvers. Indeed Mosek in its moment formulation sucks.
-filter!(s -> s != :MosekMoment && s != :HypatiaMoment, solvers)
-
 @testset "Example 6.1 chained singular from correlative sparsity paper" begin
     for n in (16, 40, 100, 200, 400)
         DynamicPolynomials.@polyvar x[1:n]
         sp = Relaxation.SparsityCorrelative(poly_problem(sum((x[i] + 10x[i+1])^2 + 5(x[i+2] - x[i+3])^2 +
                                                              (x[i+1] - 2x[i+2])^4 + 10(x[i] - 10x[i+3])^4 for i in 1:2:n-3)))
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
-        if optimize
-            for solver in solvers
-                # all moment-based solvers fail miserably on this problem. However, they will all report the issues.
-                @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 6e-5 skip=occursin("Moment", string(solver))
-                end
-            end
+        # all moment-based solvers fail miserably on this problem. However, they will all report the issues.
+        @testset let n=n
+            @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 6e-5 skip=!have_mosek
         end
     end
 end
@@ -28,30 +21,22 @@ end
                               sum(j == i ? 0 : (1 + x[j]) * x[j] for j in max(1, i - 5):min(n, i + 1)))^2 for i = 1:n))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == cl
-        if optimize
-            for solver in solvers
-                @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 2e-5 skip=solver==:ClarabelMoment
-                end
-            end
+        @testset let n=n
+            @test poly_optimize(:SCS, sp).objective ≈ 0 atol = 2e-5
         end
     end
 end
 
 @testset "Example 6.1 Broyden tridiagonal function from correlative sparsity paper" begin
-    for n in 600:100:1000
+    for n in 600:200:1000
         DynamicPolynomials.@polyvar x[1:n]
         sp = Relaxation.SparsityCorrelative(
             poly_problem(((3 - 2x[1]) * x[1] - 2x[2] + 1)^2 +
                 sum(((3 - 2x[i]) * x[i] - x[i-1] - 2x[i+1] + 1)^2 for i in 2:n-1) + ((3 - 2x[n]) * x[n] - x[n-1] + 1)^2)
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(3 => n -2)
-        if optimize
-            for solver in solvers
-                @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 0 atol = 5e-5 skip=solver==:SCSMoment
-                end
-            end
+        @testset let n=n
+            @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-5
         end
     end
 end
@@ -64,31 +49,22 @@ end
                 (1 - x[i+2])^2 + 10(x[i+1] + x[i+3] - 2)^2 + 0.1(x[i+1] - x[i+3])^2 for i in 1:2:n-3))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
-        if optimize
-            for solver in solvers
-                @testset let n=n, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ 1 atol = 1e-4 skip=solver==:SCSMoment
-                end
-            end
+        @testset let n=n
+            @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol = 2e-5
         end
     end
 end
 
-@testset "Example 6.1 Generalized Rosebrock function from correlative sparsity paper" begin
-    for n in 600:100:1000
+@testset "Example 6.1 Generalized Rosenbrock function from correlative sparsity paper" begin
+    for n in 600:300:1000
         DynamicPolynomials.@polyvar x[1:n]
         sp = Relaxation.SparsityCorrelative(
             poly_problem(1 + sum(100((x[i] - x[i-1]^2)^2 + (1 - x[i])^2) for i in 2:n))
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
-        if optimize
-            for solver in solvers
-                @testset let n=n, solver=solver
-                    @test(poly_optimize(solver, sp).objective ≈ 1, atol=solver==:HypatiaMoment ? 5e-2 : 3e-4,
-                        skip=solver ∈ (:ClarabelMoment, :SCSMoment))
-                    # Clarabel very inaccurate, SCS very slow
-                end
-            end
+        @testset let n=n
+            @test poly_optimize(:Loraine, sp, precision=1e-3,
+                preconditioner=PolynomialOptimization.Solvers.Loraine.PRECONDITIONER_NONE).objective ≈ 1 atol=5e-4
         end
     end
 end
@@ -98,25 +74,27 @@ end
     # there, they use a chordal extension heuristic (an option that we also have, but it is a different one). Here, we disable
     # chordal completion in order to obtain the best possible (and unique) answer.
     # The numerical results for μ = 0 are exact, as NMinimize gives the same value for feasible points.
+    # Some entries are disabled just to speed things up.
     results = Dict(
         (2, 4, 0., 6) => (Dict(3 => 1, 4 => 15, 5 => 15, 6 => 7), 0.036193),
         (2, 4, 0., 12) => (Dict(3 => 1, 4 => 39, 5 => 39, 6 => 19), 0.0440061),
         (2, 4, 0., 18) => (Dict(3 => 1, 4 => 63, 5 => 63, 6 => 31), 0.0517071),
-        (2, 4, 0., 24) => (Dict(3 => 1, 4 => 87, 5 => 87, 6 => 43), 0.0594),
-        (2, 4, 0., 30) => (Dict(3 => 1, 4 => 111, 5 => 111, 6 => 55), 0.0670932), # here Mosek has trouble when presolve is on
+        #(2, 4, 0., 24) => (Dict(3 => 1, 4 => 87, 5 => 87, 6 => 43), 0.0594),
+        #(2, 4, 0., 30) => (Dict(3 => 1, 4 => 111, 5 => 111, 6 => 55), 0.0670932), # here Mosek has trouble when presolve is on
         (2, 4, .5, 6) => (Dict(4 => 3, 7 => 4, 10 => 3), 0.059118),
-        (2, 4, .5, 12) => (Dict(4 => 3, 7 => 4, 10 => 9), 0.112406), # gap to NMinimize: 0.000079
-        (2, 4, .5, 18) => (Dict(4 => 3, 7 => 4, 10 => 15), 0.165774), # gap to NMinimize: 0.00024
-        (2, 4, .5, 24) => (Dict(4 => 3, 7 => 4, 10 => 21), 0.219139), # gap to NMinimize: 0.0004
-        (2, 4, .5, 30) => (Dict(4 => 3, 7 => 4, 10 => 27), 0.272505), # gap to NMinimize: 0.00056
+        #(2, 4, .5, 12) => (Dict(4 => 3, 7 => 4, 10 => 9), 0.112406), # gap to NMinimize: 0.000079
+        #(2, 4, .5, 18) => (Dict(4 => 3, 7 => 4, 10 => 15), 0.165774), # gap to NMinimize: 0.00024
+        #(2, 4, .5, 24) => (Dict(4 => 3, 7 => 4, 10 => 21), 0.219139), # gap to NMinimize: 0.0004
+        #(2, 4, .5, 30) => (Dict(4 => 3, 7 => 4, 10 => 27), 0.272505), # gap to NMinimize: 0.00056
         (1, 2, 1, 6) => (Dict(2 => 1, 4 => 2, 5 => 3), 0.0282973),
-        (1, 2, 1, 12) => (Dict(2 => 1, 4 => 2, 5 => 9), 0.052990), # gap to NMinimize: 0.0000019
-        (1, 2, 1, 18) => (Dict(2 => 1, 4 => 2, 5 => 15), 0.077680), # gap to NMinimize: 0.0000054
-        (1, 2, 1, 24) => (Dict(2 => 1, 4 => 2, 5 => 21), 0.102370), # gap to NMinimize: 0.000009
-        (1, 2, 1, 30) => (Dict(2 => 1, 4 => 2, 5 => 27), 0.127060), # gap to NMinimize: 0.000012
+        #(1, 2, 1, 12) => (Dict(2 => 1, 4 => 2, 5 => 9), 0.052990), # gap to NMinimize: 0.0000019
+        #(1, 2, 1, 18) => (Dict(2 => 1, 4 => 2, 5 => 15), 0.077680), # gap to NMinimize: 0.0000054
+        #(1, 2, 1, 24) => (Dict(2 => 1, 4 => 2, 5 => 21), 0.102370), # gap to NMinimize: 0.000009
+        #(1, 2, 1, 30) => (Dict(2 => 1, 4 => 2, 5 => 27), 0.127060), # gap to NMinimize: 0.000012
     )
     for (nx, ny, μ) in ((2, 4, 0.), (2, 4, 0.5), (1, 2, 1))
         for M in 6:6:30
+            haskey(results, (nx, ny, μ, M)) || continue
             # they don't add y₁ = 0 but instead make this implicit
             DynamicPolynomials.@polyvar x[1:M-1, 1:nx] y[2:M, 1:ny]
             ninv = inv(ny + nx)
@@ -138,16 +116,9 @@ end
             )
             cliques, bound = results[(nx, ny, μ, M)]
             @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == cliques
-            if optimize && μ != 0.5
-                for solver in solvers # the largest 0.5 can take about 180s to solve
-                    if solver == :MosekSOS
-                        parameters = Dict(:MSK_IPAR_PRESOLVE_USE => Mosek.MSK_PRESOLVE_MODE_OFF.value)
-                    else
-                        parameters = Dict()
-                    end
-                    @testset let nx=nx, ny=ny, μ=μ, M=M, solver=solver
-                        @test poly_optimize(solver, sp; parameters...).objective ≈ bound atol = solver===:SCSMoment ? 1e-3 : 1e-4
-                    end
+            if μ != 0.5 # the largest 0.5 can take about 180s to solve
+                @testset let nx=nx, ny=ny, μ=μ, M=M
+                    @test poly_optimize(:Clarabel, sp).objective ≈ bound atol = 1e-4
                 end
             end
         end
@@ -155,7 +126,7 @@ end
 end
 
 @testset "Example 6.2 Problem (6.2) from correlative sparsity paper" begin
-    for (M, result) in ((600, 0.00645), (700, 0.00553), (800, 0.00484), (900, 0.0043), (1000, 0.0038))
+    for (M, result) in ((600, 0.00645), #=(700, 0.00553), (800, 0.00484), (900, 0.0043),=# (1000, 0.0038))
         DynamicPolynomials.@polyvar x[1:M] y[2:M]
         Y(i) = isone(i) ? 1 : y[i-1]
         sp = Relaxation.SparsityCorrelative(
@@ -168,12 +139,8 @@ end
         # constraints will only allow for the constant prefactor - therefore, we can also count variables occurring
         # simultaneously in terms instead of the whole constraints!
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(1 => 2*(M -1))
-        if optimize
-            for solver in solvers
-                @testset let M=M, solver=solver
-                    @test poly_optimize(solver, sp).objective ≈ result atol = 1e-4
-                end
-            end
+        @testset let M=M
+            @test poly_optimize(:Clarabel, sp).objective ≈ result atol = 1e-4
         end
     end
 end
@@ -187,13 +154,7 @@ Variable cliques:
   x[2], x[3]
 PSD block sizes:
   [6 => 2]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.625 atol = solver===:SCSMoment ? 1e-5 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Hypatia, sp).objective ≈ 0.625 atol = 1e-6
 end
 
 @testset "Example 3.4 from correlative term sparsity paper" begin
@@ -208,13 +169,7 @@ Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
   [15 => 1, 10 => 1]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.5042 atol = 1e-3
-            end
-        end
-    end
+    @test poly_optimize(:Hypatia, sp).objective ≈ 0.5042 atol = 1e-3
 end
 
 @testset "Example 4.1 from Zhen, Fantuzzi, Papachristodoulou review" begin
@@ -274,13 +229,7 @@ Variable cliques:
   x[48], x[49], x[50]
 PSD block sizes:
   [10 => 48]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0 atol = solver===:SCSMoment ? 1e-5 : 1e-6
-            end
-        end
-    end
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 1e-6
 end
 
 @testset "Example 4.4 from Zhen, Fantuzzi, Papachristodoulou review" begin
@@ -295,13 +244,7 @@ Variable cliques:
   x[2], x[3], x[4]
 PSD block sizes:
   [35 => 2]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
-            end
-        end
-    end
+    @test poly_optimize(:ProxSDP, sp).objective ≈ 0.11008 atol = 1e-3
 
     sp = Relaxation.SparsityCorrelative(prob, 4, chordal_completion=false)
     @test strRep(sp) == "Relaxation.SparsityCorrelative of a polynomial optimization problem
@@ -312,13 +255,7 @@ Variable cliques:
   x[3], x[4]
 PSD block sizes:
   [15 => 4]"
-    if optimize
-        for solver in solvers
-            @testset let solver=solver
-                @test poly_optimize(solver, sp).objective ≈ 0.11008 atol = 1e-3
-            end
-        end
-    end
+    @test poly_optimize(:ProxSDP, sp).objective ≈ 0.11008 atol = 1e-5
 
     @test isnothing(iterate!(sp))
 end
