@@ -24,8 +24,8 @@ number up or down by 100 or more. All solvers may expose options that can influe
 | Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment   | 👍👍👍 | 👍👍👍 | 👍👍    | ~300 - 500             |
 | ProxSDP     | [ProxSDP.jl](https://github.com/mariohsouto/ProxSDP.jl)     | MIT        | primal moment | 👍👍👍 | 👍👍    | 👍👍👍 | very large             |
 | SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment        | 👍      | 👍      | 👍👍👍 |                         |
-| SketchyCGAL | ∅                                                           |            | primal moment | 👎      | 👍      | 👍👍👍 |                        |
-| SpecBM      | ∅[^6]                                                       |            | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
+| SketchyCGAL | ∅                                                           | MIT        | primal moment | 👎      | 👍      | 👍👍👍 |                        |
+| SpecBM      | ∅[^6]                                                       | MIT        | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
 
 [^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
       one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
