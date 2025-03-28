@@ -129,7 +129,8 @@ Creates a `SimpleMonomialVector` from a generic monomial vector that supports `M
 The monomials will internally be represented by the type `I` (`UInt` by default).
 The keyword argument `vars` must contain all real-valued and original complex-valued (so not the conjugates) variables that
 occur in the monomial vector. However, the order of this iterable (which must have a length) controls how the MP variables are
-mapped to [`SimpleVariable`](@ref)s.
+mapped to [`SimpleVariable`](@ref)s. The variables must be commutative; there is currently no way to check for this, so in the
+conversion process, commutativity is simply assumed.
 The input must not contain duplicates. It will be sorted; if `along` are present, those vectors will be put in the same order
 as the inputs.
 """

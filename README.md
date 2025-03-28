@@ -4,7 +4,8 @@
 
 # PolynomialOptimization.jl
 
-`PolynomialOptimization` is a Julia package that allows to easily optimize large-scale polynomial optimization problems.
+`PolynomialOptimization` is a Julia package that allows to easily optimize large-scale polynomial optimization problems
+(currently commutative only).
 It builds on `MultivariatePolynomials` to provide a concise interface for the specification of the problem and allows to apply
 many kinds of sparsity methods. It also fully supports complex-valued problems and positive semidefinite constraints and allows
 to extract solutions even for sparse problems.
