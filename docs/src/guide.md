@@ -499,11 +499,6 @@ julia> res_dd_rotated = poly_optimize(res_dd_rotated)
 # output truncated
 Lower bound to optimum (in case of good status): 0.9160797358944991
 Time required for optimization: 0.0102907 seconds
-
-julia> res_dd_rotated = poly_optimize(res_dd_rotated)
-# output truncated
-Lower bound to optimum (in case of good status): 0.916563314002245
-Time required for optimization: 0.0123682 seconds
 ```
 So indeed, after a couple of iterations, the optimum is approached pretty well. We could have used the scaled diagonally
 dominant representation instead, which relies on quadratic instead of linear programs, which for this particular example would

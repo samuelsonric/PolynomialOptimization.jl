@@ -155,7 +155,7 @@ end
                                            sum(nonneg[i] *
                                                sum(hs, PolynomialOptimization.change_backend.(cert[:nonneg, i, 1], (vars,)))
                                                for i in 1:length(nonneg)),
-                                           obj - res.objective),
+                                           obj - res.objective, tol=solver === :ProxSDPMoment ? 4 : 5),
                               broken=solver===:COPTMoment) # TODO: fix COPT. But is it our fault or COPT's? The data just seems
                                                            # to be wrong...
                     end

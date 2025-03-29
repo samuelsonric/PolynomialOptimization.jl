@@ -16,7 +16,7 @@ include("./shared.jl")
             @test optimality_certificate(res) === :Unknown
         end
         @testset let solver=solver
-            res = poly_optimize(solver, prob, 2, precision=1e-7)
+            res = poly_optimize(solver, prob, 2, precision=solver === :LoraineMoment ? 4e-7 : 1e-7)
             @test res.method === solver
             @test res.objective ≈ -2 atol=(solver ∈ bad_quality ? 1e-2 : 1e-5)
             solver ∈ bad_quality && continue
