@@ -17,3 +17,8 @@ makedocs(sitename="PolynomialOptimization.jl",
     warnonly=:missing_docs,
     doctest=false
 )
+
+deploydocs(
+    repo = "github.com/projekter/PolynomialOptimization.jl.git",
+    devbranch = "main"
+)
