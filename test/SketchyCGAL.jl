@@ -81,7 +81,7 @@ for (mat, optval) in optvals
         C = -.25 .* C
         scale_x = 1/n
         scale_c = 1/norm(C)
-        for method in (mat == "G01.mat" ? (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) : (:auto,))
+        for method in (mat == "G1.mat" ? (:lanczos_space, :lanczos_time, :lobpcg_fast, :lobpcg_accurate) : (:auto,))
             opt = sketchy_cgal(
                 (v, u, idx, α, β) -> mul!(v, C, u, α * scale_c, β),
                 (v, u, z, idx, α, β) -> v .= α .* u .* z .+ β .* v,
