@@ -4,7 +4,7 @@ using LinearAlgebra
 roundfn(tol) = x -> round(x, digits=tol)
 hs(x) = x' * x
 almost_equal(x::AbstractPolynomial, y::AbstractPolynomial; tol=5) = iszero(map_coefficients!(roundfn(tol), x - y))
-almost_equal(x::Vector{<:SimplePolynomial}, y::AbstractPolynomial; tol=5) =
+almost_equal(x::Vector{<:IntPolynomial}, y::AbstractPolynomial; tol=5) =
     almost_equal(sum(let v=variables(y); p -> hs(PolynomialOptimization.change_backend(p, v)) end, x, init=zero(y)), y; tol)
 
 sossolvers = [:ClarabelMoment, :COPTMoment, :HypatiaMoment, :LoRADSMoment, :LoraineMoment, :ProxSDPMoment, :SCSMoment]

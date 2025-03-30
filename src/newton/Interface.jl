@@ -1,5 +1,5 @@
 """
-    preproc(V, mons::SimpleMonomialVector, vertexindices, verbose::Bool, singlethread::Bool;
+    preproc(V, mons::IntMonomialVector, vertexindices, verbose::Bool, singlethread::Bool;
         parameters...) -> AbstractVector{Bool}
 
 Checks for convex dependencies of exponents from the list of monomials.
@@ -16,7 +16,7 @@ should be single-threaded.
 function preproc end
 
 """
-    prepare(V, vertices::SimpleMonomialVector, num::Int, verbose::Bool; parameters...) ->
+    prepare(V, vertices::IntMonomialVector, num::Int, verbose::Bool; parameters...) ->
         (nthreads::Int, userdata, userdata_clone)
 
 This function is responsible for creating an optimization task that can be used to check membership in the Newton halfpolytope.
@@ -59,7 +59,7 @@ This function must create a copy of the optimization task `t` that can run in pa
 function clonetask end
 
 """
-    work(V, task, data_global, data_local, expiter::SimpleMonomialVectorIterator{true},
+    work(V, task, data_global, data_local, expiter::IntMonomialVectorIterator{true},
         Δprogress::Ref{Int}, Δacceptance::Ref{Int}, add_callback::Function,
         iteration_callback::Union{Nothing,Function})
 

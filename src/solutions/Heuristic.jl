@@ -23,18 +23,18 @@ function poly_solutions(::Val{:heuristic}, result::Result; verbose::Bool=false)
 end
 
 function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
-    relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,MI}}}},
+    relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,MI}}}},
     moments::MomentVector{R,V,Nr,Nc}) where {Nr,Nc,MI<:Integer,R<:Real,V<:Union{R,Complex{R}}}
     # In this part, we extract the parts of the solution by looking at the monomials that are powers of variables.
     solution = fill(iszero(Nc) ? R(NaN) : Complex(R(NaN), R(NaN)), Nr + Nc)
-    I = SimplePolynomials.smallest_unsigned(Nr + 2Nc)
+    I = IntPolynomials.smallest_unsigned(Nr + 2Nc)
     zero_checks = Set{I}()
     unknown_signs = Set{I}()
     unknown_phases = Dict{I,Set{R}}()
     e = ExponentsAll{Nr+2Nc,MI}()
     deg = degree(relaxation)
     for i in 1:Nr
-        mon = SimpleMonomial(e, SimpleRealVariable{Nr,Nc}(i))
+        mon = IntMonomial(e, IntRealVariable{Nr,Nc}(i))
         # The monomial is present in the original basis, so we try to reconstruct it by searching for its powers. We will
         # favor even powers (even over the variable itself), as they are not affected by multiple sign-symmetric solutions
         for pow in 2:2:2deg
@@ -66,7 +66,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
         @label real_done
     end
     for i in Nr+1:Nr+Nc
-        mon = SimpleMonomial(e, SimpleComplexVariable{Nr,Nc}(i))
+        mon = IntMonomial(e, IntComplexVariable{Nr,Nc}(i))
         # For complex-valued variables, favor the variable itself, as we cannot say which power would gobble the phases.
         val = moments[mon]
         if !isnan(val)
@@ -78,7 +78,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
             phase_candidates = Set{R}()
             for pow1 in 1:deg, pow2 in 0:deg
                 pow1 == pow2 && continue # we cannot get any phase information
-                val = moments[mon^pow1 * SimpleConjMonomial(mon)^pow2]
+                val = moments[mon^pow1 * IntConjMonomial(mon)^pow2]
                 if !isnan(val)
                     Σpow, δpow = pow1 + pow2, pow1 - pow2
                     # we have candidates for the phase

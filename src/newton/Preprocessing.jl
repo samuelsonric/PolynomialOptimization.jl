@@ -1,4 +1,4 @@
-function preproc_prequick(V, mons::SimpleMonomialVector{Nr,0}, verbose; parameters...) where {Nr}
+function preproc_prequick(V, mons::IntMonomialVector{Nr,0}, verbose; parameters...) where {Nr}
     @inbounds begin
         vertexindices = fill(1, 2Nr)
         lowestidx = @view(vertexindices[1:Nr])
@@ -129,9 +129,9 @@ function preproc_randomized(V, mons, verbose; parameters...)
     return required_exps
 end
 
-function preproc(V, objective::SimplePolynomial{<:Any,Nr,0}; verbose::Bool=false,
-    zero::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}}, nonneg::AbstractVector{<:SimplePolynomial{<:Any,Nr,0}},
-    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,0}}}, prefactor::SimplePolynomial{<:Any,Nr,0},
+function preproc(V, objective::IntPolynomial{<:Any,Nr,0}; verbose::Bool=false,
+    zero::AbstractVector{<:IntPolynomial{<:Any,Nr,0}}, nonneg::AbstractVector{<:IntPolynomial{<:Any,Nr,0}},
+    psd::AbstractVector{<:AbstractMatrix{<:IntPolynomial{<:Any,Nr,0}}}, prefactor::IntPolynomial{<:Any,Nr,0},
     groupings::RelaxationGroupings{Nr,0}, preprocess::Union{Nothing,Bool}=nothing, preprocess_quick::Bool=true,
     preprocess_randomized::Bool=false, preprocess_fine::Bool=false, warn_disable_randomization::Bool=true,
     parameters...) where {Nr}
@@ -145,7 +145,7 @@ function preproc(V, objective::SimplePolynomial{<:Any,Nr,0}; verbose::Bool=false
     if preprocess_quick
         @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", length(mons), " initial candidates")
         preproc_time = @elapsed begin
-            mons = SimplePolynomials.keepat!!(mons, preproc_prequick(V, mons, verbose; parameters...))
+            mons = IntPolynomials.keepat!!(mons, preproc_prequick(V, mons, verbose; parameters...))
         end
         @verbose_info("Found ", length(mons), " potential extremal points of the convex hull in ", preproc_time, " seconds")
     end
@@ -153,7 +153,7 @@ function preproc(V, objective::SimplePolynomial{<:Any,Nr,0}; verbose::Bool=false
         if length(mons) ≥ 100
             @verbose_info("Removing redundancies from the convex hull - randomized, ", length(mons), " initial candidates")
             preproc_time = @elapsed begin
-                mons = SimplePolynomials.keepat!!(mons, preproc_randomized(V, mons, verbose; parameters...))
+                mons = IntPolynomials.keepat!!(mons, preproc_randomized(V, mons, verbose; parameters...))
             end
             @verbose_info("Found ", length(mons), " extremal points of the convex hull via randomization in ", preproc_time, " seconds")
         else
@@ -165,7 +165,7 @@ function preproc(V, objective::SimplePolynomial{<:Any,Nr,0}; verbose::Bool=false
         # eliminate all the coefficients that are redundant themselves to make the linear system smaller
         @verbose_info("Removing redundancies from the convex hull - fine, ", length(mons), " initial candidates")
         preproc_time = @elapsed begin
-            mons = SimplePolynomials.keepat!!(mons, preproc(V, mons, Val(:all), verbose, false; parameters...))
+            mons = IntPolynomials.keepat!!(mons, preproc(V, mons, Val(:all), verbose, false; parameters...))
         end
         @verbose_info("Found ", length(mons), " extremal points of the convex hull in ", preproc_time, " seconds")
     end

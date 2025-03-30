@@ -9,9 +9,9 @@ for f in (:variables, :effective_variables)
     end
 end
 
-function MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc}};
+function MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:IntPolynomial{<:Any,Nr,Nc}};
     rettype::Type{V}=Vector, by::F=identity) where {Nr,Nc,V<:Union{Vector,Set},F}
-    ET = Base.promote_op(by, SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr+2Nc)})
+    ET = Base.promote_op(by, IntVariable{Nr,Nc,IntPolynomials.smallest_unsigned(Nr+2Nc)})
     isempty(m) && return V <: Vector ? ET[] : Set{ET}()
     a, rest = Iterators.peel(m)
     @inbounds result = effective_variables(a; rettype=Set, by)
@@ -25,7 +25,7 @@ end
 MultivariatePolynomials.monomials(m::AbstractMatrix{<:AbstractPolynomialLike}) = merge_monomial_vectors(monomials.(m))
 # For the type-stable implementation let's assume that if all of the polynomials share a common exponent type, then they'll
 # actually share the same exponents object.
-MultivariatePolynomials.monomials(m::AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,E}}}) where {Nr,Nc,E} =
+MultivariatePolynomials.monomials(m::AbstractMatrix{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,E}}}) where {Nr,Nc,E} =
     merge_monomial_vectors(Val(Nr), Val(Nc), monomials(first(m)).e, monomials.(Iterators.flatten(m)))
 
 MultivariatePolynomials.coefficients(m::AbstractMatrix{<:AbstractPolynomialLike}) = coefficients.(m, (monomials(m),))
@@ -49,7 +49,7 @@ for f in (:extdegree, :extdegree_complex, :exthalfdegree)
     end
 end
 
-SimplePolynomials.effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) =
+IntPolynomials.effective_variables_in(m::AbstractMatrix{<:AbstractPolynomialLike}, in) =
     all(Base.Fix2(effective_variables_in, in), m)
 
 Base.isreal(m::AbstractMatrix{<:AbstractPolynomialLike}) = all(isreal, m)

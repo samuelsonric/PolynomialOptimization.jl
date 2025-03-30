@@ -9,8 +9,8 @@ if isone(Threads.nthreads())
         @testset "FastVector" begin
             include("./FastVector.jl")
         end
-        @testset "SimplePolynomials" begin
-            include("./SimplePolynomials.jl")
+        @testset "IntPolynomials" begin
+            include("./IntPolynomials.jl")
         end
         @testset "Moment solver interface" begin
             include("./MomentHelpers.jl")

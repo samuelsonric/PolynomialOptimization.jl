@@ -3,7 +3,7 @@ module PolynomialOptimizationMosek
 using Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
     PolynomialOptimization.Newton, PolynomialOptimization.Solvers.SpecBM, StandardPacked
 using PolynomialOptimization: @assert, @inbounds, @allocdiff
-using PolynomialOptimization.SimplePolynomials: veciter
+using PolynomialOptimization.IntPolynomials: veciter
 using Mosek: msk_global_env, Env, deletetask
 using StandardPacked: SPMatrix
 import PolynomialOptimization

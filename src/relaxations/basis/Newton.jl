@@ -1,4 +1,4 @@
-struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationBasis{P}
+struct Newton{P<:Problem,MV<:IntMonomialVector,G} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV
@@ -24,7 +24,7 @@ struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationBasis{
     The `parameters` are passed on to [`Newton.halfpolytope`](@ref PolynomialOptimization.Newton.halfpolytope).
     """
     function Newton(relaxation::AbstractRelaxation{P};
-        method::Symbol=iszero(Nc) ? PolynomialOptimization.Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:SimplePolynomial{<:Any,Nr,Nc},P<:Problem{Poly}}
+        method::Symbol=iszero(Nc) ? PolynomialOptimization.Newton.default_newton_method() : :complex, parameters...) where {Nr,Nc,Poly<:IntPolynomial{<:Any,Nr,Nc},P<:Problem{Poly}}
         if !iszero(Nr) && !iszero(Nc)
             # Well, we could do this. For a polynomial ∑ᵢⱼₖ αᵢⱼₖ xⁱ zʲ z̄ᵏ, we could factor the complex valued part and then
             # apply the Newton polytope to the real factor: ∑ⱼₖ NP(∑ᵢ αᵢⱼₖ xⁱ) zʲ z̄ᵏ; and then simplify the complex valued part.
@@ -36,7 +36,7 @@ struct Newton{P<:Problem,MV<:SimpleMonomialVector,G} <: AbstractRelaxationBasis{
         parent = groupings(relaxation)
         basis = PolynomialOptimization.Newton.halfpolytope(method, problem.objective; zero=problem.constr_zero,
             nonneg=problem.constr_nonneg, psd=problem.constr_psd, prefactor=problem.prefactor, groupings=parent, parameters...)
-        basis isa SimpleMonomialVector ||
+        basis isa IntMonomialVector ||
             error("Newton polytope calculation did not give results. Were the results written to a file?")
         gr = groupings(problem, basis, maxdegree(basis), parent)
         new{P,typeof(basis),typeof(gr)}(problem, Int(maxdegree(basis)), basis, gr)

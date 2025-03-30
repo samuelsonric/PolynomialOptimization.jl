@@ -16,10 +16,10 @@ This function returns an iterator.
 See also [`poly_optimize`](@ref).
 """
 poly_solutions(::Val{:mvhankel}, result::Result{Rx,R,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000);
-    verbose::Bool=false) where {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}  =
+    verbose::Bool=false) where {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}  =
     poly_solutions(Val(:mvhankel), result.relaxation, result.moments, ϵ, δ, verbose)
 
-function poly_solutions(::Val{:mvhankel}, relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},
+function poly_solutions(::Val{:mvhankel}, relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}},
     moments::MomentVector{R,V,Nr,Nc}, ϵ::R, δ::R, verbose::Bool) where {Nr,Nc,R<:Real,V<:Union{R,Complex{R}}}
     @verbose_info("Preprocessing for decomposition")
     nvars = Nr + 2Nc
@@ -78,7 +78,7 @@ function poly_solutions(::Val{:mvhankel}, relaxation::AbstractRelaxation{<:Probl
     # variables in the cliques can overlap).
     @verbose_info("Found all potential individual solutions in ", extraction_time, " seconds. Building iterator.")
     return PolynomialSolutions{R,V,Nr,Nc,
-                               SimpleVariable{Nr,Nc,SimplePolynomials.smallest_unsigned(Nr + 2Nc)},isone(length(cliques))}(
+                               IntVariable{Nr,Nc,IntPolynomials.smallest_unsigned(Nr + 2Nc)},isone(length(cliques))}(
         cliques,
         finish!(solutions_cl),
         δ,

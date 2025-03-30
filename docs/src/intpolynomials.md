@@ -1,12 +1,12 @@
 ```@meta
-CurrentModule = PolynomialOptimization.SimplePolynomials.MultivariateExponents
+CurrentModule = PolynomialOptimization.IntPolynomials.MultivariateExponents
 ```
 
-# SimplePolynomials
+# IntPolynomials
 `PolynomialOptimization` allows data in the form of any implementation that supports the
 [`MultivariatePolynomials`](https://github.com/JuliaAlgebra/MultivariatePolynomials.jl) interface. However, it does not keep
 the data in this way, which would not be particularly efficient. Instead, it is converted into an internal format, the
-`SimplePolynomial`. It offers very compact storage (in some way even more compact than
+`IntPolynomial`. It offers very compact storage (in some way even more compact than
 [`SIMDPolynomials`](https://github.com/YingboMa/SIMDPolynomials.jl)) and is particularly focused on being as
 allocation-free as possible - which means that once the original polynomials were created, at no further stage in processing
 the polynomials or monomial bases will any allocations be done.
@@ -92,44 +92,44 @@ Monomials do not support a lot of operations once they are constructed (hence th
 iterate through their exponents, convert the index between different types of exponent sets, can be conjugated (sometimes with
 zero cost) and can be multiplied with each other. Polynomials can be evaluated at a fully specified point.
 
-This makes `SimplePolynomials` very specialized for the particular needs of `PolynomialOptimization`; however, all the
+This makes `IntPolynomials` very specialized for the particular needs of `PolynomialOptimization`; however, all the
 functionality is wrapped in its own subpackage and can be loaded independently of the main package. Don't do the conversion
 manually and then pass the converted polynomials to [`poly_problem`](@ref poly_problem) - when the
 polynomial problem is initialized, depending on the keyword arguments, some operations still need to be carried out using the
-full interface of `MultivariatePolynomials`, not just the restricted subset that `SimplePolynomials` provides.
+full interface of `MultivariatePolynomials`, not just the restricted subset that `IntPolynomials` provides.
 
-Handling the exponents without the `MultivariatePolynomials` machinery is also deferred to subpackage of `SimplePolynomials`,
+Handling the exponents without the `MultivariatePolynomials` machinery is also deferred to subpackage of `IntPolynomials`,
 `MultivariateExponents`. Note that these exponents and their indices always refer to the graded lexicographic order, which is
 the default in `DynamicPolynomials`.
 
 ```@meta
-CurrentModule = PolynomialOptimization.SimplePolynomials
+CurrentModule = PolynomialOptimization.IntPolynomials
 ```
 ## The MultivariatePolynomials interface
 ```@docs
-SimpleVariable
-SimpleRealVariable
-SimpleComplexVariable
-SimpleMonomial
-SimpleMonomial{Nr,Nc}(::AbstractExponents, ::AbstractVector{<:Integer}...) where {Nr,Nc}
-SimpleConjMonomial
-SimpleMonomial(::SimpleConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc}
-SimpleMonomialVector
-SimplePolynomial
+IntVariable
+IntRealVariable
+IntComplexVariable
+IntMonomial
+IntMonomial{Nr,Nc}(::AbstractExponents, ::AbstractVector{<:Integer}...) where {Nr,Nc}
+IntConjMonomial
+IntMonomial(::IntConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc}
+IntMonomialVector
+IntPolynomial
 change_backend
 ```
 
 ## Implementation peculiarities
 ```@docs
-Base.conj(::SimpleMonomialOrConj)
+Base.conj(::IntMonomialOrConj)
 variable_index
 monomial_product
 monomial_index
 effective_nvariables
 MultivariatePolynomials.monomials(::Val{Nr}, ::Val{Nc}, ::AbstractUnitRange{<:Integer}) where {Nr,Nc}
-Base.intersect(::SimpleMonomialVector{Nr,Nc}, ::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+Base.intersect(::IntMonomialVector{Nr,Nc}, ::IntMonomialVector{Nr,Nc}) where {Nr,Nc}
 MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, ::AbstractExponents{N,I}, ::AbstractVector) where {Nr,Nc,N,I<:Integer}
-MultivariatePolynomials.merge_monomial_vectors(::AbstractVector{<:SimpleMonomialVector})
-veciter(::SimpleMonomialVector, ::AbstractVector{Int}, ::Val{indexed}) where {indexed}
+MultivariatePolynomials.merge_monomial_vectors(::AbstractVector{<:IntMonomialVector})
+veciter(::IntMonomialVector, ::AbstractVector{Int}, ::Val{indexed}) where {indexed}
 keepat!!
 ```

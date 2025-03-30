@@ -69,7 +69,7 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     return [smallcliques; cliques[idx]]
 end
 
-function _convert_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<:Integer}
+function _convert_cliques(cl::Vector{<:IntMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<:Integer}
     # best situation (which should always be the case: all vectors have the same set of exponents)
     a, rest = Iterators.peel(cl)
     required_e = a.e
@@ -83,14 +83,14 @@ function _convert_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc,I}}) where {Nr
     end
     return required_e, Set.(getproperty.(cl, :indices))
 end
-function merge_cliques(cl::Vector{<:SimpleMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<:Integer}
+function merge_cliques(cl::Vector{<:IntMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<:Integer}
     converted = _convert_cliques(cl)
     merged = merge_cliques!(converted[2])
-    return SimpleMonomialVector{Nr,Nc,I}[SimpleMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)) for mergedᵢ in merged]
+    return IntMonomialVector{Nr,Nc,I}[IntMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)) for mergedᵢ in merged]
 end
 
 function merge_cliques(groupings::Relaxation.RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
-    outtype_part = Vector{<:SimpleMonomialVector{Nr,Nc}}
+    outtype_part = Vector{<:IntMonomialVector{Nr,Nc}}
     newobj = merge_cliques(groupings.obj)
     # it does not make sense to merge the zero constraints, as every unique product corresponds to a separate variable anyway.
     newnonnegs = similar(groupings.nonnegs)

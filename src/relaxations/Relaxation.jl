@@ -1,6 +1,6 @@
 module Relaxation
 
-using ..SimplePolynomials, .SimplePolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
+using ..IntPolynomials, .IntPolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector
 import StatsBase, Graphs
 using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted
@@ -34,13 +34,13 @@ Groupings are contained in the fields `obj`, `zero`, `nonneg`, and `psd`:
 The field `var_cliques` contains a list of sets of variables, each corresponding to a variable clique in the total problem. In
 the complex case, only the declared variables are returned, not their conjugates.
 """
-struct RelaxationGroupings{Nr,Nc,I<:Integer,V<:SimpleVariable{Nr,Nc}}
+struct RelaxationGroupings{Nr,Nc,I<:Integer,V<:IntVariable{Nr,Nc}}
     # These can all be different types of monomial vectors, but we don't want to have a type explosion with nested relaxation
     # groupings. Keep it dynamic.
-    obj::Vector{SimpleMonomialVector{Nr,Nc,I}}
-    zeros::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
-    nonnegs::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
-    psds::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
+    obj::Vector{IntMonomialVector{Nr,Nc,I}}
+    zeros::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
+    nonnegs::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
+    psds::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
     var_cliques::Vector{Vector{V}}
 end
 
@@ -48,10 +48,10 @@ _lensort(x) = (-length(x), x) # use as "by" argument for sort to sort with desce
 
 # We don't store the association of a grouping with a clique; we just find it anew every time. While this is not too efficient,
 # it also doesn't occur so often that we actually need this information.
-_findclique(grouping::SimpleMonomialVector{Nr,Nc}, var_cliques::(Vector{Vector{V}} where V<:SimpleVariable)) where {Nr,Nc} =
+_findclique(grouping::IntMonomialVector{Nr,Nc}, var_cliques::(Vector{Vector{V}} where V<:IntVariable)) where {Nr,Nc} =
     findlast(Base.Fix1(⊆, effective_variables(grouping)), var_cliques) # put the grouping in the smallest fitting clique
 
-function _show_groupings(io::IO, grouping::Vector{<:SimpleMonomialVector}, cliques)
+function _show_groupings(io::IO, grouping::Vector{<:IntMonomialVector}, cliques)
     if get(io, :bycliques, false)::Bool
         noc = IOContext(io, :bycliques => false)
         for i in 1:length(cliques)
@@ -106,7 +106,7 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     print(io, "\nBlock groupings\n===============\nObjective: ")
     _show_groupings(io, groupings.obj, groupings.var_cliques)
     for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
-        block = getproperty(groupings, f)::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}
+        block = getproperty(groupings, f)::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
         if !isempty(block)
             for (i, constr) in enumerate(block)
                 print(io, "\n", name, " constraint #", i, ": ")
@@ -196,7 +196,7 @@ Returns the original problem associated with a relaxation.
 poly_problem(relaxation::AbstractRelaxation) = relaxation.problem
 
 """
-    basis(relaxation::AbstractRelaxation[, clique::Int]) -> SimpleMonomialVector
+    basis(relaxation::AbstractRelaxation[, clique::Int]) -> IntMonomialVector
 
 Constructs the basis that is associated with a given polynomial relaxation. If `clique` is given, only the monomials that are
 relevant for the given clique must be returned.

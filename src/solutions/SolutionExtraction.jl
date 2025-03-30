@@ -2,7 +2,7 @@ export poly_solutions, poly_solution_badness, poly_all_solutions
 
 struct MonomialMissing <: Exception end
 
-struct PolynomialSolutions{R<:Real,V<:Union{R,Complex{R}},Nr,Nc,Var<:SimpleVariable{Nr,Nc},has_length}
+struct PolynomialSolutions{R<:Real,V<:Union{R,Complex{R}},Nr,Nc,Var<:IntVariable{Nr,Nc},has_length}
     cliques::Vector{Vector{Var}}
     solutions_cl::Vector{Union{Missing,Matrix{V}}}
     δ::R
@@ -93,13 +93,13 @@ function Base.iterate(iter::PolynomialSolutions{R,V,Nr,Nc}, state::Vector{Int}) 
     return solution, state
 end
 
-Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:SimpleVariable{Nr,Nc},true} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
+Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:IntVariable{Nr,Nc},true} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
     Base.HasLength()
-Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:SimpleVariable{Nr,Nc},false} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
+Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:IntVariable{Nr,Nc},false} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
     Base.SizeUnknown()
 Base.IteratorEltype(::Type{PolynomialSolutions}) = Base.HasEltype()
 Base.eltype(::Type{<:PolynomialSolutions{R,V}}) where {R<:Real,V<:Union{R,Complex{R}}} = Vector{V}
-function Base.length(iter::PolynomialSolutions{R,V,Nr,Nc,<:SimpleVariable{Nr,Nc},true}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}
+function Base.length(iter::PolynomialSolutions{R,V,Nr,Nc,<:IntVariable{Nr,Nc},true}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}
     @inbounds cl = iter.solutions_cl[1]  # true = there is exactly one clique
     if ismissing(cl)
         return 0

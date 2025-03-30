@@ -14,7 +14,7 @@ See also [`SparseMatrixCOO`](@ref).
 """
 abstract type AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real} <: AbstractSolver{K,V} end
 
-Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
+Solver.mindex(::AbstractSparseMatrixSolver{<:Integer,K,<:Real}, monomials::IntMonomialOrConj{Nr,Nc}...) where {K,Nr,Nc} =
     monomial_index(monomials...)::K
 
 function Solver.add_var_slack!(state::AbstractSparseMatrixSolver{<:Integer,K}, num::Int) where {K}
@@ -187,7 +187,7 @@ sparse vector depending on the relaxation. To establish the mapping between the 
 column-sorted COO data (i.e., as returned by [`coo_to_csc!`](@ref)) used in the problem construction needs to be passed on.
 `slack` must contain the current value of the `slack` field of the `AbstractSparseMatrixSolver`.
 """
-function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, _moments::Vector{V},
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}}, _moments::Vector{V},
     slack::K, coo₁::SparseMatrixCOO{<:Integer,K,V,Offset}, cooₙ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
     # we need at least one coo here for dispatch
     if slack isa Signed

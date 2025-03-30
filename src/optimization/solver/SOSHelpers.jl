@@ -45,8 +45,8 @@ addtocounter!(state::SOSWrapper, counters::Counters, ::Val{:fix}, args...) =
     addtocounter!(state.state, counters, Val(:free), args...)
 
 """
-    sos_add_matrix!(state::AbstractSolver, grouping::SimpleMonomialVector,
-        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
+    sos_add_matrix!(state::AbstractSolver, grouping::IntMonomialVector,
+        constraint::Union{<:IntPolynomial,<:AbstractMatrix{<:IntPolynomial}},
         representation::RepresentationMethod=RepresentationPSD())
 
 Parses a SOS constraint with a basis given in `grouping` (this might also be a partial basis due to sparsity), premultiplied by
@@ -76,8 +76,8 @@ See also [`sos_add_equality!`](@ref).
 sos_add_matrix!(state::AbstractSolver, args...) = moment_add_matrix!(SOSWrapper(state), args...)
 
 """
-    sos_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector,
-        constraint::SimplePolynomial)
+    sos_add_equality!(state::AbstractSolver, grouping::IntMonomialVector,
+        constraint::IntPolynomial)
 
 Parses a polynomial equality constraint for sums-of-squares and calls the appropriate solver functions to set up the problem
 structure. `grouping` contains the basis that will be squared in the process to generate the prefactor.

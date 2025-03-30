@@ -18,28 +18,28 @@ struct MomentVector{R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R},E<:Expon
     e::E
     values::D
 
-    function MomentVector(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, exponents::E, values::D) where {Nr,Nc,R,D<:AbstractVector{R},N,E<:ExponentsAll{N}}
+    function MomentVector(r::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}}, exponents::E, values::D) where {Nr,Nc,R,D<:AbstractVector{R},N,E<:ExponentsAll{N}}
         N == Nr + 2Nc || throw(MethodError(MomentVector, (r, exponents, values)))
         new{R,iszero(Nc) ? R : Complex{R},Nr,Nc,D,E}(exponents, values)
     end
 end
 
-MomentVector(r::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}, ::Missing) where {Nr,Nc,I<:Integer} =
+MomentVector(r::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}, ::Missing) where {Nr,Nc,I<:Integer} =
     MomentVector(r, ExponentsAll{Nr+2Nc,I}(), Float64[]) # this is the fallback if no data was provided by the solver
 
 Base.length(d::MomentVector) = length(d.values)
 Base.size(d::MomentVector) = (length(d.values),)
-Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc}, keys::Union{<:IntMonomialOrConj{Nr,Nc},<:IntVariable{Nr,Nc}}...) where {Nr,Nc} =
     monomial_index(d.e, keys...) ≤ length(d.values)
 Base.haskey(d::MomentVector{<:Any,<:Any,Nr,Nc,<:AbstractSparseVector},
-    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc} =
+    keys::Union{<:IntMonomialOrConj{Nr,Nc},<:IntVariable{Nr,Nc}}...) where {Nr,Nc} =
     insorted(monomial_index(d.e, keys...), rowvals(d.values))
-Base.getindex(d::MomentVector{<:Any,V,Nr,Nc}, keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {Nr,Nc,V} =
+Base.getindex(d::MomentVector{<:Any,V,Nr,Nc}, keys::Union{<:IntMonomialOrConj{Nr,Nc},<:IntVariable{Nr,Nc}}...) where {Nr,Nc,V} =
     @inline get(d, () -> V(NaN), keys...)
 Base.@propagate_inbounds Base.getindex(d::MomentVector, i::Integer) = d.values[i]
 Base.@propagate_inbounds Base.setindex!(d::MomentVector, value, i::Integer) = setindex!(d.values, value, i)
 function Base.get(d::MomentVector{R,R,Nr,0} where {R}, not_found,
-    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    keys::Union{<:IntMonomialOrConj{Nr,0},<:IntVariable{Nr,0}}...) where {Nr}
     idx = monomial_index(d.e, keys...)
     if idx ≤ length(d.values)
         val = @inbounds d.values[idx]
@@ -48,17 +48,17 @@ function Base.get(d::MomentVector{R,R,Nr,0} where {R}, not_found,
     return not_found()
 end
 function Base.get(d::MomentVector{R,R,Nr,0,<:AbstractSparseVector{R}} where {R}, not_found,
-    keys::Union{<:SimpleMonomialOrConj{Nr,0},<:SimpleVariable{Nr,0}}...) where {Nr}
+    keys::Union{<:IntMonomialOrConj{Nr,0},<:IntVariable{Nr,0}}...) where {Nr}
     idx = monomial_index(d.e, keys...)
     ridx = searchsorted(rowvals(d.values), idx)
     isempty(ridx) && return not_found()
     @inbounds return nonzeros(d.values)[ridx[begin]]
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
-    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    keys::Union{<:IntMonomialOrConj{Nr,Nc},<:IntVariable{Nr,Nc}}...) where {R,Nr,Nc}
     idx = monomial_index(d.e, keys...)
     idx > length(d.values) && return not_found()
-    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
+    idx_c = monomial_index((m isa AbstractMonomial ? IntConjMonomial(m) : conj(m) for m in keys)...)
     if idx_c == idx
         val = @inbounds d.values[idx]
         return isnan(val) ? not_found() : Complex{R}(val)
@@ -70,12 +70,12 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc}, not_found,
     end
 end
 function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}}, not_found,
-    keys::Union{<:SimpleMonomialOrConj{Nr,Nc},<:SimpleVariable{Nr,Nc}}...) where {R,Nr,Nc}
+    keys::Union{<:IntMonomialOrConj{Nr,Nc},<:IntVariable{Nr,Nc}}...) where {R,Nr,Nc}
     rv, nz = rowvals(d.values), nonzeros(d.values)
     idx = monomial_index(d.e, keys...)
     ridx = searchsorted(rv, idx)
     isempty(ridx) && return not_found()
-    idx_c = monomial_index((m isa AbstractMonomial ? SimpleConjMonomial(m) : conj(m) for m in keys)...)
+    idx_c = monomial_index((m isa AbstractMonomial ? IntConjMonomial(m) : conj(m) for m in keys)...)
     if idx_c == idx
         val = @inbounds nz[ridx[begin]]
         return isnan(val) ? not_found() : Complex{R}(val)
@@ -103,7 +103,7 @@ Base.IteratorSize(::Type{<:MomentAssociation{<:(MomentVector{R,<:Union{R,Complex
 Base.IteratorSize(::Type{<:MomentAssociation}) = Base.SizeUnknown() # during iteration, we combine the real/complex parts
 Base.eltype(::Type{MomentAssociation{M}}) where {R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R},I<:Integer,
                                                  E<:AbstractExponents{<:Any,I},M<:MomentVector{R,V,Nr,Nc,D,E}} =
-    Pair{SimpleMonomial{Nr,Nc,I,E},V}
+    Pair{IntMonomial{Nr,Nc,I,E},V}
 Base.length(m::MomentAssociation{<:(MomentVector{R,<:Union{R,Complex{R}},<:Any,0} where {R})}) = length(m.d)
 Base.get(m::MomentAssociation, args...) = get(m.d, args...)
 function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVector{R},
@@ -119,7 +119,7 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
             deg += 1
             degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
         end
-        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, SimplePolynomials.unsafe_cast(I, i), deg)
+        mon = IntMonomial{Nr,Nc}(unsafe, d.e, IntPolynomials.unsafe_cast(I, i), deg)
         iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
@@ -159,7 +159,7 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
                 degIncAt = @inbounds(counts[deg+1, 1]) +1
             end
         end
-        mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, i, deg)
+        mon = IntMonomial{Nr,Nc}(unsafe, d.e, i, deg)
         iszero(Nc) && @inbounds return Pair(mon, nz[idx]), (idx +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(nz[idx])), (idx +1, rem, deg, degIncAt)
@@ -174,8 +174,8 @@ function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}
 end
 
 moment_vector_type(::Type{Rx}, ::Type{V}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc,I<:Integer,
-                                                 Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{
-                                                     <:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}
+                                                 Rx<:AbstractRelaxation{<:Problem{<:IntPolynomial{
+                                                     <:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}
                                                  }}}} =
     MomentVector{R,V,Nr,Nc,<:Union{Vector{R},SparseVector{R,I},SubArray{R,1,Vector{R},Tuple{UnitRange{I}},true}},
                  ExponentsAll{Nr+2Nc,I}}
@@ -208,7 +208,7 @@ mutable struct Result{Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
     const objective::R
     moments
 
-    Result(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,<:Any,Nc}}}, method::Symbol, time::Float64,
+    Result(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,<:Any,Nc}}}, method::Symbol, time::Float64,
         @nospecialize(state), @nospecialize(status), objective::R) where {R<:Real,Nc} =
         new{typeof(relaxation),R,iszero(Nc) ? R : Complex{R}}(relaxation, method, time, state, status, objective, missing)
 end

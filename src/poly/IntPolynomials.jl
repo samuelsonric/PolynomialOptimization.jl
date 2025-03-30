@@ -1,4 +1,4 @@
-module SimplePolynomials
+module IntPolynomials
 
 using MultivariatePolynomials, ..FastVector
 using ..PolynomialOptimization: @assert, @inbounds, sort_along!

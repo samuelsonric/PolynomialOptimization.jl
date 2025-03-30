@@ -1,7 +1,7 @@
 module PolynomialOptimizationMPI
 
-using MultivariatePolynomials, PolynomialOptimization.SimplePolynomials, PolynomialOptimization.FastVector,
-    PolynomialOptimization.SimplePolynomials.MultivariateExponents, Printf
+using MultivariatePolynomials, PolynomialOptimization.IntPolynomials, PolynomialOptimization.FastVector,
+    PolynomialOptimization.IntPolynomials.MultivariateExponents, Printf
 import MPI, Random
 using PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, haveMPI
 using PolynomialOptimization.Relaxation: RelaxationGroupings

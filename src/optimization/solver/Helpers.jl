@@ -28,13 +28,13 @@ end
 
 # For complex-valued problems, there are m and conj(m); all solvers require real-valued inputs.
 # Therefore, we first define the canonicalized monomial m̃ as the one of m, conj(m) that has the smaller index.
-iscanonical(::SimpleMonomial{<:Any,0}) = true
-Base.@assume_effects :consistent iscanonical(m::SimpleMonomialOrConj) = m ≤ SimpleConjMonomial(m)
-canonicalize(m::SimpleMonomialOrConj) = iscanonical(m) ? m : SimpleConjMonomial(m)
+iscanonical(::IntMonomial{<:Any,0}) = true
+Base.@assume_effects :consistent iscanonical(m::IntMonomialOrConj) = m ≤ IntConjMonomial(m)
+canonicalize(m::IntMonomialOrConj) = iscanonical(m) ? m : IntConjMonomial(m)
 
-@inline function getreim(state, args::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
+@inline function getreim(state, args::IntMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
     idx₁ = mindex(state, args...)
-    idx₂ = mindex(state, SimpleConjMonomial.(reverse(args))...) # reverse is rather unnecessary (commuting)
+    idx₂ = mindex(state, IntConjMonomial.(reverse(args))...) # reverse is rather unnecessary (commuting)
     if idx₁ ≤ idx₂
         return idx₁, idx₂, true # make sure to test for equality whenever the imaginary part is involved
     else
@@ -99,7 +99,7 @@ end
 Base.iterate(m::ScalarMatrix) = m.x, nothing
 Base.iterate(::ScalarMatrix, ::Nothing) = nothing
 
-collect_grouping(g::AbstractVector{M} where M<:SimpleMonomial) = g
+collect_grouping(g::AbstractVector{M} where M<:IntMonomial) = g
 collect_grouping(g) = collect(g)
 
 """

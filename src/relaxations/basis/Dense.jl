@@ -1,4 +1,4 @@
-struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
+struct Dense{P<:Problem,MV<:IntMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV
@@ -17,7 +17,7 @@ struct Dense{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: Abst
     """
     function Dense(problem::P,
         degree::Integer=(@info("Automatically selecting minimal degree cutoff $(problem.mindegree)"); problem.mindegree)) where
-        {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
+        {Nr,Nc,I<:Integer,Poly<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
         degree < problem.mindegree && throw(ArgumentError("The minimally required degree is $(problem.mindegree)"))
         if iszero(Nc)
             basis = monomials(Val(Nr), Val(Nc), 0:degree; I)

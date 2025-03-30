@@ -32,7 +32,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     function SparsityCorrelative(relaxation::AbstractRelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
         low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where # sync with SparsityCorrelativeTerm
-        {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
+        {Nr,Nc,I<:Integer,P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
             (!ismissing(high_order_psd) && !ismissing(low_order_psd))) &&
@@ -82,7 +82,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             if !ismissing(l) && !(l isa AbstractSet)
                 l = Set(l)
             end
-            for (i, (constr, groupings)) in enumerate(zip(constrs, parentgroupings::Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}))
+            for (i, (constr, groupings)) in enumerate(zip(constrs, parentgroupings::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}))
                 low_deg = false
                 if !ismissing(h)
                     low_deg = !(i ∈ h)
@@ -131,22 +131,22 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             " seconds. Generating groupings.")
         # The correlative iterator could potentially be made even smaller by determining all the multideg boundaries, but would
         # this be worth the effort?
-        minmultideg = SimplePolynomials.ConstantVector(0, Nr + 2Nc)
-        newobj = Vector{SimpleMonomialVector{Nr,Nc,I}}(undef, length(cliques))
-        newzero = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_zero)]
-        newnonneg = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_nonneg)]
-        newpsd = [SimpleMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_psd)]
+        minmultideg = IntPolynomials.ConstantVector(0, Nr + 2Nc)
+        newobj = Vector{IntMonomialVector{Nr,Nc,I}}(undef, length(cliques))
+        newzero = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_zero)]
+        newnonneg = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_nonneg)]
+        newpsd = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_psd)]
         @inbounds for (i, clique) in enumerate(cliques)
             maxmultideg = zeros(Int, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
-            newobj[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
+            newobj[i] = IntMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
         end
         @unroll for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
                                                    (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
                                                    (problem.constr_psd, parentmaxpsddeg, newpsd))
             for (constr, maxdeg, newel) in zip(constrs, parentdeg, news)
                 constrvars = effective_variables(constr, rettype=Vector,
-                    by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{SimplePolynomials.smallest_unsigned(Nr+2Nc)}
+                    by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{IntPolynomials.smallest_unsigned(Nr+2Nc)}
                 @assert(issorted(constrvars))
                 # There will be at least one clique that contains all the variables in the constraint; take the smallest one...
                 cliqueᵢ = findfirst(Base.Fix1(issubset_sorted, constrvars), cliques)
@@ -155,7 +155,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     maxmultideg = zeros(Int, Nr + 2Nc)
                     fill!(@view(maxmultideg[clique]), maxdeg)
                     push!(newel,
-                        SimpleMonomialVector{Nr,Nc}(
+                        IntMonomialVector{Nr,Nc}(
                             ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
                             minmultideg, maxmultideg)
                         )
@@ -164,13 +164,13 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
                     # ...unless the prefactor was of low order, as then we didn't necessarily introduce all the couplings.
                     # But low degree = prefactor is 1
                     iszero(maxdeg) || error("Something is wrong with graph theory")
-                    push!(newel, SimpleMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)))
+                    push!(newel, IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)))
                 end
             end
         end
         @verbose_info("Generated new groupings; embedding in old.")
         gentime = @elapsed(gr = embed(
-            RelaxationGroupings(newobj, newzero, newnonneg, newpsd, map.(SimpleVariable{Nr,Nc}, cliques)),
+            RelaxationGroupings(newobj, newzero, newnonneg, newpsd, map.(IntVariable{Nr,Nc}, cliques)),
             parent,
             relaxation isa AbstractRelaxationBasis
         ))

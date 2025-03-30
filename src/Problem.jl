@@ -12,7 +12,7 @@ This type is not exported.
 
 See also [`poly_problem`](@ref), [`poly_optimize`](@ref), [`AbstractRelaxation`](@ref).
 """
-struct Problem{P<:SimplePolynomial,OV}
+struct Problem{P<:IntPolynomial,OV}
     objective::P
     prefactor::P
     mindegree::Int
@@ -39,10 +39,10 @@ counted.
 
 See also [`variables`](@ref variables(::Problem)).
 """
-MultivariatePolynomials.nvariables(::Problem{<:SimplePolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
+MultivariatePolynomials.nvariables(::Problem{<:IntPolynomial{<:Any,Nr,Nc}}) where {Nr,Nc} = Nr + Nc
 
-const RealProblem = Problem{<:SimplePolynomial{<:Any,<:Any,0}}
-const ComplexProblem = Problem{<:SimplePolynomial{<:Any,0}}
+const RealProblem = Problem{<:IntPolynomial{<:Any,<:Any,0}}
+const ComplexProblem = Problem{<:IntPolynomial{<:Any,0}}
 
 """
     isreal(problem::Union{Problem,<:AbstractRelaxation})
@@ -144,7 +144,7 @@ Analyze a polynomial optimization problem and return a [`Problem`](@ref) that ca
   positive semidefinite. The matrices must be symmetric/hermitian.
 ## Problem representation
 - `monomial_index_type::Type{<:Integer}`: internally, whatever interface of `MultivariatePolynomials` is used, the data is
-  converted to the efficient [`SimplePolynomial`](@ref) representation. Every monomial is represented by a single number of the
+  converted to the efficient [`IntPolynomial`](@ref) representation. Every monomial is represented by a single number of the
   type given for this keyword argument. The default is usually a good choice, allowing quite large problems. For very small
   problems, the index type might be reduced (however, note that the index must be large enough to capture the monomial for
   every desired relaxation, and there will be no warning on overflow!); if the problem is extremely large, it might also be
@@ -349,23 +349,23 @@ function poly_problem(objective::P;
     end
     #endregion
 
-    #region SimplePolynomial conversion
+    #region IntPolynomial conversion
     @verbose_info("Converting data to simple polynomials")
-    sobj = SimplePolynomial{monomial_index_type}(objective, T; vars)
-    sprefactor = SimplePolynomial{monomial_index_type}(factor_coercive, T; vars)
+    sobj = IntPolynomial{monomial_index_type}(objective, T; vars)
+    sprefactor = IntPolynomial{monomial_index_type}(factor_coercive, T; vars)
     szero = FastVec{typeof(sobj)}(buffer=length(zero))
     for zeroᵢ in zero
-        unsafe_push!(szero, SimplePolynomial{monomial_index_type}(zeroᵢ, T; vars))
+        unsafe_push!(szero, IntPolynomial{monomial_index_type}(zeroᵢ, T; vars))
     end
     snonneg = FastVec{typeof(sobj)}(buffer=length(nonneg))
     for nonnegᵢ in nonneg
-        unsafe_push!(snonneg, SimplePolynomial{monomial_index_type}(nonnegᵢ, T; vars))
+        unsafe_push!(snonneg, IntPolynomial{monomial_index_type}(nonnegᵢ, T; vars))
     end
     spsd = FastVec{Matrix{typeof(sobj)}}(buffer=length(psd))
     for psdᵢ in psd
         m = Matrix{typeof(sobj)}(undef, size(psdᵢ)...)
         for j in eachindex(psdᵢ, m)
-            @inbounds m[j] = SimplePolynomial{monomial_index_type}(psdᵢ[j], T; vars)
+            @inbounds m[j] = IntPolynomial{monomial_index_type}(psdᵢ[j], T; vars)
         end
         unsafe_push!(spsd, m)
     end

@@ -39,7 +39,7 @@ Base.elsize(v::FastVec) = Base.elsize(v.data)
 
 iterate(v::FastVec, i=1) = (@inline; (i % UInt) - 1 < length(v) ? (@inbounds v.data[i], i + 1) : nothing)
 
-# Similar to unsafe_cast in SimplePolynomials, but we only want to skip the checks if our given type is not larger than the
+# Similar to unsafe_cast in IntPolynomials, but we only want to skip the checks if our given type is not larger than the
 # target, because only then we can ensure validity base on the nonnegativity of the length.
 unsafe_upcast(T::Type{<:Signed}, x::Signed) = T(x)
 unsafe_upcast(T::Type{<:Unsigned}, x::Unsigned) = T(x)

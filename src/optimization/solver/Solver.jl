@@ -1,12 +1,12 @@
 module Solver
 
-using ..SimplePolynomials, ..PolynomialOptimization, MultivariatePolynomials, LinearAlgebra, SparseArrays, Reexport
-using ..SimplePolynomials: SimpleMonomialOrConj, SimpleConjMonomial, _get_I
+using ..IntPolynomials, ..PolynomialOptimization, MultivariatePolynomials, LinearAlgebra, SparseArrays, Reexport
+using ..IntPolynomials: IntMonomialOrConj, IntConjMonomial, _get_I
 @reexport using ..FastVector
 using ..FastVector: overallocation
 using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, sort_along!
 import ..PolynomialOptimization: MomentVector
-using ..SimplePolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
+using ..IntPolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
 import LinearAlgebra: issuccess, UpperOrUnitUpperTriangular, LowerOrUnitLowerTriangular
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most
@@ -14,7 +14,7 @@ import LinearAlgebra: issuccess, UpperOrUnitUpperTriangular, LowerOrUnitLowerTri
 export
     poly_problem, Problem, MomentVector, StackVec, FastKey, sort_along!, @verbose_info, @capture, # from PolynomialOptimization
     AbstractRelaxation, RelaxationGroupings, # from Relaxation
-    SimpleMonomialOrConj, SimpleConjMonomial, monomial_index, _get_I, # from SimplePolynomials
+    IntMonomialOrConj, IntConjMonomial, monomial_index, _get_I, # from IntPolynomials
     overallocation, # from FastVector (not exported)
     poly_optimize, solver_methods, @solver_alias,
     issuccess # from LinearAlgebra

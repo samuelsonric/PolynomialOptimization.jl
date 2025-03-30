@@ -28,10 +28,10 @@ constructors are shorthands that create `SparsityTerm` objects with the `method`
 """
 mutable struct SparsityTerm{
     I<:Integer,
-    P<:Problem{<:(SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}} where {Nr,Nc})},
+    P<:Problem{<:(IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}} where {Nr,Nc})},
     PG<:RelaxationGroupings,
     U<:AbstractSet{I},
-    S<:SimpleMonomialVector,
+    S<:IntMonomialVector,
     G<:RelaxationGroupings
 } <: AbstractRelaxationSparse{P}
     const problem::P
@@ -47,7 +47,7 @@ mutable struct SparsityTerm{
     function SparsityTerm(relaxation::AbstractRelaxation{P},
         support_union::AbstractSet{I}; method::Union{TermMode,<:AbstractVector{TermMode}},
         varclique_method::VarcliqueMethods=missing, verbose::Bool=false) where
-        {Nr,Nc,I<:Integer,MV<:SimpleMonomialVector{Nr,Nc,I},P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,MV}}}
+        {Nr,Nc,I<:Integer,MV<:IntMonomialVector{Nr,Nc,I},P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,MV}}}
         problem = poly_problem(relaxation)
         parent = groupings(relaxation)
         tot = 1 + length(problem.constr_zero) + length(problem.constr_nonneg) + length(problem.constr_psd)
@@ -91,17 +91,17 @@ mutable struct SparsityTerm{
 end
 
 # Only a helper so that we can cheaply obtain the monomial union without having to construct the square basis.
-struct _SquareBasis{M<:SimpleMonomial,B<:AbstractVector{M}}
+struct _SquareBasis{M<:IntMonomial,B<:AbstractVector{M}}
     parent::B
 end
 
-Base.IteratorSize(::Type{<:_SquareBasis{M,B}}) where {M<:SimpleMonomial,B<:AbstractVector{M}} = Base.IteratorSize(B)
+Base.IteratorSize(::Type{<:_SquareBasis{M,B}}) where {M<:IntMonomial,B<:AbstractVector{M}} = Base.IteratorSize(B)
 Base.IteratorEltype(::Type{<:_SquareBasis{M}}) where {M} = Base.HasEltype()
-Base.eltype(::Type{<:_SquareBasis{M}}) where {M} = SimplePolynomials._get_I(M)
-Base.length(b::_SquareBasis{<:SimpleMonomial{<:Any,0}}) = length(b.parent)
+Base.eltype(::Type{<:_SquareBasis{M}}) where {M} = IntPolynomials._get_I(M)
+Base.length(b::_SquareBasis{<:IntMonomial{<:Any,0}}) = length(b.parent)
 Base.length(b::_SquareBasis) = count(isreal, b.parent) # assuming that no conjugates occur, a monomial with complex variables
                                                        # cannot be real-valued
-function Base.iterate(b::_SquareBasis{M}, state=missing) where {I<:Integer,M<:SimpleMonomial{<:Any,<:Any,I}}
+function Base.iterate(b::_SquareBasis{M}, state=missing) where {I<:Integer,M<:IntMonomial{<:Any,<:Any,I}}
     result = ismissing(state) ? iterate(b.parent) : iterate(b.parent, state)
     local parent_mon, parent_state
     while true
@@ -135,7 +135,7 @@ See also [`SparsityTermBlock`](@ref), [`SparsityTermChordal`](@ref), [`SparsityC
 """
 function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,<:AbstractVector{TermMode}},
     varclique_method::VarcliqueMethods=missing, verbose::Bool=false) where
-    {Nr,Nc,I<:Integer,P<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}}
+    {Nr,Nc,I<:Integer,P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}
     # Let 𝒜 = supp(obj) ∪ supp(constrs)
     # support_union corresponds to 𝒮. For real-valued problems, the initialization is
     # 𝒮 = 𝒜 ∪ 2grouping(obj), for complex-valued problems, only 𝒜. There is no good explanation given for why we even use
@@ -174,7 +174,7 @@ function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,
 end
 
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
-    localizing_supports::(Vector{MV} where {MV<:SimpleMonomialVector}), parent::RelaxationGroupings,
+    localizing_supports::(Vector{MV} where {MV<:IntMonomialVector}), parent::RelaxationGroupings,
     methods::AbstractVector{TermMode}, varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer}
     # enforce specialization on grouping, which is an abstract type
     grouping_loop = (grouping, localizing_support, ipoly, igroup) -> begin
@@ -190,7 +190,7 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
             for (exp1, g₁) in enumerate(Iterators.take(grouping, r ? exp2 -1 : typemax(Int)))
                 Graphs.has_edge(graph, exp1, exp2) && continue
                 for supp_constr in localizing_support
-                    if monomial_index(g₁, supp_constr, SimpleConjMonomial(g₂)) ∈ support_union
+                    if monomial_index(g₁, supp_constr, IntConjMonomial(g₂)) ∈ support_union
                         Graphs.add_edge!(graph, Graphs.Edge(exp1, exp2))
                         break
                     end
@@ -274,7 +274,7 @@ end
     $((let
         body = quote
             $(name === :obj ? :newobj : :($(Symbol(:new, name))[i])) = if methods[ipoly] != TERM_MODE_NONE
-                newgroup = FastVec{SimpleMonomialVector{Nr,Nc,I}}()
+                newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
                 for grouping in constr_groupings
                     # while grouping is generic, we don't gain a lot on inference by putting the loop body in a function
                     # barrier
@@ -296,7 +296,7 @@ end
                 igroup += length(constr_groupings)
                 $(name === :obj ? :(previous.obj) : :(previous.$name[i]))
             else
-                newgroup = FastVec{SimpleMonomialVector{Nr,Nc,I}}()
+                newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
                 missingclique = false
                 nonmissingclique = false
                 for grouping in constr_groupings
@@ -331,7 +331,7 @@ end
             )
         else
             Expr(:block,
-                Expr(:(=), Symbol(:new, name),:(Vector{Vector{SimpleMonomialVector{Nr,Nc,I}}}(undef, length(parent.$name)))),
+                Expr(:(=), Symbol(:new, name),:(Vector{Vector{IntMonomialVector{Nr,Nc,I}}}(undef, length(parent.$name)))),
                 :(for (i, constr_groupings) in enumerate(parent.$name); $body end)
             )
         end
@@ -352,16 +352,16 @@ function _extend_graphs!(relaxation::SparsityTerm, methods::AbstractVector{TermM
 end
 
 function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vector{MV}, g::Vector{G}) where
-    {I<:Integer,Nc,MV<:SimpleMonomialVector{<:Any,Nc,I},G<:Graphs.SimpleGraph}
+    {I<:Integer,Nc,MV<:IntMonomialVector{<:Any,Nc,I},G<:Graphs.SimpleGraph}
     support_union = Set{I}()
     grouping_loop = @capture((grouping, localizing_support, graph) -> begin
         for e in Graphs.edges(graph)
             for α in localizing_support
                 push!($support_union, monomial_index(grouping[Graphs.src(e)], α,
-                                                     SimpleConjMonomial(grouping[Graphs.dst(e)])))
+                                                     IntConjMonomial(grouping[Graphs.dst(e)])))
                 if !iszero(Nc) && Graphs.src(e) != Graphs.dst(e) # or noncommutative
                     push!(support_union, monomial_index(grouping[Graphs.dst(e)], α,
-                          SimpleConjMonomial(grouping[Graphs.src(e)])))
+                          IntConjMonomial(grouping[Graphs.src(e)])))
                 end
             end
         end

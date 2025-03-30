@@ -92,8 +92,8 @@ end
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
 # - or DD/SDD representations in the real case and in the complex case if the quadratic cone is requested
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
+    constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri},
     type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::RepresentationMethod,
     counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
@@ -119,7 +119,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         indices = similar(rows)
         values = similar(rows, complex ? Complex{V} : V)
     else
-        lens = FastVec{SimplePolynomials.smallest_unsigned(2maxlen)}(buffer=colcount)
+        lens = FastVec{IntPolynomials.smallest_unsigned(2maxlen)}(buffer=colcount)
         indices = FastVec{T}(buffer=indlen)
         values = similar(indices, V)
     end
@@ -129,8 +129,8 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values), representation, counters)
 end
 
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
+    constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
     ::Val{complex}, lg, block_size, dim, data, representation::RepresentationMethod,
     counters::Counters) where {T,V,Tri,tri,matrix_indexing,complex}
     if matrix_indexing
@@ -216,7 +216,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                             end
                             recoeff = real(coeff_constr)
                             imcoeff = imag(coeff_constr)
-                            repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
+                            repart, impart, canonical = getreim(state, g₁, mon_constr, IntConjMonomial(g₂))
                             if total_real
                                 # Even if `complex` - so we are on the diagonal and the values should be Complex{V} - we can
                                 # just do the push!, the conversion is implicitly done; as the imaginary part should be zero,
@@ -385,8 +385,8 @@ end
 
 # generic moment matrix constraint with complex-valued monomials involved in the grouping, but the solver does not support the
 # complex PSD cone explicitly
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where M<:SimpleMonomial,
-    constraint::AbstractMatrix{<:SimplePolynomial}, indextype::PSDIndextype{Tri},
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where M<:IntMonomial,
+    constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri},
     ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,<:RepresentationSDD,RepresentationPSD},
     counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
@@ -466,7 +466,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                         end
                         recoeff = real(coeff_constr)
                         imcoeff = imag(coeff_constr)
-                        repart, impart, canonical = getreim(state, g₁, mon_constr, SimpleConjMonomial(g₂))
+                        repart, impart, canonical = getreim(state, g₁, mon_constr, IntConjMonomial(g₂))
                         if total_real
                             if canonical
                                 if !iszero(recoeff)
@@ -557,7 +557,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         # (i.e., entries for the PSD matrix) are zero and don't arise in rows, although they will have to be present in lens.
         # So to avoid potentially overwriting data, we need a whole new vector.
         @inbounds let rows=finish!(rows), indices=finish!(indices), values=finish!(values)
-            lens = Vector{SimplePolynomials.smallest_unsigned(2maxlen)}(undef, (Tri === :F ? 4dim^2 : trisize(2dim)))
+            lens = Vector{IntPolynomials.smallest_unsigned(2maxlen)}(undef, (Tri === :F ? 4dim^2 : trisize(2dim)))
             sort_along!(rows, indices, values)
             row = zero(T)
             i = 1
@@ -1633,8 +1633,8 @@ end
 #endregion
 
 """
-    moment_add_matrix!(state::AbstractSolver, grouping::SimpleMonomialVector,
-        constraint::Union{<:SimplePolynomial,<:AbstractMatrix{<:SimplePolynomial}},
+    moment_add_matrix!(state::AbstractSolver, grouping::IntMonomialVector,
+        constraint::Union{<:IntPolynomial,<:AbstractMatrix{<:IntPolynomial}},
         representation::RepresentationMethod=RepresentationPSD())
 
 Parses a constraint in the moment hierarchy with a basis given in `grouping` (this might also be a partial basis due to
@@ -1661,9 +1661,9 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 
 See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
-function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
+function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD(),
-    counters::Counters=Counters()) where {P<:SimplePolynomial,V<:Real}
+    counters::Counters=Counters()) where {P<:IntPolynomial,V<:Real}
     dim = length(grouping) * (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
     if (dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))))
         if representation isa RepresentationPSD
@@ -1722,8 +1722,8 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
 end
 
 """
-    moment_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector,
-        constraint::SimplePolynomial)
+    moment_add_equality!(state::AbstractSolver, grouping::IntMonomialVector,
+        constraint::IntPolynomial)
 
 Parses a polynomial equality constraint for moments and calls the appropriate solver functions to set up the problem structure.
 `grouping` contains the basis that will be squared in the process to generate the prefactor.
@@ -1737,8 +1737,8 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 
 See also [`moment_add_matrix!`](@ref).
 """
-function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} where {M<:SimpleMonomial},
-    constraint::P, counters::Counters=Counters()) where {T,Nr,Nc,I<:Integer,P<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}}
+function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} where {M<:IntMonomial},
+    constraint::P, counters::Counters=Counters()) where {T,Nr,Nc,I<:Integer,P<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}
     # keep in sync with SOSCertificate -> poly_decomposition
 
     # We need to traverse all unique elements in groupings * groupings†. For purely complex-valued groupings, this is the full
@@ -1754,7 +1754,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
             g₁real = !iszero(Nr) && isreal(g₁)
             # Consider the g₂ = ḡ₁ case separately in the complex case. Explanations below.
             let g₂=g₁
-                prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
                 indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
                 if indexug ≤ 0
                     @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
@@ -1770,7 +1770,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
             # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
             # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
             # will probably appear at some place).
-            prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
             # We need to add the product to the set if it does not exists; we also need to count the number of conditions that
             # we get out of it.
             indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
@@ -1785,7 +1785,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
                 # (III) Re(ḡ*p) = gᵣ*pᵣ + gᵢ*pᵢ
                 # (IV)  Im(ḡ*p) = gᵣ*pᵢ - gᵢ*pᵣ
                 # To analyze this (which would be easier if we added and subtracted the equalities, but in the
-                # SimplePolynomials setup, the given form is most easy to handle), let's consider linear dependencies.
+                # IntPolynomials setup, the given form is most easy to handle), let's consider linear dependencies.
                 # - If the constraint is real-valued, (III) is equal to (I) and (IV) is -(II), so we only take (I) and (II).
                 # - If the grouping is real-valued, (III) is equal to (I) and (IV) is equal to (II); we only take (I) and (II).
                 # - If both are real-valued, (III) is equal to (I) while (II) and (IV) are zero, so we only take (I).
@@ -1829,7 +1829,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
     e = ExponentsAll{Nr+2Nc,I}()
 
     for grouping_idx in unique_groupings
-        grouping = SimpleMonomial{Nr,Nc}(unsafe, e, convert(I, grouping_idx))
+        grouping = IntMonomial{Nr,Nc}(unsafe, e, convert(I, grouping_idx))
         real_grouping = isreal(grouping)
         skip₂ = real_constr && real_grouping
         for term_constr in constraint
@@ -1851,7 +1851,7 @@ function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} w
                 skip₂ || pushorupdate!(indices₂, repart, values₂, imcoeff)
             end
             if !real_grouping && !real_constr
-                repart₂, impart₂, canonical₂ = getreim(state, SimpleConjMonomial(grouping), mon_constr)
+                repart₂, impart₂, canonical₂ = getreim(state, IntConjMonomial(grouping), mon_constr)
                 if !iszero(recoeff)
                     pushorupdate!(indices₃, repart₂, values₃, recoeff)
                     repart₂ == impart₂ || pushorupdate!(indices₄, impart₂, values₄, canonical₂ ? recoeff : -recoeff)

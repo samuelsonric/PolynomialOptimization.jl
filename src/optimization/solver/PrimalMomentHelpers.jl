@@ -47,7 +47,7 @@ function Base.getproperty(s::PrimalMomentSolver, f::Symbol)
     return getfield(s, f)
 end
 
-mindex(state::PrimalMomentSolver, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc} = mindex(state.parent, monomials...)
+mindex(state::PrimalMomentSolver, monomials::IntMonomialOrConj{Nr,Nc}...) where {Nr,Nc} = mindex(state.parent, monomials...)
 
 psd_indextype(state::PrimalMomentSolver) = PSDIndextypeVector(psd_indextype(state.parent) isa PSDIndextypePrimal{:U} ? :U : :L,
                                                               true)
@@ -596,7 +596,7 @@ Given the moment data obtained from an optimization using [`primal_moment_setup!
 variables. Note that this function is not fully type-stable, as the result may be based either on a dense or sparse vector
 depending on the relaxation.
 """
-function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}},
     state::PrimalMomentSolver{I,K,V}, mm, mm_lin) where {Nr,Nc,I<:Integer,K<:Integer,V<:Real}
     mon_eq = state.mon_eq
     y = Vector{V}(undef, length(mon_eq))

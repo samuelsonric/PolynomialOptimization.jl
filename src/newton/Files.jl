@@ -23,13 +23,13 @@ the objective itself. This function does not do any calculation, but instead loa
 
 See also [`halfpolytope`](@ref).
 """
-halfpolytope_from_file(filepath::AbstractString, objective::SimplePolynomial{<:Any,<:Any,0}; estimate::Bool=false,
+halfpolytope_from_file(filepath::AbstractString, objective::IntPolynomial{<:Any,<:Any,0}; estimate::Bool=false,
     verbose::Bool=false) =
     return halfpolytope_from_file(filepath, objective, estimate, verbose)
 
 function halfpolytope_from_file(filepath::AbstractString, objective::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
-    out = halfpolytope_from_file(filepath, SimplePolynomial(objective); verbose, kwargs...)
-    if out isa SimpleMonomialVector
+    out = halfpolytope_from_file(filepath, IntPolynomial(objective); verbose, kwargs...)
+    if out isa IntMonomialVector
         conv_time = @elapsed begin
             mv = change_backend(out, variables(objective))
         end
@@ -105,7 +105,7 @@ function halfpolytope_from_file(filepath::AbstractString, objective, estimate::B
     i -1 == len * sizeof(UInt) || error("Calculated length does not match number of loaded monomials")
     @verbose_info("Loaded $len monomials into memory in $load_time seconds. Now sorting and removing duplicates.")
     sort_time = @elapsed begin
-        finalcandidates = SimpleMonomialVector{nvariables(objective),0}(Base._groupedunique!(sort!(candidates)))
+        finalcandidates = IntMonomialVector{nvariables(objective),0}(Base._groupedunique!(sort!(candidates)))
     end
     @verbose_info("Sorted all monomials and removed $(len - length(finalcandidates)) duplicates in $sort_time seconds")
     return finalcandidates

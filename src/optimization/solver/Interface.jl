@@ -10,13 +10,13 @@ Most likely, `V` will be `Float64`.
 abstract type AbstractSolver{T,V<:Real} end
 
 """
-    mindex(::AbstractSolver{T}, monomials::SimpleMonomialOrConj...)::T
+    mindex(::AbstractSolver{T}, monomials::IntMonomialOrConj...)::T
 
 Calculates the index that the product of all monomials will have in the SDP represented by `state`.
 The default implementation calculates the one-based monomial index according to a dense deglex order and returns an `UInt`.
 The returned index is arbitrary as long as it is unique for the total monomial.
 """
-@inline mindex(::AbstractSolver{T}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc} =
+@inline mindex(::AbstractSolver{T}, monomials::IntMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc} =
     monomial_index(ExponentsAll{Nr+2Nc,UInt}(), monomials...)::T
 
 include("./Support.jl")

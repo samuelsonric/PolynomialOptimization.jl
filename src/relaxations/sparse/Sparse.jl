@@ -10,7 +10,7 @@ basis(relaxation::AbstractRelaxationSparse) = basis(relaxation.parent)
 
 function basis(relaxation::AbstractRelaxationSparse, i::Int)
     1 ≤ i ≤ length(relaxation.groupings.var_cliques) || throw(ArgumentError("Unknown clique index: $i"))
-    return filter(Base.Fix2(SimplePolynomials.effective_variables_in, Set(relaxation.groupings.var_cliques[i])),
+    return filter(Base.Fix2(IntPolynomials.effective_variables_in, Set(relaxation.groupings.var_cliques[i])),
         basis(relaxation))
 end
 

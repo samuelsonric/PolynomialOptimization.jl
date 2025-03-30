@@ -15,12 +15,12 @@ function basis(relaxation::AbstractRelaxationBasis, i::Int)
 end
 
 function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
-    {Nr,Nc,I<:Integer,M<:SimpleMonomial{Nr,Nc,I},Prob<:SimplePolynomial{<:Any,Nr,Nc}}
+    {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc,I},Prob<:IntPolynomial{<:Any,Nr,Nc}}
     return embed(RelaxationGroupings(
-        SimpleMonomialVector{Nr,Nc,I}[basis],
-        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
-        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
-        [SimpleMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
+        IntMonomialVector{Nr,Nc,I}[basis],
+        [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
+        [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
+        [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
     ), parent, true)
 end
@@ -38,7 +38,7 @@ end
 
 MultivariatePolynomials.degree(d::_DummyMonomial) = d.degree
 
-function truncate_basis(v::AbstractVector{M} where {M<:SimpleMonomial}, maxdeg::Integer)
+function truncate_basis(v::AbstractVector{M} where {M<:IntMonomial}, maxdeg::Integer)
     idx = searchsortedlast(v, _DummyMonomial(maxdeg), by=degree)
     if idx < firstindex(v)
         return @view(v[begin:end])

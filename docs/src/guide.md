@@ -410,7 +410,7 @@ julia> show(stdout, "text/plain", moment_matrix(res))
 The rows and columns of the matrix are indexed by the basis of the relaxation:
 ```jldoctest walkthrough
 julia> Relaxation.basis(tcs)
-10-element PolynomialOptimization.SimplePolynomials.SimpleMonomialVector{3, 0, UInt64, PolynomialOptimization.SimplePolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}, PolynomialOptimization.SimplePolynomials.SimpleMonomial{3, 0, UInt64, PolynomialOptimization.SimplePolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}}}:
+10-element PolynomialOptimization.IntPolynomials.IntMonomialVector{3, 0, UInt64, PolynomialOptimization.IntPolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}, PolynomialOptimization.IntPolynomials.IntMonomial{3, 0, UInt64, PolynomialOptimization.IntPolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}}}:
  1
  x₃
  x₂

@@ -1,4 +1,4 @@
-# This testsuite uses some of MP's tests (and some more), but does so explicitly, since SimplePolynomials on purpose does not
+# This testsuite uses some of MP's tests (and some more), but does so explicitly, since IntPolynomials on purpose does not
 # support a lot of the things that you would want to do with polynomials.
 using Test
 using LinearAlgebra, SparseArrays
@@ -7,8 +7,8 @@ using MultivariatePolynomials
 const MP = MultivariatePolynomials
 import DynamicPolynomials, Combinatorics
 
-using PolynomialOptimization.SimplePolynomials
-using PolynomialOptimization.SimplePolynomials.MultivariateExponents
+using PolynomialOptimization.IntPolynomials
+using PolynomialOptimization.IntPolynomials.MultivariateExponents
 
 testdir = dirname(pathof(MP)) * "/../test"
 include("$testdir/utils.jl")
@@ -221,16 +221,16 @@ end
 
 @testset "Variable" begin
     # No polyvar macro index set: we don't provide a macro for variable construction.
-    # You shouldn't build up SimplePolynomials from variables anyway!
+    # You shouldn't build up IntPolynomials from variables anyway!
 
-    @test_throws DomainError SimpleRealVariable{1,0}(-1)
-    @test_throws DomainError SimpleRealVariable{1,0}(0)
-    @test_throws DomainError SimpleRealVariable{1,5}(2)
-    @test_throws DomainError SimpleComplexVariable{0,1}(-1)
-    @test_throws DomainError SimpleComplexVariable{0,1}(0)
-    @test_throws DomainError SimpleComplexVariable{5,1}(2)
+    @test_throws DomainError IntRealVariable{1,0}(-1)
+    @test_throws DomainError IntRealVariable{1,0}(0)
+    @test_throws DomainError IntRealVariable{1,5}(2)
+    @test_throws DomainError IntComplexVariable{0,1}(-1)
+    @test_throws DomainError IntComplexVariable{0,1}(0)
+    @test_throws DomainError IntComplexVariable{5,1}(2)
     for (t, i) in ((UInt8, Int8(1)), (UInt16, Int16(1)), (UInt32, Int32(1)), (UInt64, Int64(1)))
-        x = SimpleRealVariable{typemax(t),0}(i)
+        x = IntRealVariable{typemax(t),0}(i)
         @test t(x) === t(i)
         @test convert(typeof(x), x) === x # these are a few of the only allowed converts
         alloc_test(() -> convert(typeof(x), x), 0)
@@ -239,7 +239,7 @@ end
         @test isreal(x) # test for short-circuit versions
         @test !isconj(x) # test for short-circuit versions
         @test ordinary_variable(x) === x
-        z = SimpleComplexVariable{0,typemax(t)>>1}(i)
+        z = IntComplexVariable{0,typemax(t)>>1}(i)
         @test t(z) === t(i)
         @test convert(typeof(z), z) === z
         alloc_test(() -> convert(typeof(z), z), 0)
@@ -247,8 +247,8 @@ end
         alloc_test(() -> convert(variable_union_type(z), z), 0)
     end
 
-    x = SimpleRealVariable{1,1}(0x1)
-    z = SimpleComplexVariable{1,1}(0x1)
+    x = IntRealVariable{1,1}(0x1)
+    z = IntComplexVariable{1,1}(0x1)
 
     @test isreal(x)
     @test !isconj(x)
@@ -258,7 +258,7 @@ end
     @test !isconj(z)
     @test ordinary_variable(z) === z
 
-    zc = SimpleComplexVariable{1,1}(0x1, true)
+    zc = IntComplexVariable{1,1}(0x1, true)
     @test !isreal(zc)
     @test isconj(zc)
     @test ordinary_variable(zc) === z
@@ -298,30 +298,30 @@ end
 @testset "Monomial (real)" begin
     # lots of tests to skip, we don't construct monomials by multiplying variables
 
-    @test_throws ArgumentError SimpleMonomial{2,0}([1])
-    m = SimpleMonomial{7,0}([1, 0, 1, 0, 1, 0, 1])
-    alloc_test(let v=[1, 0, 1, 0, 1, 0, 1]; () -> SimpleMonomial{7,0}(v) end, 0)
-    @test m === SimpleMonomial{7,0}([1, 0, 1, 0, 1, 0, 1])
+    @test_throws ArgumentError IntMonomial{2,0}([1])
+    m = IntMonomial{7,0}([1, 0, 1, 0, 1, 0, 1])
+    alloc_test(let v=[1, 0, 1, 0, 1, 0, 1]; () -> IntMonomial{7,0}(v) end, 0)
+    @test m === IntMonomial{7,0}([1, 0, 1, 0, 1, 0, 1])
     alloc_test(() -> convert(typeof(m), m), 0)
-    @test_throws ArgumentError SimpleMonomial{1,0}([1, 2])
+    @test_throws ArgumentError IntMonomial{1,0}([1, 2])
 
-    @test nvariables(SimpleMonomialVector{4,0}([2 0; 0 1; 0 1; 0 1])) == 4
+    @test nvariables(IntMonomialVector{4,0}([2 0; 0 1; 0 1; 0 1])) == 4
 
-    @test nterms(SimpleMonomial{1,0}([2])) == 1
-    @test collect(m) == [(SimpleRealVariable{7,0}(1), 1), (SimpleRealVariable{7,0}(3), 1),
-                         (SimpleRealVariable{7,0}(5), 1), (SimpleRealVariable{7,0}(7), 1)]
-    @test collect(SimpleMonomial{7,0}([0, 1, 0, 2, 0, 3, 0])) ==
-        [(SimpleRealVariable{7,0}(2), 1), (SimpleRealVariable{7,0}(4), 2), (SimpleRealVariable{7,0}(6), 3)]
+    @test nterms(IntMonomial{1,0}([2])) == 1
+    @test collect(m) == [(IntRealVariable{7,0}(1), 1), (IntRealVariable{7,0}(3), 1),
+                         (IntRealVariable{7,0}(5), 1), (IntRealVariable{7,0}(7), 1)]
+    @test collect(IntMonomial{7,0}([0, 1, 0, 2, 0, 3, 0])) ==
+        [(IntRealVariable{7,0}(2), 1), (IntRealVariable{7,0}(4), 2), (IntRealVariable{7,0}(6), 3)]
 
-    @test degree(SimpleMonomial{3,0}([1, 0, 2]), SimpleRealVariable{3,0}(1)) == UInt(1)
-    @test degree(SimpleMonomial{3,0}([1, 0, 2]), SimpleRealVariable{3,0}(2)) == UInt(0)
-    @test degree(SimpleMonomial{3,0}([1, 0, 2]), SimpleRealVariable{3,0}(3)) == UInt(2)
+    @test degree(IntMonomial{3,0}([1, 0, 2]), IntRealVariable{3,0}(1)) == UInt(1)
+    @test degree(IntMonomial{3,0}([1, 0, 2]), IntRealVariable{3,0}(2)) == UInt(0)
+    @test degree(IntMonomial{3,0}([1, 0, 2]), IntRealVariable{3,0}(3)) == UInt(2)
 
-    @test_throws InexactError variable(SimpleMonomial{1,0}([2]))
-    @test_throws InexactError variable(SimpleMonomial{2,0}([1, 1]))
-    @test_throws InexactError variable(constant_monomial(typeof(SimpleRealVariable{1,0}(1))))
+    @test_throws InexactError variable(IntMonomial{1,0}([2]))
+    @test_throws InexactError variable(IntMonomial{2,0}([1, 1]))
+    @test_throws InexactError variable(constant_monomial(typeof(IntRealVariable{1,0}(1))))
 
-    x = SimpleRealVariable{2,0}(1)
+    x = IntRealVariable{2,0}(1)
     @test x != constant_monomial(typeof(x))
     @test constant_monomial(typeof(x)) != x
 
@@ -329,7 +329,7 @@ end
 
     typetests(m)
 
-    xmon = SimpleMonomial{2,0}([1, 0])
+    xmon = IntMonomial{2,0}([1, 0])
     @test variable(xmon) === x
     # no arithmetics
     @test variable(Term(1., xmon)) === x
@@ -342,14 +342,14 @@ end
     @test isreal(m)
 
     @testset "Effective variables" begin
-        x = SimpleRealVariable{8,0}(1)
-        y = ntuple(i -> SimpleRealVariable{8,0}(i+1), Val(7))
+        x = IntRealVariable{8,0}(1)
+        y = ntuple(i -> IntRealVariable{8,0}(i+1), Val(7))
         T = variable_union_type(x)
         @test x isa T
         @test y[2] isa T
-        @test T[x, y[2]] == @inferred effective_variables(SimpleMonomial{8,0}([1, 0, 1, 0, 0, 0, 0, 0]))
-        @test T[x] == @inferred effective_variables(      SimpleMonomial{8,0}([1, 0, 0, 0, 0, 0, 0, 0]))
-        @test T[y[2]] == @inferred effective_variables(   SimpleMonomial{8,0}([0, 0, 1, 0, 0, 0, 0, 0]))
+        @test T[x, y[2]] == @inferred effective_variables(IntMonomial{8,0}([1, 0, 1, 0, 0, 0, 0, 0]))
+        @test T[x] == @inferred effective_variables(      IntMonomial{8,0}([1, 0, 0, 0, 0, 0, 0, 0]))
+        @test T[y[2]] == @inferred effective_variables(   IntMonomial{8,0}([0, 0, 1, 0, 0, 0, 0, 0]))
     end
 
     # no mapexponents
@@ -358,42 +358,42 @@ end
 @testset "Monomial (complex)" begin
     # lots of tests to skip, we don't construct monomials by multiplying variables
 
-    @test_throws ArgumentError SimpleMonomial{0,1}([1, 0], [0])
-    @test_throws ArgumentError SimpleMonomial{0,2}([1, 0], [0])
-    m = SimpleMonomial{0,7}([1, 0, 0, 0, 1, 0, 1], [0, 0, 1, 0, 0, 0, 0])
-    alloc_test(let v1=[1, 0, 0, 0, 1, 0, 1], v2=[0, 0, 1, 0, 0, 0, 0]; () -> SimpleMonomial{0,7}(v1, v2) end, 0)
-    @test m == SimpleMonomial{0,7}([1, 0, 0, 0, 1, 0, 1], [0, 0, 1, 0, 0, 0, 0])
+    @test_throws ArgumentError IntMonomial{0,1}([1, 0], [0])
+    @test_throws ArgumentError IntMonomial{0,2}([1, 0], [0])
+    m = IntMonomial{0,7}([1, 0, 0, 0, 1, 0, 1], [0, 0, 1, 0, 0, 0, 0])
+    alloc_test(let v1=[1, 0, 0, 0, 1, 0, 1], v2=[0, 0, 1, 0, 0, 0, 0]; () -> IntMonomial{0,7}(v1, v2) end, 0)
+    @test m == IntMonomial{0,7}([1, 0, 0, 0, 1, 0, 1], [0, 0, 1, 0, 0, 0, 0])
     alloc_test(() -> convert(typeof(m), m), 0)
-    @test_throws ArgumentError SimpleMonomial{0,1}([1, 2], [0, 0])
-    @test_throws ArgumentError SimpleMonomial{0,2}([1, 2], [0])
-    @test_throws ArgumentError SimpleMonomial{0,2}([0], [1, 2])
+    @test_throws ArgumentError IntMonomial{0,1}([1, 2], [0, 0])
+    @test_throws ArgumentError IntMonomial{0,2}([1, 2], [0])
+    @test_throws ArgumentError IntMonomial{0,2}([0], [1, 2])
 
-    @test nvariables(SimpleMonomialVector{0,4}([2 0; 0 1; 0 0; 0 1], [0 0; 0 0; 0 1; 0 0])) == 8
+    @test nvariables(IntMonomialVector{0,4}([2 0; 0 1; 0 0; 0 1], [0 0; 0 0; 0 1; 0 0])) == 8
 
-    @test nterms(SimpleMonomial{0,1}([2], [0])) == 1
-    @test collect(m) == [(SimpleComplexVariable{0,7}(1), 1), (SimpleComplexVariable{0,7}(3, true), 1),
-                         (SimpleComplexVariable{0,7}(5), 1), (SimpleComplexVariable{0,7}(7), 1)]
-    @test collect(SimpleConjMonomial(m)) == [(SimpleComplexVariable{0,7}(1, true), 1), (SimpleComplexVariable{0,7}(3), 1),
-                         (SimpleComplexVariable{0,7}(5, true), 1), (SimpleComplexVariable{0,7}(7, true), 1)]
-    @test collect(SimpleMonomial{0,7}([0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
-                        [(SimpleComplexVariable{0,7}(2), 1), (SimpleComplexVariable{0,7}(4, true), 2),
-                         (SimpleComplexVariable{0,7}(6), 3)]
+    @test nterms(IntMonomial{0,1}([2], [0])) == 1
+    @test collect(m) == [(IntComplexVariable{0,7}(1), 1), (IntComplexVariable{0,7}(3, true), 1),
+                         (IntComplexVariable{0,7}(5), 1), (IntComplexVariable{0,7}(7), 1)]
+    @test collect(IntConjMonomial(m)) == [(IntComplexVariable{0,7}(1, true), 1), (IntComplexVariable{0,7}(3), 1),
+                         (IntComplexVariable{0,7}(5, true), 1), (IntComplexVariable{0,7}(7, true), 1)]
+    @test collect(IntMonomial{0,7}([0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
+                        [(IntComplexVariable{0,7}(2), 1), (IntComplexVariable{0,7}(4, true), 2),
+                         (IntComplexVariable{0,7}(6), 3)]
 
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(1)) === 1
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(1, true)) === 0
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(2)) === 0
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(2, true)) === 1
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(3)) === 2
-    @test degree(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(3, true)) === 3
-    @test degree_complex(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(1)) === 1
-    @test degree_complex(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(2)) === 1
-    @test degree_complex(SimpleMonomial{0,3}([1, 0, 2], [0, 1, 3]), SimpleComplexVariable{0,3}(3)) === 3
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(1)) === 1
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(1, true)) === 0
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(2)) === 0
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(2, true)) === 1
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(3)) === 2
+    @test degree(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(3, true)) === 3
+    @test degree_complex(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(1)) === 1
+    @test degree_complex(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(2)) === 1
+    @test degree_complex(IntMonomial{0,3}([1, 0, 2], [0, 1, 3]), IntComplexVariable{0,3}(3)) === 3
 
-    @test_throws InexactError variable(SimpleMonomial{0,1}([2], [0]))
-    @test_throws InexactError variable(SimpleMonomial{0,2}([1, 0], [0, 1]))
-    @test_throws InexactError variable(constant_monomial(typeof(SimpleComplexVariable{0,1}(1))))
+    @test_throws InexactError variable(IntMonomial{0,1}([2], [0]))
+    @test_throws InexactError variable(IntMonomial{0,2}([1, 0], [0, 1]))
+    @test_throws InexactError variable(constant_monomial(typeof(IntComplexVariable{0,1}(1))))
 
-    z = SimpleComplexVariable{0,2}(1)
+    z = IntComplexVariable{0,2}(1)
     @test z != constant_monomial(typeof(z))
     @test constant_monomial(typeof(z)) != z
 
@@ -401,7 +401,7 @@ end
 
     typetests(m)
 
-    zmon = SimpleMonomial{0,2}([1, 0], [0, 0])
+    zmon = IntMonomial{0,2}([1, 0], [0, 0])
     @test variable(zmon) === z
     # no arithmetics
     @test variable(Term(1., zmon)) === z
@@ -410,21 +410,21 @@ end
     @test transpose(z) === z
     @test adjoint(z) === conj(z)
     @test transpose(m) === m
-    @test adjoint(m) === conj(m) == SimpleMonomial{0,7}(UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
+    @test adjoint(m) === conj(m) == IntMonomial{0,7}(UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
     @test !isreal(m)
-    @test isreal(SimpleMonomial{0,7}(UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
+    @test isreal(IntMonomial{0,7}(UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
 
     @testset "Effective variables" begin
-        y = ntuple(i -> SimpleComplexVariable{0,8}(i, true), Val(7))
-        z = SimpleComplexVariable{0,8}(8)
+        y = ntuple(i -> IntComplexVariable{0,8}(i, true), Val(7))
+        z = IntComplexVariable{0,8}(8)
         T = variable_union_type(z)
         @test z isa T
         @test y[2] isa T
-        @test T[y[2], z] == @inferred effective_variables(SimpleMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 1],
+        @test T[y[2], z] == @inferred effective_variables(IntMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 1],
                                                                               [0, 1, 0, 0, 0, 0, 0, 0]))
-        @test T[z] == @inferred effective_variables(      SimpleMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 1],
+        @test T[z] == @inferred effective_variables(      IntMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 1],
                                                                               [0, 0, 0, 0, 0, 0, 0, 0]))
-        @test T[y[2]] == @inferred effective_variables(   SimpleMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 0],
+        @test T[y[2]] == @inferred effective_variables(   IntMonomial{0,8}([0, 0, 0, 0, 0, 0, 0, 0],
                                                                               [0, 1, 0, 0, 0, 0, 0, 0]))
     end
 
@@ -434,58 +434,58 @@ end
 @testset "Monomial (mixed)" begin
     # lots of tests to skip, we don't construct monomials by multiplying variables
 
-    @test_throws ArgumentError SimpleMonomial{2,2}([1], [1, 2], [0, 1])
-    @test_throws ArgumentError SimpleMonomial{2,2}([1, 0], [1], [0, 1])
-    @test_throws ArgumentError SimpleMonomial{2,2}([1, 0], [1, 0], [0])
-    @test_throws ArgumentError SimpleMonomial{2,2}([1, 0], [1], [0])
-    m = SimpleMonomial{2,7}(UInt8[2, 3], UInt8[1, 0, 0, 0, 1, 0, 1], UInt8[0, 0, 1, 0, 0, 0, 0])
+    @test_throws ArgumentError IntMonomial{2,2}([1], [1, 2], [0, 1])
+    @test_throws ArgumentError IntMonomial{2,2}([1, 0], [1], [0, 1])
+    @test_throws ArgumentError IntMonomial{2,2}([1, 0], [1, 0], [0])
+    @test_throws ArgumentError IntMonomial{2,2}([1, 0], [1], [0])
+    m = IntMonomial{2,7}(UInt8[2, 3], UInt8[1, 0, 0, 0, 1, 0, 1], UInt8[0, 0, 1, 0, 0, 0, 0])
     alloc_test(let v1=UInt8[2, 3], v2=UInt8[1, 0, 0, 0, 1, 0, 1], v3=UInt8[0, 0, 1, 0, 0, 0, 0]
-        () -> SimpleMonomial{2,7}(v1, v2, v3)
+        () -> IntMonomial{2,7}(v1, v2, v3)
     end, 0)
-    @test m == SimpleMonomial{2,7}(Int8[2, 3], Int8[1, 0, 0, 0, 1, 0, 1], Int8[0, 0, 1, 0, 0, 0, 0])
+    @test m == IntMonomial{2,7}(Int8[2, 3], Int8[1, 0, 0, 0, 1, 0, 1], Int8[0, 0, 1, 0, 0, 0, 0])
     alloc_test(() -> convert(typeof(m), m), 0)
-    @test_throws ArgumentError SimpleMonomial{1,1}([1, 2], [1], [1])
-    @test_throws ArgumentError SimpleMonomial{1,1}([1], [1, 2], [0, 0])
-    @test_throws ArgumentError SimpleMonomial{1,2}([1], [1, 2], [0])
-    @test_throws ArgumentError SimpleMonomial{1,2}([1], [0], [1, 2])
+    @test_throws ArgumentError IntMonomial{1,1}([1, 2], [1], [1])
+    @test_throws ArgumentError IntMonomial{1,1}([1], [1, 2], [0, 0])
+    @test_throws ArgumentError IntMonomial{1,2}([1], [1, 2], [0])
+    @test_throws ArgumentError IntMonomial{1,2}([1], [0], [1, 2])
 
-    @test nvariables(SimpleMonomialVector{3,4}([0 2; 0 0; 1 1], [0 2; 1 0; 0 0; 1 0], [0 0; 0 0; 1 0; 0 0])) == 11
+    @test nvariables(IntMonomialVector{3,4}([0 2; 0 0; 1 1], [0 2; 1 0; 0 0; 1 0], [0 0; 0 0; 1 0; 0 0])) == 11
 
-    @test nterms(SimpleMonomial{1,1}([3], [2], [0])) == 1
-    @test collect(m) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
-                         (SimpleComplexVariable{2,7}(1), 1), (SimpleComplexVariable{2,7}(3, true), 1),
-                         (SimpleComplexVariable{2,7}(5), 1), (SimpleComplexVariable{2,7}(7), 1)]
-    @test collect(SimpleConjMonomial(m)) == [(SimpleRealVariable{2,7}(1), 2), (SimpleRealVariable{2,7}(2), 3),
-                         (SimpleComplexVariable{2,7}(1, true), 1), (SimpleComplexVariable{2,7}(3), 1),
-                         (SimpleComplexVariable{2,7}(5, true), 1), (SimpleComplexVariable{2,7}(7, true), 1)]
-    @test collect(SimpleMonomial{2,7}([0, 4], [0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
-                         [(SimpleRealVariable{2,7}(2), 4),
-                          (SimpleComplexVariable{2,7}(2), 1), (SimpleComplexVariable{2,7}(4, true), 2),
-                          (SimpleComplexVariable{2,7}(6), 3)]
+    @test nterms(IntMonomial{1,1}([3], [2], [0])) == 1
+    @test collect(m) == [(IntRealVariable{2,7}(1), 2), (IntRealVariable{2,7}(2), 3),
+                         (IntComplexVariable{2,7}(1), 1), (IntComplexVariable{2,7}(3, true), 1),
+                         (IntComplexVariable{2,7}(5), 1), (IntComplexVariable{2,7}(7), 1)]
+    @test collect(IntConjMonomial(m)) == [(IntRealVariable{2,7}(1), 2), (IntRealVariable{2,7}(2), 3),
+                         (IntComplexVariable{2,7}(1, true), 1), (IntComplexVariable{2,7}(3), 1),
+                         (IntComplexVariable{2,7}(5, true), 1), (IntComplexVariable{2,7}(7, true), 1)]
+    @test collect(IntMonomial{2,7}([0, 4], [0, 1, 0, 0, 0, 3, 0], [0, 0, 0, 2, 0, 0, 0])) ==
+                         [(IntRealVariable{2,7}(2), 4),
+                          (IntComplexVariable{2,7}(2), 1), (IntComplexVariable{2,7}(4, true), 2),
+                          (IntComplexVariable{2,7}(6), 3)]
 
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(1)) === 2
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(2)) === 1
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(1)) === 1
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(1, true)) === 0
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(2)) === 0
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(2, true)) === 1
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(3)) === 2
-    @test degree(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(3, true)) === 3
-    @test degree_complex(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(1)) === 2
-    @test degree_complex(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleRealVariable{2,3}(2)) === 1
-    @test degree_complex(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(1)) === 1
-    @test degree_complex(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(2)) === 1
-    @test degree_complex(SimpleMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), SimpleComplexVariable{2,3}(3)) === 3
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntRealVariable{2,3}(1)) === 2
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntRealVariable{2,3}(2)) === 1
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(1)) === 1
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(1, true)) === 0
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(2)) === 0
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(2, true)) === 1
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(3)) === 2
+    @test degree(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(3, true)) === 3
+    @test degree_complex(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntRealVariable{2,3}(1)) === 2
+    @test degree_complex(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntRealVariable{2,3}(2)) === 1
+    @test degree_complex(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(1)) === 1
+    @test degree_complex(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(2)) === 1
+    @test degree_complex(IntMonomial{2,3}([2, 1], [1, 0, 2], [0, 1, 3]), IntComplexVariable{2,3}(3)) === 3
 
-    @test_throws InexactError variable(SimpleMonomial{1,1}([3], [2], [0]))
-    @test_throws InexactError variable(SimpleMonomial{1,2}([1], [1, 0], [0, 1]))
-    @test_throws InexactError variable(constant_monomial(typeof(SimpleComplexVariable{1,1}(1))))
+    @test_throws InexactError variable(IntMonomial{1,1}([3], [2], [0]))
+    @test_throws InexactError variable(IntMonomial{1,2}([1], [1, 0], [0, 1]))
+    @test_throws InexactError variable(constant_monomial(typeof(IntComplexVariable{1,1}(1))))
 
-    # no constant monomial tests -> these belong to SimpleSparseMonomial, which is the default for monomial construction
-    x = SimpleRealVariable{3,2}(1)
+    # no constant monomial tests
+    x = IntRealVariable{3,2}(1)
     @test x != constant_monomial(typeof(x))
     @test constant_monomial(typeof(x)) != x
-    z = SimpleComplexVariable{3,2}(1)
+    z = IntComplexVariable{3,2}(1)
     @test z != constant_monomial(typeof(z))
     @test constant_monomial(typeof(z)) != z
     @test x != z
@@ -494,8 +494,8 @@ end
 
     typetests(m)
 
-    xmon = SimpleMonomial{3,2}([1, 0, 0], [0, 0], [0, 0])
-    zmon = SimpleMonomial{3,2}([0, 0, 0], [1, 0], [0, 0])
+    xmon = IntMonomial{3,2}([1, 0, 0], [0, 0], [0, 0])
+    zmon = IntMonomial{3,2}([0, 0, 0], [1, 0], [0, 0])
     @test variable(xmon) === x
     @test variable(zmon) === z
     # no arithmetics
@@ -509,24 +509,24 @@ end
     @test adjoint(x) === x
     @test adjoint(z) === conj(z)
     @test transpose(m) === m
-    @test adjoint(m) === conj(m) == SimpleMonomial{2,7}(UInt8[2, 3], UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
+    @test adjoint(m) === conj(m) == IntMonomial{2,7}(UInt8[2, 3], UInt8[0, 0, 1, 0, 0, 0, 0], UInt8[1, 0, 0, 0, 1, 0, 1])
     @test !isreal(m)
-    @test isreal(SimpleMonomial{2,7}(UInt8[2, 3], UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
+    @test isreal(IntMonomial{2,7}(UInt8[2, 3], UInt8[0, 1, 2, 3, 2, 1, 0], UInt8[0, 1, 2, 3, 2, 1, 0]))
 
     @testset "Effective variables" begin
-        x = SimpleRealVariable{3,5}(2)
-        y = SimpleComplexVariable{3,5}(1, true)
-        z = SimpleComplexVariable{3,5}(3)
-        T = SimpleVariable{3,5}
+        x = IntRealVariable{3,5}(2)
+        y = IntComplexVariable{3,5}(1, true)
+        z = IntComplexVariable{3,5}(3)
+        T = IntVariable{3,5}
         @test z isa T
         @test y isa T
-        @test T[x, y, z] == @inferred effective_variables(SimpleMonomial{3,5}([0, 2, 0], [0, 0, 1, 0, 0],
+        @test T[x, y, z] == @inferred effective_variables(IntMonomial{3,5}([0, 2, 0], [0, 0, 1, 0, 0],
                                                                                          [1, 0, 0, 0, 0]))
-        @test T[x] == @inferred effective_variables(      SimpleMonomial{3,5}([0, 2, 0], [0, 0, 0, 0, 0],
+        @test T[x] == @inferred effective_variables(      IntMonomial{3,5}([0, 2, 0], [0, 0, 0, 0, 0],
                                                                                          [0, 0, 0, 0, 0]))
-        @test T[y] == @inferred effective_variables(      SimpleMonomial{3,5}([0, 0, 0], [0, 0, 0, 0, 0],
+        @test T[y] == @inferred effective_variables(      IntMonomial{3,5}([0, 0, 0], [0, 0, 0, 0, 0],
                                                                                          [1, 0, 0, 0, 0]))
-        @test T[z] == @inferred effective_variables(      SimpleMonomial{3,5}([0, 0, 0], [0, 0, 1, 0, 0],
+        @test T[z] == @inferred effective_variables(      IntMonomial{3,5}([0, 0, 0], [0, 0, 1, 0, 0],
                                                                                          [0, 0, 0, 0, 0]))
     end
 
@@ -535,18 +535,18 @@ end
 
 @testset "Term" begin
     # as our implementation uses the default Term, there's not much to test
-    t = Term(3, SimpleMonomial{2,0}([2, 4]))
+    t = Term(3, IntMonomial{2,0}([2, 4]))
     alloc_test(() -> convert(typeof(t), t), 0)
     typetests(t)
-    typetests([t, Term(2, SimpleMonomial{2,0}([2, 0]))])
+    typetests([t, Term(2, IntMonomial{2,0}([2, 0]))])
 end
 
 @testset "Monomial vector" begin
     # by default, our monomial vector does not impose any order
     @test_throws ArgumentError monomials(2, 0, 0x1:0x0)
-    X = [SimpleMonomial{2,0}(UInt8[0, 2]),
-         SimpleMonomial{2,0}(UInt8[1, 1]),
-         SimpleMonomial{2,0}(UInt8[2, 0])]
+    X = [IntMonomial{2,0}(UInt8[0, 2]),
+         IntMonomial{2,0}(UInt8[1, 1]),
+         IntMonomial{2,0}(UInt8[2, 0])]
     monos = monomials(2, 0, 0x2:0x2)
     @test length(monos) == length(X)
     @test monos ⊆ monos
@@ -562,33 +562,33 @@ end
     @test monomials(2, 0, 0x1:0x3, filter_exps=e -> sum(e) > 1, filter_mons=m -> degree(m) < 3) == monos
     # we don't provide monomial_vector_type
 
-    X = SimpleMonomialVector{2,0}(UInt8[1 0 1; 0 0 1])
+    X = IntMonomialVector{2,0}(UInt8[1 0 1; 0 0 1])
     @test !(monos ⊆ X)
     @test !(X ⊆ monos)
     @test X == collect(X)
     @test nvariables(X) == 2
-    @test variables(X)[1] == SimpleRealVariable{2,0}(1)
-    @test variables(X)[2] == SimpleRealVariable{2,0}(2)
-    @test X[2:3][1] == SimpleMonomial{2,0}([0x1, 0x0])
-    @test X[2:3][2] == SimpleMonomial{2,0}([0x1, 0x1])
+    @test variables(X)[1] == IntRealVariable{2,0}(1)
+    @test variables(X)[2] == IntRealVariable{2,0}(2)
+    @test X[2:3][1] == IntMonomial{2,0}([0x1, 0x0])
+    @test X[2:3][2] == IntMonomial{2,0}([0x1, 0x1])
     @test X[3:3] ⊆ monos
     @test !(monos ⊆ X[3:3])
 
-    _checkindex(::SimpleMonomialVector{<:Any,<:Any,<:Integer,<:Tuple}, indexed::Bool) = @test indexed
-    _checkindex(::SimpleMonomialVector, indexed::Bool) = @test !indexed
+    _checkindex(::IntMonomialVector{<:Any,<:Any,<:Integer,<:Tuple}, indexed::Bool) = @test indexed
+    _checkindex(::IntMonomialVector, indexed::Bool) = @test !indexed
     function req_same(out, ref, indexed)
         @test out == ref
         _checkindex(out, indexed)
     end
 
     @testset "merge_monomial_vectors" begin
-        m1 = SimpleMonomialVector{2,0}([1; 1;; 1; 0])
-        m2 = SimpleMonomialVector{2,0}([2; 1;; 1; 0])
-        req_same(@inferred(merge_monomial_vectors([m1, m2])), SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1]), true)
-        req_same(merge_monomial_vectors(Any[m1, m2]), SimpleMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1]), true)
-        req_same(merge_monomial_vectors([m1, m2, monos]), SimpleMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
-        req_same(merge_monomial_vectors([m1, monos, m2]), SimpleMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
-        req_same(merge_monomial_vectors([monos, m1, m2]), SimpleMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
+        m1 = IntMonomialVector{2,0}([1; 1;; 1; 0])
+        m2 = IntMonomialVector{2,0}([2; 1;; 1; 0])
+        req_same(@inferred(merge_monomial_vectors([m1, m2])), IntMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1]), true)
+        req_same(merge_monomial_vectors(Any[m1, m2]), IntMonomialVector{2,0}([1; 0;; 1; 1;; 2; 1]), true)
+        req_same(merge_monomial_vectors([m1, m2, monos]), IntMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
+        req_same(merge_monomial_vectors([m1, monos, m2]), IntMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
+        req_same(merge_monomial_vectors([monos, m1, m2]), IntMonomialVector{2,0}([1; 0;; 0; 2;; 1; 1;; 2; 0;; 2; 1]), true)
         req_same(merge_monomial_vectors([monomials(2, 0, 0x1:0x1), monomials(2, 0, 0x2:0x2)]), monomials(2, 0, 0x1:0x2), false)
         req_same(merge_monomial_vectors([monomials(2, 0, 0x1:0x1), monomials(2, 0, 0x1:0x2)]), monomials(2, 0, 0x1:0x2), false)
         req_same(merge_monomial_vectors([monomials(2, 0, 0x1:0x2), monomials(2, 0, 0x2:0x2)]), monomials(2, 0, 0x1:0x2), false)
@@ -609,13 +609,13 @@ end
             monomials(2, 0, 0x2:0x5, maxmultideg=[3, 4])]), monomials(2, 0, 0x1:0x5, maxmultideg=[3, 4]), false)
         req_same(merge_monomial_vectors([monomials(2, 0, 0x2:0x3, maxmultideg=[2, 2]),
             monomials(2, 0, 0x2:0x4, minmultideg=[2, 0], maxmultideg=[2, 2])]),
-            SimpleMonomialVector{2,0}([0; 2;; 1; 1;; 2; 0;; 1; 2;; 2; 1;; 2; 2]), true)
+            IntMonomialVector{2,0}([0; 2;; 1; 1;; 2; 0;; 1; 2;; 2; 1;; 2; 2]), true)
     end
 
-    @test monomials(1, 0, 0x1:0x3) == SimpleMonomialVector{1,0}(UInt8[1 2 3])
+    @test monomials(1, 0, 0x1:0x3) == IntMonomialVector{1,0}(UInt8[1 2 3])
 
     @testset "monomials" begin
-        @test monomials(3, 0, 0x0:0x3) == SimpleMonomialVector{3,0}(
+        @test monomials(3, 0, 0x0:0x3) == IntMonomialVector{3,0}(
             copy(transpose(UInt8[
                 0 0 0
                 0 0 1
@@ -645,12 +645,12 @@ end
 
     # new tests
     @testset "intersect" begin
-        m1 = SimpleMonomialVector{2,0}([1; 1;; 1; 0])
-        m2 = SimpleMonomialVector{2,0}([2; 1;; 1; 0])
-        empty = SimpleMonomialVector{2,0}(zeros(Int, 2, 0))
-        req_same(@inferred(intersect(m1, m2)), SimpleMonomialVector{2,0}([1; 0;;]), true)
-        req_same(@inferred(intersect(m1, monos)), SimpleMonomialVector{2,0}([1; 1;;]), true)
-        req_same(@inferred(intersect(monos, m1)), SimpleMonomialVector{2,0}([1; 1;;]), true)
+        m1 = IntMonomialVector{2,0}([1; 1;; 1; 0])
+        m2 = IntMonomialVector{2,0}([2; 1;; 1; 0])
+        empty = IntMonomialVector{2,0}(zeros(Int, 2, 0))
+        req_same(@inferred(intersect(m1, m2)), IntMonomialVector{2,0}([1; 0;;]), true)
+        req_same(@inferred(intersect(m1, monos)), IntMonomialVector{2,0}([1; 1;;]), true)
+        req_same(@inferred(intersect(monos, m1)), IntMonomialVector{2,0}([1; 1;;]), true)
         req_same(@inferred(intersect(m2, monos)), empty, true)
         req_same(@inferred(intersect(monos, m2)), empty, true)
         req_same(intersect(monos, monos), monos, false)
@@ -676,31 +676,31 @@ end
         req_same(intersect(monomials(2, 0, 0x2:0x3, maxmultideg=[2, 2]),
             monomials(2, 0, 0x2:0x4, minmultideg=[2, 0], maxmultideg=[2, 2])),
             monomials(2, 0, 0x2:0x3, minmultideg=[2, 0], maxmultideg=[2, 2]), false)
-        m3 = SimpleMonomialVector{2,0}(ExponentsMultideg{2,UInt}(0, 3, [0, 0], [1, 1]))
+        m3 = IntMonomialVector{2,0}(ExponentsMultideg{2,UInt}(0, 3, [0, 0], [1, 1]))
         req_same(intersect(m1, m3), m1, true)
-        req_same(intersect(m2, m3), SimpleMonomialVector{2,0}([1; 0;;]), true)
+        req_same(intersect(m2, m3), IntMonomialVector{2,0}([1; 0;;]), true)
     end
 
     @testset failfast=true "effective_variables" begin
-        function evt(m::SimpleMonomialVector, v)
+        function evt(m::IntMonomialVector, v)
             @test effective_nvariables(m) == length(v)
             @test collect(effective_variables(m)) == v
         end
-        evt(monomials(2, 3, 0x0:0x2), SimpleVariable{2,3}.(1:8))
+        evt(monomials(2, 3, 0x0:0x2), IntVariable{2,3}.(1:8))
         @test effective_nvariables(monomials(2, 3, 0x0:0x1), monomials(2, 3, 0:2)) == 8
-        evt(monomials(2, 3, 0x0:0x0), SimpleVariable{2,3}[])
-        evt(SimpleMonomialVector{2,0}([0; 0;; 1; 0]), SimpleVariable{2,0}.([1]))
-        evt(SimpleMonomialVector{2,0}([1; 0;; 2; 0]), SimpleVariable{2,0}.([1]))
-        evt(SimpleMonomialVector{2,0}([0; 1;; 1; 0]), SimpleVariable{2,0}.([1, 2]))
-        @test effective_nvariables(SimpleMonomialVector{2,0}([0; 0;; 1; 0]), SimpleMonomialVector{2,0}([0; 0;; 1; 0])) == 1
-        @test effective_nvariables(SimpleMonomialVector{2,0}([0; 0;; 1; 0]), SimpleMonomialVector{2,0}([0; 0;; 1; 1])) == 2
+        evt(monomials(2, 3, 0x0:0x0), IntVariable{2,3}[])
+        evt(IntMonomialVector{2,0}([0; 0;; 1; 0]), IntVariable{2,0}.([1]))
+        evt(IntMonomialVector{2,0}([1; 0;; 2; 0]), IntVariable{2,0}.([1]))
+        evt(IntMonomialVector{2,0}([0; 1;; 1; 0]), IntVariable{2,0}.([1, 2]))
+        @test effective_nvariables(IntMonomialVector{2,0}([0; 0;; 1; 0]), IntMonomialVector{2,0}([0; 0;; 1; 0])) == 1
+        @test effective_nvariables(IntMonomialVector{2,0}([0; 0;; 1; 0]), IntMonomialVector{2,0}([0; 0;; 1; 1])) == 2
 
-        evt(monomials(3, 0, 0x2:0x5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3]), SimpleVariable{3,0}.(1:3))
-        evt(monomials(3, 0, 0x2:0x5, minmultideg=[1, 0, 4], maxmultideg=[7, 4, 8]), SimpleVariable{3,0}.([1, 3]))
+        evt(monomials(3, 0, 0x2:0x5, minmultideg=[1, 0, 2], maxmultideg=[7, 4, 3]), IntVariable{3,0}.(1:3))
+        evt(monomials(3, 0, 0x2:0x5, minmultideg=[1, 0, 4], maxmultideg=[7, 4, 8]), IntVariable{3,0}.([1, 3]))
         mons = monomials(4, 0, 0:5, minmultideg=[2, 0, 0, 0], maxmultideg=[4, 5, 6, 7])
         for rstart in 1:length(mons), rend in rstart:length(mons)
             sub = @view(mons[rstart:rend])
-            correct_efvars = Set{SimpleVariable{4,0}}()
+            correct_efvars = Set{IntVariable{4,0}}()
             for mon in sub, (var, pow) in mon
                 push!(correct_efvars, var)
             end
@@ -708,7 +708,7 @@ end
         end
         for subs in Combinatorics.powerset(1:length(mons), 0, 4)
             sub = @view(mons[subs])
-            correct_efvars = Set{SimpleVariable{4,0}}()
+            correct_efvars = Set{IntVariable{4,0}}()
             for mon in sub, (var, pow) in mon
                 push!(correct_efvars, var)
             end
@@ -717,165 +717,165 @@ end
     end
 
     @testset "iteration" begin
-        mv = SimpleMonomialVector{2,0}([2, 3, 5, 8, 13])
+        mv = IntMonomialVector{2,0}([2, 3, 5, 8, 13])
         e = mv.e
         @testset "standard (indexed)" begin
             vi = veciter(mv)
             it, state = iterate(vi)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 2))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 3))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 5))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 8))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 8))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 13))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 13))
             @test isnothing(iterate(vi, state))
         end
         @testset "enumerated (indexed)" begin
             vi = veciter(mv, true)
             it, state = iterate(vi)
-            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            @test it == (2, exponents(IntMonomial{2,0}(unsafe, e, 2)))
             it, state = iterate(vi, state)
-            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            @test it == (3, exponents(IntMonomial{2,0}(unsafe, e, 3)))
             it, state = iterate(vi, state)
-            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            @test it == (5, exponents(IntMonomial{2,0}(unsafe, e, 5)))
             it, state = iterate(vi, state)
-            @test it == (8, exponents(SimpleMonomial{2,0}(unsafe, e, 8)))
+            @test it == (8, exponents(IntMonomial{2,0}(unsafe, e, 8)))
             it, state = iterate(vi, state)
-            @test it == (13, exponents(SimpleMonomial{2,0}(unsafe, e, 13)))
+            @test it == (13, exponents(IntMonomial{2,0}(unsafe, e, 13)))
             @test isnothing(iterate(vi, state))
         end
 
-        mv = SimpleMonomialVector{2,0}([2, 3, 5, 8, 9])
+        mv = IntMonomialVector{2,0}([2, 3, 5, 8, 9])
         @testset "standard (iterated)" begin
             vi = veciter(mv)
             it, state = iterate(vi)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 2))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 3))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 5))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 8))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 8))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 9))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 9))
             @test isnothing(iterate(vi, state))
         end
         @testset "enumerated (iterated)" begin
             vi = veciter(mv, true)
             it, state = iterate(vi)
-            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            @test it == (2, exponents(IntMonomial{2,0}(unsafe, e, 2)))
             it, state = iterate(vi, state)
-            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            @test it == (3, exponents(IntMonomial{2,0}(unsafe, e, 3)))
             it, state = iterate(vi, state)
-            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            @test it == (5, exponents(IntMonomial{2,0}(unsafe, e, 5)))
             it, state = iterate(vi, state)
-            @test it == (8, exponents(SimpleMonomial{2,0}(unsafe, e, 8)))
+            @test it == (8, exponents(IntMonomial{2,0}(unsafe, e, 8)))
             it, state = iterate(vi, state)
-            @test it == (9, exponents(SimpleMonomial{2,0}(unsafe, e, 9)))
+            @test it == (9, exponents(IntMonomial{2,0}(unsafe, e, 9)))
             @test isnothing(iterate(vi, state))
         end
 
-        mv = SimpleMonomialVector{2,0}(2:6)
+        mv = IntMonomialVector{2,0}(2:6)
         @testset "standard (unit range)" begin
             vi = veciter(mv)
             it, state = iterate(vi)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 2))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 3))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 4))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 4))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 5))
             it, state = iterate(vi, state)
-            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 6))
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 6))
             @test isnothing(iterate(vi, state))
         end
         @testset "enumerated (unit range)" begin
             vi = veciter(mv, true)
             it, state = iterate(vi)
-            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            @test it == (2, exponents(IntMonomial{2,0}(unsafe, e, 2)))
             it, state = iterate(vi, state)
-            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            @test it == (3, exponents(IntMonomial{2,0}(unsafe, e, 3)))
             it, state = iterate(vi, state)
-            @test it == (4, exponents(SimpleMonomial{2,0}(unsafe, e, 4)))
+            @test it == (4, exponents(IntMonomial{2,0}(unsafe, e, 4)))
             it, state = iterate(vi, state)
-            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            @test it == (5, exponents(IntMonomial{2,0}(unsafe, e, 5)))
             it, state = iterate(vi, state)
-            @test it == (6, exponents(SimpleMonomial{2,0}(unsafe, e, 6)))
+            @test it == (6, exponents(IntMonomial{2,0}(unsafe, e, 6)))
             @test isnothing(iterate(vi, state))
         end
     end
 end
 
 @testset "Polynomial" begin
-    # polynomial is just a very thin wrapper, and its main importance is in converting other MP polynomials to SimplePolynomial
-    # (which is also mainly a feature of SimpleMonomialVector, but we'll test it here)
+    # polynomial is just a very thin wrapper, and its main importance is in converting other MP polynomials to IntPolynomial
+    # (which is also mainly a feature of IntMonomialVector, but we'll test it here)
     DynamicPolynomials.@polyvar x
 
-    @test terms(SimplePolynomial(polynomial([1, x^2, x, 2x^2]))) ==
-        [Term(1, SimpleMonomial{1,0}([0])),
-         Term(1, SimpleMonomial{1,0}([1])),
-         Term(3, SimpleMonomial{1,0}([2]))]
+    @test terms(IntPolynomial(polynomial([1, x^2, x, 2x^2]))) ==
+        [Term(1, IntMonomial{1,0}([0])),
+         Term(1, IntMonomial{1,0}([1])),
+         Term(3, IntMonomial{1,0}([2]))]
 
-    @test term(SimplePolynomial(x + x^2 - x)) isa AbstractTerm
+    @test term(IntPolynomial(x + x^2 - x)) isa AbstractTerm
 
     DynamicPolynomials.@complex_polyvar y
-    p = SimplePolynomial(3x^2 * y^4 + 2x)
-    @test terms(p)[1] == Term(2, SimpleMonomial{1,1}([1], [0], [0]))
-    @test terms(p)[end] == Term(3, SimpleMonomial{1,1}([2], [4], [0]))
+    p = IntPolynomial(3x^2 * y^4 + 2x)
+    @test terms(p)[1] == Term(2, IntMonomial{1,1}([1], [0], [0]))
+    @test terms(p)[end] == Term(3, IntMonomial{1,1}([2], [4], [0]))
     typetests(p)
-    typetests([p, SimplePolynomial(x + y)])
+    typetests([p, IntPolynomial(x + y)])
 
-    @test coefficient(SimplePolynomial(2x + 4y^2 + 3), SimpleMonomial{1,1}([0], [2], [0])) == 4
-    @test coefficient(SimplePolynomial(2x + 4y^2 + 3), SimpleMonomial{1,1}([2], [0], [0])) == 0
+    @test coefficient(IntPolynomial(2x + 4y^2 + 3), IntMonomial{1,1}([0], [2], [0])) == 4
+    @test coefficient(IntPolynomial(2x + 4y^2 + 3), IntMonomial{1,1}([2], [0], [0])) == 0
 
-    # no coefficient with variable selection, requires zero(::SimplePolynomial)
-    p = SimplePolynomial(x^2 - x^2)
+    # no coefficient with variable selection, requires zero(::IntPolynomial)
+    p = IntPolynomial(x^2 - x^2)
     @test maxdegree(p) == 0
-    @test maxdegree(p, SimpleRealVariable{1,1}(1)) == 0
-    @test maxdegree(p, SimpleComplexVariable{1,1}(1)) == 0
+    @test maxdegree(p, IntRealVariable{1,1}(1)) == 0
+    @test maxdegree(p, IntComplexVariable{1,1}(1)) == 0
     @test mindegree(p) == 0
-    @test mindegree(p, SimpleRealVariable{1,1}(1)) == 0
-    @test mindegree(p, SimpleComplexVariable{1,1}(1)) == 0
+    @test mindegree(p, IntRealVariable{1,1}(1)) == 0
+    @test mindegree(p, IntComplexVariable{1,1}(1)) == 0
     @test extdegree(p) == (0, 0)
-    @test extdegree(p, SimpleRealVariable{1,1}(1)) == (0, 0)
-    @test extdegree(p, SimpleComplexVariable{1,1}(1)) == (0, 0)
-    q = SimplePolynomial(x * y + 2 + x^2 * y + x + y)
+    @test extdegree(p, IntRealVariable{1,1}(1)) == (0, 0)
+    @test extdegree(p, IntComplexVariable{1,1}(1)) == (0, 0)
+    q = IntPolynomial(x * y + 2 + x^2 * y + x + y)
     @test maxdegree(q) == 3
-    @test maxdegree(q, SimpleRealVariable{1,1}(1)) == 2
-    @test maxdegree(q, SimpleComplexVariable{1,1}(1)) == 1
+    @test maxdegree(q, IntRealVariable{1,1}(1)) == 2
+    @test maxdegree(q, IntComplexVariable{1,1}(1)) == 1
     @test mindegree(q) == 0
-    @test mindegree(q, SimpleRealVariable{1,1}(1)) == 0
-    @test mindegree(q, SimpleComplexVariable{1,1}(1)) == 0
+    @test mindegree(q, IntRealVariable{1,1}(1)) == 0
+    @test mindegree(q, IntComplexVariable{1,1}(1)) == 0
     @test extdegree(q) == (0, 3)
-    @test extdegree(q, SimpleRealVariable{1,1}(1)) == (0, 2)
-    @test extdegree(q, SimpleComplexVariable{1,1}(1)) == (0, 1)
+    @test extdegree(q, IntRealVariable{1,1}(1)) == (0, 2)
+    @test extdegree(q, IntComplexVariable{1,1}(1)) == (0, 1)
 
-    @test coefficients(SimplePolynomial(x * y + 2 + 3x^2 * y + 4x + 6y)) == [2, 6, 4, 1, 3]
-    @test coefficients(SimplePolynomial(x * y + 2 + 3x^2 * y + 4x + 6y),
-        [SimpleMonomial{1,1}([1], [0], [0]),
-         SimpleMonomial{1,1}([1], [2], [0]),
-         SimpleMonomial{1,1}([1], [1], [0]),
-         SimpleMonomial{1,1}([2], [1], [0]),
-         SimpleMonomial{1,1}([0], [1], [0]),
-         SimpleMonomial{1,1}([3], [0], [0])
+    @test coefficients(IntPolynomial(x * y + 2 + 3x^2 * y + 4x + 6y)) == [2, 6, 4, 1, 3]
+    @test coefficients(IntPolynomial(x * y + 2 + 3x^2 * y + 4x + 6y),
+        [IntMonomial{1,1}([1], [0], [0]),
+         IntMonomial{1,1}([1], [2], [0]),
+         IntMonomial{1,1}([1], [1], [0]),
+         IntMonomial{1,1}([2], [1], [0]),
+         IntMonomial{1,1}([0], [1], [0]),
+         IntMonomial{1,1}([3], [0], [0])
         ]) == [4, 0, 1, 3, 6, 0]
-    @test monomials(SimplePolynomial(4x^2 * y + x * y + 2x + 3))[1:1] == [constant_monomial(SimplePolynomial(x * y))]
+    @test monomials(IntPolynomial(4x^2 * y + x * y + 2x + 3))[1:1] == [constant_monomial(IntPolynomial(x * y))]
 
-    for p in [SimplePolynomial(polynomial([4, 9], [x, x * x])), SimplePolynomial(polynomial([9, 4], [x * x, x]))]
+    for p in [IntPolynomial(polynomial([4, 9], [x, x * x])), IntPolynomial(polynomial([9, 4], [x * x, x]))]
         @test coefficients(p) == [4, 9]
-        @test monomials(p)[1] == SimpleMonomial{1,0}([1])
-        @test monomials(p)[2] == SimpleMonomial{1,0}([2])
-        @test monomials(p)[1:2][1] == SimpleMonomial{1,0}([1])
-        @test monomials(p)[1:2][2] == SimpleMonomial{1,0}([2])
+        @test monomials(p)[1] == IntMonomial{1,0}([1])
+        @test monomials(p)[2] == IntMonomial{1,0}([2])
+        @test monomials(p)[1:2][1] == IntMonomial{1,0}([1])
+        @test monomials(p)[1:2][2] == IntMonomial{1,0}([2])
     end
 
-    @test SimplePolynomial(x + 2y)' == SimplePolynomial(x + 2conj(y))
-    @test transpose(SimplePolynomial(x + y)) == SimplePolynomial(x + y)
-    @test transpose(SimplePolynomial(Term([1 2; 3 4], x^1))) == SimplePolynomial(Term([1 3; 2 4], x^1))
+    @test IntPolynomial(x + 2y)' == IntPolynomial(x + 2conj(y))
+    @test transpose(IntPolynomial(x + y)) == IntPolynomial(x + y)
+    @test transpose(IntPolynomial(Term([1 2; 3 4], x^1))) == IntPolynomial(Term([1 3; 2 4], x^1))
 
     # none of the rest
 end
@@ -891,16 +891,16 @@ end
     @test (mons[17] * mons[25]).index == 205
     alloc_test(let m1=mons[17], m2=mons[25]; () -> (m1 * m2).index end, 0)
 
-    @test monomial_index(SimpleRealVariable{3,5}(2)) == 13
-    @test monomial_index(SimpleComplexVariable{3,5}(4)) == 5
-    @test monomial_index(SimpleComplexVariable{3,5}(3, true)) == 6
+    @test monomial_index(IntRealVariable{3,5}(2)) == 13
+    @test monomial_index(IntComplexVariable{3,5}(4)) == 5
+    @test monomial_index(IntComplexVariable{3,5}(3, true)) == 6
 
     # mons[35] = x₁x₂, mons[113] = x₁x₂²
-    @test monomial_index(mons[35], SimpleRealVariable{3,2}(2)) == 113
+    @test monomial_index(mons[35], IntRealVariable{3,2}(2)) == 113
     # mons[109] = x₁x₂z₂
-    @test monomial_index(mons[35], SimpleComplexVariable{3,2}(2)) == 109
+    @test monomial_index(mons[35], IntComplexVariable{3,2}(2)) == 109
     # mons[108] = x₁x₂z̄₂
-    @test monomial_index(mons[35], SimpleComplexVariable{3,2}(2, true)) == 108
+    @test monomial_index(mons[35], IntComplexVariable{3,2}(2, true)) == 108
 
     @testset failfast=true "Index consistency with DynamicPolynomials" begin
         DynamicPolynomials.@polyvar x[1:3]

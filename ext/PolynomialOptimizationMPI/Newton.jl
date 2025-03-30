@@ -1,7 +1,7 @@
 function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     filepath::Union{<:AbstractString,Nothing}=nothing, zero::AbstractVector{P}, nonneg::AbstractVector{P},
     psd::AbstractVector{<:AbstractMatrix{P}}, groupings::RelaxationGroupings, kwargs...) where
-    {Nr,I<:Integer,P<:SimplePolynomial{<:Any,Nr,0,<:SimpleMonomialVector{Nr,0,I}}}
+    {Nr,I<:Integer,P<:IntPolynomial{<:Any,Nr,0,<:IntMonomialVector{Nr,0,I}}}
     nworkers = MPI.Comm_size(comm) # we don't need a master, everyone can do the same work
     # isone(nworkers) && return halfpolytope(V, objective, Val(false); verbose, filepath, zero, nonneg, psd, groupings,
     #     kwargs...)
@@ -18,7 +18,7 @@ function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     parameters, vertexmons = preproc(V, objective; verbose=verbose && isroot(rank), warn_disable_randomization=isroot(rank),
         zero, nonneg, psd, groupings, kwargs...)
     e = ExponentsMultideg{Nr,UInt}(analyze(vertexmons)...)
-    innermons = SimpleMonomialVector{Nr,0}(e)
+    innermons = IntMonomialVector{Nr,0}(e)
     num = length(innermons)
 
     if isroot(rank)
@@ -38,7 +38,7 @@ function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
                     MPI.Recv!(@view(candidates[i+1:i+sizeᵢ]), comm, source=rankᵢ, tag=3)
                     i += sizeᵢ
                 end
-                SimpleMonomialVector{Nr,0}(e, candidates)
+                IntMonomialVector{Nr,0}(e, candidates)
             end
         end
 
@@ -58,7 +58,7 @@ function halfpolytope(V, objective::P, comm, rank::MPIRank; verbose::Bool=false,
     end
 end
 
-function halfpolytope(V, objective::SimplePolynomial, ::Val{true}; kwargs...)
+function halfpolytope(V, objective::IntPolynomial, ::Val{true}; kwargs...)
     if isone(Threads.nthreads())
         MPI.Init(threadlevel=MPI.THREAD_SINGLE)
     elseif MPI.Init(threadlevel=MPI.THREAD_FUNNELED) < MPI.THREAD_FUNNELED

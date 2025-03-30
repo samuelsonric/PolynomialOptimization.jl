@@ -18,7 +18,7 @@ given by `key`.
 """
 Base.append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
 
-@inline function mindex(solver::AbstractAPISolver{<:Integer,T}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc}
+@inline function mindex(solver::AbstractAPISolver{<:Integer,T}, monomials::IntMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc}
     idx = monomial_index(monomials...)
     dictidx = Base.ht_keyindex(solver.mon_to_solver, FastKey(idx))
     @inbounds return (dictidx < 0 ?
@@ -34,7 +34,7 @@ end
 Given the moments vector as obtained from an [`AbstractAPISolver`](@ref), convert it to a [`MomentVector`](@ref). Note that this
 function is not fully type-stable, as the result may be based either on a dense or sparse vector depending on the relaxation.
 """
-function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
+function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}}, moments::Vector{V},
     solver::AbstractAPISolver{K}) where {Nr,Nc,K<:Integer,V<:Real}
     @assert(length(moments) ≥ length(solver.mon_to_solver))
     # In any case, our variables will not be in the proper order. First figure this out.

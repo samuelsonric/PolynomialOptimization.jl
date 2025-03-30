@@ -1,9 +1,9 @@
 # We only accept ExponentsAll; else, we cannot guarantee that all the resulting exponents will in fact be possible. In this
 # way, we don't have to check for equality of the exponents sets (or form the largest cover), which is also beneficial.
 # And converting polynomials from the MP interface will yield ExponentsAll anyway.
-function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::AbstractVector{<:SimplePolynomial{<:Any,Nr,Nc}},
-    nonneg::AbstractVector{<:SimplePolynomial{<:Any,Nr,Nc}},
-    psd::AbstractVector{<:AbstractMatrix{<:SimplePolynomial{<:Any,Nr,Nc}}}, prefactor::SimplePolynomial{<:Any,Nr,Nc},
+function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::AbstractVector{<:IntPolynomial{<:Any,Nr,Nc}},
+    nonneg::AbstractVector{<:IntPolynomial{<:Any,Nr,Nc}},
+    psd::AbstractVector{<:AbstractMatrix{<:IntPolynomial{<:Any,Nr,Nc}}}, prefactor::IntPolynomial{<:Any,Nr,Nc},
     groupings::RelaxationGroupings{Nr,Nc}, verbose::Bool, need_copy::Bool) where {Nr,Nc}
     @verbose_info("Incorporating constraints into set of exponents")
     # Note that in the complex-valued case there's no mixing - i.e., no real variables. And every monomial appears once in its
@@ -37,7 +37,7 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
                 @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates{Nr}(exponents(mon))))
             end
             @verbose_info("Sorting and removing duplicates")
-            return SimpleMonomialVector{Nr,Nc}(e, Base._groupedunique(sort!(finish!(candidates))))
+            return IntMonomialVector{Nr,Nc}(e, Base._groupedunique(sort!(finish!(candidates))))
         end
     end
 
@@ -72,7 +72,7 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
         if !iszero(Nc)
             monₜe = KillConjugates{Nr}(exponents(monₜ))
             if !constr_is_real
-                monₜec = KillConjugates{Nr}(exponents(SimpleConjMonomial(monₜ)))
+                monₜec = KillConjugates{Nr}(exponents(IntConjMonomial(monₜ)))
             end
         end
         for (i, g₁) in enumerate(grouping)
@@ -146,5 +146,5 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
 
     # now we need to re-cast the indices into the exponent-representations
     @verbose_info("├ Total number of coefficients: ", length(mons_idx_set))
-    return SimpleMonomialVector{Nr,Nc}(e, sort!(convert.(UInt, mons_idx_set)))
+    return IntMonomialVector{Nr,Nc}(e, sort!(convert.(UInt, mons_idx_set)))
 end

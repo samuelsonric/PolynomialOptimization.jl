@@ -11,7 +11,7 @@ eigenvalues are considered to be negative.
 
 See also [`poly_optimize`](@ref).
 """
-function optimality_certificate(result::Result{<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}}, ϵ::R=1e-6) where {Nr,Nc,R<:Real}
+function optimality_certificate(result::Result{<:AbstractRelaxation{<:Problem{<:IntPolynomial{<:Any,Nr,Nc}}}}, ϵ::R=1e-6) where {Nr,Nc,R<:Real}
     relaxation = result.relaxation
     deg = degree(relaxation)
     deg < 1 && return :CertificateUnavailable
@@ -42,9 +42,9 @@ function optimality_certificate(result::Result{<:AbstractRelaxation{<:Problem{<:
                     zᵢ, zⱼ = vars[i], vars[j]
                     m₁₂ = moment_matrix(result; max_deg, prefix=zᵢ)
                     m₁₃ = moment_matrix(result; max_deg, prefix=zⱼ)
-                    m₂₂ = moment_matrix(result; max_deg, prefix=zᵢ*SimpleConjMonomial(zᵢ))
-                    m₂₃ = moment_matrix(result; max_deg, prefix=zⱼ*SimpleConjMonomial(zᵢ))
-                    m₃₃ = moment_matrix(result; max_deg, prefix=zⱼ*SimpleConjMonomial(zⱼ))
+                    m₂₂ = moment_matrix(result; max_deg, prefix=zᵢ*IntConjMonomial(zᵢ))
+                    m₂₃ = moment_matrix(result; max_deg, prefix=zⱼ*IntConjMonomial(zᵢ))
+                    m₃₃ = moment_matrix(result; max_deg, prefix=zⱼ*IntConjMonomial(zⱼ))
                     if min(eigvals!(Hermitian([m₁₁       m₁₂       m₁₃
                                                conj(m₁₂) m₂₂       m₂₃
                                                conj(m₁₃) conj(m₂₃) m₃₃]))) < -ϵ
@@ -55,7 +55,7 @@ function optimality_certificate(result::Result{<:AbstractRelaxation{<:Problem{<:
             elseif !iszero(Nc)
                 @inbounds z = vars[1]
                 m₁₂ = moment_matrix(result; max_deg, prefix=z)
-                m₂₂ = moment_matrix(result; max_deg, prefix=z*SimpleConjMonomial(z))
+                m₂₂ = moment_matrix(result; max_deg, prefix=z*IntConjMonomial(z))
                 if min(eigvals!(Hermitian([m₁₁ m₁₂; conj(m₁₂) m₂₂]))) < -ϵ
                     fail = true
                 end

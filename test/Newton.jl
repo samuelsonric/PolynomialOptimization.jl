@@ -72,7 +72,7 @@ end
         DynamicPolynomials.@polyvar w x y z
         @testnewtons halfpolytope(
             method,
-            PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
+            PolynomialOptimization.IntPolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
             verbose=true
         ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
     end
@@ -83,7 +83,7 @@ end
         DynamicPolynomials.@polyvar w x y z
         @testnewtons halfpolytope(
             method,
-            PolynomialOptimization.SimplePolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
+            PolynomialOptimization.IntPolynomial((w^4 + 1) * (x^4 + 1) * (y^4 + 1) * (z^4 + 1) + 2w + 3x + 4y + 5z),
             preprocess_quick=false, preprocess_fine=true, verbose=true
         ) == monomials(4, 0, 0:8, minmultideg=fill(0, 4), maxmultideg=fill(2, 4))
     end

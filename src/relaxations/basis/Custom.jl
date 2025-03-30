@@ -1,4 +1,4 @@
-struct Custom{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
+struct Custom{P<:Problem,MV<:IntMonomialVector,G<:RelaxationGroupings} <: AbstractRelaxationBasis{P}
     problem::P
     degree::Int
     basis::MV
@@ -10,9 +10,9 @@ struct Custom{P<:Problem,MV<:SimpleMonomialVector,G<:RelaxationGroupings} <: Abs
     Constructs a relaxation out of a polynomial optimization problem for the case in which a suitable basis is already known.
     """
     function Custom(problem::P,
-        basis::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractVector{<:AbstractMonomialLike}}) where {Nr,Nc,I<:Integer,Poly<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
-        if !(basis isa SimpleMonomialVector)
-            basis = SimpleMonomialVector{I}(basis; vars=problem.original_variables)
+        basis::Union{<:IntMonomialVector{Nr,Nc},<:AbstractVector{<:AbstractMonomialLike}}) where {Nr,Nc,I<:Integer,Poly<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
+        if !(basis isa IntMonomialVector)
+            basis = IntMonomialVector{I}(basis; vars=problem.original_variables)
             if !iszero(Nc)
                 for v in effective_variables(basis)
                     isconj(v) && throw(ArgumentError("Any custom basis must not contain explicit conjugates"))

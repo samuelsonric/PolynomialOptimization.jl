@@ -12,7 +12,7 @@ makedocs(sitename="PolynomialOptimization.jl",
         "includedsolvers.md",
         "backend.md",
         "auxreference.md",
-        "simplepolynomials.md"
+        "intpolynomials.md"
     ],
     warnonly=:missing_docs,
     doctest=false

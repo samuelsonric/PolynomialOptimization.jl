@@ -309,7 +309,7 @@ function SOSCertificate(result::Result)
     return SOSCertificate(relaxation, result.objective, data)
 end
 
-function sos_decomposition(matrix, grouping::SimpleMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
+function sos_decomposition(matrix, grouping::IntMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
     # What to do with negative eigenvalues? We might get very small negative eigenvalues just due to numerical error; this is
     # fine. We could raise an error if the smallest eigenvalue is smaller than -ϵ. But if ϵ = 0, the user wants to keep
     # everything, though obviously negative eigenvalues have to be discarded. So we decide not to raise an error at all.
@@ -318,7 +318,7 @@ function sos_decomposition(matrix, grouping::SimpleMonomialVector{Nr,Nc,I}, ϵ) 
         # while we reshaped the vector into a matrix, let's skip the overload here
         @assert(isone(length(matrix)))
         val = first(matrix)
-        return [SimplePolynomial([val > 0 ? sqrt(val) : zero(val)], grouping)]
+        return [IntPolynomial([val > 0 ? sqrt(val) : zero(val)], grouping)]
     end
     matrixdim = LinearAlgebra.checksquare(matrix)
     n = length(grouping)
@@ -339,12 +339,12 @@ function sos_decomposition(matrix, grouping::SimpleMonomialVector{Nr,Nc,I}, ϵ) 
                 vec[j] *= val
             end
         end
-        polynomials[k] = SimplePolynomial(collect(vec), grouping)
+        polynomials[k] = IntPolynomial(collect(vec), grouping)
     end
     return polynomials
 end
 
-function sos_decomposition(::Type{Matrix}, matrix, grouping::SimpleMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
+function sos_decomposition(::Type{Matrix}, matrix, grouping::IntMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
     matrixdim = LinearAlgebra.checksquare(matrix)
     n = length(grouping)
     d = matrixdim ÷ n
@@ -366,7 +366,7 @@ function sos_decomposition(::Type{Matrix}, matrix, grouping::SimpleMonomialVecto
         end
         coeffs = reshape(vec, d, n) # col-major: the second system is of size d, so here the first
         for j in 1:d
-            @inbounds Mᵀ[j, k] = SimplePolynomial(coeffs[j, :], grouping)
+            @inbounds Mᵀ[j, k] = IntPolynomial(coeffs[j, :], grouping)
         end
     end
     return transpose(Mᵀ)
@@ -374,8 +374,8 @@ end
 
 @inline _trunc(x, ϵ) = abs(x) < ϵ ? zero(x) : x
 
-function poly_decomposition(data, grouping::SimpleMonomialVector{Nr,Nc,I},
-    constraint::SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}}, ϵ) where {Nr,Nc,I<:Integer}
+function poly_decomposition(data, grouping::IntMonomialVector{Nr,Nc,I},
+    constraint::IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}, ϵ) where {Nr,Nc,I<:Integer}
     # this is a decomposition of the equality constraint prefactors, which are arbitrary polynomials, no longer SOS.
     # keep in sync with MomentHelpers -> moment_add_equality
 
@@ -385,13 +385,13 @@ function poly_decomposition(data, grouping::SimpleMonomialVector{Nr,Nc,I},
         if !iszero(Nc)
             g₁real = !iszero(Nr) && isreal(g₁)
             let g₂=g₁
-                prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
                 indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
                 indexug ≤ 0 && @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
             end
         end
         for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
-            prodidx = FastKey(monomial_index(g₁, SimpleConjMonomial(g₂)))
+            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
             indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
             if indexug ≤ 0
                 @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
@@ -411,7 +411,7 @@ function poly_decomposition(data, grouping::SimpleMonomialVector{Nr,Nc,I},
 
 
     for grouping_idx in unique_groupings
-        grouping = SimpleMonomial{Nr,Nc}(unsafe, e, convert(I, grouping_idx))
+        grouping = IntMonomial{Nr,Nc}(unsafe, e, convert(I, grouping_idx))
         unsafe_push!(mons, monomial_index(e, grouping))
         unsafe_push!(coeffs, data[i])
         i += 1
@@ -420,7 +420,7 @@ function poly_decomposition(data, grouping::SimpleMonomialVector{Nr,Nc,I},
     mons_v = finish!(mons)
     coeffs_v = finish!(coeffs)
     sort_along!(mons_v, coeffs_v)
-    return SimplePolynomial(coeffs_v, SimpleMonomialVector{Nr,Nc}(e, mons_v))
+    return IntPolynomial(coeffs_v, IntMonomialVector{Nr,Nc}(e, mons_v))
 end
 
 function Base.show(io::IO, m::MIME"text/plain", cert::SOSCertificate, ϵ=1e-6)

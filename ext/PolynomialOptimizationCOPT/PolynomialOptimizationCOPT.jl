@@ -2,7 +2,7 @@ module PolynomialOptimizationCOPT
 
 using COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.Solver, PolynomialOptimization.Newton
 using PolynomialOptimization: @assert, @inbounds, @allocdiff
-using PolynomialOptimization.SimplePolynomials: veciter
+using PolynomialOptimization.IntPolynomials: veciter
 using COPT: _check_ret, Env#, libcopt
 import PolynomialOptimization
 

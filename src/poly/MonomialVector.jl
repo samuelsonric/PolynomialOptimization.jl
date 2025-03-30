@@ -1,44 +1,44 @@
-export SimpleMonomialVector, effective_nvariables, change_backend
+export IntMonomialVector, effective_nvariables, change_backend
 
-struct SimpleMonomialVector{Nr,Nc,I<:Integer,E,T<:SimpleMonomial{Nr,Nc,I}} <: AbstractVector{T}
+struct IntMonomialVector{Nr,Nc,I<:Integer,E,T<:IntMonomial{Nr,Nc,I}} <: AbstractVector{T}
     data::E
 
-    @inline function SimpleMonomialVector{Nr,Nc}(e::AbstractExponentsDegreeBounded{N,I}) where {Nr,Nc,N,I<:Integer}
-        N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (e,)))
+    @inline function IntMonomialVector{Nr,Nc}(e::AbstractExponentsDegreeBounded{N,I}) where {Nr,Nc,N,I<:Integer}
+        N == Nr + 2Nc || throw(MethodError(IntMonomialVector{Nr,Nc}, (e,)))
         index_counts(e, 0) # populate the cache
-        new{Nr,Nc,I,typeof(e),SimpleMonomial{Nr,Nc,I,typeof(e)}}(e)
+        new{Nr,Nc,I,typeof(e),IntMonomial{Nr,Nc,I,typeof(e)}}(e)
     end
 
-    @inline function SimpleMonomialVector{Nr,Nc}(::Unsafe, e::AbstractExponents{N,I}, indices::AbstractVector{I}) where {Nr,Nc,N,I<:Integer}
-        N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (unsafe, e, indices))) # compile-time check
+    @inline function IntMonomialVector{Nr,Nc}(::Unsafe, e::AbstractExponents{N,I}, indices::AbstractVector{I}) where {Nr,Nc,N,I<:Integer}
+        N == Nr + 2Nc || throw(MethodError(IntMonomialVector{Nr,Nc}, (unsafe, e, indices))) # compile-time check
         @inbounds degree_from_index(e, isempty(indices) ? one(I) : indices[end]) # populate the cache
         et = (e, indices)
-        new{Nr,Nc,I,typeof(et),SimpleMonomial{Nr,Nc,I,typeof(e)}}(et)
+        new{Nr,Nc,I,typeof(et),IntMonomial{Nr,Nc,I,typeof(e)}}(et)
     end
 end
 
-function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{<:Any,I}, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer}
+function IntMonomialVector{Nr,Nc}(e::AbstractExponents{<:Any,I}, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer}
     _sortedallunique(sort!(indices)) || throw(ArgumentError("Monomial vector must not contain duplicates"))
     if !isempty(indices)
         @boundscheck @inbounds indices[begin] ≥ firstindex(e) || throw(BoundsError(e, indices[begin]))
         e isa AbstractExponentsDegreeBounded &&
             (@boundscheck @inbounds indices[end] ≤ lastindex(e) || throw(BoundsError(e, indices[end])))
     end
-    return SimpleMonomialVector{Nr,Nc}(unsafe, e, indices)
+    return IntMonomialVector{Nr,Nc}(unsafe, e, indices)
 end
 
-SimpleMonomialVector{Nr,Nc}(::Unsafe, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer} =
-    SimpleMonomialVector{Nr,Nc}(unsafe, ExponentsAll{Nr+2Nc,I}(), indices)
-SimpleMonomialVector{Nr,Nc}(indices::AbstractVector{I}) where {Nr,Nc,I<:Integer} =
-    SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), indices)
+IntMonomialVector{Nr,Nc}(::Unsafe, indices::AbstractVector{I}) where {Nr,Nc,I<:Integer} =
+    IntMonomialVector{Nr,Nc}(unsafe, ExponentsAll{Nr+2Nc,I}(), indices)
+IntMonomialVector{Nr,Nc}(indices::AbstractVector{I}) where {Nr,Nc,I<:Integer} =
+    IntMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), indices)
 
 """
-    SimpleMonomialVector{Nr,0[,I]}([e::AbstractExponents,]
+    IntMonomialVector{Nr,0[,I]}([e::AbstractExponents,]
         exponents_real::AbstractMatrix{<:Integer}, along...)
-    SimpleMonomialVector{0,Nc[,I]}([e::AbstractExponents,]
+    IntMonomialVector{0,Nc[,I]}([e::AbstractExponents,]
         exponents_complex::AbstractMatrix{<:Integer},
         exponents_conj::AbstractMatrix{<:Integer}, along...)
-    SimpleMonomialVector{Nr,Nc[,I]}([e::AbstractExponents,]
+    IntMonomialVector{Nr,Nc[,I]}([e::AbstractExponents,]
         exponents_real::AbstractMatrix{<:Integer},
         exponents_complex::AbstractMatrix{<:Integer},
         exponents_conj::AbstractMatrix{<:Integer}, along...)
@@ -51,7 +51,7 @@ All matrices must have the same number of columns; complex and conjugate matrice
 The input will be sorted; if `along` are present, those vectors will be put in the same order as the inputs.
 The input must not contain duplicates.
 """
-function SimpleMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractMatrix{<:Integer}, along...) where {Nr,I<:Integer}
+function IntMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::AbstractMatrix{<:Integer}, along...) where {Nr,I<:Integer}
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
     exps = Vector{I}(undef, size(exponents_real, 2))
     for (i, col) in zip(eachindex(exps), eachcol(exponents_real))
@@ -64,12 +64,12 @@ function SimpleMonomialVector{Nr,0}(e::AbstractExponents{Nr,I}, exponents_real::
         e isa AbstractExponentsDegreeBounded &&
             (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
-    return SimpleMonomialVector{Nr,0}(unsafe, e, exps)
+    return IntMonomialVector{Nr,0}(unsafe, e, exps)
 end
 
-function SimpleMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::AbstractMatrix{<:Integer},
+function IntMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex::AbstractMatrix{<:Integer},
     exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nc,N,I<:Integer}
-    N == 2Nc || throw(MethodError(SimpleMonomialVector{0,Nc}, (e, exponents_complex, exponents_conj, along...)))
+    N == 2Nc || throw(MethodError(IntMonomialVector{0,Nc}, (e, exponents_complex, exponents_conj, along...)))
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
         throw(ArgumentError("Complex and conjugate exponents lengths are different"))
     size(exponents_complex, 1) == Nc ||
@@ -87,12 +87,12 @@ function SimpleMonomialVector{0,Nc}(e::AbstractExponents{N,I}, exponents_complex
         e isa AbstractExponentsDegreeBounded &&
             (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
-    return SimpleMonomialVector{0,Nc}(unsafe, e, exps)
+    return IntMonomialVector{0,Nc}(unsafe, e, exps)
 end
 
-function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::AbstractMatrix{<:Integer},
+function IntMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::AbstractMatrix{<:Integer},
     exponents_complex::AbstractMatrix{<:Integer}, exponents_conj::AbstractMatrix{<:Integer}, along...) where {Nr,Nc,N,I<:Integer}
-    N == Nr + 2Nc || throw(MethodError(SimpleMonomialVector{Nr,Nc}, (e, exponents_real, exponents_complex, exponents_conj,
+    N == Nr + 2Nc || throw(MethodError(IntMonomialVector{Nr,Nc}, (e, exponents_real, exponents_complex, exponents_conj,
                                                                      along...)))
     size(exponents_real, 1) == Nr || throw(ArgumentError("Requested $Nr real variables, but got $(size(exponents_real, 1))"))
     size(exponents_complex, 1) == size(exponents_conj, 1) ||
@@ -113,28 +113,28 @@ function SimpleMonomialVector{Nr,Nc}(e::AbstractExponents{N,I}, exponents_real::
         e isa AbstractExponentsDegreeBounded &&
             (@boundscheck @inbounds exps[end] ≤ lastindex(e) || throw(BoundsError(e, exps[end])))
     end
-    return SimpleMonomialVector{Nr,Nc}(unsafe, e, exps)
+    return IntMonomialVector{Nr,Nc}(unsafe, e, exps)
 end
 
-SimpleMonomialVector{Nr,Nc}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc} =
-    SimpleMonomialVector{Nr,Nc,UInt}(exponents, args...)
-SimpleMonomialVector{Nr,Nc,I}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc,I<:Integer} =
-    SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), exponents, args...)
+IntMonomialVector{Nr,Nc}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc} =
+    IntMonomialVector{Nr,Nc,UInt}(exponents, args...)
+IntMonomialVector{Nr,Nc,I}(exponents::AbstractMatrix{<:Integer}, args...) where {Nr,Nc,I<:Integer} =
+    IntMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,I}(), exponents, args...)
 
 """
-    SimpleMonomialVector[{I}](mv::AbstractVector{<:AbstractMonomialLike}, along...;
+    IntMonomialVector[{I}](mv::AbstractVector{<:AbstractMonomialLike}, along...;
         vars=variables(mv))
 
-Creates a `SimpleMonomialVector` from a generic monomial vector that supports `MultivariatePolynomials`'s interface.
+Creates a `IntMonomialVector` from a generic monomial vector that supports `MultivariatePolynomials`'s interface.
 The monomials will internally be represented by the type `I` (`UInt` by default).
 The keyword argument `vars` must contain all real-valued and original complex-valued (so not the conjugates) variables that
 occur in the monomial vector. However, the order of this iterable (which must have a length) controls how the MP variables are
-mapped to [`SimpleVariable`](@ref)s. The variables must be commutative; there is currently no way to check for this, so in the
+mapped to [`IntVariable`](@ref)s. The variables must be commutative; there is currently no way to check for this, so in the
 conversion process, commutativity is simply assumed.
 The input must not contain duplicates. It will be sorted; if `along` are present, those vectors will be put in the same order
 as the inputs.
 """
-function SimpleMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
+function IntMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, along::AbstractVector...;
     vars=unique!((x -> isconj(x) ? conj(x) : x).(variables(mv)))) where {I<:Integer}
     any(isconj, vars) && throw(ArgumentError("The variables must not contain conjuates"))
     allunique(vars) || throw(ArgumentError("Variables must not contain duplicates"))
@@ -163,18 +163,18 @@ function SimpleMonomialVector{I}(mv::AbstractVector{<:AbstractMonomialLike}, alo
     end
     sort_along!(exps, along...)
     _sortedallunique(exps) || throw(ArgumentError("Monomial vector must not contain duplicates"))
-    return SimpleMonomialVector{vars_real,vars_complex}(unsafe, ea, exps)
+    return IntMonomialVector{vars_real,vars_complex}(unsafe, ea, exps)
 end
 
-SimpleMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, args...; kwargs...) =
-    SimpleMonomialVector{UInt}(mv, args...; kwargs...)
+IntMonomialVector(mv::AbstractVector{<:AbstractMonomialLike}, args...; kwargs...) =
+    IntMonomialVector{UInt}(mv, args...; kwargs...)
 
-const SimpleMonomialVectorComplete{Nr,Nc,I<:Integer,E<:AbstractExponentsDegreeBounded,T<:SimpleMonomial{Nr,Nc,I}} =
-    SimpleMonomialVector{Nr,Nc,I,E,T}
-const SimpleMonomialVectorSubset{Nr,Nc,I<:Integer,E<:AbstractExponents,T<:SimpleMonomial{Nr,Nc,I}} =
-    SimpleMonomialVector{Nr,Nc,I,<:Tuple{E,AbstractVector{I}},T}
+const IntMonomialVectorComplete{Nr,Nc,I<:Integer,E<:AbstractExponentsDegreeBounded,T<:IntMonomial{Nr,Nc,I}} =
+    IntMonomialVector{Nr,Nc,I,E,T}
+const IntMonomialVectorSubset{Nr,Nc,I<:Integer,E<:AbstractExponents,T<:IntMonomial{Nr,Nc,I}} =
+    IntMonomialVector{Nr,Nc,I,<:Tuple{E,AbstractVector{I}},T}
 
-function Base.getproperty(x::SimpleMonomialVectorComplete{<:Any,<:Any,I}, f::Symbol) where {I<:Integer}
+function Base.getproperty(x::IntMonomialVectorComplete{<:Any,<:Any,I}, f::Symbol) where {I<:Integer}
     if f === :e
         return getfield(x, :data)
     elseif f === :indices
@@ -183,7 +183,7 @@ function Base.getproperty(x::SimpleMonomialVectorComplete{<:Any,<:Any,I}, f::Sym
         return getfield(x, f)
     end
 end
-function Base.getproperty(x::SimpleMonomialVectorSubset, f::Symbol)
+function Base.getproperty(x::IntMonomialVectorSubset, f::Symbol)
     if f === :e
         return getfield(x, :data)[1]
     elseif f === :indices
@@ -193,36 +193,36 @@ function Base.getproperty(x::SimpleMonomialVectorSubset, f::Symbol)
     end
 end
 
-Base.IndexStyle(::Type{<:SimpleMonomialVector}) = IndexLinear()
-Base.size(x::SimpleMonomialVector) = (unsafe_cast(Int, length(x.indices)),)
-Base.firstindex(::SimpleMonomialVector) = 1
-Base.lastindex(x::SimpleMonomialVector) = length(x)
-Base.isempty(::SimpleMonomialVectorComplete) = false # AbstractExponents must not be empty
-Base.copy(x::SimpleMonomialVectorComplete) = x
-Base.copy(x::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} = SimpleMonomialVector{Nr,Nc}(unsafe, x.e, copy(x.indices))
+Base.IndexStyle(::Type{<:IntMonomialVector}) = IndexLinear()
+Base.size(x::IntMonomialVector) = (unsafe_cast(Int, length(x.indices)),)
+Base.firstindex(::IntMonomialVector) = 1
+Base.lastindex(x::IntMonomialVector) = length(x)
+Base.isempty(::IntMonomialVectorComplete) = false # AbstractExponents must not be empty
+Base.copy(x::IntMonomialVectorComplete) = x
+Base.copy(x::IntMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} = IntMonomialVector{Nr,Nc}(unsafe, x.e, copy(x.indices))
 
-@inline function Base.getindex(x::SimpleMonomialVector{Nr,Nc}, i::Integer) where {Nr,Nc}
+@inline function Base.getindex(x::IntMonomialVector{Nr,Nc}, i::Integer) where {Nr,Nc}
     @boundscheck checkbounds(x, i)
-    @inbounds return SimpleMonomial{Nr,Nc}(unsafe, x.e, x.indices[i])
+    @inbounds return IntMonomial{Nr,Nc}(unsafe, x.e, x.indices[i])
 end
-@inline function Base.getindex(x::SimpleMonomialVector{Nr,Nc}, i) where {Nr,Nc}
+@inline function Base.getindex(x::IntMonomialVector{Nr,Nc}, i) where {Nr,Nc}
     @boundscheck checkbounds(x, i)
-    @inbounds return SimpleMonomialVector{Nr,Nc}(unsafe, x.e, x.indices[i])
+    @inbounds return IntMonomialVector{Nr,Nc}(unsafe, x.e, x.indices[i])
 end
-@inline function Base.view(x::SimpleMonomialVector{Nr,Nc}, i) where {Nr,Nc}
+@inline function Base.view(x::IntMonomialVector{Nr,Nc}, i) where {Nr,Nc}
     @boundscheck checkbounds(x, i)
-    @inbounds return SimpleMonomialVector{Nr,Nc}(unsafe, x.e, view(x.indices, i))
+    @inbounds return IntMonomialVector{Nr,Nc}(unsafe, x.e, view(x.indices, i))
 end
 """
-    keepat!!(x::SimpleMonomialVector, i::AbstractVector{Bool})
+    keepat!!(x::IntMonomialVector, i::AbstractVector{Bool})
 
 Keeps the `j`ᵗʰ monomial in `x` only if `i[j]` is `true`. This will mutate `x` if possible (i.e., if it was already indexed by
 a vector before), but it might also create a new vector if required (i.e., if a whole range of exponents was covered). Always
 use the return value, never rely on `x`.
 This function is not exported.
 """
-Base.@propagate_inbounds keepat!!(x::SimpleMonomialVector{Nr,Nc}, i::AbstractVector{Bool}) where {Nr,Nc} =
-    SimpleMonomialVector{Nr,Nc}(unsafe, x.e, keepat!!(x.indices, i))
+Base.@propagate_inbounds keepat!!(x::IntMonomialVector{Nr,Nc}, i::AbstractVector{Bool}) where {Nr,Nc} =
+    IntMonomialVector{Nr,Nc}(unsafe, x.e, keepat!!(x.indices, i))
 Base.@propagate_inbounds keepat!!(x::Vector, i) = keepat!(x, i)
 @inline function keepat!!(r::AbstractRange{T}, i::AbstractVector{Bool}) where {T}
     @boundscheck checkbounds(r, length(i))
@@ -238,38 +238,38 @@ Base.@propagate_inbounds keepat!!(x::Vector, i) = keepat!(x, i)
     return result
 end
 
-struct SimpleMonomialVectorIterator{Indexed,V,MV,Iterate}
+struct IntMonomialVectorIterator{Indexed,V,MV,Iterate}
     v::V
     mv::MV
 
-    function SimpleMonomialVectorIterator{Indexed}(v::V, mv::MV) where {Indexed,V<:AbstractVector{Int},Nr,Nc,MV<:SimpleMonomialVector{Nr,Nc}}
-        Indexed isa Bool || throw(MethodError(SimpleMonomialVectorIterator{Indexed}, (v, mv)))
+    function IntMonomialVectorIterator{Indexed}(v::V, mv::MV) where {Indexed,V<:AbstractVector{Int},Nr,Nc,MV<:IntMonomialVector{Nr,Nc}}
+        Indexed isa Bool || throw(MethodError(IntMonomialVectorIterator{Indexed}, (v, mv)))
         length(v) == Nr + 2Nc || throw(DimensionMismatch("Vector length does not match variable count"))
         # iteration is always better if we have a complete covering of the exponents or at least an assuredly continuous one
         new{Indexed,V,MV,
-            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
-            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
+            MV isa IntMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
+            MV isa IntMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
             isempty(mv) || 2length(mv) ≥ @inbounds(mv.indices[end] - mv.indices[begin] +1)
            }(v, mv)
     end
 
-    function SimpleMonomialVectorIterator{Indexed}(mv::MV) where {Indexed,Nr,Nc,MV<:SimpleMonomialVector{Nr,Nc}}
-        Indexed isa Bool || throw(MethodError(SimpleMonomialVectorIterator{Indexed}, (mv,)))
+    function IntMonomialVectorIterator{Indexed}(mv::MV) where {Indexed,Nr,Nc,MV<:IntMonomialVector{Nr,Nc}}
+        Indexed isa Bool || throw(MethodError(IntMonomialVectorIterator{Indexed}, (mv,)))
         new{Indexed,Nothing,MV,
-            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
-            MV isa SimpleMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
+            MV isa IntMonomialVector{Nr,Nc,<:Integer,<:AbstractExponents} ||
+            MV isa IntMonomialVector{Nr,Nc,<:Integer,<:Tuple{AbstractExponents,AbstractUnitRange}} ||
             isempty(mv) || 2length(mv) ≥ @inbounds(mv.indices[end] - mv.indices[begin] +1)
            }(nothing, mv)
     end
 end
 
-Base.IteratorSize(::Type{<:SimpleMonomialVectorIterator}) = Base.HasLength()
-Base.IteratorEltype(::Type{<:SimpleMonomialVectorIterator}) = Base.HasEltype()
-Base.length(mi::SimpleMonomialVectorIterator) = length(mi.mv)
-Base.eltype(::Type{<:SimpleMonomialVectorIterator{<:Any,Nothing}}) = Vector{Int}
-Base.eltype(::Type{<:SimpleMonomialVectorIterator{<:Any,V}}) where {V} = V
+Base.IteratorSize(::Type{<:IntMonomialVectorIterator}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:IntMonomialVectorIterator}) = Base.HasEltype()
+Base.length(mi::IntMonomialVectorIterator) = length(mi.mv)
+Base.eltype(::Type{<:IntMonomialVectorIterator{<:Any,Nothing}}) = Vector{Int}
+Base.eltype(::Type{<:IntMonomialVectorIterator{<:Any,V}}) where {V} = V
 
-function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed,V,<:SimpleMonomialVector{<:Any,<:Any,I,E},Iterate}) where {Indexed,V,I<:Integer,E,Iterate}
+function Base.iterate(mi::IntMonomialVectorIterator{Indexed,V,<:IntMonomialVector{<:Any,<:Any,I,E},Iterate}) where {Indexed,V,I<:Integer,E,Iterate}
     isempty(mi.mv) && return nothing
     if V <: AbstractVector{Int}
         @inbounds v = copyto!(mi.v, exponents(mi.mv[begin]))
@@ -287,23 +287,23 @@ function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed,V,<:SimpleMonomia
         return Indexed ? ((mi.mv.indices[begin], v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
     end
 end
-Base.iterate(mi::SimpleMonomialVectorIterator{false}, state::AbstractVector{Int}) =
+Base.iterate(mi::IntMonomialVectorIterator{false}, state::AbstractVector{Int}) =
     @inbounds iterate!(unsafe, state, mi.mv.e) ? (state, state) : nothing
-Base.iterate(mi::SimpleMonomialVectorIterator{true}, (index, state)::Tuple{Integer,AbstractVector{Int}}) =
+Base.iterate(mi::IntMonomialVectorIterator{true}, (index, state)::Tuple{Integer,AbstractVector{Int}}) =
     @inbounds iterate!(unsafe, state, mi.mv.e) ? ((index + one(index), state), (index + one(index), state)) : nothing
-function Base.iterate(mi::SimpleMonomialVectorIterator{false}, (state, remaining)::Tuple{AbstractVector{Int},Int})
+function Base.iterate(mi::IntMonomialVectorIterator{false}, (state, remaining)::Tuple{AbstractVector{Int},Int})
     iszero(remaining) && return nothing
     success = iterate!(unsafe, state, mi.mv.e)
     @assert(success)
     return state, (state, remaining -1)
 end
-function Base.iterate(mi::SimpleMonomialVectorIterator{true}, (index, state, remaining)::Tuple{Integer,AbstractVector{Int},Int})
+function Base.iterate(mi::IntMonomialVectorIterator{true}, (index, state, remaining)::Tuple{Integer,AbstractVector{Int},Int})
     iszero(remaining) && return nothing
     success = iterate!(unsafe, state, mi.mv.e)
     @assert(success)
     return (index + one(index), state), (index + one(index), state, remaining -1)
 end
-function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, previndex, internal, remaining)::Tuple{AbstractVector{Int},Integer,Int,Int}) where {Indexed}
+function Base.iterate(mi::IntMonomialVectorIterator{Indexed}, (state, previndex, internal, remaining)::Tuple{AbstractVector{Int},Integer,Int,Int}) where {Indexed}
     iszero(remaining) && return nothing
     index = mi.mv.indices[internal]
     @inbounds for _ in previndex+one(previndex):index
@@ -313,15 +313,15 @@ function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, prevind
     end
     return (Indexed ? (index, state) : state), (state, index, internal +1, remaining -1)
 end
-function Base.iterate(mi::SimpleMonomialVectorIterator{Indexed}, (state, index, remaining)::Tuple{AbstractVector{Int},Int,Int}) where {Indexed}
+function Base.iterate(mi::IntMonomialVectorIterator{Indexed}, (state, index, remaining)::Tuple{AbstractVector{Int},Int,Int}) where {Indexed}
     iszero(remaining) && return nothing
     result = copyto!(state, exponents(mi.mv[index]))
     @inbounds return (Indexed ? (mi.mv.indices[index], result) : result), (state, index +1, remaining -1)
 end
-Base.parent(mi::SimpleMonomialVectorIterator) = mi.mv
+Base.parent(mi::IntMonomialVectorIterator) = mi.mv
 
 """
-    veciter(mv::SimpleMonomialVector[, v::AbstractVector{Int}], indexed::Bool=false)
+    veciter(mv::IntMonomialVector[, v::AbstractVector{Int}], indexed::Bool=false)
 
 Creates an iterator over all exponents present in `mv` (see
 [`veciter`](@ref veciter(::AbstractExponents, ::AbstractVector{Int})) for `AbstractExponents`). By setting `indexed` to `true`,
@@ -329,34 +329,34 @@ this iterator will instead give a tuple similar to `enumerate`, where the first 
 in the exponent set (so it does not necessarily start at `1` or have unit step).
 For type stability, `indexed` may instead be `Val(false)` or `Val(true)`.
 """
-veciter(mv::SimpleMonomialVector, v::AbstractVector{Int}, ::Val{indexed}=Val(false)) where {indexed} =
-    SimpleMonomialVectorIterator{indexed}(v, mv)
-veciter(mv::SimpleMonomialVector, v::AbstractVector{Int}, indexed::Bool) = veciter(mv, v, Val(indexed))
-veciter(mv::SimpleMonomialVector, ::Val{indexed}=Val(false)) where {indexed} = SimpleMonomialVectorIterator{indexed}(mv)
-veciter(mv::SimpleMonomialVector, indexed::Bool) = veciter(mv, Val(indexed))
+veciter(mv::IntMonomialVector, v::AbstractVector{Int}, ::Val{indexed}=Val(false)) where {indexed} =
+    IntMonomialVectorIterator{indexed}(v, mv)
+veciter(mv::IntMonomialVector, v::AbstractVector{Int}, indexed::Bool) = veciter(mv, v, Val(indexed))
+veciter(mv::IntMonomialVector, ::Val{indexed}=Val(false)) where {indexed} = IntMonomialVectorIterator{indexed}(mv)
+veciter(mv::IntMonomialVector, indexed::Bool) = veciter(mv, Val(indexed))
 
-MultivariatePolynomials.mindegree(x::SimpleMonomialVectorComplete) = x.e.mindeg
-MultivariatePolynomials.mindegree(x::SimpleMonomialVectorSubset) =
+MultivariatePolynomials.mindegree(x::IntMonomialVectorComplete) = x.e.mindeg
+MultivariatePolynomials.mindegree(x::IntMonomialVectorSubset) =
     isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, @inbounds x.indices[begin])
-MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorComplete) = x.e.maxdeg
-MultivariatePolynomials.maxdegree(x::SimpleMonomialVectorSubset) =
+MultivariatePolynomials.maxdegree(x::IntMonomialVectorComplete) = x.e.maxdeg
+MultivariatePolynomials.maxdegree(x::IntMonomialVectorSubset) =
     isempty(x.indices) ? 0 : degree_from_index(unsafe, x.e, @inbounds x.indices[end])
-MultivariatePolynomials.extdegree_complex(x::SimpleMonomialVector{<:Any,0}) = extdegree(x)
-MultivariatePolynomials.mindegree_complex(x::SimpleMonomialVector{<:Any,0}) = mindegree(x)
-MultivariatePolynomials.maxdegree_complex(x::SimpleMonomialVector{<:Any,0}) = maxdegree(x)
-MultivariatePolynomials.exthalfdegree(x::SimpleMonomialVector{<:Any,0}) = div.(extdegree(x), 2, RoundUp)
-MultivariatePolynomials.minhalfdegree(x::SimpleMonomialVector{<:Any,0}) = div(mindegree(x), 2, RoundUp)
-MultivariatePolynomials.maxhalfdegree(x::SimpleMonomialVector{<:Any,0}) = div(maxdegree(x), 2, RoundUp)
+MultivariatePolynomials.extdegree_complex(x::IntMonomialVector{<:Any,0}) = extdegree(x)
+MultivariatePolynomials.mindegree_complex(x::IntMonomialVector{<:Any,0}) = mindegree(x)
+MultivariatePolynomials.maxdegree_complex(x::IntMonomialVector{<:Any,0}) = maxdegree(x)
+MultivariatePolynomials.exthalfdegree(x::IntMonomialVector{<:Any,0}) = div.(extdegree(x), 2, RoundUp)
+MultivariatePolynomials.minhalfdegree(x::IntMonomialVector{<:Any,0}) = div(mindegree(x), 2, RoundUp)
+MultivariatePolynomials.maxhalfdegree(x::IntMonomialVector{<:Any,0}) = div(maxdegree(x), 2, RoundUp)
 # TODO: is there any more efficient way to obtain the [ext,min,max][half]degree[_complex] information for complex-valued
 # vectors than the default iteration over exponents. This should be possible at least partly, though it might also depend on
 # whether there is a multideg restriction present or not. We might be able to infer the maximal degree for a range of indices
 # and a range exponents, at least if these exponents are to the right.
 
-Base.isreal(::SimpleMonomialVector{<:Any,0}) = true
-Base.conj(v::SimpleMonomialVector{<:Any,0}, along...) = v
-Base.conj(v::SimpleMonomialVector, along...) = _conj(v, along...)
-_conj(v::SimpleMonomialVectorComplete{<:Any,<:Any,<:Integer,<:ExponentsDegree}, along...) = v
-function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
+Base.isreal(::IntMonomialVector{<:Any,0}) = true
+Base.conj(v::IntMonomialVector{<:Any,0}, along...) = v
+Base.conj(v::IntMonomialVector, along...) = _conj(v, along...)
+_conj(v::IntMonomialVectorComplete{<:Any,<:Any,<:Integer,<:ExponentsDegree}, along...) = v
+function _conj(v::IntMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
     if @view(v.e.minmultideg[Nr+1:2:end]) == @view(v.e.minmultideg[Nr+2:2:end])
         minmultideg = v.e.minmultideg
     else
@@ -378,18 +378,18 @@ function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}) whe
         end
     end
     minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg && return v
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg))
+    return IntMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg))
 end
-function _conj(v::SimpleMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, along₁, alongᵣ...) where {Nr,Nc,I<:Integer}
+function _conj(v::IntMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, along₁, alongᵣ...) where {Nr,Nc,I<:Integer}
     # just to get along sorted correctly, we have to do all this extra work
-    cmv = _conj(SimpleMonomialVector{Nr,Nc}(unsafe, v.e, collect(firstindex(v.e):lastindex(v.e)), along₁, alongᵣ...))
+    cmv = _conj(IntMonomialVector{Nr,Nc}(unsafe, v.e, collect(firstindex(v.e):lastindex(v.e)), along₁, alongᵣ...))
     # but for the return value, we really don't need any indexing
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(cmv.e.mindeg, cmv.e.maxdeg, cmv.e.minmultideg,
+    return IntMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(cmv.e.mindeg, cmv.e.maxdeg, cmv.e.minmultideg,
         cmv.e.maxmultideg))
 end
-_conj(v::SimpleMonomialVectorSubset{Nr,Nc,I}, along...) where {Nr,Nc,I<:Integer} =
-    SimpleMonomialVector{Nr,Nc}(v.e, sort_along!(map(x -> conj(x).index, v), along...)[1])
-function _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along...) where {Nr,Nc,I<:Integer}
+_conj(v::IntMonomialVectorSubset{Nr,Nc,I}, along...) where {Nr,Nc,I<:Integer} =
+    IntMonomialVector{Nr,Nc}(v.e, sort_along!(map(x -> conj(x).index, v), along...)[1])
+function _conj(v::IntMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along...) where {Nr,Nc,I<:Integer}
     if @view(v.e.minmultideg[Nr+1:2:end]) == @view(v.e.minmultideg[Nr+2:2:end])
         minmultideg = v.e.minmultideg
     else
@@ -412,44 +412,44 @@ function _conj(v::SimpleMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along..
     end
     enew = minmultideg === v.e.minmultideg && maxmultideg === v.e.maxmultideg ? v.e :
         ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg, minmultideg, maxmultideg)
-    return SimpleMonomialVector{Nr,Nc}(
+    return IntMonomialVector{Nr,Nc}(
         enew,
-        sort_along!(map(let enew=enew; x -> exponents_to_index(enew, exponents(SimpleConjMonomial(x)), degree(x)) end, v),
+        sort_along!(map(let enew=enew; x -> exponents_to_index(enew, exponents(IntConjMonomial(x)), degree(x)) end, v),
             along...)[1]
     )
 end
 
-Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorComplete{Nr,Nc}) where {Nr,Nc} =
+Base.in(x::IntMonomial{Nr,Nc}, v::IntMonomialVectorComplete{Nr,Nc}) where {Nr,Nc} =
     x.e == v.e || !iszero(convert_index(v.e, x.e, x.index, degree(x)))
-Base.in(x::SimpleMonomial{Nr,Nc}, v::SimpleMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} =
+Base.in(x::IntMonomial{Nr,Nc}, v::IntMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} =
     insorted(monomial_index(v.e, x), v.indices)
-Base.hasfastin(::Type{<:SimpleMonomialVector}) = true
-Base.searchsortedlast(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
+Base.hasfastin(::Type{<:IntMonomialVector}) = true
+Base.searchsortedlast(v::IntMonomialVectorComplete{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     monomial_index(v.e, x)
-Base.searchsortedlast(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
+Base.searchsortedlast(v::IntMonomialVectorSubset{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     searchsortedlast(v.indices, monomial_index(v.e, x))
-function Base.searchsortedfirst(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+function Base.searchsortedfirst(v::IntMonomialVectorComplete{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     i = monomial_index(v.e, x)
     return iszero(i) ? lastindex(v) +1 : i
 end
-function Base.searchsortedfirst(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+function Base.searchsortedfirst(v::IntMonomialVectorSubset{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     i = monomial_index(v.e, x)
     iszero(i) && return lastindex(v) +1
     return searchsortedfirst(v.indices, i)
 end
-function Base.searchsorted(v::SimpleMonomialVectorComplete{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+function Base.searchsorted(v::IntMonomialVectorComplete{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     i = monomial_index(v.e, x)
     iszero(i) && return 1:0
     return i:i
 end
-function Base.searchsorted(v::SimpleMonomialVectorSubset{Nr,Nc}, x::SimpleMonomialOrConj{Nr,Nc}) where {Nr,Nc}
+function Base.searchsorted(v::IntMonomialVectorSubset{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc}
     i = monomial_index(v.e, x)
     iszero(i) && return 1:0
     idx = searchsortedlast(v.indices, i)
     iszero(idx) && return 1:0
     return idx:idx
 end
-function _issubset_generic(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+function _issubset_generic(a::IntMonomialVector{Nr,Nc}, b::IntMonomialVector{Nr,Nc}) where {Nr,Nc}
     isempty(a) && return true
     length(a) > length(b) && return false
     @inbounds if a.e == b.e
@@ -515,8 +515,8 @@ function _issubset_generic(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVect
         end
     end
 end
-function Base.issubset(a::SimpleMonomialVector{Nr,Nc},
-    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
+function Base.issubset(a::IntMonomialVector{Nr,Nc},
+    b::IntMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
     isempty(a) && return true
     if a.e isa ExponentsMultideg
         if b.e isa ExponentsMultideg
@@ -535,12 +535,12 @@ function Base.issubset(a::SimpleMonomialVector{Nr,Nc},
     @label simple
     @inbounds return a[begin] ∈ b && a[end] ∈ b
 end
-Base.issubset(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
-    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
+Base.issubset(a::IntMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree},
+    b::IntMonomialVectorComplete{Nr,Nc,<:Integer,<:ExponentsDegree}) where {Nr,Nc} =
     return a.e.mindeg ≥ b.e.mindeg && a.e.maxdeg ≤ b.e.maxdeg
-Base.issubset(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc} = _issubset_generic(a, b)
-function Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
-    b::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
+Base.issubset(a::IntMonomialVector{Nr,Nc}, b::IntMonomialVector{Nr,Nc}) where {Nr,Nc} = _issubset_generic(a, b)
+function Base.:(==)(a::IntMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}},
+    b::IntMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractExponents,<:Tuple{AbstractExponents,AbstractUnitRange}}}) where {Nr,Nc}
     length(a) == length(b) || return false
     isempty(a) && return true
     @inbounds if a.e == b.e
@@ -549,10 +549,10 @@ function Base.:(==)(a::SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:AbstractEx
         return all(splat(isequal), zip(a, b))
     end
 end
-Base.:(==)(a::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,E},
-    b::SimpleMonomialVectorComplete{Nr,Nc,<:Integer,E}) where {Nr,Nc,E<:AbstractExponents} =
+Base.:(==)(a::IntMonomialVectorComplete{Nr,Nc,<:Integer,E},
+    b::IntMonomialVectorComplete{Nr,Nc,<:Integer,E}) where {Nr,Nc,E<:AbstractExponents} =
     return a.e == b.e
-function Base.:(==)(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+function Base.:(==)(a::IntMonomialVector{Nr,Nc}, b::IntMonomialVector{Nr,Nc}) where {Nr,Nc}
     length(a) == length(b) || return false
     isempty(a) && return true
     @inbounds if a.e == b.e
@@ -561,28 +561,28 @@ function Base.:(==)(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,N
         return all(splat(isequal), zip(a, b))
     end
 end
-Base.sort!(x::SimpleMonomialVector) = x # we are already sorted; and no keyword argument that changes the order is allowed
+Base.sort!(x::IntMonomialVector) = x # we are already sorted; and no keyword argument that changes the order is allowed
 
-MultivariatePolynomials.variables(::XorTX{<:AbstractVector{<:SimpleMonomial{Nr,Nc}}}) where {Nr,Nc} = SimpleVariables{Nr,Nc}()
-MultivariatePolynomials.nvariables(::XorTX{AbstractVector{<:SimpleMonomial{Nr,Nc}}}) where {Nr,Nc} = Nr + 2Nc
+MultivariatePolynomials.variables(::XorTX{<:AbstractVector{<:IntMonomial{Nr,Nc}}}) where {Nr,Nc} = IntVariables{Nr,Nc}()
+MultivariatePolynomials.nvariables(::XorTX{AbstractVector{<:IntMonomial{Nr,Nc}}}) where {Nr,Nc} = Nr + 2Nc
 
-struct SimpleMonomialVectorEffectiveVariables{MV<:SimpleMonomialVector}
+struct IntMonomialVectorEffectiveVariables{MV<:IntMonomialVector}
     mv::MV
 end
 
-Base.getproperty(smvev::SimpleMonomialVectorEffectiveVariables, f::Symbol) = getproperty(getfield(smvev, :mv), f)
+Base.getproperty(smvev::IntMonomialVectorEffectiveVariables, f::Symbol) = getproperty(getfield(smvev, :mv), f)
 
-Base.IteratorSize(::Type{<:SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVectorComplete}}) = Base.HasLength()
-Base.IteratorSize(::Type{<:SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVectorSubset}}) = Base.SizeUnknown()
-Base.IteratorEltype(::Type{<:SimpleMonomialVectorEffectiveVariables}) = Base.HasEltype()
-Base.eltype(::Type{<:SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc}}}) where {Nr,Nc} =
-    SimpleVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}
+Base.IteratorSize(::Type{<:IntMonomialVectorEffectiveVariables{<:IntMonomialVectorComplete}}) = Base.HasLength()
+Base.IteratorSize(::Type{<:IntMonomialVectorEffectiveVariables{<:IntMonomialVectorSubset}}) = Base.SizeUnknown()
+Base.IteratorEltype(::Type{<:IntMonomialVectorEffectiveVariables}) = Base.HasEltype()
+Base.eltype(::Type{<:IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc}}}) where {Nr,Nc} =
+    IntVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}
 
-Base.length(::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:ExponentsAll}}) where {Nr,Nc} =
+Base.length(::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:ExponentsAll}}) where {Nr,Nc} =
     Nr + 2Nc
-Base.length(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:ExponentsDegree}}) where {Nr,Nc} =
+Base.length(smvev::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:ExponentsDegree}}) where {Nr,Nc} =
     iszero(smvev.e.maxdeg) ? zero(Nr + 2Nc) : Nr + 2Nc
-function Base.length(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{<:Any,<:Any,<:Integer,<:ExponentsMultideg}})
+function Base.length(smvev::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{<:Any,<:Any,<:Integer,<:ExponentsMultideg}})
     i = 0
     e = smvev.e
     for (min, max) in zip(e.minmultideg, e.maxmultideg)
@@ -593,31 +593,31 @@ function Base.length(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonom
     return i
 end
 
-function Base.iterate(::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:ExponentsAll}}) where {Nr,Nc}
+function Base.iterate(::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:ExponentsAll}}) where {Nr,Nc}
     iszero(Nr + Nc) && return nothing # is Nr = Nc = 0 allowed at all?
     one_ = one(smallest_unsigned(Nr + 2Nc))
-    return SimpleVariable{Nr,Nc}(one_), one_ + one_
+    return IntVariable{Nr,Nc}(one_), one_ + one_
 end
-function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:ExponentsDegree}}) where {Nr,Nc}
+function Base.iterate(smvev::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:ExponentsDegree}}) where {Nr,Nc}
     (iszero(Nr + Nc) || iszero(smvev.e.maxdeg)) && return nothing
     one_ = one(smallest_unsigned(Nr + 2Nc))
-    return SimpleVariable{Nr,Nc}(one_), one_ + one_
+    return IntVariable{Nr,Nc}(one_), one_ + one_
 end
-function Base.iterate(::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:Union{<:ExponentsAll,<:ExponentsDegree}}},
+function Base.iterate(::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:Union{<:ExponentsAll,<:ExponentsDegree}}},
     var) where {Nr,Nc}
     var > Nr + 2Nc && return nothing
-    return SimpleVariable{Nr,Nc}(var), var + one(var)
+    return IntVariable{Nr,Nc}(var), var + one(var)
 end
-function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,<:Integer,<:ExponentsMultideg}},
+function Base.iterate(smvev::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,<:Integer,<:ExponentsMultideg}},
     var=one(smallest_unsigned(Nr + 2Nc))) where {Nr,Nc}
     e = smvev.e
     @inbounds while var ≤ Nr + 2Nc && (iszero(e.maxmultideg[var]) || e.Σminmultideg - e.minmultideg[var] ≥ e.maxdeg)
         var += one(var)
     end
     var > Nr + 2Nc && return nothing
-    return SimpleVariable{Nr,Nc}(var), var + one(var)
+    return IntVariable{Nr,Nc}(var), var + one(var)
 end
-function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMonomialVector{Nr,Nc,I}},
+function Base.iterate(smvev::IntMonomialVectorEffectiveVariables{<:IntMonomialVector{Nr,Nc,I}},
     var=one(smallest_unsigned(Nr + 2Nc))) where {Nr,Nc,I<:Integer}
     (var > Nr + 2Nc || iszero(var)) && return nothing # zero might happen if var + one(var) overflowed previously
     e = smvev.e
@@ -628,7 +628,7 @@ function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMono
             var += one(var)
             var > Nr + 2Nc && return nothing
         end
-        iszero(e.minmultideg[var]) || return SimpleVariable{Nr,Nc}(var), var + one(var)
+        iszero(e.minmultideg[var]) || return IntVariable{Nr,Nc}(var), var + one(var)
     end
     counts = index_counts(unsafe, e)
     # This implementation is the zero-allocation variant: go through the indices, check whether the variable is present; if
@@ -653,7 +653,7 @@ function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMono
             if !iszero(lastexp)
                 # the exponent occurs. But this now requires that there is an index in [index, lastsameindex] that can be found
                 # in indices.
-                return SimpleVariable{Nr,Nc}(var), var + one(var)
+                return IntVariable{Nr,Nc}(var), var + one(var)
             end
             # the variable is zero. lastsameidx is the largest index that has the current set of exponents up to var. Increment
             # by one and find the next available index.
@@ -666,21 +666,21 @@ function Base.iterate(smvev::SimpleMonomialVectorEffectiveVariables{<:SimpleMono
     end
 end
 
-MultivariatePolynomials.effective_variables(x::SimpleMonomialVector) = SimpleMonomialVectorEffectiveVariables(x)
+MultivariatePolynomials.effective_variables(x::IntMonomialVector) = IntMonomialVectorEffectiveVariables(x)
 
 """
-    effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},
-                                  <:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...)
+    effective_nvariables(x::Union{<:IntMonomialVector{Nr,Nc},
+                                  <:AbstractArray{<:IntMonomialVector{Nr,Nc}}}...)
 
 Calculates the number of effective variable of its arguments: there are at most `Nr + 2Nc` variables that may occur in any
 of the monomial vectors or arrays of monomial vectors in the arguments. This function calculates efficiently the number of
 variables that actually occur at least once anywhere in any argument.
 """
-effective_nvariables(x::SimpleMonomialVectorComplete) = length(effective_variables(x))
+effective_nvariables(x::IntMonomialVectorComplete) = length(effective_variables(x))
 # TODO (maybe): get rid off this generated function, instead define an iterable that iterates through all effective variables
 # of products/array elements. Maybe also convert every index to ExponentsAll unless they all have the same exponent set, so
 # that we don't have to do expensive comparisons over an over...
-@generated function effective_nvariables(x::Union{<:SimpleMonomialVector{Nr,Nc},<:AbstractArray{<:SimpleMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
+@generated function effective_nvariables(x::Union{<:IntMonomialVector{Nr,Nc},<:AbstractArray{<:IntMonomialVector{Nr,Nc}}}...) where {Nr,Nc}
     items = length(x)
     result = Expr(:block, :(result = 0), :(minitem = nothing))
     varloop = Expr(:block, :(result += 1))
@@ -688,7 +688,7 @@ effective_nvariables(x::SimpleMonomialVectorComplete) = length(effective_variabl
     for (k, xₖ) in enumerate(x)
         xef = Symbol(:xef, k)
         iter = Symbol(:iter, k)
-        if xₖ <: SimpleMonomialVector
+        if xₖ <: IntMonomialVector
             push!(result.args, quote
                 $xef = effective_variables(x[$k])
                 $iter = iterate($xef)
@@ -740,7 +740,7 @@ end
         minmultideg=nothing, maxmultideg=nothing, filter_exps=nothing,
         filter_mons=nothing, I=UInt)
 
-Returns a [`SimpleMonomialVector`](@ref) with `Nr` real and `Nc` complex variables, total degrees contained in `degree`,
+Returns a [`IntMonomialVector`](@ref) with `Nr` real and `Nc` complex variables, total degrees contained in `degree`,
 ordered according to `Graded{LexOrder}` and individual variable degrees varying between `minmultideg` and `maxmultideg` (where
 real variables come first, then complex variables, then their conjugates).
 
@@ -748,7 +748,7 @@ The monomial vector will take possession of the min/maxmultidegs, do not modify 
 
 An additional filter may be employed to drop monomials during the construction. Note that the presence of a filter function
 will change to a less efficient internal representation. The filter function can get a vector with the exponents as its
-argument (`filter_exps`) or a filter function that gets the corresponding `SimpleMonomial`. The former is more efficient if
+argument (`filter_exps`) or a filter function that gets the corresponding `IntMonomial`. The former is more efficient if
 every exponent has to be retrieved (but do not alter the argument).
 
 The internal representation will be of the type `I`.
@@ -771,51 +771,51 @@ function MultivariatePolynomials.monomials(::Val{Nr}, ::Val{Nc}, degree::Abstrac
     else
         e = ExponentsMultideg{Nr+2Nc,I}(first(degree), last(degree), minmultideg, maxmultideg)
     end
-    isnothing(filter_exps) && isnothing(filter_mons) && return SimpleMonomialVector{Nr,Nc}(e)
+    isnothing(filter_exps) && isnothing(filter_mons) && return IntMonomialVector{Nr,Nc}(e)
     index_counts(e, 0) # populate the cache
     indices = FastVec{I}()
     if !isnothing(filter_exps)
         i = one(I)
         for exps in veciter(e)
             filter_exps(exps) &&
-                (isnothing(filter_mons) || filter_mons(SimpleMonomial{Nr,Nc}(unsafe, e, i, sum(exps, init=0)))) &&
+                (isnothing(filter_mons) || filter_mons(IntMonomial{Nr,Nc}(unsafe, e, i, sum(exps, init=0)))) &&
                 push!(indices, i)
             i += one(I)
         end
     else
         for i in one(I):I(length(e))
-            filter_mons(SimpleMonomial{Nr,Nc}(unsafe, e, i)) && push!(indices, i)
+            filter_mons(IntMonomial{Nr,Nc}(unsafe, e, i)) && push!(indices, i)
         end
     end
-    return SimpleMonomialVector{Nr,Nc}(unsafe, e, finish!(indices))
+    return IntMonomialVector{Nr,Nc}(unsafe, e, finish!(indices))
 end
 
 MultivariatePolynomials.monomials(Nr::Integer, Nc::Integer, degree::AbstractUnitRange{<:Integer}; kwargs...) =
     monomials(Val(Nr), Val(Nc), degree; kwargs...)
 
 """
-    intersect(a::SimpleMonomialVector{Nr,Nc}, b::SimpleMonomialVector{Nr,Nc})
+    intersect(a::IntMonomialVector{Nr,Nc}, b::IntMonomialVector{Nr,Nc})
 
 Calculates efficiently the intersection of two monomial vectors.
 """
-Base.intersect(::SimpleMonomialVector{Nr,Nc}, ::SimpleMonomialVector{Nr,Nc}) where {Nr,Nc}
+Base.intersect(::IntMonomialVector{Nr,Nc}, ::IntMonomialVector{Nr,Nc}) where {Nr,Nc}
 
-function Base.intersect(a::MV, b::MV) where {Nr,Nc,I<:Integer,MV<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree}}
+function Base.intersect(a::MV, b::MV) where {Nr,Nc,I<:Integer,MV<:IntMonomialVector{Nr,Nc,I,<:ExponentsDegree}}
     a.e == b.e && return a
     ae, be = a.e, b.e
     mindeg = max(ae.mindeg, be.mindeg)
     maxdeg = min(ae.maxdeg, be.maxdeg)
-    return mindeg ≤ maxdeg ? SimpleMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg)) :
-                             SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+    return mindeg ≤ maxdeg ? IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg)) :
+                             IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
 end
-function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
-    b::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
+function Base.intersect(a::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
+    b::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
     # potentially type-unstable
     a.e == b.e && return a
     ae, be = a.e, b.e
     mindeg = max(ae.mindeg, be.mindeg)
     maxdeg = min(ae.maxdeg, be.maxdeg)
-    mindeg ≤ maxdeg || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+    mindeg ≤ maxdeg || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
     if ae.minmultideg == be.minmultideg
         minmultideg = ae.minmultideg
     else
@@ -826,33 +826,33 @@ function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
     else
         maxmultideg = elementwise(min, ae.maxmultideg, be.maxmultideg)
     end
-    all(splat(≤), zip(minmultideg, maxmultideg)) || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+    all(splat(≤), zip(minmultideg, maxmultideg)) || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
     any(∘(!, iszero), minmultideg) || any(<(maxdeg), maxmultideg) ||
-        return SimpleMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg))
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, minmultideg, maxmultideg))
+        return IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg))
+    return IntMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, minmultideg, maxmultideg))
 end
-function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree},
-    b::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
+function Base.intersect(a::IntMonomialVector{Nr,Nc,I,<:ExponentsDegree},
+    b::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer}
     # type-unstable (but only two choices)
     ae, be = a.e, b.e
     ae.mindeg == be.mindeg && ae.maxdeg == be.maxdeg && return b
     mindeg = max(ae.mindeg, be.mindeg)
     maxdeg = min(ae.maxdeg, be.maxdeg)
-    mindeg ≤ maxdeg || return SimpleMonomialVector{Nr,Nc}(unsafe, be, I[])
+    mindeg ≤ maxdeg || return IntMonomialVector{Nr,Nc}(unsafe, be, I[])
     any(∘(!, iszero), be.minmultideg) || any(<(maxdeg), be.maxmultideg) ||
-        return SimpleMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg))
-    return SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, be.minmultideg, be.maxmultideg))
+        return IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg))
+    return IntMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, be.minmultideg, be.maxmultideg))
 end
-Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
-    b::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree}) where {Nr,Nc,I<:Integer} = intersect(b, a)
-function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree},
-    b::SimpleMonomialVectorSubset{Nr,Nc,I}) where {Nr,Nc,I<:Integer}
+Base.intersect(a::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
+    b::IntMonomialVector{Nr,Nc,I,<:ExponentsDegree}) where {Nr,Nc,I<:Integer} = intersect(b, a)
+function Base.intersect(a::IntMonomialVector{Nr,Nc,I,<:ExponentsDegree},
+    b::IntMonomialVectorSubset{Nr,Nc,I}) where {Nr,Nc,I<:Integer}
     @assert(!isempty(a))
-    isempty(b) && return SimpleMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end])) # just to have type-stability
+    isempty(b) && return IntMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end])) # just to have type-stability
     ae, be = a.e, b.e
     @inbounds if ae.mindeg ≤ degree(b[begin])
         if ae.maxdeg ≥ degree(b[end])
-            return SimpleMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end]))
+            return IntMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[begin:end]))
         else
             lastina = searchsortedlast(b.indices, convert_index(unsafe, be, ae, lastindex(ae), ae.maxdeg))
         end
@@ -864,25 +864,25 @@ function Base.intersect(a::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree},
         firstina = searchsortedfirst(b.indices, convert_index(unsafe, be, ae, firstindex(ae), ae.mindeg))
         lastina = searchsortedlast(b.indices, convert_index(unsafe, be, ae, lastindex(ae), ae.maxdeg))
     end
-    return SimpleMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[firstina:lastina]))
+    return IntMonomialVector{Nr,Nc}(unsafe, be, @view(b.indices[firstina:lastina]))
 end
-Base.intersect(a::SimpleMonomialVectorSubset{Nr,Nc,I},
-    b::SimpleMonomialVector{Nr,Nc,I,<:ExponentsDegree}) where {Nr,Nc,I<:Integer} = intersect(b, a)
-function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
-                                 <:SimpleMonomialVectorSubset{Nr,Nc,I}}, b::SimpleMonomialVectorSubset{Nr,Nc,I}) where {Nr,Nc,I<:Integer}
+Base.intersect(a::IntMonomialVectorSubset{Nr,Nc,I},
+    b::IntMonomialVector{Nr,Nc,I,<:ExponentsDegree}) where {Nr,Nc,I<:Integer} = intersect(b, a)
+function Base.intersect(a::Union{<:IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
+                                 <:IntMonomialVectorSubset{Nr,Nc,I}}, b::IntMonomialVectorSubset{Nr,Nc,I}) where {Nr,Nc,I<:Integer}
     # necessarily type-unstable (but finite Union)
     ae, be = a.e, b.e
     isempty(a) && return a
     isempty(b) && return b
     if ae == be
-        return SimpleMonomialVector{Nr,Nc}(unsafe, ae, intersect_sorted(a.indices, b.indices))
+        return IntMonomialVector{Nr,Nc}(unsafe, ae, intersect_sorted(a.indices, b.indices))
     else
         @assert(!(ae isa ExponentsAll && be isa ExponentsAll))
         mindeg = max(ae isa AbstractExponentsDegreeBounded ? ae.mindeg : 0,
                      be isa AbstractExponentsDegreeBounded ? be.mindeg : 0)
         maxdeg = min(ae isa AbstractExponentsDegreeBounded ? ae.maxdeg : typemax(Int),
                      be isa AbstractExponentsDegreeBounded ? be.maxdeg : typemax(Int))
-        mindeg ≤ maxdeg || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+        mindeg ≤ maxdeg || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
         if ae isa ExponentsMultideg || be isa ExponentsMultideg
             if !(ae isa ExponentsMultideg)
                 minmultideg = be.minmultideg
@@ -893,14 +893,14 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
             else
                 minmultideg = elementwise(max, ae.minmultideg, be.minmultideg)
                 maxmultideg = elementwise(min, ae.maxmultideg, be.maxmultideg)
-                all(splat(≤), zip(minmultideg, maxmultideg)) || return SimpleMonomialVector{Nr,Nc}(unsafe, ae, I[])
+                all(splat(≤), zip(minmultideg, maxmultideg)) || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
             end
             newe = ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, minmultideg, maxmultideg)
         else
             newe = ExponentsDegree{Nr+2Nc,I}(mindeg, maxdeg)
         end
         rema, remb = length(a), length(b)
-        (iszero(rema) || iszero(remb)) && return SimpleMonomialVector{Nr,Nc}(unsafe, newe, I[])
+        (iszero(rema) || iszero(remb)) && return IntMonomialVector{Nr,Nc}(unsafe, newe, I[])
         index_counts(newe, 0) # populate the cache
         indices_a = a.indices
         indices_b = b.indices
@@ -936,19 +936,19 @@ function Base.intersect(a::Union{<:SimpleMonomialVector{Nr,Nc,I,<:ExponentsMulti
             end
         end
         @label done
-        return SimpleMonomialVector{Nr,Nc}(unsafe, newe, finish!(indices))
+        return IntMonomialVector{Nr,Nc}(unsafe, newe, finish!(indices))
     end
 end
-Base.intersect(a::SimpleMonomialVectorSubset{Nr,Nc,I},
-    b::SimpleMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer} = intersect(b, a)
+Base.intersect(a::IntMonomialVectorSubset{Nr,Nc,I},
+    b::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg}) where {Nr,Nc,I<:Integer} = intersect(b, a)
 
 """
     merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e::AbstractExponents, X::AbstractVector)
 
 Returns the vector of monomials contained `X` in increasing order and without any duplicates. The individual elements in
-`X` must be sorted iterables with a length and return `SimpleMonomial`s compatible with the number of real `Nr` and complex
+`X` must be sorted iterables with a length and return `IntMonomial`s compatible with the number of real `Nr` and complex
 variables `Nc`. The output will internally use the exponents `e`.
-The result type will be a `SimpleMonomialVector` with `Nr` and `Nc` as given, `I` and the exponents determined by `e`, and
+The result type will be a `IntMonomialVector` with `Nr` and `Nc` as given, `I` and the exponents determined by `e`, and
 indexed internally with a `Vector{I}`.
 """
 function MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e::AbstractExponents{N,I},
@@ -967,7 +967,7 @@ function MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e:
         for Xᵢ in X
             T = typeof(Xᵢ)
             if Base.IteratorEltype(T) isa Base.HasEltype
-                eltype(T) <: SimpleMonomial{Nr,Nc} || SimpleMonomial{Nr,Nc} <: eltype(T) ||
+                eltype(T) <: IntMonomial{Nr,Nc} || IntMonomial{Nr,Nc} <: eltype(T) ||
                     error("An iterator does not have a compatible element type")
             end
             v = get!(let T=T; () -> T[] end, grouped, T)
@@ -981,13 +981,13 @@ function MultivariatePolynomials.merge_monomial_vectors(::Val{Nr}, ::Val{Nc}, e:
     end
 end
 
-_extract_n(::XorTX{<:SimpleMonomial{Nr,Nc}}) where {Nr,Nc} = (Nr, Nc)
+_extract_n(::XorTX{<:IntMonomial{Nr,Nc}}) where {Nr,Nc} = (Nr, Nc)
 _extract_n(_) = missing
-_extract_E(::Type{<:SimpleMonomial{<:Any,<:Any,<:Integer,E}}) where {E<:AbstractExponents} = E
+_extract_E(::Type{<:IntMonomial{<:Any,<:Any,<:Integer,E}}) where {E<:AbstractExponents} = E
 _extract_E(_) = Missing
 _extract_I(::XorTX{<:AbstractExponents{<:Any,I}}) where {I<:Integer} = I
 _extract_I(_) = UInt
-_is_full_smv(::XorTX{<:SimpleMonomialVector{<:Any,<:Any,<:Integer,<:AbstractExponents}}) = true
+_is_full_smv(::XorTX{<:IntMonomialVector{<:Any,<:Any,<:Integer,<:AbstractExponents}}) = true
 _is_full_smv(_) = false
 _to_I(::Type{I}, e::AbstractExponents{<:Any,I}) where {I<:Integer} = e
 _to_I(::Type{I}, e::ExponentsAll{N,<:Integer}) where {I<:Integer,N} = ExponentsAll{N,I}()
@@ -999,13 +999,13 @@ _to_I(::Type{I}, e::ExponentsMultideg{N,<:Integer}) where {I<:Integer,N} =
     merge_monomial_vectors(X::AbstractVector)
 
 Potentially type-unstable variant that automatically determines the output format.
-If `X` has a defined eltype with known eltype `<:SimpleMonomial{Nr,Nc,I,E}`, `Nr`, `Nc`, and `I` are determined automatically
+If `X` has a defined eltype with known eltype `<:IntMonomial{Nr,Nc,I,E}`, `Nr`, `Nc`, and `I` are determined automatically
 in a type-stable manner. If not, they are taken from the eltype of the first iterable in `X` (which is not type stable). If
 this is not possible, either, they are taken from the first element in the first nonempty iterable in `X`.
 
 Regarding the automatic determination of `E`, the following rule is applied: it is assumed that if `E` is known in the element
 type, then every monomial will have the same instance of `e` as the exponents _per iterable_ (this is always satisfied if the
-iterables are `SimpleMonomialVector`s). If there is one exponent that covers all others, this instance will be used. If not,
+iterables are `IntMonomialVector`s). If there is one exponent that covers all others, this instance will be used. If not,
 the largest necessary exponents will be constructed; the result will be indexed unless all can be merged contiguously). Note
 that inhomogeneous iterables must implement `last` if the elements are based on `ExponentsAll`.
 
@@ -1013,7 +1013,7 @@ that inhomogeneous iterables must implement `last` if the elements are based on 
     This method has a very general type signature and may therefore also be called for other implementations of
     `MultivariatePolynomials`. However, this case will be caught and then forwarded to the generic MP implementation.
 """
-MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{<:SimpleMonomialVector})
+MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{<:IntMonomialVector})
 # ^ Julia assigns docstrings in a faulty way when type parameters are involved. As there is the generic (::Any) function and
 # every (unconstrained) type parameter that is present will lead to a pseudo-signature (::Any), we must avoid this.
 # (https://github.com/JuliaLang/julia/pull/53824)
@@ -1031,7 +1031,7 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
             item = iterate(Xᵢ)
             if !isnothing(item)
                 if ismissing((nrnc = _extract_n(item[1]);))
-                    # oops... Looks like this was not really SimplePolynomials related. Call the generic MP version.
+                    # oops... Looks like this was not really IntPolynomials related. Call the generic MP version.
                     return @invoke merge_monomial_vectors(X::Any)
                 end
                 break
@@ -1048,7 +1048,7 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
         no_indexing = true
         copied = false
         @inbounds for Xᵢ in X
-            if Xᵢ isa SimpleMonomialVector
+            if Xᵢ isa IntMonomialVector
                 isempty(Xᵢ) && continue
                 eᵢ = Xᵢ.e
                 no_indexingᵢ = _is_full_smv(Xᵢ)
@@ -1166,11 +1166,11 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
         end
         if ismissing(e)
             E <: Missing && return []
-            return SimpleMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,_extract_I(E)}(), _extract_I(E)[])
+            return IntMonomialVector{Nr,Nc}(ExponentsAll{Nr+2Nc,_extract_I(E)}(), _extract_I(E)[])
         end
     end
     if no_indexing
-        return SimpleMonomialVector{Nr,Nc}(e)
+        return IntMonomialVector{Nr,Nc}(e)
     else
         return merge_monomial_vectors(Val(Nr), Val(Nc), e, X)
     end
@@ -1267,17 +1267,17 @@ end
         end
     end)
     push!(result.args,
-        :(return SimpleMonomialVector{Nr,Nc}(unsafe, e, finish!(indices)))
+        :(return IntMonomialVector{Nr,Nc}(unsafe, e, finish!(indices)))
     )
     return :(@inbounds($result))
 end
 
-struct FakeMonomialVector{S<:SimpleMonomialVector,V,M} <: AbstractVector{M}
+struct FakeMonomialVector{S<:IntMonomialVector,V,M} <: AbstractVector{M}
     data::S
     real_vars::Vector{V}
     complex_vars::Vector{V}
 
-    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {Nr,Nc,S<:SimpleMonomialVector{Nr,Nc},V<:AbstractVariable}
+    function FakeMonomialVector(data::S, real_vars::Vector{V}, complex_vars::Vector{V}) where {Nr,Nc,S<:IntMonomialVector{Nr,Nc},V<:AbstractVariable}
         (length(real_vars) == Nr && length(complex_vars) == Nc) || error("Invalid monomial vector construction")
         new{S,V,monomial_type(V)}(data, real_vars, complex_vars)
     end
@@ -1335,14 +1335,14 @@ function Base.getindex(fmv::FakeMonomialVector{S,V,M} where {V,S}, x) where {M}
 end
 
 """
-    change_backend(mv::SimpleMonomialVector, variable::AbstractVector{<:AbstractVariable})
+    change_backend(mv::IntMonomialVector, variable::AbstractVector{<:AbstractVariable})
 
-Changes a `SimpleMonomialVector` into a different implementation of `MultivariatePolynomials`, where the variables are taken
+Changes a `IntMonomialVector` into a different implementation of `MultivariatePolynomials`, where the variables are taken
 from the given vector in the order as they appear (but keeping real and complex variables distinct).
 
 This conversion is not particularly efficient, as it works with generic implementations.
 """
-function change_backend(mv::SimpleMonomialVector{Nr,Nc}, variables::AbstractVector{V}) where {Nr,Nc,V<:AbstractVariable}
+function change_backend(mv::IntMonomialVector{Nr,Nc}, variables::AbstractVector{V}) where {Nr,Nc,V<:AbstractVariable}
     real_vars = similar(variables, 0)
     complex_vars = similar(real_vars)
     for v in variables
