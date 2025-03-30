@@ -70,7 +70,8 @@ add_var_quadratic!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where {T,V}
 function add_var_rotated_quadratic! end
 
 @doc raw"""
-    add_var_rotated_quadratic!(state::AbstractSolver{T,V}, indvals::IndvalsIterator{T,V}) where {T,V}
+    add_var_rotated_quadratic!(state::AbstractSolver{T,V},
+        indvals::IndvalsIterator{T,V}) where {T,V}
 
 Adds decision variables in a rotated quadratic cone to the solver and put their values into the linear constraints (rows in
 the linear constraint matrix), indexed according to `indvals`. The `N = length(indvals)` variables will satisfy
@@ -91,7 +92,8 @@ add_var_rotated_quadratic!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where 
 function add_var_psd! end
 
 """
-    add_var_psd!(state::AbstractSolver{T,V}, dim::Int, data::PSDMatrixCartesian{T,V}) where {T,V}
+    add_var_psd!(state::AbstractSolver{T,V}, dim::Int,
+        data::PSDMatrixCartesian{T,V}) where {T,V}
 
 Add a PSD variable of side dimension `dim` ≥ 3 to the solver. Its requested triangle is indexed according to the return value
 of [`psd_indextype`](@ref)); these elements of the matrix are put into the linear constraints (rows in the linear constraint
@@ -191,7 +193,8 @@ This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeMatrixC
 add_var_psd_complex!(::AbstractSolver{T,V}, ::Int, ::PSDMatrixCartesian{T,Complex{V}}) where {T,V}
 
 """
-    add_var_psd_complex!(state::AbstractSolver{T,V}, dim::Int, data::IndvalsIterator{T,V}) where {T,V}
+    add_var_psd_complex!(state::AbstractSolver{T,V}, dim::Int,
+        data::IndvalsIterator{T,V}) where {T,V}
 
 Conceptually the same as above; but now, `data` is an iterable through the elements of the PSD variable one-by-one. The
 individual entries are [`Indvals`](@ref).
@@ -207,7 +210,8 @@ add_var_psd_complex!(::AbstractSolver{T,V}, ::Int, ::IndvalsIterator{T,V}) where
 function add_var_dd! end
 
 @doc raw"""
-    add_var_dd!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_var_dd!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V},
+        u) where {T,V}
 
 Add a constraint for membership in the cone of diagonally dominant matrices to the solver. `data` is an iterator through the
 scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning that `M ∈ DD(u) ⇔ M = uᵀ Q u` with
@@ -223,7 +227,8 @@ add_var_dd!(::AbstractSolver{T,V}, ::Integer, ::IndvalsIterator{T,V}, u) where {
 function add_var_dd_complex! end
 
 @doc raw"""
-    add_var_dd_complex!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_var_dd_complex!(state::AbstractSolver{T,V}, dim::Integer,
+        data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the cone of complex-valued diagonally dominant matrices to the solver. `data` is an iterator
 hrough the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning that
@@ -274,7 +279,8 @@ add_var_l1_complex!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where {T,V}
 function add_var_sdd! end
 
 @doc raw"""
-    add_var_sdd!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_var_sdd!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V},
+        u) where {T,V}
 
 Add a constraint for membership in the cone of scaled diagonally dominant matrices to the solver. `data` is an iterator through
 the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning that `M ∈ SDD(u) ⇔ M = uᵀ Q u`
@@ -289,7 +295,8 @@ add_var_sdd!(::AbstractSolver{T,V}, ::Integer, ::IndvalsIterator{T,V}, u) where 
 function add_var_sdd_complex! end
 
 @doc raw"""
-    add_var_sdd_complex!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_var_sdd_complex!(state::AbstractSolver{T,V}, dim::Integer,
+        data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the cone of complex-valued scaled diagonally dominant matrices to the solver. `data` is an
 iterator through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning that
@@ -314,7 +321,8 @@ The default implementation does nothing.
 add_var_free_prepare!(::AbstractSolver, _) = nothing
 
 """
-    add_var_free!(state::AbstractSolver{T,V}, eqstate, indvals::Indvals{T,V}, obj::V) where {T,V}
+    add_var_free!(state::AbstractSolver{T,V}, eqstate, indvals::Indvals{T,V},
+        obj::V) where {T,V}
 
 Add a free variable to the solver and put its value into the linear constraints (rows in the linear constraint matrix), indexed
 according to `indvals`.

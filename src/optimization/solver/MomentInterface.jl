@@ -17,7 +17,8 @@ add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where
     add_constr_nonnegative!(state, IndvalsIterator(unsafe, indvals.indices, indvals.values, StackVec(length(indvals))))
 
 """
-    add_constr_nonnegative!(state::AbstractSolver{T,V}, indvals::IndvalsIterator{T,V}) where {T,V}
+    add_constr_nonnegative!(state::AbstractSolver{T,V},
+        indvals::IndvalsIterator{T,V}) where {T,V}
 
 Adds multiple nonnegative constraints to the solver that contain the decision variables (columns in the linear constraint
 matrix) indices according to the entries in `indvals`.
@@ -57,7 +58,8 @@ add_constr_quadratic!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where {T,V}
 function add_constr_rotated_quadratic! end
 
 @doc raw"""
-    add_constr_rotated_quadratic!(state::AbstractSolver{T,V}, indvals::IndvalsIterator{T,V}) where {T,V}
+    add_constr_rotated_quadratic!(state::AbstractSolver{T,V},
+        indvals::IndvalsIterator{T,V}) where {T,V}
 
 Adds a rotated quadratic constraint to the `N = length(indvals)` linear combinations of decision variables (columns in the
 conic constraint matrix) indexed according to the `indvals`. This will read (where ``X_i`` is
@@ -79,7 +81,8 @@ add_constr_rotated_quadratic!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) whe
 function add_constr_psd! end
 
 """
-    add_constr_psd!(state::AbstractSolver{T,V}, dim::Integer, data::PSDMatrixCartesian{T,V}) where {T,V}
+    add_constr_psd!(state::AbstractSolver{T,V}, dim::Integer,
+        data::PSDMatrixCartesian{T,V}) where {T,V}
 
 Add a PSD constraint of side dimension `dim` ≥ 3 to the solver. Its requested triangle is indexed according to the return value
 of [`psd_indextype`](@ref)); these elements make up a linear matrix inequality with variables given by the keys when iterating
@@ -143,7 +146,8 @@ add_constr_psd_complex!(::AbstractSolver{T,V}, ::Int, ::IndvalsIterator{T,V}) wh
 function add_constr_dddual! end
 
 @doc raw"""
-    add_constr_dddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_constr_dddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V},
+        u) where {T,V}
 
 Add a constraint for membership in the dual cone to diagonally dominant matrices to the solver. `data` is an iterator through
 the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone that
@@ -159,7 +163,8 @@ add_constr_dddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterat
 function add_constr_dddual_complex! end
 
 @doc raw"""
-    add_constr_dddual_complex!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_constr_dddual_complex!(state::AbstractSolver{T,V}, dim::Integer,
+        data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the dual cone to complex-valued diagonally dominant matrices to the solver. `data` is an
 iterator through the scaled lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal
@@ -211,7 +216,8 @@ add_constr_linf_complex!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where {T
 function add_constr_sdddual! end
 
 @doc raw"""
-    add_constr_sdddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_constr_sdddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V},
+        u) where {T,V}
 
 Add a constraint for membership in the dual cone to scaled diagonally dominant matrices to the solver. `data` is an iterator
 through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the primal cone
@@ -226,7 +232,8 @@ add_constr_sdddual!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsItera
 function add_constr_sdddual_complex! end
 
 @doc raw"""
-    add_constr_sdddual_complex!(state::AbstractSolver{T,V}, dim::Integer, data::IndvalsIterator{T,V}, u) where {T,V}
+    add_constr_sdddual_complex!(state::AbstractSolver{T,V}, dim::Integer,
+        data::IndvalsIterator{T,V}, u) where {T,V}
 
 Add a constraint for membership in the dual cone to complex-valued scaled diagonally dominant matrices to the solver. `data` is
 an iterator through the (unscaled) lower triangle of the matrix. A basis change is induced by `u`, with the meaning for the
@@ -252,7 +259,8 @@ The default implementation does nothing.
 add_constr_fix_prepare!(::AbstractSolver, _) = nothing
 
 """
-    add_constr_fix!(state::AbstractSolver{T,V}, constrstate, indvals::Indvals{T,V}, rhs::V) where {T,V}
+    add_constr_fix!(state::AbstractSolver{T,V}, constrstate, indvals::Indvals{T,V},
+        rhs::V) where {T,V}
 
 Add a constraint fixed to `rhs` to the solver that is composed of all variables (columns in the linear constraint matrix)
 indexed according to `indvals`.

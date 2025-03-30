@@ -76,7 +76,8 @@ See also [`sos_add_equality!`](@ref).
 sos_add_matrix!(state::AbstractSolver, args...) = moment_add_matrix!(SOSWrapper(state), args...)
 
 """
-    sos_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+    sos_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector,
+        constraint::SimplePolynomial)
 
 Parses a polynomial equality constraint for sums-of-squares and calls the appropriate solver functions to set up the problem
 structure. `grouping` contains the basis that will be squared in the process to generate the prefactor.
@@ -93,7 +94,8 @@ See also [`sos_add_matrix!`](@ref).
 sos_add_equality!(state::AbstractSolver, args...) = moment_add_equality!(SOSWrapper(state), args...)
 
 """
-    sos_setup!(state::AbstractSolver, relaxation::AbstractRelaxation, groupings::RelaxationGroupings[; representation])
+    sos_setup!(state::AbstractSolver, relaxation::AbstractRelaxation,
+        groupings::RelaxationGroupings[; representation])
 
 Sets up all the necessary SOS matrices, free variables, objective, and constraints of a polynomial optimization problem
 `problem` according to the values given in `grouping` (where the first entry corresponds to the basis of the objective, the

@@ -25,7 +25,8 @@ end
 
 """
     addtocounter!(state, counters::Counters, ::Val{type}, dim::Integer) where {type} -> Int
-    addtocounter!(state, counters::Counters, ::Val{type}, num::Integer, dim::Integer) where {type} -> UnitRange{Int}
+    addtocounter!(state, counters::Counters, ::Val{type}, num::Integer,
+        dim::Integer) where {type} -> UnitRange{Int}
 
 Increments the internal information about how many constraints/variables of a certain type were already added. Usually, a
 solver implementation does not have to overwrite the default implementation; but it might be useful to do so if some types are

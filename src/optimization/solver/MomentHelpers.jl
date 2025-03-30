@@ -1722,7 +1722,8 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
 end
 
 """
-    moment_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector, constraint::SimplePolynomial)
+    moment_add_equality!(state::AbstractSolver, grouping::SimpleMonomialVector,
+        constraint::SimplePolynomial)
 
 Parses a polynomial equality constraint for moments and calls the appropriate solver functions to set up the problem structure.
 `grouping` contains the basis that will be squared in the process to generate the prefactor.

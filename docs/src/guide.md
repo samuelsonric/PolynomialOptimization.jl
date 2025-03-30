@@ -128,7 +128,7 @@ necessarily cheaper than trying to extract solutions; as the latter is more info
 Whenever the optimization was successful, a valid sums-of-squares certificate will be available, i.e., a decomposition of the
 objective (in this simple, unconstrained, case). Here, the minimum value of the objective was found to be `0.9166...`.
 We can therefore obtain a certificate for the positivity of the original objective minus this global minimum:
-```meta
+```@meta
 # Don't test this, it appears to give very different results even on the same machine depending on whether the test runs
 # directly or via Pkg. The solution is not unique anyway and we have enough tests of the SOS certificate that check what must
 # reliably be the same.
@@ -475,7 +475,7 @@ the previous iteration as a new rotation basis.
     `UniformScaling`. This is only compatible with other diagonal rotations. Use [`RepresentationIAs`](@ref) to "fake" an
     upper triangular identity at the beginning.
 
-```meta
+```@meta
 # Beware the Documenter bug https://github.com/JuliaDocs/Documenter.jl/issues/2277 (which I consider a bug): the filter must
 # match both the original output as well as the expected output in order to be applied to either - so let's make it so.
 ```

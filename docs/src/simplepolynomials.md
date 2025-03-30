@@ -54,11 +54,14 @@ exponents_product
 Note that `exponents_from_index` returns a lazy implementation of an `AbstractVector{Int}`; if the same exponents must be
 accessed multple times, it might be beneficial to `collect` the result or copy it to a pre-allocated vector.
 
-Further information can be obtained about one or two indices:
+Further information can be obtained about one or two indices or exponent sets:
 ```@docs
 degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
 convert_index(::AbstractExponents{N,I}, ::AbstractExponents{N,IS}, ::IS, ::Int) where {N,I<:Integer,IS<:Integer}
 compare_indices(::AbstractExponents{N,I1}, ::I1, ::_CompareOp, ::AbstractExponents{N,I2}, ::I2, ::Int) where {N,I1<:Integer,I2<:Integer}
+Base.:(==)(::AbstractExponents{N,I1}, ::AbstractExponents{N,I2}) where {N,I1<:Integer,I2<:Integer}
+isequal(::AbstractExponents{N}, ::AbstractExponents{N}) where {N}
+issubset(::AbstractExponents{N}, ::AbstractExponents{N}) where {N}
 ```
 
 Degree-bound exponent sets have a length:

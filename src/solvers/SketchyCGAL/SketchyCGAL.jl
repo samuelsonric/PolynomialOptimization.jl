@@ -35,8 +35,8 @@ mutable struct Status{R}
 end
 
 @doc raw"""
-    sketchy_cgal(A, b, C; α=(0, 1), rank, ϵ=1e-4, max_iter=0, time_limit=0, verbose=false, β₀=1, K=∞, method=:auto,
-        callback=(_) -> ()[, A_norm][, A_normsquare])
+    sketchy_cgal(A, b, C; α=(0, 1), rank, ϵ=1e-4, max_iter=0, time_limit=0, verbose=false,
+        β₀=1, K=∞, method=:auto, callback=(_) -> ()[, A_norm][, A_normsquare])
 
 Enhanced implementation of the [SketchyCGAL algorithm](https://doi.org/10.1137/19M1305045). This solves the following problem:
 ```math
@@ -93,9 +93,9 @@ See also [`Status`](@ref).
 
 
 
-    sketchy_cgal(primitive1!, primitive2!, primitive3!, n, b, α; rank, primitive3_norm=0, primitive3_normsquare=0, ϵ=1e-8,
-        max_iter=10_000, verbose=false, rescale_C=1, rescale_A=[1, ...], rescale_X=1, β₀=1, K=∞, method=:auto,
-        callback=(_) -> ())
+    sketchy_cgal(primitive1!, primitive2!, primitive3!, n, b, α; rank, primitive3_norm=0,
+        primitive3_normsquare=0, ϵ=1e-8, max_iter=10_000, verbose=false, rescale_C=1,
+        rescale_A=[1, ...], rescale_X=1, β₀=1, K=∞, method=:auto, callback=(_) -> ())
 
 This is the black-box version that allows for matrix-free operations. `n` is a tuple or vector that indicates the side
 dimensions of the semidefinite variables, `b` is the right-hand side of the constraint vector (of length `d`); and the
@@ -111,7 +111,7 @@ If you are able to calculate these oracles faster or more memory-efficiently tha
 based on `mul!`), use the blackbox method.
 It is recommended to obey the following normalization conditions:
 ```math
-    \sum_i lVert C_i\rVert_{\mathrm F}^2 = 1;
+    \sum_i \lVert C_i\rVert_{\mathrm F}^2 = 1;
     \quad
     \sum_i \lVert primitive3!_i\rVert_{\mathrm F \to \ell_2}^2 = 1;
     \quad

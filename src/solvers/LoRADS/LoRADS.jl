@@ -111,8 +111,9 @@ function set_dual_objective(solver::Solver, dObj::AbstractVector{Cdouble})
 end
 
 """
-    conedata_to_userdata(cone::ConeType, nConstrRows, dim, coneMatBeg::AbstractVector{LoRADSInt},
-        coneMatIdx::AbstractVector{LoRADSInt}, coneMatElem::AbstractVector{Cdouble})
+    conedata_to_userdata(cone::ConeType, nConstrRows, dim,
+        coneMatBeg::AbstractVector{LoRADSInt}, coneMatIdx::AbstractVector{LoRADSInt},
+        coneMatElem::AbstractVector{Cdouble})
 
 Allocates a new user data objects and sets its conic data. This consists of a cone type (only `CONETYPE_DENSE_SDP` and
 `CONETYPE_SPARSE_SDP` are supported), the number of rows (which is the same as the number of constraints in the solver)

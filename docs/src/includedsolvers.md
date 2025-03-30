@@ -86,9 +86,8 @@ LoRADS has to be compiled from the source into a shared library; its path must t
 [`set_solverlib`](@ref). This setting will take effect after the Julia session is restarted.
 ```@docs
 set_solverlib
-ASDP
+Solver
 ConeType
-Strategy
 init_solver
 set_dual_objective
 conedata_to_userdata
