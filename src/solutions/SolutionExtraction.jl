@@ -93,9 +93,9 @@ function Base.iterate(iter::PolynomialSolutions{R,V,Nr,Nc}, state::Vector{Int}) 
     return solution, state
 end
 
-Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:IntVariable{Nr,Nc},true} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
+Base.IteratorSize(::(Type{PolynomialSolutions{R,V,Nr,Nc,I,true}} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc,I<:IntVariable{Nr,Nc}})) =
     Base.HasLength()
-Base.IteratorSize(::Type{PolynomialSolutions{R,V,Nr,Nc,<:IntVariable{Nr,Nc},false} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc}}) =
+Base.IteratorSize(::(Type{PolynomialSolutions{R,V,Nr,Nc,I,false}} where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc,I<:IntVariable{Nr,Nc}})) =
     Base.SizeUnknown()
 Base.IteratorEltype(::Type{PolynomialSolutions}) = Base.HasEltype()
 Base.eltype(::Type{<:PolynomialSolutions{R,V}}) where {R<:Real,V<:Union{R,Complex{R}}} = Vector{V}
