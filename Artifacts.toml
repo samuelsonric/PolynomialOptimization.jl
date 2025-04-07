@@ -1,0 +1,17 @@
+[[LoRADS]]
+arch = "x86_64"
+git-tree-sha1 = "8f8dbfd87704b7a2a34cced395120d47566d99e3"
+os = "windows"
+
+    [[LoRADS.download]]
+    url = "https://github.com/projekter/LoRADS/releases/download/v2.0.1-alpha-1/x86_64-w64-msvc.tar.gz"
+    sha256 = "30770b7f28f7600569d30bf5b929aa9ca017442c8ce711a6ed230a5db3e7ef3d"
+
+[[LoRADS]]
+arch = "x86_64"
+git-tree-sha1 = "a9552b44f225f4683a46311e3d31c4c86b534006"
+os = "linux"
+
+    [[LoRADS.download]]
+    url = "https://github.com/projekter/LoRADS/releases/download/v2.0.1-alpha-1/x86_64-linux-gnu.tar.gz"
+    sha256 = "88f9a23a3771823fa240a42c6d1ecf9afa10046eceb3193909a7bc1b3c218ec1"

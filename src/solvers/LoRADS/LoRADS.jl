@@ -6,28 +6,11 @@ using LinearAlgebra: chkstride1, Transpose, Symmetric, rmul!
 using SparseArrays, Preferences, Printf
 using LinearAlgebra.BLAS: axpy!, syrk!
 using StandardPacked: tpttr!
+using Pkg.Artifacts
 using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
 
-const solverlib = @load_preference("lorads-solver", "")
-const LoRADSInt = @load_preference("lorads-int", Int64)
-
-havefree::Bool = false
-
-function __init__()
-    !isempty(solverlib) && let dl=Libc.dlopen(solverlib, throw_error=false)
-        if isnothing(dl)
-            @warn("The LoRADS library is configured to $solverlib, but it could not be opened. Call \
-                   `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to change the configuration; set it to an empty \
-                   value to disable the solver.")
-        else
-            global havefree
-            havefree = !isnothing(Libc.dlsym(dl, :FREE, throw_error=false))
-            havefree || @warn("The unpatched version of the LoRADS library is used. This is not recommended.")
-            Libc.dlclose(dl)
-        end
-    end
-    return
-end
+const solverlib = joinpath(artifact"LoRADS", Sys.iswindows() ? "LoRADS_v_2_0_1-alpha.dll" : "libLoRADS_v_2_0_1-alpha.so")
+const LoRADSInt = Int64
 
 """
     set_solverlib(path)
@@ -65,30 +48,13 @@ end
 function cleanup(solver::Solver)
     @ccall solverlib.LORADSDestroyADMMVars(solver::Ptr{Cvoid})::Cvoid
     @ccall solverlib.LORADSDestroyALMVars(solver::Ptr{Cvoid})::Cvoid
-    global havefree
     solver.hisRecT = 0
     if solver.sparsitySDPCoeff != C_NULL
-        if havefree
-            @ccall solverlib.FREE(solver.sparsitySDPCoeff::Ptr{Cvoid})::Cvoid
-        else
-            @ccall solverlib.REALLOC(
-                (pointer_from_objref(solver) + fieldoffset(Solver, Base.fieldindex(Solver, :sparsitySDPCoeff)))::Ptr{Ptr{Cvoid}},
-                zero(LoRADSInt)::LoRADSInt,
-                zero(LoRADSInt)::LoRADSInt
-            )::Cvoid
-        end
+        @ccall solverlib.FREE(solver.sparsitySDPCoeff::Ptr{Cvoid})::Cvoid
         solver.sparsitySDPCoeff = C_NULL # since zero-length calloc is implementation-defined
     end
     if solver.var.rankElem != C_NULL
-        if havefree
-            @ccall solverlib.FREE(solver.var.rankElem::Ptr{Cvoid})::Cvoid
-        else
-            @ccall solverlib.REALLOC(
-                (pointer_from_objref(solver.var) + fieldoffset(Variable, Base.fieldindex(Variable, :rankElem)))::Ptr{Ptr{LoRADSInt}},
-                zero(LoRADSInt)::LoRADSInt,
-                zero(LoRADSInt)::LoRADSInt
-            )::Cvoid
-        end
+        @ccall solverlib.FREE(solver.var.rankElem::Ptr{Cvoid})::Cvoid
         solver.var.rankElem = C_NULL
     end
     @ccall solverlib.destroyPreprocess(solver::Ptr{Cvoid})::Cvoid

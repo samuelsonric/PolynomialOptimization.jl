@@ -20,12 +20,12 @@ number up or down by 100 or more. All solvers may expose options that can influe
 | Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment        | 👍👍    | 👍👍   | 👍      | ~100                    |
 | LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear  | n.a.     | n.a.    | 👍👍👍 | n.a.                    |
 | Loraine     | ∅[^3]                                                       | MIT        | primal moment | 👍👍👍 | 👍👍   | 👍👍👍 | moderately large         |
-| LoRADS      | [LoRADS](https://github.com/COPT-Public/LoRADS)[^4]         | MIT        | primal moment | 👍👍👍 | 👍      | 👍👍👍 | very large              |
-| Mosek[^5]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment   | 👍👍👍 | 👍👍👍 | 👍👍    | ~300 - 500             |
+| LoRADS      | [LoRADS](https://github.com/projekter/LoRADS)            | MIT        | primal moment | 👍👍👍 | 👍      | 👍👍👍 | very large              |
+| Mosek[^4]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment   | 👍👍👍 | 👍👍👍 | 👍👍    | ~300 - 500             |
 | ProxSDP     | [ProxSDP.jl](https://github.com/mariohsouto/ProxSDP.jl)     | MIT        | primal moment | 👍👍👍 | 👍👍    | 👍👍👍 | very large             |
 | SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment        | 👍      | 👍      | 👍👍👍 |                         |
 | SketchyCGAL | ∅                                                           | MIT        | primal moment | 👎      | 👍      | 👍👍👍 |                        |
-| SpecBM      | ∅[^6]                                                       | MIT        | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
+| SpecBM      | ∅[^5]                                                       | MIT        | SOS           | n.a.     | n.a.    | 👍👍👍 |                        |
 
 [^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
       one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
@@ -43,15 +43,12 @@ number up or down by 100 or more. All solvers may expose options that can influe
       tries to use the available memory more efficiently (though there is still room for improvement). Since only a subset of
       the features of the original package has been implemented, this is not yet ready to be contributed to the solver; but it
       can be expected that in the future, an external package will be required to use Loraine.
-[^4]: There is no Julia package for LoRADS available. You first have to clone the linked Git repositiory and compile the solver
-      for your system; then, call [`Solvers.LoRADS.set_solverlib`](@ref) in order to tell `PolynomialOptimization` where to
-      look for the binary. After restarting Julia, the method is available.
-[^5]: `:MosekMoment` requires at least version 10, `:MosekSOS` already works with version 9.
+[^4]: `:MosekMoment` requires at least version 10, `:MosekSOS` already works with version 9.
       The moment variant is more prone to failure in case of close-to-illposed problems; sometimes, this is an issue of the
       presolver, which can be turned off by passing `MSK_IPAR_PRESOLVE_USE="MSK_PRESOLVE_MODE_OFF"` to [`poly_optimize`](@ref).
       The performance indicators in the table are valid for `:MosekSOS`. The new PSD cone interface of Mosek 10 that is used by
       the moment-based variant proves to be much slower than the old one; therefore, using `:MosekMoment` is not recommended.
-[^6]: `SpecBM` is provided by `PolynomialOptimization`; however, it requires a subsolver for the quadratic master problem.
+[^5]: `SpecBM` is provided by `PolynomialOptimization`; however, it requires a subsolver for the quadratic master problem.
       Currently, `Mosek` and `Hypatia` are implemented and must therefore be loaded to make `SpecBM` work.
 
 # Packaged solvers
@@ -143,12 +140,12 @@ CurrentModule = PolynomialOptimization.Solvers.LANCELOT
 [GALAHAD](https://github.com/ralna/GALAHAD) library which has a quite recent Julia interface, the LANCELOT part is still pure
 Fortran without even a C interface. Therefore, here, we exploit that the pre-packaged binaries are compiled with GFortran,
 version at least 9, so that we know the binary layout of the parameters and can pretend that we like Fortran. Currently, only
-`LANCELOT_simple` is supported, which is of course not quite ideal[^7]. Since `Galahad.jl` is a weak dependency, the package
+`LANCELOT_simple` is supported, which is of course not quite ideal[^6]. Since `Galahad.jl` is a weak dependency, the package
 has to be loaded first before the `Solvers.LANCELOT` module becomes available:
 ```@docs
 LANCELOT_simple
 ```
 
-[^7]: The branch `lancelot` goes further and defines an interface for the full version of LANCELOT, which is a lot more
+[^6]: The branch `lancelot` goes further and defines an interface for the full version of LANCELOT, which is a lot more
       sophisticated. Unfortunately, it also seems to be broken at the moment and bugfixing will require some debugging of the
       disassembly. This is not a priority at the moment (which is whenever you read this statement).
