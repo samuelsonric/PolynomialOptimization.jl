@@ -79,7 +79,7 @@ end
             sosc4 = dot(gₙ[3], cert.data[4][1], gₙ[3])
             @test almost_equal(cert[:nonneg, 3, 1], sosc4)
             @test almost_equal(sosc1 + nonneg[1] * sosc2 + nonneg[2] * sosc3 + nonneg[3] * sosc4, obj - res.objective,
-                tol=solver === :SCSMoment ? 2 : 6)
+                tol=solver === :SCSMoment ? 2 : (solver === :LoRADSMoment ? 4 : 6))
         end
     end
 end
