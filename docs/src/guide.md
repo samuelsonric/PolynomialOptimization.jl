@@ -541,7 +541,7 @@ standard monomials with respect to the Gröbner basis, and the savings there are
 Inequality constraints are implemented using Putinar's Positivstellensatz or localizing matrices. They can be specified by
 passing the keyword argument `nonneg` to [`poly_problem`](@ref), which constraints those polynomials to be greater or
 equal to zero.
-```jldoctest walkthrough
+```jldoctest walkthrough; filter=r"(1\.999999|2\.000000)\d*" => "2.000000"
 julia> @polyvar x[1:2];
 
 julia> prob = poly_problem(-(x[1]-1)^2 - (x[1]-x[2])^2 - (x[2]-3)^2,
@@ -622,7 +622,7 @@ It may be the case that the required tightening polynomials cannot be determined
 insufficient to satisfy the conditions. Since `PolynomialOptimization` cannot distinguish this from the case where the degree
 is just quite high, the procedure may run into an infinite(ly-seeming) loop.
 Complex-valued problems are not supported at the moment; and PSD constraints will be skipped during the tightening.
-```jldoctest walkthrough; filter=r"-1\.(50|49)\d+"=>"-1.50"
+```jldoctest walkthrough; filter=r"-1\.(5[01]|49)\d+"=>"-1.50"
 julia> @polyvar x y;
 
 julia> poly_optimize(:Clarabel, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1), 5)

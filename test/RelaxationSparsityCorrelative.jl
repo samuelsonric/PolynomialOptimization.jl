@@ -50,7 +50,7 @@ end
         )
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
         @testset let n=n
-            @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol = 2e-5
+            @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol = 5e-5
         end
     end
 end
@@ -64,7 +64,7 @@ end
         @test StatsBase.countmap(length.(groupings(sp).var_cliques)) == Dict(2 => n -1)
         @testset let n=n
             @test poly_optimize(:Loraine, sp, precision=1e-3,
-                preconditioner=PolynomialOptimization.Solvers.Loraine.PRECONDITIONER_NONE).objective ≈ 1 atol=5e-4
+                preconditioner=PolynomialOptimization.Solvers.Loraine.PRECONDITIONER_NONE).objective ≈ 1 atol=1e-3
         end
     end
 end

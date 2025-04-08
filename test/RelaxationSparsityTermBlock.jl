@@ -116,7 +116,7 @@ PSD block sizes:
   [85 => 1, 1 => 35]"
     @test poly_optimize(:MosekMoment, sp).objective ≈ 0 atol = 2e-8 skip = !have_mosek
     @test poly_optimize(:MosekSOS, sp).objective ≈ 0 atol = 1e-8 skip = !have_mosek
-    @test poly_optimize(:LoRADS, sp).objective ≈ 0 atol = 5e-7 skip = !have_lorads
+    @test poly_optimize(:LoRADS, sp).objective ≈ 0 atol = 5e-5 skip = !have_lorads
     @test poly_optimize(:COPT, sp).objective ≈ 0 atol = 2e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem

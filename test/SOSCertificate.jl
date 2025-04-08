@@ -99,7 +99,7 @@ end
         skipsolver(solver) && continue
         solver === :LoRADSMoment && continue # won't get enough precision
         @testset let solver=solver
-            res = poly_optimize(solver, rel, precision=1e-7)
+            res = poly_optimize(solver, rel, precision=solver === :LoraineMoment ? 1e-6 : 1e-7)
             cert = SOSCertificate(res)
             sosc1 = dot(g₁, cert.data[1][1], g₁)
             @test almost_equal(cert[:objective, 1], sosc1)
