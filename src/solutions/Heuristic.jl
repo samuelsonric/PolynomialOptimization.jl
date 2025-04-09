@@ -121,7 +121,10 @@ end
 
 function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentVector{R,V,Nr,Nc}, candidate::AbstractVector{V},
     zero_checks::Set{I}, unknown_signs::Set{I}, unknown_phases::Dict{I,Set{R}}) where {Nr,Nc,I<:Integer,R<:Real,V<:Union{R,Complex{R}}}
-    isempty(zero_checks) && isempty(unknown_signs) && isempty(unknown_phases) && return [candidate]
+    callstack = Tuple{typeof(candidate),typeof(unknown_signs),typeof(unknown_phases)}[]
+    result = typeof(candidate)[]
+    @label restart
+    isempty(zero_checks) && isempty(unknown_signs) && isempty(unknown_phases) && @goto done
     # Candidate contains the possible absolute values of the solutions. However,
     # - some unknown entries may in fact be zero: check for those indices in zero_checks
     # - some real-valued variables have an unknown sign: check for those in unknown_signs
@@ -258,12 +261,9 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
         # First, check the signs, for which there are only two options.
         if !isempty(unknown_signs)
             signpos = pop!(unknown_signs)
-            first_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, copy(candidate), zero_checks,
-                copy(unknown_signs), copy(unknown_phases))
+            push!(callstack, (copy(candidate), copy(unknown_signs), copy(unknown_phases)))
             candidate[signpos] = -candidate[signpos]
-            second_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidate, zero_checks, unknown_signs,
-                unknown_phases)
-            return [first_sol; second_sol]
+            push!(callstack, (candidate, unknown_signs, unknown_phases))
         else
             # Find the variable with the last possible combinations
             candidate_index, candidate_phases = @inbounds unknown_phases[begin]
@@ -274,14 +274,20 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
             end
             delete!(unknown_phases, candidate_index)
             solutions = typeof(candidate)[]
+            sizehint!(callstack, length(callstack) + length(candidate_phases))
             for candidate_phase in candidate_phases
                 candidateᵢ = copy(candidate)
                 candidateᵢ[candidate_index] *= cis(candidate_phase)
-                append!(solutions, poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidateᵢ, zero_checks,
-                    copy(unknown_signs), copy(unknown_phases)))
+                push!(callstack, (candidateᵢ, copy(unknown_signs), copy(unknown_phases)))
             end
-            return solutions
         end
+    else
+        @label done
+        push!(result, candidate)
     end
-    return [candidate]
+    if !isempty(callstack)
+        candidate, unknown_signs, unknown_phases = pop!(callstack)
+        @goto restart
+    end
+    return result
 end
