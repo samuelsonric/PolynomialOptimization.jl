@@ -39,7 +39,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             error("high_order_... and low_order_... specifications cannot be used at the same time")
         problem = poly_problem(relaxation)
         ((ismissing(high_order_zero) || high_order_zero ⊆ 1:length(problem.constr_zero)) &&
-            (ismissing(low_order_zero) || low_order_zero ⊆ 1:length(problem:constr_zero)) &&
+            (ismissing(low_order_zero) || low_order_zero ⊆ 1:length(problem.constr_zero)) &&
             (ismissing(high_order_nonneg) || high_order_nonneg ⊆ 1:length(problem.constr_nonneg)) &&
             (ismissing(low_order_nonneg) || low_order_nonneg ⊆ 1:length(problem.constr_nonneg)) &&
             (ismissing(high_order_psd) || high_order_psd ⊆ 1:length(problem.constr_psd)) &&
