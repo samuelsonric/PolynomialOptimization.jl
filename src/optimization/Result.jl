@@ -88,6 +88,62 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}},
     end
 end
 
+Base.mapreduce(f, op, d::MomentVector; kw...) = mapreduce(f, op, d.values; kw...)
+# not implemented in SparseArray for views (but we don't want to inject this, so let's just do it for MomentVector)
+if !isdefined(SparseArrays, :SparseVectorPartialView) # requires SparseArrays 1.12
+    const SparseVectorPartialView{Tv,Ti} = SubArray{Tv,1,<:AbstractSparseVector{Tv,Ti},<:Tuple{AbstractUnitRange},false}
+    function _partialview_end_indices(x::SparseVectorPartialView)
+        p = parent(x)
+        nzinds = SparseArrays.nonzeroinds(p)
+        if isempty(nzinds)
+            last_idx = length(nzinds)
+            first_idx = last_idx + 1
+        else
+            first_idx = findfirst(>=(x.indices[1][begin]), nzinds)
+            last_idx = findlast(<=(x.indices[1][end]), nzinds)
+            # empty view
+            if first_idx === nothing || last_idx === nothing
+                last_idx = length(nzinds)
+                first_idx = last_idx+1
+            end
+        end
+        return (first_idx, last_idx)
+    end
+    SparseArrays.nnz(x::SparseVectorPartialView) = 1 - (-(_partialview_end_indices(x)...,))
+    function SparseArrays.nonzeros(x::SparseVectorPartialView)
+        (first_idx, last_idx) = _partialview_end_indices(x)
+        nzvals = nonzeros(parent(x))
+        return view(nzvals, first_idx:last_idx)
+    end
+    function SparseArrays.nonzeroinds(x::SparseVectorPartialView)
+        isempty(x.indices[1]) && return indtype(parent(x))[]
+        (first_idx, last_idx) = _partialview_end_indices(x)
+        nzinds = SparseArrays.nonzeroinds(parent(x))
+        return @view(nzinds[first_idx:last_idx]) .- (x.indices[1][begin] - 1)
+    end
+    SparseArrays.indtype(x::SparseVectorPartialView) = indtype(parent(x))
+end
+function Base._mapreduce(f, op, ::IndexCartesian, A::SubArray{V,1,<:MomentVector{R,V,<:Any,<:Any,<:AbstractSparseVector{R}},
+                                                              <:Tuple{AbstractUnitRange{<:Integer}},false}) where {R,V<:Union{R,Complex{R}}}
+    isempty(A) && return Base.mapreduce_empty(f, op, V)
+    d = parent(A)
+    dv = view(d.values, A.indices...)
+    z = nnz(dv)
+    rest, ini = if z == 0
+        length(dv)-z-1, f(zero(V))
+    else
+        length(dv)-z, Base.mapreduce_impl(f, op, nonzeros(dv), 1, z)
+    end
+    return SparseArrays._mapreducezeros(f, op, V, rest, ini)
+end
+# we just define rmul!, as it is used in the solution extraction. Of course, many others could be defined.
+function LinearAlgebra.rmul!(A::SubArray{V,1,<:MomentVector{R,V,<:Any,<:Any,<:AbstractSparseVector{R}},
+                                         <:Tuple{AbstractUnitRange{<:Integer}},false}, s::Number) where {R,V<:Union{R,Complex{R}}}
+    dv = view(d.values, A.indices...)
+    rmul!(nonzeros(dv), s)
+    return A
+end
+
 """
     MomentAssociation(m::MomentVector)
 
