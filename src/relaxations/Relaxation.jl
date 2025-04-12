@@ -1,7 +1,7 @@
 module Relaxation
 
 using ..IntPolynomials, .IntPolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
-    ..PolynomialOptimization.FastVector
+    ..PolynomialOptimization.FastVector, SortingAlgorithms
 import StatsBase, Graphs
 using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted
 import ..PolynomialOptimization: poly_problem, iterate!
@@ -138,37 +138,42 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
 end
 
 function embed(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where {X}
-    complete = true
-    to = FastVec{X}(buffer=length(news))
-    for new in news
-        complete &= embed!(to, new, olds)
-    end
-    if X <: AbstractVector
-        for toᵢ in to
-            sort!(toᵢ)
+    complete = Threads.Atomic{Bool}(true)
+    nos = Threads.nthreads()
+    batch = div(length(news), nos, RoundUp)
+    tos = [FastVec{X}(buffer=batch) for _ in 1:nos]
+    @inbounds Threads.@threads for i in 1:nos
+        items = @view(news[(i-1)*batch+1:min(i*batch, length(news))])
+        completeᵢ = true
+        toᵢ = tos[i]
+        for new in items
+            completeᵢ &= embed!(toᵢ, new, olds)
         end
+        Threads.atomic_and!(complete, completeᵢ)
+        if X <: AbstractVector
+            for toᵢᵢ in toᵢ
+                sort!(toᵢᵢ)
+            end
+        end
+        sort!(toᵢ, by=_lensort)
     end
-    result = Base._groupedunique!(sort!(finish!(to), by=_lensort))
-    news_is_clean && complete && return result
+    to = sizehint!(X[], sum(length, tos, init=0))
+    for toᵢ in tos
+        append!(to, toᵢ)
+    end
+    result = Base._groupedunique!(sort!(to, by=_lensort, alg=TimSort)) # use TimSort as the subslices are already presorted
+    news_is_clean && complete[] && return result
     # it is not guaranteed that news is completely subset-free, as it might have been constructed from different sources
-    lastdel = 0
-    @inbounds for i in length(result):-1:2
+    deletes = fill(false, length(result))
+    @inbounds Threads.@threads for i in 2:length(result)
         resultᵢ = result[i]
-        for resultⱼ in @view(result[1:i-1])
-            if resultᵢ ⊆ resultⱼ
-                if iszero(lastdel)
-                    lastdel = i
-                end
-                break
-            elseif !iszero(lastdel)
-                deleteat!(result, i+1:lastdel)
-                lastdel = 0
+        for j in 1:i-1
+            if !deletes[j] && resultᵢ ⊆ result[j]
+                deletes[i] = true
             end
         end
     end
-    if !iszero(lastdel)
-        deleteat!(result, 2:lastdel)
-    end
+    deleteat!(result, deletes)
     return result
 end
 
