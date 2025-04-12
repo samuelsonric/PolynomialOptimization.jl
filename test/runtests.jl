@@ -55,5 +55,17 @@ else
         @testset "Newton" begin
             include("./Newton.jl")
         end
+        @testset "correlative sparsity" begin
+            include("./RelaxationSparsityCorrelative.jl")
+        end
+        @testset "term sparsity" begin
+            include("./RelaxationSparsityTermBlock.jl")
+        end
+        @testset "term sparsity with chordal extension" begin
+            include("./RelaxationSparsityTermCliques.jl")
+        end
+        @testset "correlative and term sparsity" begin
+            include("./RelaxationSparsityCorrelativeTerm.jl")
+        end
     end
 end
