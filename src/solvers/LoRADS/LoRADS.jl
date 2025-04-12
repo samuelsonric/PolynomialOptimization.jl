@@ -12,21 +12,6 @@ using ...PolynomialOptimization: @assert, @inbounds, @verbose_info
 const solverlib = joinpath(artifact"LoRADS", Sys.iswindows() ? "LoRADS_v_2_0_1-alpha.dll" : "libLoRADS_v_2_0_1-alpha.so")
 const LoRADSInt = Int64
 
-"""
-    set_solverlib(path)
-
-Changes the path to the LoRADS library, which takes effect after restarting Julia.
-"""
-function set_solverlib(path::String)
-    if isfile(path)
-        @set_preferences!("lorads-solver" => path)
-        @info("New path to solver library set; restart you Julia session for this change to take effect!")
-        return
-    else
-        throw(ArgumentError("Library not found: $path"))
-    end
-end
-
 include("./Enums.jl")
 include("./DataTypes.jl")
 
@@ -404,9 +389,6 @@ dimensions, and the number of nonnegative scalar variables.
     corresponding functions are exported. Only use it for quick tests, not in production.
 """
 function load_sdpa(fn::AbstractString)
-    isempty(solverlib) &&
-        error("LoRADS is not configured. Call `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to specify the location \
-               of the solver library")
     fn_str = Vector{UInt8}(fn)
     fn_str[end] == 0x00 || push!(fn_str, 0x00)
     pnConstrs = Ref{LoRADSInt}()
@@ -466,8 +448,6 @@ end
 Solves a preprocessed `Solver` instance.
 """
 function solve(solver::Solver, params::Params, coneDims::AbstractVector{LoRADSInt}; verbose::Bool=false)
-    isempty(solverlib) &&
-        error("LoRADS is not configured. Call `PolynomialOptimization.Solvers.LoRADS.set_solverlib` to specify the location of the solver library")
     chkstride1(coneDims)
 
     prep = @elapsed begin
