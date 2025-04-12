@@ -139,6 +139,7 @@ end
 # we just define rmul!, as it is used in the solution extraction. Of course, many others could be defined.
 function LinearAlgebra.rmul!(A::SubArray{V,1,<:MomentVector{R,V,<:Any,<:Any,<:AbstractSparseVector{R}},
                                          <:Tuple{AbstractUnitRange{<:Integer}},false}, s::Number) where {R,V<:Union{R,Complex{R}}}
+    d = parent(A)
     dv = view(d.values, A.indices...)
     rmul!(nonzeros(dv), s)
     return A
