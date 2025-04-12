@@ -15,14 +15,14 @@ function Base.show(io::IO, ::MIME"text/plain", s::PolynomialSolutions)
         print(io, "Number of solutions: ", size(s.solutions_cl[1], 2))
     else
         println(io, "Number of solutions: unknown")
-        println(io, "Number of cliques: ", length(s.cliques))
+        print(io, "Number of cliques: ", length(s.cliques))
         for (i, (clique, clique_sol)) in enumerate(zip(s.cliques, s.solutions_cl))
-            println(io, "Clique #", i, ": ", length(clique.variables), " variable")
+            print(io, "\nClique #", i, ": ", length(clique), " variable")
             isone(length(clique)) || print(io, "s")
             print(io, ", ", size(clique_sol, 2), " subsolution")
             isone(size(clique_sol, 2)) || print(io, "s")
         end
-        println(io, "Maximally allowed discrepancy between same variables in different cliques: ", s.δ)
+        println(io, "\nMaximally allowed discrepancy between same variables in different cliques: ", s.δ)
         print(io, "Verbose display while assembling solutions: ", s.verbose ? "enabled" : "disabled")
     end
 end
