@@ -24,8 +24,8 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
         ∇nonneg = [differentiate.((n,), variables) for n in nonneg]
         Cᵀ = hcat(transpose(hcat(∇zero..., ∇nonneg...)), Diagonal([constr for zn in (zero, nonneg) for constr in zn]))
         if verbose
-            println("C:")
-            show(stdout, "text/plain", transpose(Cᵀ))
+            # println("C:")
+            # show(stdout, "text/plain", transpose(Cᵀ))
             println("\nFound C. Starting with ansatzes for the polynomials in L.")
             flush(stdout)
         end
@@ -141,8 +141,8 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
             end
         end
         if verbose
-            println("Found L₁:")
-            show(stdout, "text/plain", transpose(L₁ᵀ))
+            # println("Found L₁:")
+            # show(stdout, "text/plain", transpose(L₁ᵀ))
             println("\nNow constructing additional constraints")
             flush(stdout)
         end
