@@ -174,47 +174,51 @@ function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,
 end
 
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
-    localizing_supports::(Vector{MV} where {MV<:IntMonomialVector}), parent::RelaxationGroupings,
-    methods::AbstractVector{TermMode}, varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer}
+    localizing_supports::Vector{MV}, parent::RelaxationGroupings, methods::AbstractVector{TermMode},
+    varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer,MV<:IntMonomialVector}
     # enforce specialization on grouping, which is an abstract type
-    grouping_loop = (grouping, localizing_support, ipoly, igroup) -> begin
-        if methods[ipoly] == TERM_MODE_NONE
-            vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
-            if ismissing(vcm) || vcm == TERM_MODE_NONE
-                return
+    c = Channel{Tuple{Any,MV,Int,Int}}(0, spawn=true) do ch
+        ipoly = 1
+        igroup = 1
+        @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
+            for constr_groupings in constrs
+                if methods[ipoly] != TERM_MODE_NONE || !ismissing(varclique_methods)
+                    localizing_support = localizing_supports[ipoly]
+                    for grouping in constr_groupings
+                        put!(ch, (grouping, localizing_support, ipoly, igroup))
+                        igroup += 1
+                    end
+                else
+                    igroup += length(constr_groupings)
+                end
+                ipoly += 1
             end
         end
-        graphs[igroup] = graph = Graphs.SimpleGraph(length(grouping))
-        for (exp2, g₂) in enumerate(grouping)
-            r = isreal(g₂)
-            for (exp1, g₁) in enumerate(Iterators.take(grouping, r ? exp2 -1 : typemax(Int)))
-                Graphs.has_edge(graph, exp1, exp2) && continue
-                for supp_constr in localizing_support
-                    if monomial_index(g₁, supp_constr, IntConjMonomial(g₂)) ∈ support_union
-                        Graphs.add_edge!(graph, Graphs.Edge(exp1, exp2))
-                        break
+    end
+    Threads.threading_run(_ -> begin
+        for (grouping, localizing_support, ipoly, igroup) in c
+            if methods[ipoly] == TERM_MODE_NONE
+                vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
+                if ismissing(vcm) || vcm == TERM_MODE_NONE
+                    return
+                end
+            end
+            graphs[igroup] = graph = Graphs.SimpleGraph(length(grouping))
+            for (exp2, g₂) in enumerate(grouping)
+                r = isreal(g₂)
+                for (exp1, g₁) in enumerate(Iterators.take(grouping, r ? exp2 -1 : typemax(Int)))
+                    Graphs.has_edge(graph, exp1, exp2) && continue
+                    for supp_constr in localizing_support
+                        if monomial_index(g₁, supp_constr, IntConjMonomial(g₂)) ∈ support_union
+                            Graphs.add_edge!(graph, Graphs.Edge(exp1, exp2))
+                            break
+                        end
                     end
                 end
             end
+            nothing
         end
-        nothing
-    end
-    ipoly = 1
-    igroup = 1
-    @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
-        for constr_groupings in constrs
-            if methods[ipoly] != TERM_MODE_NONE || !ismissing(varclique_methods)
-                localizing_support = localizing_supports[ipoly]
-                for grouping in constr_groupings
-                    grouping_loop(grouping, localizing_support, ipoly, igroup)
-                    igroup += 1
-                end
-            else
-                igroup += length(constr_groupings)
-            end
-            ipoly += 1
-        end
-    end
+    end, false)
     return
 end
 _supports_to_graphs!(relaxation::SparsityTerm, methods, varclique_methods) = _supports_to_graphs!(relaxation.graphs,
