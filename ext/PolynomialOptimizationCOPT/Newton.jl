@@ -154,7 +154,7 @@ function Newton.prepare(::Val{:COPT}, mons, num, verbose; parameters...)
         @inbounds fill!(@view(tmp[1:nc]), 1.)
         _check_ret(copt_env, COPT_AddRow(task, nc, idxs, tmp, 0, 1., 1., C_NULL))
     end
-    if num < 10_000 || isone(nv)
+    if (num < 10_000 && nc < 10_000) || isone(nv)
         nthreads = 1
         secondtask = nothing
     else

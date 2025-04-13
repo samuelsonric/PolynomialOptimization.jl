@@ -145,7 +145,7 @@ function Newton.prepare(::Val{:Mosek}, mons, num, verbose; parameters...)
         end
     end
     putconbound(task, nv +1, MSK_BK_FX, 1., 1.)
-    if num < 10_000 || isone(nv)
+    if (num < 10_000 && nc < 10_000) || isone(nv)
         nthreads = 1
         secondtask = nothing
     else
