@@ -151,7 +151,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
                             break
                         end
                     else
-                        val = solution[var_idx]
+                        val = candidate[var_idx]
                         if abs(val) < R(1e-7)
                             # does not help, there's another zero variable
                             zerovar = zero(I)
@@ -160,7 +160,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
                     end
                 end
                 if !iszero(zerovar)
-                    solution[zerovar] = zero(V)
+                    candidate[zerovar] = zero(V)
                     setdiff!(zero_checks, (zerovar,))
                     retry |= zerovar ∈ dependencies
                 end
