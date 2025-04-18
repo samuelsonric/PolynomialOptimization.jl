@@ -7,19 +7,22 @@ function preproc_prequick(V, mons::IntMonomialVector{Nr,0}, verbose; parameters.
         highestvals = copy(lowestvals)
         # we might also add the points with the smallest/largest sum of all coordinates, or differences (but there are 2^nv
         # ways to combine, so let's skip it)
-        for (j, exps) in enumerate(veciter(mons))
-            for (i, expᵢ) in enumerate(exps)
-                if lowestvals[i] > expᵢ
-                    lowestidx[i] = j
-                    lowestvals[i] = expᵢ
-                end
-                if highestvals[i] < expᵢ
-                    highestidx[i] = j
-                    highestvals[i] = expᵢ
+        preptime = @elapsed begin
+            for (j, exps) in enumerate(veciter(mons))
+                for (i, expᵢ) in enumerate(exps)
+                    if lowestvals[i] > expᵢ
+                        lowestidx[i] = j
+                        lowestvals[i] = expᵢ
+                    end
+                    if highestvals[i] < expᵢ
+                        highestidx[i] = j
+                        highestvals[i] = expᵢ
+                    end
                 end
             end
+            Base._groupedunique!(sort!(vertexindices))
         end
-        Base._groupedunique!(sort!(vertexindices))
+        @verbose_info("Extremal exponents determined in ", preptime, " seconds, passing control to solver")
         return preproc(V, mons, vertexindices, false, verbose; parameters...)
     end
 end
@@ -140,8 +143,11 @@ function preproc(V, objective::IntPolynomial{<:Any,Nr,0}; verbose::Bool=false,
     end
     @verbose_info("Determining Newton polytope (quick preprocessing: ", preprocess_quick, ", randomized preprocessing: ",
         preprocess_randomized, ", fine preprocessing: ", preprocess_fine, ")")
-    mons = merge_constraints(objective, zero, nonneg, psd, prefactor, groupings, verbose,
-        preprocess_quick | preprocess_randomized | preprocess_fine)
+    constrtime = @elapsed begin
+        mons = merge_constraints(objective, zero, nonneg, psd, prefactor, groupings, verbose,
+            preprocess_quick | preprocess_randomized | preprocess_fine)
+    end
+    @verbose_info("Built initial monomial list in ", constrtime, " seconds")
     if preprocess_quick
         @verbose_info("Removing redundancies from the convex hull - quick heuristic, ", length(mons), " initial candidates")
         preproc_time = @elapsed begin

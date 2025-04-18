@@ -127,8 +127,7 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
         mons = monomials(objective)
         pmons = monomials(prefactor)
         if iszero(Nc)
-            if mons.e == e && pmons.e == e &&
-                issubset(pmons, mons)
+            if mons.e == e && pmons.e == e && issubset(pmons, mons)
                 @verbose_info("Aliasing monomial indices")
                 return need_copy ? copy(mons) : mons
             else
