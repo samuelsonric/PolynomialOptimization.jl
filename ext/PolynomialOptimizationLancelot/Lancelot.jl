@@ -78,7 +78,7 @@ function lancelot_solve(problem::PolynomialOptimization.RealProblem; precision::
                 # ∇λₘᵢₙ(Gᵢ(x)) = λₘᵢₙ'(Gᵢ(x)) Gᵢ'(x)
                 # now ∇Gᵢ is simple, and ∂λₘᵢₙ(S₀ + ϵ S)/∂ϵ = ⟨v₀, S v₀⟩, where vᵢ: min eigvec of S₀
                 # derivative of smallest eigenvalue of S₀ + ϵ S: eigenvalues of ⟨v₀, S v₀⟩, where v₀: min eigvec of S₀
-                # λₘᵢₙ'(Y) = [∂λₘᵢₙ(Y + ϵ Eⱼ)/∂ϵ = ⟨y₀, E y₀⟩]ⱼ where Eⱼ are the symmetric elementary matrices
+                # λₘᵢₙ'(Y) = [∂λₘᵢₙ(Y + ϵ Eⱼ)/∂ϵ = ⟨v₀, E v₀⟩]ⱼ where Eⱼ are the symmetric elementary matrices
                 psd = psd_buffer[i]
                 StaticPolynomials.evaluate_and_jacobian!(vec(psd), jac_buffer[i], static_psd_constrs[i], x)
                 v₀ = @view(eigen!(psd, 1:1).vectors[:, 1]) # eigen! overwrites psd with eigenvalues, but allocates for vectors
@@ -94,6 +94,7 @@ function lancelot_solve(problem::PolynomialOptimization.RealProblem; precision::
                 end
                 mul!(reshape(g, (1, length(g))), reshape(dλ, (1, length(dλ))), jac_buffer[i], -1, false)
             end
+            return
         end
     end
     # we only provide the Hessian if there are no PSD constraints (as we either have to give all or none)
@@ -103,7 +104,8 @@ function lancelot_solve(problem::PolynomialOptimization.RealProblem; precision::
             eval_hess(H, x) = StaticPolynomials.hessian!(H, static_objective, x)
             function eval_hess(H, x, i)
                 @assert(i ≤ num_scalar)
-                return StaticPolynomials.hessian!(H, static_scalar_constrs[i], x)
+                StaticPolynomials.hessian!(H, static_scalar_constrs[i], x)
+                return
             end
         end
     else
