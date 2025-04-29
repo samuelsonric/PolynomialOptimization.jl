@@ -1,4 +1,5 @@
 using CliqueTrees, Graphs
+using CliqueTrees: EliminationAlgorithm
 
 """
     chordal_completion!(G::Graphs.SimpleGraph)
@@ -9,10 +10,10 @@ This is a more efficient implementation of `ChordalGraph.jl/GreedyOrder` (for th
 See also [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph)
 
 """
-function chordal_completion!(graph::SimpleGraph)
+function chordal_completion!(graph::SimpleGraph; alg::EliminationAlgorithm=MF())
     # compute a tree decomposition using
     # the minimum-fill algorithm
-    order, tree = cliquetree(graph; alg=MF())
+    order, tree = cliquetree(graph; alg)
     filledgraph = FilledGraph(tree)
     
     # triangulate graph
@@ -33,10 +34,10 @@ This is almost the same implementation as in `ChordalGraph.jl/chordal_cliques!`.
 
 See also [`chordal_completion!`](@ref), [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph)
 """
-function chordal_cliques!(graph::SimpleGraph)
+function chordal_cliques!(graph::SimpleGraph; alg::EliminationAlgorithm=MF())
     # compute a tree decomposition using
     # the minimum-fill algorithm
-    order, tree = cliquetree(graph; alg=MF())
+    order, tree = cliquetree(graph; alg)
     filledgraph = FilledGraph(tree)
     
     # triangulate graph
