@@ -2,7 +2,7 @@ using CliqueTrees, Graphs
 using CliqueTrees: EliminationAlgorithm
 
 """
-    chordal_completion!(G::Graphs.SimpleGraph)
+    chordal_completion!(G::Graphs.SimpleGraph; alg::EliminationAlgorithm=MF())
 
 Augment `G` by a chordal completion using a greedy minimal fill-in, and also return a perfect elimination ordering.
 This is a more efficient implementation of `ChordalGraph.jl/GreedyOrder` (for the "MF" case).
@@ -12,7 +12,7 @@ See also [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph)
 """
 function chordal_completion!(graph::SimpleGraph; alg::EliminationAlgorithm=MF())
     # compute a tree decomposition using
-    # the minimum-fill algorithm
+    # the given algorithm
     order, tree = cliquetree(graph; alg)
     filledgraph = FilledGraph(tree)
     
@@ -27,7 +27,7 @@ function chordal_completion!(graph::SimpleGraph; alg::EliminationAlgorithm=MF())
 end
 
 """
-    chordal_cliques!(G::Graphs.SimpleGraph)
+    chordal_cliques!(G::Graphs.SimpleGraph; alg::EliminationAlgorithm=MF())
 
 Make the given graph chordal, and then calculate its maximal cliques.
 This is almost the same implementation as in `ChordalGraph.jl/chordal_cliques!`.
@@ -36,7 +36,7 @@ See also [`chordal_completion!`](@ref), [`ChordalGraph.jl`](https://github.com/w
 """
 function chordal_cliques!(graph::SimpleGraph; alg::EliminationAlgorithm=MF())
     # compute a tree decomposition using
-    # the minimum-fill algorithm
+    # the given algorithm
     order, tree = cliquetree(graph; alg)
     filledgraph = FilledGraph(tree)
     
