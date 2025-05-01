@@ -1,5 +1,5 @@
 """
-    chordal_cliques!(graphs::Graphs.SimpleGraph; alg::CliqueTrees.EliminationAlgorithm=MF())
+    chordal_cliques!(graphs::Graphs.SimpleGraph; alg::CliqueTrees.EliminationAlgorithm=CliqueTrees.MF())
 
 Make the given graph chordal, and then calculate its maximal cliques.
 """
@@ -27,7 +27,7 @@ function chordal_cliques!(graph::Graphs.SimpleGraph; alg::CliqueTrees.Eliminatio
 end
 
 """
-    chordal_cliques(graph::Graphs.SimpleGraph; alg::EliminationAlgorithm=MF())
+    chordal_cliques(graph::Graphs.SimpleGraph; alg::CliqueTrees.EliminationAlgorithm=CliqueTrees.MF())
 
 Non-mutating version of [`chordal_cliques!`](@ref)
 """
