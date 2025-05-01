@@ -14,11 +14,12 @@ issubset_sorted
 ```
 
 ## Chordal graphs
-The functionality for chordal graphs is taken from the [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph) package
-(MIT license). Some features that we don't need were removed, inefficient implementations were improved.
+Functionality for working with chordal graphs. The API is similar to the 
+[`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph) package (MIT license). Some features that we don't need were
+removed.
 ```@docs
-Relaxation.chordal_completion!
 Relaxation.chordal_cliques!
+Relaxation.chordal_cliques
 ```
 
 ## Sorting of multiple vectors
