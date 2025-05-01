@@ -14,9 +14,7 @@ issubset_sorted
 ```
 
 ## Chordal graphs
-Functionality for working with chordal graphs. The API is similar to the 
-[`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph) package (MIT license). Some features that we don't need were
-removed.
+The following functions provide a thin wrapper to [`CliqueTrees.jl`](https://github.com/AlgebraicJulia/CliqueTrees.jl).
 ```@docs
 Relaxation.chordal_cliques!
 Relaxation.chordal_cliques
